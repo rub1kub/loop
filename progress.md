@@ -11,8 +11,9 @@ Original prompt: Build a production-ready LOOP Telegram Mini App for TON/GRAM wi
 ## Work log
 
 - Architecture and threat model drafted from the product brief and current TON/Telegram guidance.
+- FastAPI/aiogram backend implemented with strict Telegram authentication, signed sessions, TON proof verification, wallet binding, non-custodial BANK goals, deterministic duel quotes, referrals, inline invites, durable models, migrations and chain projection worker.
+- Backend lint and focused unit/API/property tests pass.
 
 ## Remaining
 
-- Implement and validate backend, frontend, contract, deployment, and live testnet flow.
-
+- Implement and validate frontend, contract, deployment, and live testnet flow.

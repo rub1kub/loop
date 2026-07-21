@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools==82.0.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "loop-api"
+version = "0.1.0"
+description = "LOOP Telegram Mini App backend"
+requires-python = ">=3.12"
+dependencies = [
+  "aiogram==3.30.0",
+  "alembic==1.18.5",
+  "asyncpg==0.31.0",
+  "cryptography==49.0.0",
+  "fastapi==0.139.2",
+  "httpx==0.28.1",
+  "orjson==3.11.9",
+  "prometheus-client==0.25.0",
+  "pydantic-settings==2.14.2",
+  "redis==8.0.1",
+  "SQLAlchemy[asyncio]==2.0.51",
+  "structlog==26.1.0",
+  "tonsdk==1.0.15",
+  "uvicorn[standard]==0.51.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "aiosqlite==0.22.1",
+  "hypothesis==6.158.0",
+  "mypy==2.3.0",
+  "pytest==9.1.1",
+  "pytest-asyncio==1.4.0",
+  "pytest-cov==7.1.0",
+  "ruff==0.15.22",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S106"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
