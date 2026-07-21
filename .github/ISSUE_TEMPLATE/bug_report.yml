@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible LOOP defect without secrets or personal data.
+title: 'bug: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Never include mnemonics, bot tokens, wallet proofs, Telegram initData, or private user data.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Mini App, API or bot, TON contract, Deployment]
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Include a minimal sequence and sanitized evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or release
+      placeholder: Git SHA or testnet release date
+    validations:
+      required: true

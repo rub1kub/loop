@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a scoped product or engineering improvement.
+title: 'feat: '
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user problem, not only a proposed implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Safety constraints
+      options:
+        - label: This proposal does not require custody of user funds.
+          required: true
+        - label: This issue contains no credentials or personal data.
+          required: true

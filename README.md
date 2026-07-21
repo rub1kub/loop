@@ -55,6 +55,8 @@ Testnet is the only enabled chain in the default configuration. Mainnet requires
 
 ## Documentation
 
+- [Product vision](docs/product.md)
+- [Setup](docs/setup.md)
 - [Architecture](docs/architecture.md)
 - [TON integration](docs/ton.md)
 - [Telegram integration](docs/telegram.md)
