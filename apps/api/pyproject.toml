@@ -27,7 +27,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "aiosqlite==0.22.1",
-  "hypothesis==6.158.0",
+  "hypothesis==6.158.1",
   "mypy==2.3.0",
   "pytest==9.1.1",
   "pytest-asyncio==1.4.0",
