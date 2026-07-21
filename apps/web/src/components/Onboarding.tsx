@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import { haptic, setBackAction } from '../telegram';
 
 const stories = [
-  'Один цикл\nначинается с одного шага.',
-  'GRAM\nсоединяет людей.',
-  'Создавай.\nИграй.\nПобеждай.',
-  'Твой кошелёк.\nТвои средства.',
-  'Добро пожаловать\nв LOOP.',
+  'Ты входишь\nв живой цикл.',
+  'Банка хранит\nсобытия. Не средства.',
+  'Бросай вызов.\nЖди соперника.',
+  'Важное\nподтверждает TON.',
+  'Начать\nв LOOP.',
 ];
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
@@ -24,6 +24,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   return (
     <main className="onboarding">
+      <span className="onboarding-brand">LOOP</span>
       <div className="story-stage" onClick={next} role="presentation">
         <AnimatePresence mode="wait">
           <motion.h1

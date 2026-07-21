@@ -98,7 +98,7 @@ export default function App() {
   if (state.error && !state.profile) {
     return (
       <main className="fatal-screen">
-        <span className="fatal-mark">∞</span>
+        <img className="fatal-mark" src="/assets/loop-loader.webp" alt="" />
         <h1>LOOP недоступен</h1>
         <p>{state.error}</p>
         <button className="primary-button" onClick={() => window.location.reload()}>
@@ -115,8 +115,8 @@ export default function App() {
     bank: (
       <BankScreen
         profile={state.profile}
-        onRefresh={() => state.refresh()}
-        onConnect={() => void tonConnectUI.openModal()}
+        onStart={() => state.startCycle()}
+        onContinue={() => state.setTab('duel')}
       />
     ),
     duel: (
@@ -131,7 +131,6 @@ export default function App() {
     profile: (
       <ProfileScreen
         profile={state.profile}
-        offers={state.offers}
         duels={state.duels}
         onReplay={() => state.replayOnboarding()}
       />
@@ -142,13 +141,6 @@ export default function App() {
     <main className="app-shell">
       <div className="brand-bar">
         <span className="brand">LOOP</span>
-        <button
-          className={`connect-pill ${wallet ? 'connected' : ''}`}
-          onClick={() => void tonConnectUI.openModal()}
-        >
-          <i />
-          {wallet ? 'CONNECTED' : 'CONNECT'}
-        </button>
       </div>
 
       <AnimatePresence mode="wait">

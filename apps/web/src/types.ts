@@ -56,6 +56,7 @@ export interface User {
   telegram_id: number;
   username: string | null;
   first_name: string;
+  photo_url: string | null;
   onboarding_seen: boolean;
 }
 
@@ -65,17 +66,32 @@ export interface Wallet {
   verified_at: string;
 }
 
-export interface BankPosition {
-  target_nano: number;
-  updated_at: string;
+export interface CycleEvent {
+  id: string;
+  kind: string;
+  title: string;
+  proof_type: 'system' | 'telegram' | 'ton_transaction' | 'ton_state';
+  proof_ref: string | null;
+  created_at: string;
+}
+
+export interface BankCycle {
+  id: string;
+  sequence_number: number;
+  status: 'active' | 'completed' | 'expired';
+  goal_events: number;
+  event_count: number;
+  progress_bps: number;
+  started_at: string;
+  ends_at: string;
+  completed_at: string | null;
+  events: CycleEvent[];
 }
 
 export interface Profile {
   user: User;
   wallet: Wallet | null;
-  bank: BankPosition | null;
-  balance_nano: number | null;
-  plush_brick_holder: boolean;
+  bank: BankCycle | null;
 }
 
 export interface Offer {
@@ -138,8 +154,11 @@ export interface Referral {
 
 export interface Invite {
   code: string;
-  creator_telegram_id: number;
+  creator_name: string;
+  creator_username: string | null;
   stake_nano: number;
+  total_pool_nano: number;
   chance_bps: number;
+  counter_offer_id: number;
   expires_at: string;
 }

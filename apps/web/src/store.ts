@@ -4,21 +4,62 @@ import { api } from './api';
 import { isMockTelegram, telegram } from './telegram';
 import type { Duel, Invite, Offer, Profile, Tab } from './types';
 
+const mockParameters = new URLSearchParams(window.location.search);
+const mockState = mockParameters.get('state');
+const mockNow = Date.now();
+
 const demoProfile: Profile = {
   user: {
     id: 'demo',
     telegram_id: 777000,
     username: 'loop_demo',
     first_name: 'Дмитрий',
+    photo_url: null,
     onboarding_seen: false,
   },
   wallet: null,
-  bank: null,
-  balance_nano: 18_750_000_000,
-  plush_brick_holder: true,
+  bank:
+    mockState === 'empty'
+      ? null
+      : {
+          id: 'cycle-demo-04',
+          sequence_number: 4,
+          status: mockState === 'completed' ? 'completed' : 'active',
+          goal_events: 8,
+          event_count: mockState === 'completed' ? 8 : 5,
+          progress_bps: mockState === 'completed' ? 10_000 : 6_200,
+          started_at: new Date(mockNow - 2 * 86_400_000).toISOString(),
+          ends_at: new Date(mockNow + 5 * 86_400_000).toISOString(),
+          completed_at: mockState === 'completed' ? new Date(mockNow).toISOString() : null,
+          events: [
+            {
+              id: 'event-1',
+              kind: 'invite_accepted',
+              title: 'Миша принял вызов',
+              proof_type: 'telegram',
+              proof_ref: 'demo-invite',
+              created_at: new Date(mockNow - 2 * 60_000).toISOString(),
+            },
+            {
+              id: 'event-2',
+              kind: 'duel_matched',
+              title: 'Соперник найден',
+              proof_type: 'ton_transaction',
+              proof_ref: 'demo-chain-proof',
+              created_at: new Date(mockNow - 42 * 60_000).toISOString(),
+            },
+            {
+              id: 'event-3',
+              kind: 'cycle_started',
+              title: 'Цикл начат',
+              proof_type: 'system',
+              proof_ref: 'cycle-demo-04',
+              created_at: new Date(mockNow - 2 * 86_400_000).toISOString(),
+            },
+          ],
+        },
 };
 
-const mockParameters = new URLSearchParams(window.location.search);
 const mockTab = mockParameters.get('screen');
 const initialTab: Tab =
   isMockTelegram() && (mockTab === 'bank' || mockTab === 'duel' || mockTab === 'profile')
@@ -40,6 +81,7 @@ interface LoopState {
   setError(error: string | null): void;
   finishOnboarding(): Promise<void>;
   replayOnboarding(): void;
+  startCycle(): Promise<void>;
   updateProfile(profile: Profile): void;
 }
 
@@ -118,6 +160,43 @@ export const useLoopStore = create<LoopState>((set, get) => ({
 
   replayOnboarding() {
     set({ showOnboarding: true });
+  },
+
+  async startCycle() {
+    if (!isMockTelegram()) {
+      await api.startCycle();
+      await get().refresh();
+      return;
+    }
+    const profile = get().profile;
+    if (!profile) return;
+    const now = Date.now();
+    set({
+      profile: {
+        ...profile,
+        bank: {
+          id: `cycle-demo-${now}`,
+          sequence_number: (profile.bank?.sequence_number ?? 0) + 1,
+          status: 'active',
+          goal_events: 6,
+          event_count: 1,
+          progress_bps: 1_666,
+          started_at: new Date(now).toISOString(),
+          ends_at: new Date(now + 7 * 86_400_000).toISOString(),
+          completed_at: null,
+          events: [
+            {
+              id: `event-${now}`,
+              kind: 'cycle_started',
+              title: 'Цикл начат',
+              proof_type: 'system',
+              proof_ref: `cycle-demo-${now}`,
+              created_at: new Date(now).toISOString(),
+            },
+          ],
+        },
+      },
+    });
   },
 
   updateProfile(profile) {

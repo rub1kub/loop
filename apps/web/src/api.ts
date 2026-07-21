@@ -19,7 +19,30 @@ const userSchema = z.object({
   telegram_id: z.number(),
   username: z.string().nullable(),
   first_name: z.string(),
+  photo_url: z.string().nullable(),
   onboarding_seen: z.boolean(),
+});
+
+const cycleEventSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  title: z.string(),
+  proof_type: z.enum(['system', 'telegram', 'ton_transaction', 'ton_state']),
+  proof_ref: z.string().nullable(),
+  created_at: z.string(),
+});
+
+const bankCycleSchema = z.object({
+  id: z.string(),
+  sequence_number: z.number(),
+  status: z.enum(['active', 'completed', 'expired']),
+  goal_events: z.number(),
+  event_count: z.number(),
+  progress_bps: z.number(),
+  started_at: z.string(),
+  ends_at: z.string(),
+  completed_at: z.string().nullable(),
+  events: z.array(cycleEventSchema),
 });
 
 const profileSchema = z.object({
@@ -27,9 +50,7 @@ const profileSchema = z.object({
   wallet: z
     .object({ address: z.string(), network: z.number(), verified_at: z.string() })
     .nullable(),
-  bank: z.object({ target_nano: z.number(), updated_at: z.string() }).nullable(),
-  balance_nano: z.number().nullable(),
-  plush_brick_holder: z.boolean(),
+  bank: bankCycleSchema.nullable(),
 });
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -74,10 +95,10 @@ export const api = {
     });
   },
 
-  async setBankTarget(targetNano: number): Promise<void> {
-    await request('/bank', {
-      method: 'PUT',
-      body: JSON.stringify({ target_nano: targetNano }),
+  async startCycle(goalEvents = 6): Promise<void> {
+    await request('/bank/cycles', {
+      method: 'POST',
+      body: JSON.stringify({ goal_events: goalEvents }),
     });
   },
 
@@ -99,6 +120,7 @@ export const api = {
     chance_bps: number;
     total_pool_nano: number;
     commitment_hex: string;
+    challenge_code?: string;
   }): Promise<OfferQuote> {
     return await request('/duels/quote', { method: 'POST', body: JSON.stringify(input) });
   },
