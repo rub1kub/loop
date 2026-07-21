@@ -1,5 +1,6 @@
 """Archive social cycles and create independent BANK and DUEL domains."""
 
+import hashlib
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -9,6 +10,48 @@ revision: str = "20260721_0004"
 down_revision: str | None = "20260721_0003"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
+
+def legacy_identifier(name: str) -> str:
+    candidate = f"legacy_{name}"
+    if len(candidate) <= 63:
+        return candidate
+    digest = hashlib.sha256(name.encode()).hexdigest()[:8]
+    return f"legacy_{name[:46]}_{digest}"
+
+
+def archive_table(old: str, archived: str) -> None:
+    op.rename_table(old, archived)
+    bind = op.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    quote = bind.dialect.identifier_preparer.quote
+    inspector = sa.inspect(bind)
+    constraint_names = {
+        item.get("name")
+        for item in [
+            inspector.get_pk_constraint(archived),
+            *inspector.get_unique_constraints(archived),
+            *inspector.get_foreign_keys(archived),
+            *inspector.get_check_constraints(archived),
+        ]
+        if item.get("name")
+    }
+    for name in sorted(constraint_names):
+        op.execute(
+            sa.text(
+                f"ALTER TABLE {quote(archived)} RENAME CONSTRAINT {quote(name)} "
+                f"TO {quote(legacy_identifier(name))}"
+            )
+        )
+    # PostgreSQL constraint renames also rename their backing indexes. Re-read
+    # the table and move any remaining standalone index names out of the way.
+    for index in sa.inspect(bind).get_indexes(archived):
+        name = index.get("name")
+        if name and not name.startswith("legacy_"):
+            op.execute(
+                sa.text(f"ALTER INDEX {quote(name)} RENAME TO {quote(legacy_identifier(name))}")
+            )
 
 
 def upgrade() -> None:
@@ -22,7 +65,7 @@ def upgrade() -> None:
         ("duel_challenges", "legacy_duel_challenges"),
         ("chain_events", "legacy_chain_events"),
     ]:
-        op.rename_table(old, archived)
+        archive_table(old, archived)
 
     op.add_column(
         "users",
