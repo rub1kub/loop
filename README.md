@@ -1,6 +1,6 @@
 # LOOP
 
-LOOP is a Telegram Mini App that turns native TON/GRAM interactions into a small, monochrome, wallet-first experience. The application never keeps an off-chain user balance: funds remain in the user's wallet or in the audited escrow state of a smart contract.
+LOOP is a Telegram Mini App that turns native TON/GRAM interactions into a small, monochrome, wallet-first experience. The application never keeps an off-chain user balance: funds remain in the user's wallet or in the verifiable escrow state of a smart contract.
 
 ## Product
 
@@ -64,4 +64,3 @@ Testnet is the only enabled chain in the default configuration. Mainnet requires
 ## License
 
 MIT
-

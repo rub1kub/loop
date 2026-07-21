@@ -2,7 +2,7 @@
 
 ## Production topology
 
-Only nginx publishes ports 80/443. PostgreSQL, Redis, API and workers use an internal Docker network. Images run as non-root with read-only filesystems, dropped capabilities, `no-new-privileges`, health checks and explicit resource limits. PostgreSQL and Redis are never bound to a public host interface.
+On the shared target VPS, the existing Apache edge owns ports 80/443 and forwards only the LOOP SNI host to nginx on `127.0.0.1:18791`. nginx serves immutable frontend files, applies request limits and security headers, and proxies the API on `127.0.0.1:8000`. PostgreSQL, Redis, API and workers otherwise use an internal Docker network. Images run as non-root with read-only filesystems, dropped capabilities, `no-new-privileges`, health checks and explicit resource limits. PostgreSQL and Redis are never bound to a public host interface.
 
 TLS uses Let's Encrypt with monitored renewal. nginx enforces request limits, exact CORS, CSP, HSTS after a staged rollout, `nosniff`, a restrictive referrer policy and per-route rate limiting. Telegram framing behavior must be verified before tightening `frame-ancestors`.
 
@@ -26,4 +26,3 @@ Alert independently of the production bot for service health, 5xx rate, database
 ## Rollback
 
 Disable only new offers and referrals. Never disable reveal, settlement, cancellation or timeout refunds. Drain and reconcile active rounds, then roll application images back by digest while retaining chain events and database audit history.
-

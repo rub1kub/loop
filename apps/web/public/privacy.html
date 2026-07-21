@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>LOOP — Конфиденциальность</title>
+    <style>
+      body {
+        margin: 0;
+        background: #000;
+        color: #f5f5f5;
+        font:
+          16px/1.55 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 720px;
+        margin: auto;
+        padding: 48px 24px 80px;
+      }
+      a {
+        color: #fff;
+      }
+      h1 {
+        font-size: 36px;
+        letter-spacing: -0.04em;
+      }
+      h2 {
+        margin-top: 32px;
+        font-size: 18px;
+      }
+      p,
+      li {
+        color: #b9b9b9;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a href="/">← LOOP</a>
+      <h1>Конфиденциальность</h1>
+      <p>Обновлено 21 июля 2026 года.</p>
+      <h2>Какие данные обрабатываются</h2>
+      <p>
+        LOOP получает от Telegram идентификатор, имя, username, язык и параметр запуска; хранит
+        подтверждённый адрес TON-кошелька, настройки BANK, предложения DUEL, реферальную атрибуцию и
+        проекцию публичных blockchain-событий.
+      </p>
+      <h2>Секреты и средства</h2>
+      <p>
+        Секрет commit–reveal создаётся на устройстве и хранится в Telegram SecureStorage. Он не
+        передаётся backend до публикации самим кошельком в TON. Seed phrase, private key и
+        пользовательские средства LOOP не получает.
+      </p>
+      <h2>Цели и срок</h2>
+      <p>
+        Данные используются для входа, связи Telegram с кошельком, matchmaking, восстановления
+        состояния и защиты от злоупотреблений. Off-chain данные хранятся до удаления аккаунта или
+        пока нужны для безопасности теста. Публичные записи TON удалить невозможно.
+      </p>
+      <h2>Передача</h2>
+      <p>
+        Для работы используются Telegram, TON Connect, TON Center и инфраструктурный сервер. Данные
+        не продаются. Технические журналы не должны содержать tokens, seed phrases или содержимое
+        TON proof.
+      </p>
+      <h2>Запросы</h2>
+      <p>
+        Запросить экспорт или удаление off-chain данных можно через чат Telegram-бота LOOP.
+        Blockchain-транзакции и данные, необходимые для расследования злоупотреблений, могут
+        сохраняться согласно применимому праву.
+      </p>
+    </main>
+  </body>
+</html>
