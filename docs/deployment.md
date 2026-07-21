@@ -17,6 +17,10 @@ TLS uses Let's Encrypt with monitored renewal. nginx enforces request limits, ex
 
 Mainnet deployment is a separate manual multisig change and is not performed by CI.
 
+Telegram inline mode is the one BotFather-only setting: run `/setinline` for `@getloopbot`, provide a short duel placeholder, then verify `getMe.supports_inline_queries=true`. The Bot API cannot enable this capability.
+
+On a shared host, keep the existing Apache default vhost order unchanged. The three nginx LOOP files under `/etc/nginx` may point to `/opt/loop/current/deploy/nginx/`; release activation validates the new configuration and restores the previous release symlink if validation fails. After key-based deployment is verified, rotate the bootstrap root password through the hosting control plane.
+
 ## Backups and monitoring
 
 Archive PostgreSQL WAL continuously and take encrypted off-site base backups. Target RPO is 5 minutes and RTO is 60 minutes; verify every backup and perform an isolated restore monthly. Redis is disposable.

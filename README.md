@@ -10,6 +10,14 @@ LOOP is a Telegram Mini App that turns native TON/GRAM interactions into a small
 - **Telegram** — validated Mini App `initData`, native buttons, safe areas, haptics, bot menu, notifications, and inline duel invitations.
 - **TON** — TON Connect, Tolk contracts built by Acton, chain-confirmed state, and permissionless recovery paths.
 
+## Live testnet
+
+- Mini App: <https://144-31-30-62.sslip.io>
+- Telegram bot: <https://t.me/getloopbot>
+- Escrow: [`kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a`](https://testnet.tonviewer.com/kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a)
+
+The deployed contract bytecode is attested at API startup against code hash `1D8330B799875E54680D3180703A2CC0A3C3FFE4C763B6A9D2980E910252B63D`.
+
 ## Repository
 
 ```text

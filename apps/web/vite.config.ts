@@ -12,7 +12,7 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    sourcemap: true,
+    sourcemap: process.env.LOOP_BUILD_SOURCEMAPS === 'true',
     rolldownOptions: {
       output: {
         codeSplitting: {
