@@ -22,7 +22,7 @@ make deploy RELEASE=<40-character-git-sha>
 make smoke-test
 ```
 
-The BANK/DUEL split migration archives old cycle-era tables under `legacy_*`; it does not reinterpret their records as financial state. Because the old binary cannot read the new names, rollback means restoring the pre-migration database backup together with the previous release.
+The BANK/DUEL split migration archives old cycle-era tables under `legacy_*`; it does not reinterpret their records as financial state. The activation script stops writers before backup and automatically restores both the pre-migration database and previous immutable release if migration, health, nginx or public smoke validation fails.
 
 ## Health checks
 
@@ -45,4 +45,4 @@ After any deployment, update the relevant manifest and environment hash, run `ma
 
 ## Backup and recovery
 
-`deploy/backup-postgres.sh` creates timestamped compressed database dumps with restricted permissions. Restore is an operator action performed into a fresh database, followed by migration check and chain replay from the last trusted checkpoint. Contract funds are recoverable through permissionless contract timeouts even if LOOP is unavailable.
+`deploy/backup-postgres.sh` creates timestamped compressed database dumps with restricted permissions and returns the validated archive path to the activation script. Failed activation restores that archive before restarting the prior release. A disaster-recovery restore is still an operator action into a clean database, followed by migration validation and deterministic chain replay. Contract funds remain recoverable through permissionless contract timeouts even if LOOP is unavailable.

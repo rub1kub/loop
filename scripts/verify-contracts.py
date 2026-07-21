@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from tonsdk.boc import Cell  # type: ignore[import-untyped]
+from tonsdk.utils import Address  # type: ignore[import-untyped]
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_DIR = ROOT / "deployments" / "testnet"
@@ -35,6 +37,21 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{path} must contain an object")
     return value
+
+
+def raw_address(value: str) -> str:
+    return Address(value).to_string(is_user_friendly=False).lower()
+
+
+def stack_address(item: list[Any]) -> str:
+    boc = base64.b64decode(str(item[1]["bytes"]))
+    cell = Cell.one_from_boc(boc)
+    if isinstance(cell, list):
+        cell = cell[0]
+    address = cell.begin_parse().read_msg_addr()
+    if address is None:
+        raise ValueError("contractConfig returned an empty address")
+    return address.to_string(is_user_friendly=False).lower()
 
 
 async def verify_contract(
@@ -63,9 +80,6 @@ async def verify_contract(
         raise ValueError(f"{contract}: contract is not active")
     if normalize_hash(str(state.get("code_hash", ""))) != expected_code:
         raise ValueError(f"{contract}: deployed code hash mismatch")
-    if normalize_hash(str(state.get("data_hash", ""))) != expected_data:
-        raise ValueError(f"{contract}: deployed data hash mismatch")
-
     tx_response = await provider_get(
         client,
         "/api/v3/transactions",
@@ -89,6 +103,35 @@ async def verify_contract(
         raise ValueError(f"{contract}: deployment logical time mismatch")
     if int(transaction.get("mc_block_seqno", 0)) <= 0:
         raise ValueError(f"{contract}: deployment lacks masterchain finality")
+    if raw_address(str(transaction.get("account", ""))) != raw_address(
+        str(state["address"])
+    ):
+        raise ValueError(f"{contract}: deployment transaction account mismatch")
+    deployed_state = transaction.get("account_state_after") or {}
+    if normalize_hash(str(deployed_state.get("code_hash", ""))) != expected_code:
+        raise ValueError(f"{contract}: deployment code hash mismatch")
+    if normalize_hash(str(deployed_state.get("data_hash", ""))) != expected_data:
+        raise ValueError(f"{contract}: deployment data hash mismatch")
+
+    getter_response = await provider_post(
+        client,
+        "/api/v2/runGetMethod",
+        {"address": address, "method": "contractConfig", "stack": []},
+    )
+    getter = getter_response.json()
+    result = getter.get("result") or {}
+    stack = result.get("stack") or []
+    if not getter.get("ok") or result.get("exit_code") != 0 or len(stack) < 4:
+        raise ValueError(f"{contract}: contractConfig getter failed")
+    configuration = manifest["configuration"]
+    if stack_address(stack[0]) != raw_address(str(configuration["owner"])):
+        raise ValueError(f"{contract}: owner mismatch")
+    if stack_address(stack[1]) != raw_address(str(configuration["treasury"])):
+        raise ValueError(f"{contract}: treasury mismatch")
+    if int(str(stack[2][1]), 0) != int(configuration["fee_bps"]):
+        raise ValueError(f"{contract}: fee mismatch")
+    if bool(int(str(stack[3][1]), 0)) != bool(configuration["paused"]):
+        raise ValueError(f"{contract}: pause state mismatch")
 
     return {
         "contract": contract,
@@ -96,7 +139,9 @@ async def verify_contract(
         "active": True,
         "local_build_matches": True,
         "code_hash": expected_code,
-        "data_hash": expected_data,
+        "initial_data_hash": expected_data,
+        "initial_data_hash_matches": True,
+        "configuration_matches": True,
         "deployment_transaction": str(manifest["deploy_transaction"]),
         "deployment_lt": int(manifest["deploy_transaction_lt"]),
         "masterchain_seqno": int(transaction["mc_block_seqno"]),
@@ -109,6 +154,19 @@ async def provider_get(
 ) -> httpx.Response:
     for attempt in range(4):
         response = await client.get(f"{TONCENTER}{path}", params=params)
+        if response.status_code != 429:
+            response.raise_for_status()
+            return response
+        await asyncio.sleep(attempt + 1)
+    response.raise_for_status()
+    raise AssertionError("unreachable")
+
+
+async def provider_post(
+    client: httpx.AsyncClient, path: str, payload: dict[str, Any]
+) -> httpx.Response:
+    for attempt in range(4):
+        response = await client.post(f"{TONCENTER}{path}", json=payload)
         if response.status_code != 429:
             response.raise_for_status()
             return response
