@@ -42,6 +42,30 @@ class DuelState(enum.StrEnum):
     EXPIRED = "expired"
 
 
+class CycleStatus(enum.StrEnum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    EXPIRED = "expired"
+
+
+class CycleEventKind(enum.StrEnum):
+    CYCLE_STARTED = "cycle_started"
+    INVITE_CREATED = "invite_created"
+    INVITE_ACCEPTED = "invite_accepted"
+    DUEL_FUNDED = "duel_funded"
+    DUEL_MATCHED = "duel_matched"
+    DUEL_SETTLED = "duel_settled"
+    DUEL_REFUNDED = "duel_refunded"
+    ASSET_VERIFIED = "asset_verified"
+
+
+class ProofType(enum.StrEnum):
+    SYSTEM = "system"
+    TELEGRAM = "telegram"
+    TON_TRANSACTION = "ton_transaction"
+    TON_STATE = "ton_state"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -84,6 +108,12 @@ class Wallet(Base):
 
 
 class BankPosition(Base):
+    """Legacy wallet-goal record kept for rollback compatibility.
+
+    LOOP no longer reads or writes this model. Production data is intentionally
+    retained while the social cycle model proves stable.
+    """
+
     __tablename__ = "bank_positions"
 
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
@@ -92,6 +122,55 @@ class BankPosition(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+
+class BankCycle(Base):
+    __tablename__ = "bank_cycles"
+    __table_args__ = (
+        UniqueConstraint("user_id", "sequence_number", name="bank_cycle_user_sequence"),
+        Index(
+            "uq_active_bank_cycle_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(24), default=CycleStatus.ACTIVE.value, nullable=False, index=True
+    )
+    goal_events: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    event_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class CycleEvent(Base):
+    __tablename__ = "cycle_events"
+    __table_args__ = (
+        UniqueConstraint("cycle_id", "dedupe_key", name="cycle_event_dedupe"),
+        Index("ix_cycle_events_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    cycle_id: Mapped[str] = mapped_column(ForeignKey("bank_cycles.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    actor_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    proof_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    proof_ref: Mapped[str | None] = mapped_column(String(160))
+    dedupe_key: Mapped[str] = mapped_column(String(192), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class ReferralCode(Base):

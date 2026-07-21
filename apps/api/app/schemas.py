@@ -12,6 +12,7 @@ class UserView(BaseModel):
     telegram_id: int
     username: str | None
     first_name: str
+    photo_url: str | None
     onboarding_seen: bool
 
 
@@ -61,13 +62,36 @@ class WalletView(BaseModel):
     verified_at: datetime
 
 
-class BankPositionRequest(BaseModel):
-    target_nano: int = Field(ge=1_000_000_000, le=1_000_000_000_000_000)
+class BankCycleStart(BaseModel):
+    goal_events: int = Field(default=6, ge=3, le=12)
 
 
-class BankPositionView(BaseModel):
-    target_nano: int
-    updated_at: datetime
+class CycleEventView(BaseModel):
+    id: str
+    kind: str
+    title: str
+    proof_type: str
+    proof_ref: str | None
+    created_at: datetime
+
+
+class BankCycleView(BaseModel):
+    id: str
+    sequence_number: int
+    status: str
+    goal_events: int
+    event_count: int
+    progress_bps: int
+    started_at: datetime
+    ends_at: datetime
+    completed_at: datetime | None
+    events: list[CycleEventView]
+
+
+class ProfileView(BaseModel):
+    user: UserView
+    wallet: WalletView | None
+    bank: BankCycleView | None
 
 
 class OfferQuoteRequest(BaseModel):

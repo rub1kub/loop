@@ -65,8 +65,8 @@ async def test_authentication_validation_and_one_time_wallet_challenge(client, a
     assert forged.status_code == 401
 
     headers = await auth_headers(client)
-    invalid_bank = await client.put(
-        "/api/v1/bank", headers=headers, json={"target_nano": 999_999_999}
+    invalid_bank = await client.post(
+        "/api/v1/bank/cycles", headers=headers, json={"goal_events": 2}
     )
     assert invalid_bank.status_code == 422
     updated = await client.patch(

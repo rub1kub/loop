@@ -6,10 +6,18 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
+from .cycles import (
+    ActiveCycleExistsError,
+    cycle_events,
+    latest_cycle,
+    progress_bps,
+    start_cycle,
+)
 from .dependencies import Config, CurrentUser, Db
 from .models import (
     AuthExchange,
-    BankPosition,
+    BankCycle,
+    CycleEvent,
     Duel,
     DuelState,
     InlineInvite,
@@ -22,14 +30,16 @@ from .models import (
 from .schemas import (
     ActionIntent,
     AuthResponse,
-    BankPositionRequest,
-    BankPositionView,
+    BankCycleStart,
+    BankCycleView,
     ContractCall,
+    CycleEventView,
     DuelView,
     InviteView,
     OfferQuoteRequest,
     OfferQuoteResponse,
     OfferView,
+    ProfileView,
     ReferralView,
     SettingsUpdate,
     TelegramAuthRequest,
@@ -79,7 +89,34 @@ def user_view(user: User) -> UserView:
         telegram_id=user.telegram_id,
         username=user.username,
         first_name=user.first_name,
+        photo_url=user.photo_url,
         onboarding_seen=user.onboarding_seen,
+    )
+
+
+def cycle_event_view(event: CycleEvent) -> CycleEventView:
+    return CycleEventView(
+        id=event.id,
+        kind=event.kind,
+        title=event.title,
+        proof_type=event.proof_type,
+        proof_ref=event.proof_ref,
+        created_at=event.created_at,
+    )
+
+
+def bank_cycle_view(cycle: BankCycle, events: list[CycleEvent]) -> BankCycleView:
+    return BankCycleView(
+        id=cycle.id,
+        sequence_number=cycle.sequence_number,
+        status=cycle.status,
+        goal_events=cycle.goal_events,
+        event_count=cycle.event_count,
+        progress_bps=progress_bps(cycle),
+        started_at=cycle.started_at,
+        ends_at=cycle.ends_at,
+        completed_at=cycle.completed_at,
+        events=[cycle_event_view(event) for event in events],
     )
 
 
@@ -142,45 +179,27 @@ async def authenticate(body: TelegramAuthRequest, db: Db, settings: Config) -> A
     return AuthResponse(access_token=token, expires_at=expires, user=user_view(user))
 
 
-@router.get("/me")
-async def get_me(
-    user: CurrentUser, db: Db, request: Request, settings: Config
-) -> dict[str, object]:
+@router.get("/me", response_model=ProfileView)
+async def get_me(user: CurrentUser, db: Db) -> ProfileView:
     wallet = await db.scalar(
         select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True))
     )
-    position = await db.get(BankPosition, user.id)
-    balance = None
-    holder = False
-    if wallet:
-        try:
-            balance = await request.app.state.ton_client.get_native_balance(wallet.address)
-            if settings.ton_network_id == -239:
-                holder_balance = await request.app.state.ton_client.get_holder_balance(
-                    wallet.address, settings.plush_brick_master
-                )
-                holder = holder_balance >= settings.holder_min_balance_nano
-        except TonProviderError:
-            balance = None
-    return {
-        "user": user_view(user).model_dump(mode="json"),
-        "wallet": (
+    cycle = await latest_cycle(db, user.id)
+    events = await cycle_events(db, user.id, cycle.id) if cycle else []
+    await db.commit()
+    return ProfileView(
+        user=user_view(user),
+        wallet=(
             WalletView(
-                address=wallet.address, network=wallet.network, verified_at=wallet.verified_at
-            ).model_dump(mode="json")
+                address=wallet.address,
+                network=wallet.network,
+                verified_at=wallet.verified_at,
+            )
             if wallet
             else None
         ),
-        "bank": (
-            BankPositionView(
-                target_nano=position.target_nano, updated_at=position.updated_at
-            ).model_dump(mode="json")
-            if position
-            else None
-        ),
-        "balance_nano": balance,
-        "plush_brick_holder": holder,
-    }
+        bank=bank_cycle_view(cycle, events) if cycle else None,
+    )
 
 
 @router.patch("/me/settings", response_model=UserView)
@@ -190,19 +209,28 @@ async def update_settings(body: SettingsUpdate, user: CurrentUser, db: Db) -> Us
     return user_view(user)
 
 
-@router.put("/bank", response_model=BankPositionView)
-async def set_bank_position(
-    body: BankPositionRequest, user: CurrentUser, db: Db
-) -> BankPositionView:
-    position = await db.get(BankPosition, user.id)
-    if position is None:
-        position = BankPosition(user_id=user.id, target_nano=body.target_nano)
-        db.add(position)
-    else:
-        position.target_nano = body.target_nano
-        position.updated_at = datetime.now(UTC)
+@router.post("/bank/cycles", response_model=BankCycleView, status_code=status.HTTP_201_CREATED)
+async def create_bank_cycle(
+    body: BankCycleStart, user: CurrentUser, db: Db
+) -> BankCycleView:
+    try:
+        cycle = await start_cycle(db, user, body.goal_events)
+    except ActiveCycleExistsError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "active cycle already exists") from exc
     await db.commit()
-    return BankPositionView(target_nano=position.target_nano, updated_at=position.updated_at)
+    await db.refresh(cycle)
+    events = await cycle_events(db, user.id, cycle.id)
+    return bank_cycle_view(cycle, events)
+
+
+@router.get("/bank/cycles/current", response_model=BankCycleView | None)
+async def current_bank_cycle(user: CurrentUser, db: Db) -> BankCycleView | None:
+    cycle = await latest_cycle(db, user.id)
+    if cycle is None:
+        return None
+    events = await cycle_events(db, user.id, cycle.id)
+    await db.commit()
+    return bank_cycle_view(cycle, events)
 
 
 @router.post("/wallet/challenge", response_model=WalletChallengeResponse)

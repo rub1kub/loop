@@ -23,7 +23,7 @@ def signed_init_data() -> str:
 
 
 @pytest.mark.asyncio
-async def test_auth_me_and_bank(client) -> None:
+async def test_auth_me_and_social_cycle(client) -> None:
     auth = await client.post("/api/v1/auth/telegram", json={"init_data": signed_init_data()})
     assert auth.status_code == 200, auth.text
     token = auth.json()["access_token"]
@@ -31,9 +31,19 @@ async def test_auth_me_and_bank(client) -> None:
     me = await client.get("/api/v1/me", headers=headers)
     assert me.status_code == 200
     assert me.json()["user"]["telegram_id"] == 777000111
-    bank = await client.put("/api/v1/bank", headers=headers, json={"target_nano": 10_000_000_000})
-    assert bank.status_code == 200
-    assert bank.json()["target_nano"] == 10_000_000_000
+    assert me.json()["bank"] is None
+    assert "balance_nano" not in me.json()
+    bank = await client.post("/api/v1/bank/cycles", headers=headers, json={"goal_events": 6})
+    assert bank.status_code == 201
+    assert bank.json()["sequence_number"] == 1
+    assert bank.json()["event_count"] == 1
+    assert bank.json()["progress_bps"] == 1_666
+    assert bank.json()["events"][0]["kind"] == "cycle_started"
+    assert (
+        await client.post("/api/v1/bank/cycles", headers=headers, json={"goal_events": 6})
+    ).status_code == 409
+    refreshed = await client.get("/api/v1/me", headers=headers)
+    assert refreshed.json()["bank"]["id"] == bank.json()["id"]
 
 
 @pytest.mark.asyncio
