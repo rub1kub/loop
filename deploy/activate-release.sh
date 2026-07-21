@@ -20,7 +20,8 @@ export LOOP_IMAGE_TAG="$release_id"
 docker compose --project-name loop --env-file .env.production build --pull api
 docker compose --project-name loop --env-file .env.production up -d --wait db redis
 docker compose --project-name loop --env-file .env.production run --rm migrate
-docker compose --project-name loop --env-file .env.production up -d --wait --wait-timeout 120 api worker
+docker compose --project-name loop --env-file .env.production up -d api worker
+docker compose --project-name loop --env-file .env.production up -d --wait --wait-timeout 120 api
 curl --fail --silent --show-error http://127.0.0.1:8000/ready >/dev/null
 
 ln -sfn "$release_dir" "$loop_root/current.next"
