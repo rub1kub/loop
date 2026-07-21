@@ -9,17 +9,10 @@ import {
 } from '@phosphor-icons/react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../api';
-import {
-  haptic,
-  isMockTelegram,
-  readDuelSecret,
-  setMainAction,
-  storeDuelSecret,
-  telegram,
-} from '../telegram';
+import { haptic, isMockTelegram, readDuelSecret, storeDuelSecret, telegram } from '../telegram';
 import {
   buildActionTransaction,
   buildOpenOfferTransaction,
@@ -60,6 +53,7 @@ export function DuelScreen({
       : 'Равные условия. Вклад блокируется только смарт-контрактом.',
   );
   const [now, setNow] = useState(0);
+  const actionLock = useRef(false);
 
   useEffect(() => {
     const update = () => setNow(Date.now());
@@ -109,24 +103,27 @@ export function DuelScreen({
   const totalPoolNano = contributionNano * 2;
 
   const start = useCallback(async () => {
-    if (activeOffer) return;
-    if (isMockTelegram()) {
-      setStatus('searching');
-      setMessage('Ищем человека. LOOP можно закрыть — цикл продолжится.');
-      haptic('success');
-      return;
-    }
-    if (!wallet) {
-      haptic('warning');
-      await tonConnectUI.openModal();
-      return;
-    }
-    if (!profile.wallet) {
-      setMessage('Подтверждаем владение внешним кошельком…');
-      haptic('warning');
-      return;
-    }
+    if (activeOffer || actionLock.current) return;
+    actionLock.current = true;
     try {
+      if (isMockTelegram()) {
+        setStatus('searching');
+        setMessage('Ищем человека. LOOP можно закрыть — цикл продолжится.');
+        haptic('success');
+        return;
+      }
+      if (!wallet) {
+        setStatus('wallet');
+        haptic('warning');
+        await tonConnectUI.openModal();
+        setStatus('idle');
+        return;
+      }
+      if (!profile.wallet) {
+        setMessage('Подтверждаем владение внешним кошельком…');
+        haptic('warning');
+        return;
+      }
       setStatus('preparing');
       setMessage('Готовим on-chain вызов…');
       if (contributionNano <= 0) throw new Error('Выбери вклад для участия');
@@ -159,6 +156,8 @@ export function DuelScreen({
       setStatus('idle');
       setMessage(error instanceof Error ? error.message : 'Не удалось создать вызов');
       haptic('error');
+    } finally {
+      actionLock.current = false;
     }
   }, [
     activeOffer,
@@ -172,10 +171,12 @@ export function DuelScreen({
   ]);
 
   const runActiveAction = useCallback(async () => {
+    if (actionLock.current) return;
     if (!activeOffer || !wallet) {
       await tonConnectUI.openModal();
       return;
     }
+    actionLock.current = true;
     try {
       setStatus('wallet');
       let intent;
@@ -209,6 +210,9 @@ export function DuelScreen({
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Не удалось выполнить действие');
       haptic('error');
+    } finally {
+      actionLock.current = false;
+      setStatus('idle');
     }
   }, [activeDuel, activeOffer, duelExpired, offerExpired, onRefresh, tonConnectUI, wallet]);
 
@@ -241,16 +245,6 @@ export function DuelScreen({
     app.switchInlineQuery(`duel ${activeOffer.onchain_offer_id}`, ['users', 'groups']);
     haptic('light');
   }, [activeOffer]);
-
-  useEffect(() => {
-    if (activeActionLabel) {
-      return setMainAction(activeActionLabel, () => void runActiveAction());
-    }
-    if (!activeOffer) {
-      return setMainAction(invite ? 'ПРИНЯТЬ ВЫЗОВ' : 'НАЙТИ СОПЕРНИКА', () => void start());
-    }
-    return setMainAction('', undefined, false);
-  }, [activeActionLabel, activeOffer, invite, runActiveAction, start]);
 
   const statusLabel =
     effectiveStatus === 'matched'
@@ -304,7 +298,7 @@ export function DuelScreen({
                   setContribution(value);
                   haptic('selection');
                 }}
-                disabled={Boolean(invite)}
+                disabled={Boolean(invite) || status === 'preparing' || status === 'wallet'}
               >
                 <strong>{value}</strong>
                 <span>GRAM</span>
@@ -333,16 +327,25 @@ export function DuelScreen({
       <div className="duel-actions">
         {!activeOffer && effectiveStatus !== 'searching' && (
           <>
-            <button className="primary-button" onClick={() => void start()}>
-              {invite
-                ? 'ПРИНЯТЬ ВЫЗОВ'
-                : wallet || isMockTelegram()
-                  ? 'НАЙТИ СОПЕРНИКА'
-                  : 'ПРОДОЛЖИТЬ'}
+            <button
+              className="primary-button"
+              onClick={() => void start()}
+              disabled={status === 'preparing' || status === 'wallet'}
+            >
+              {status === 'preparing'
+                ? 'ГОТОВИМ ВЫЗОВ…'
+                : status === 'wallet'
+                  ? 'ОТКРОЙ КОШЕЛЁК'
+                  : invite
+                    ? 'ПРИНЯТЬ ВЫЗОВ'
+                    : wallet || isMockTelegram()
+                      ? 'НАЙТИ СОПЕРНИКА'
+                      : 'ПРОДОЛЖИТЬ'}
             </button>
             {!invite && (
               <button
                 className="secondary-button"
+                disabled={status === 'preparing' || status === 'wallet'}
                 onClick={() => {
                   setMessage(
                     'Создай on-chain вызов — после подтверждения отправим его в Telegram.',
@@ -363,7 +366,11 @@ export function DuelScreen({
           </button>
         )}
         {activeActionLabel && (
-          <button className="secondary-button" onClick={() => void runActiveAction()}>
+          <button
+            className="secondary-button"
+            onClick={() => void runActiveAction()}
+            disabled={status === 'wallet'}
+          >
             {activeActionLabel}
           </button>
         )}
