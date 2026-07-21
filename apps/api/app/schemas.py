@@ -99,12 +99,13 @@ class OfferQuoteRequest(BaseModel):
     chance_bps: int
     total_pool_nano: int
     commitment_hex: str = Field(min_length=64, max_length=64)
+    challenge_code: str | None = Field(default=None, min_length=8, max_length=24)
 
     @field_validator("chance_bps")
     @classmethod
     def valid_chance(cls, value: int) -> int:
-        if value not in {2500, 5000, 7500}:
-            raise ValueError("chance_bps must be 2500, 5000 or 7500")
+        if value != 5000:
+            raise ValueError("LOOP social duels require equal 50/50 participation")
         return value
 
     @field_validator("commitment_hex")
@@ -176,7 +177,10 @@ class ReferralView(BaseModel):
 
 class InviteView(BaseModel):
     code: str
-    creator_telegram_id: int
+    creator_name: str
+    creator_username: str | None
     stake_nano: int
+    total_pool_nano: int
     chance_bps: int
+    counter_offer_id: int
     expires_at: datetime

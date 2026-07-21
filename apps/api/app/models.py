@@ -66,6 +66,14 @@ class ProofType(enum.StrEnum):
     TON_STATE = "ton_state"
 
 
+class ChallengeState(enum.StrEnum):
+    OPEN = "open"
+    ACCEPTED = "accepted"
+    FUNDING = "funding"
+    MATCHED = "matched"
+    EXPIRED = "expired"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -234,6 +242,8 @@ class Duel(Base):
 
 
 class InlineInvite(Base):
+    """Legacy unbound inline invite retained for rollback compatibility."""
+
     __tablename__ = "inline_invites"
 
     code: Mapped[str] = mapped_column(String(24), primary_key=True)
@@ -242,6 +252,27 @@ class InlineInvite(Base):
     chance_bps: Mapped[int] = mapped_column(Integer, nullable=False)
     accepted_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class DuelChallenge(Base):
+    __tablename__ = "duel_challenges"
+    __table_args__ = (
+        UniqueConstraint("creator_offer_id", name="duel_challenge_offer"),
+        Index("ix_duel_challenges_state_expires", "state", "expires_at"),
+    )
+
+    code: Mapped[str] = mapped_column(String(24), primary_key=True)
+    creator_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    creator_offer_id: Mapped[str] = mapped_column(
+        ForeignKey("matchmaking_offers.id"), nullable=False
+    )
+    accepted_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+    state: Mapped[str] = mapped_column(
+        String(24), default=ChallengeState.OPEN.value, nullable=False, index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 

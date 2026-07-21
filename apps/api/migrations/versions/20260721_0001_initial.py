@@ -17,7 +17,7 @@ def upgrade() -> None:
     initial_tables = [
         table
         for name, table in Base.metadata.tables.items()
-        if name not in {"bank_cycles", "cycle_events"}
+        if name not in {"bank_cycles", "cycle_events", "duel_challenges"}
     ]
     Base.metadata.create_all(bind=bind, tables=initial_tables)
 
@@ -27,6 +27,6 @@ def downgrade() -> None:
     initial_tables = [
         table
         for name, table in Base.metadata.tables.items()
-        if name not in {"bank_cycles", "cycle_events"}
+        if name not in {"bank_cycles", "cycle_events", "duel_challenges"}
     ]
     Base.metadata.drop_all(bind=bind, tables=initial_tables)

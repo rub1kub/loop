@@ -8,8 +8,9 @@ import pytest
 from sqlalchemy import select
 
 from app.models import (
+    ChallengeState,
     Duel,
-    InlineInvite,
+    DuelChallenge,
     MatchmakingOffer,
     OfferState,
     User,
@@ -106,6 +107,12 @@ async def test_quote_rejects_bad_pool_active_wallet_and_reused_id(client, app) -
         json={**common, "total_pool_nano": 400_000_000},
     )
     assert outside.status_code == 422
+    weighted = await client.post(
+        "/api/v1/duels/quote",
+        headers=headers,
+        json={**common, "chance_bps": 2500},
+    )
+    assert weighted.status_code == 422
 
     created = await client.post("/api/v1/duels/quote", headers=headers, json=common)
     assert created.status_code == 200, created.text
@@ -142,9 +149,9 @@ async def test_quote_selects_only_complementary_open_counterparty(client, app) -
                 wallet_id=first_wallet.id,
                 network=-3,
                 contract_address="0:" + "11" * 32,
-                chance_bps=2500,
+                chance_bps=5000,
                 total_pool_nano=4_000_000_000,
-                stake_nano=1_000_000_000,
+                stake_nano=2_000_000_000,
                 commitment_hex="cd" * 32,
                 state=OfferState.OPEN.value,
                 expires_at=datetime.now(UTC) + timedelta(minutes=10),
@@ -157,7 +164,7 @@ async def test_quote_selects_only_complementary_open_counterparty(client, app) -
         headers=second_headers,
         json={
             "offer_id": 3_002,
-            "chance_bps": 7500,
+            "chance_bps": 5000,
             "total_pool_nano": 4_000_000_000,
             "commitment_hex": "ef" * 32,
         },
@@ -241,7 +248,9 @@ async def test_action_intents_enforce_ownership_state_and_deadlines(client, app)
 
 
 @pytest.mark.asyncio
-async def test_invites_and_referrals_resist_self_use_expiry_and_double_accept(client, app) -> None:
+async def test_bound_challenges_and_referrals_resist_self_use_expiry_and_double_accept(
+    client, app
+) -> None:
     owner_id, referred_id, third_id = 700_007, 700_008, 700_009
     owner_headers = await auth_headers(client, owner_id)
     referred_headers = await auth_headers(client, referred_id)
@@ -251,50 +260,104 @@ async def test_invites_and_referrals_resist_self_use_expiry_and_double_accept(cl
         referred = await db.scalar(select(User).where(User.telegram_id == referred_id))
         assert owner is not None and referred is not None
         referred.referred_by_id = owner.id
+        owner_wallet = Wallet(
+            user_id=owner.id,
+            network=-3,
+            address="0:" + "7" * 32,
+            public_key="6" * 64,
+        )
         wallet = Wallet(
             user_id=referred.id,
             network=-3,
             address="0:" + "8" * 32,
             public_key="9" * 64,
         )
-        db.add(wallet)
+        db.add_all([owner_wallet, wallet])
         await db.flush()
-        db.add(
-            MatchmakingOffer(
-                onchain_offer_id=5_001,
-                user_id=referred.id,
-                wallet_id=wallet.id,
-                network=-3,
-                contract_address="0:" + "11" * 32,
-                chance_bps=5000,
-                total_pool_nano=4_000_000_000,
-                stake_nano=2_000_000_000,
-                commitment_hex="33" * 32,
-                state=OfferState.SETTLED.value,
-                expires_at=datetime.now(UTC) + timedelta(minutes=1),
-            )
+        settled_offer = MatchmakingOffer(
+            onchain_offer_id=5_001,
+            user_id=referred.id,
+            wallet_id=wallet.id,
+            network=-3,
+            contract_address="0:" + "11" * 32,
+            chance_bps=5000,
+            total_pool_nano=4_000_000_000,
+            stake_nano=2_000_000_000,
+            commitment_hex="33" * 32,
+            state=OfferState.SETTLED.value,
+            expires_at=datetime.now(UTC) + timedelta(minutes=1),
         )
+        owner_offer = MatchmakingOffer(
+            onchain_offer_id=5_002,
+            user_id=owner.id,
+            wallet_id=owner_wallet.id,
+            network=-3,
+            contract_address="0:" + "11" * 32,
+            chance_bps=5000,
+            total_pool_nano=4_000_000_000,
+            stake_nano=2_000_000_000,
+            commitment_hex="44" * 32,
+            state=OfferState.OPEN.value,
+            expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
+        third_creator = User(telegram_id=99, first_name="Creator")
+        db.add_all([settled_offer, owner_offer, third_creator])
+        await db.flush()
+        third_wallet = Wallet(
+            user_id=third_creator.id,
+            network=-3,
+            address="0:" + "a" * 32,
+            public_key="b" * 64,
+        )
+        db.add(third_wallet)
+        await db.flush()
+        open_offer = MatchmakingOffer(
+            onchain_offer_id=5_003,
+            user_id=third_creator.id,
+            wallet_id=third_wallet.id,
+            network=-3,
+            contract_address="0:" + "11" * 32,
+            chance_bps=5000,
+            total_pool_nano=4_000_000_000,
+            stake_nano=2_000_000_000,
+            commitment_hex="55" * 32,
+            state=OfferState.OPEN.value,
+            expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
+        expired_offer = MatchmakingOffer(
+            onchain_offer_id=5_004,
+            user_id=third_creator.id,
+            wallet_id=third_wallet.id,
+            network=-3,
+            contract_address="0:" + "11" * 32,
+            chance_bps=5000,
+            total_pool_nano=4_000_000_000,
+            stake_nano=2_000_000_000,
+            commitment_hex="66" * 32,
+            state=OfferState.CANCELLED.value,
+            expires_at=datetime.now(UTC) - timedelta(seconds=1),
+        )
+        db.add_all([open_offer, expired_offer])
+        await db.flush()
         db.add_all(
             [
-                InlineInvite(
+                DuelChallenge(
                     code="self-invite",
-                    creator_telegram_id=owner_id,
-                    stake_nano=1_000_000_000,
-                    chance_bps=5000,
+                    creator_user_id=owner.id,
+                    creator_offer_id=owner_offer.id,
                     expires_at=datetime.now(UTC) + timedelta(minutes=5),
                 ),
-                InlineInvite(
+                DuelChallenge(
                     code="open-invite",
-                    creator_telegram_id=99,
-                    stake_nano=1_000_000_000,
-                    chance_bps=5000,
+                    creator_user_id=third_creator.id,
+                    creator_offer_id=open_offer.id,
                     expires_at=datetime.now(UTC) + timedelta(minutes=5),
                 ),
-                InlineInvite(
+                DuelChallenge(
                     code="old-invite",
-                    creator_telegram_id=99,
-                    stake_nano=1_000_000_000,
-                    chance_bps=5000,
+                    creator_user_id=third_creator.id,
+                    creator_offer_id=expired_offer.id,
+                    state=ChallengeState.OPEN.value,
                     expires_at=datetime.now(UTC) - timedelta(seconds=1),
                 ),
             ]
@@ -314,6 +377,21 @@ async def test_invites_and_referrals_resist_self_use_expiry_and_double_accept(cl
     ).status_code == 404
     accepted = await client.get("/api/v1/invites/open-invite", headers=referred_headers)
     assert accepted.status_code == 200
+    assert accepted.json()["creator_name"] == "Creator"
+    assert accepted.json()["counter_offer_id"] == 5_003
+    bound = await client.post(
+        "/api/v1/duels/quote",
+        headers=referred_headers,
+        json={
+            "offer_id": 5_005,
+            "chance_bps": 5000,
+            "total_pool_nano": 4_000_000_000,
+            "commitment_hex": "77" * 32,
+            "challenge_code": "open-invite",
+        },
+    )
+    assert bound.status_code == 200, bound.text
+    assert bound.json()["transaction"]["counter_offer_id"] == 5_003
     assert (
         await client.get("/api/v1/invites/open-invite", headers=third_headers)
     ).status_code == 409

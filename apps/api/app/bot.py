@@ -20,9 +20,23 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .config import Settings
-from .models import InlineInvite
+from .cycles import as_utc, record_cycle_event
+from .models import (
+    ChallengeState,
+    CycleEventKind,
+    DuelChallenge,
+    MatchmakingOffer,
+    OfferState,
+    ProofType,
+    User,
+)
 
-INLINE_PATTERN = re.compile(r"^\s*(\d+(?:\.\d{1,9})?)\s+(25|50|75)\s*$")
+INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
+
+
+def format_gram(nano: int) -> str:
+    value = nano / 1_000_000_000
+    return f"{value:.9f}".rstrip("0").rstrip(".")
 
 
 def create_dispatcher(
@@ -41,7 +55,7 @@ def create_dispatcher(
                 ]
             ]
         )
-        await message.answer("LOOP\nТвой кошелёк. Твои средства.", reply_markup=keyboard)
+        await message.answer("LOOP\nЖивой цикл начинается здесь.", reply_markup=keyboard)
 
     @router.inline_query()
     async def inline_duel(query: InlineQuery) -> None:
@@ -49,50 +63,79 @@ def create_dispatcher(
         if not match:
             await query.answer([], cache_time=1, is_personal=True)
             return
-        whole, fractional = (match.group(1).split(".", 1) + [""])[:2]
-        stake_nano = int(whole) * 1_000_000_000 + int(fractional.ljust(9, "0"))
-        chance = int(match.group(2))
-        chance_bps = chance * 100
-        if stake_nano * 10_000 % chance_bps:
-            await query.answer([], cache_time=1, is_personal=True)
-            return
-        total_pool = stake_nano * 10_000 // chance_bps
-        if not settings.min_pool_nano <= total_pool <= settings.max_pool_nano:
-            await query.answer([], cache_time=1, is_personal=True)
-            return
-        code = secrets.token_urlsafe(9)
-        expires = datetime.now(UTC) + timedelta(hours=1)
+        offer_id = int(match.group(1))
         async with session_factory() as db:
-            active_invites = await db.scalar(
-                select(func.count())
-                .select_from(InlineInvite)
-                .where(
-                    InlineInvite.creator_telegram_id == query.from_user.id,
-                    InlineInvite.expires_at > datetime.now(UTC),
-                )
+            creator = await db.scalar(
+                select(User).where(User.telegram_id == query.from_user.id)
             )
-            if (active_invites or 0) >= 20:
+            if creator is None:
                 await query.answer([], cache_time=1, is_personal=True)
                 return
-            db.add(
-                InlineInvite(
-                    code=code,
-                    creator_telegram_id=query.from_user.id,
-                    stake_nano=stake_nano,
-                    chance_bps=chance_bps,
-                    expires_at=expires,
+            offer = await db.scalar(
+                select(MatchmakingOffer).where(
+                    MatchmakingOffer.user_id == creator.id,
+                    MatchmakingOffer.onchain_offer_id == offer_id,
+                    MatchmakingOffer.network == settings.ton_network_id,
+                    MatchmakingOffer.contract_address == settings.ton_contract_address,
+                    MatchmakingOffer.chance_bps == 5_000,
+                    MatchmakingOffer.state == OfferState.OPEN.value,
+                    MatchmakingOffer.expires_at > datetime.now(UTC),
                 )
             )
+            if offer is None:
+                await query.answer([], cache_time=1, is_personal=True)
+                return
+            challenge = await db.scalar(
+                select(DuelChallenge).where(DuelChallenge.creator_offer_id == offer.id)
+            )
+            active_challenges = await db.scalar(
+                select(func.count())
+                .select_from(DuelChallenge)
+                .where(
+                    DuelChallenge.creator_user_id == creator.id,
+                    DuelChallenge.state.in_(
+                        [ChallengeState.OPEN.value, ChallengeState.ACCEPTED.value]
+                    ),
+                    DuelChallenge.expires_at > datetime.now(UTC),
+                )
+            )
+            if challenge is None and (active_challenges or 0) >= 20:
+                await query.answer([], cache_time=1, is_personal=True)
+                return
+            if challenge is None:
+                challenge = DuelChallenge(
+                    code=secrets.token_urlsafe(9),
+                    creator_user_id=creator.id,
+                    creator_offer_id=offer.id,
+                    expires_at=min(
+                        as_utc(offer.expires_at),
+                        datetime.now(UTC) + timedelta(hours=1),
+                    ),
+                )
+                db.add(challenge)
+                await db.flush()
+                await record_cycle_event(
+                    db,
+                    user_id=creator.id,
+                    actor_user_id=creator.id,
+                    kind=CycleEventKind.INVITE_CREATED,
+                    title="Вызов отправлен",
+                    proof_type=ProofType.TELEGRAM,
+                    proof_ref=challenge.code,
+                    dedupe_key=f"challenge-created:{challenge.code}",
+                )
             await db.commit()
-        deep_link = f"https://t.me/{settings.bot_username}?startapp=duel_{code}"
+        amount = format_gram(offer.stake_nano)
+        deep_link = f"https://t.me/{settings.bot_username}?startapp=duel_{challenge.code}"
         article = InlineQueryResultArticle(
-            id=code,
+            id=challenge.code,
             title="LOOP DUEL",
-            description=f"{match.group(1)} GRAM · шанс {chance}%",
+            description=f"{amount} GRAM · равные условия",
             input_message_content=InputTextMessageContent(
                 message_text=(
-                    f"LOOP DUEL\n\nИгрок вызывает тебя.\n"
-                    f"Ставка: {match.group(1)} GRAM\nШанс: {100 - chance}%"
+                    f"LOOP DUEL\n\n{creator.first_name} бросает тебе вызов.\n\n"
+                    f"Вклад: {amount} GRAM\nУсловия: 50 / 50\n\n"
+                    "Прими вызов и подтверди участие в LOOP."
                 )
             ),
             reply_markup=InlineKeyboardMarkup(

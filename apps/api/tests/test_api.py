@@ -56,7 +56,7 @@ async def test_quote_requires_verified_wallet(client, app) -> None:
         headers=headers,
         json={
             "offer_id": 12345,
-            "chance_bps": 2500,
+            "chance_bps": 5000,
             "total_pool_nano": 4_000_000_000,
             "commitment_hex": "ab" * 32,
         },
@@ -78,15 +78,15 @@ async def test_quote_requires_verified_wallet(client, app) -> None:
         headers=headers,
         json={
             "offer_id": 12345,
-            "chance_bps": 2500,
+            "chance_bps": 5000,
             "total_pool_nano": 4_000_000_000,
             "commitment_hex": "ab" * 32,
         },
     )
     assert quote.status_code == 200, quote.text
     result = quote.json()
-    assert result["offer"]["stake_nano"] == 1_000_000_000
-    assert result["transaction"]["amount_nano"] == "1050000000"
+    assert result["offer"]["stake_nano"] == 2_000_000_000
+    assert result["transaction"]["amount_nano"] == "2050000000"
 
 
 @pytest.mark.asyncio

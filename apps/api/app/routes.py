@@ -11,18 +11,22 @@ from .cycles import (
     cycle_events,
     latest_cycle,
     progress_bps,
+    record_cycle_event,
     start_cycle,
 )
 from .dependencies import Config, CurrentUser, Db
 from .models import (
     AuthExchange,
     BankCycle,
+    ChallengeState,
     CycleEvent,
+    CycleEventKind,
     Duel,
+    DuelChallenge,
     DuelState,
-    InlineInvite,
     MatchmakingOffer,
     OfferState,
+    ProofType,
     ReferralCode,
     User,
     Wallet,
@@ -351,21 +355,48 @@ async def create_offer_quote(
     )
     if active:
         raise HTTPException(status.HTTP_409_CONFLICT, "wallet already has an active offer")
-    counter = await db.scalar(
-        select(MatchmakingOffer)
-        .where(
-            MatchmakingOffer.network == settings.ton_network_id,
-            MatchmakingOffer.contract_address == settings.ton_contract_address,
-            MatchmakingOffer.total_pool_nano == body.total_pool_nano,
-            MatchmakingOffer.chance_bps == 10_000 - body.chance_bps,
-            MatchmakingOffer.state == OfferState.OPEN.value,
-            MatchmakingOffer.wallet_id != wallet.id,
-            MatchmakingOffer.user_id != user.id,
-            MatchmakingOffer.expires_at > datetime.now(UTC),
+    challenge = None
+    if body.challenge_code:
+        challenge = await db.scalar(
+            select(DuelChallenge)
+            .where(DuelChallenge.code == body.challenge_code)
+            .with_for_update()
         )
-        .order_by(MatchmakingOffer.created_at)
-        .with_for_update(skip_locked=True)
-    )
+        if challenge is None or as_utc(challenge.expires_at) <= datetime.now(UTC):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "challenge not found")
+        if (
+            challenge.accepted_by_user_id != user.id
+            or challenge.state != ChallengeState.ACCEPTED.value
+        ):
+            raise HTTPException(status.HTTP_409_CONFLICT, "challenge is not reserved for this user")
+        counter = await db.get(MatchmakingOffer, challenge.creator_offer_id)
+        if (
+            counter is None
+            or counter.state != OfferState.OPEN.value
+            or as_utc(counter.expires_at) <= datetime.now(UTC)
+            or counter.network != settings.ton_network_id
+            or counter.contract_address != settings.ton_contract_address
+            or counter.user_id == user.id
+            or counter.total_pool_nano != body.total_pool_nano
+            or counter.chance_bps != body.chance_bps
+        ):
+            raise HTTPException(status.HTTP_409_CONFLICT, "challenge offer is no longer available")
+    else:
+        counter = await db.scalar(
+            select(MatchmakingOffer)
+            .where(
+                MatchmakingOffer.network == settings.ton_network_id,
+                MatchmakingOffer.contract_address == settings.ton_contract_address,
+                MatchmakingOffer.total_pool_nano == body.total_pool_nano,
+                MatchmakingOffer.chance_bps == body.chance_bps,
+                MatchmakingOffer.state == OfferState.OPEN.value,
+                MatchmakingOffer.wallet_id != wallet.id,
+                MatchmakingOffer.user_id != user.id,
+                MatchmakingOffer.expires_at > datetime.now(UTC),
+            )
+            .order_by(MatchmakingOffer.created_at)
+            .with_for_update(skip_locked=True)
+        )
     offer_id = body.offer_id
     duplicate = await db.scalar(
         select(MatchmakingOffer.id).where(
@@ -391,6 +422,8 @@ async def create_offer_quote(
         expires_at=expires,
     )
     db.add(offer)
+    if challenge is not None:
+        challenge.state = ChallengeState.FUNDING.value
     await db.commit()
     await db.refresh(offer)
     view = OfferView(
@@ -612,21 +645,56 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
 
 @router.get("/invites/{code}", response_model=InviteView)
 async def resolve_invite(code: str, user: CurrentUser, db: Db) -> InviteView:
-    invite = await db.scalar(
-        select(InlineInvite).where(InlineInvite.code == code).with_for_update()
+    challenge = await db.scalar(
+        select(DuelChallenge).where(DuelChallenge.code == code).with_for_update()
     )
-    if invite is None or as_utc(invite.expires_at) <= datetime.now(UTC):
+    if challenge is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "invite not found")
-    if invite.creator_telegram_id == user.telegram_id:
+    if as_utc(challenge.expires_at) <= datetime.now(UTC):
+        challenge.state = ChallengeState.EXPIRED.value
+        await db.commit()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "invite not found")
+    creator = await db.get(User, challenge.creator_user_id)
+    offer = await db.get(MatchmakingOffer, challenge.creator_offer_id)
+    if creator is None or offer is None or offer.state != OfferState.OPEN.value:
+        raise HTTPException(status.HTTP_409_CONFLICT, "challenge is no longer available")
+    if creator.id == user.id:
         raise HTTPException(status.HTTP_409_CONFLICT, "self invite is not allowed")
-    if invite.accepted_by_user_id and invite.accepted_by_user_id != user.id:
+    if challenge.accepted_by_user_id and challenge.accepted_by_user_id != user.id:
         raise HTTPException(status.HTTP_409_CONFLICT, "invite already accepted")
-    invite.accepted_by_user_id = user.id
+    if challenge.state not in {ChallengeState.OPEN.value, ChallengeState.ACCEPTED.value}:
+        raise HTTPException(status.HTTP_409_CONFLICT, "challenge is already in progress")
+    challenge.accepted_by_user_id = user.id
+    challenge.accepted_at = challenge.accepted_at or datetime.now(UTC)
+    challenge.state = ChallengeState.ACCEPTED.value
+    await record_cycle_event(
+        db,
+        user_id=creator.id,
+        actor_user_id=user.id,
+        kind=CycleEventKind.INVITE_ACCEPTED,
+        title=f"{user.first_name} принял вызов",
+        proof_type=ProofType.TELEGRAM,
+        proof_ref=challenge.code,
+        dedupe_key=f"challenge-accepted:{challenge.code}",
+    )
+    await record_cycle_event(
+        db,
+        user_id=user.id,
+        actor_user_id=creator.id,
+        kind=CycleEventKind.INVITE_ACCEPTED,
+        title=f"Вызов {creator.first_name} принят",
+        proof_type=ProofType.TELEGRAM,
+        proof_ref=challenge.code,
+        dedupe_key=f"challenge-accepted:{challenge.code}",
+    )
     await db.commit()
     return InviteView(
-        code=invite.code,
-        creator_telegram_id=invite.creator_telegram_id,
-        stake_nano=invite.stake_nano,
-        chance_bps=invite.chance_bps,
-        expires_at=invite.expires_at,
+        code=challenge.code,
+        creator_name=creator.first_name,
+        creator_username=creator.username,
+        stake_nano=offer.stake_nano,
+        total_pool_nano=offer.total_pool_nano,
+        chance_bps=offer.chance_bps,
+        counter_offer_id=offer.onchain_offer_id,
+        expires_at=challenge.expires_at,
     )
