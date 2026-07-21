@@ -220,7 +220,16 @@ button:disabled {
 }
 
 .screen {
-  padding: calc(var(--safe-top) + 75px) 21px calc(var(--safe-bottom) + 79px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: calc(var(--safe-top) + 75px) 21px calc(var(--safe-bottom) + 104px);
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.screen::-webkit-scrollbar {
+  display: none;
 }
 
 .eyebrow {
@@ -625,7 +634,6 @@ button:disabled {
 }
 
 .profile-screen {
-  overflow: hidden;
   padding-top: calc(var(--safe-top) + 82px);
 }
 
