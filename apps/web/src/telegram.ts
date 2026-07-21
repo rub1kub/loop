@@ -58,6 +58,10 @@ export function initializeTelegram(): boolean {
     }
   }
   app.ready?.();
+  // Telegram can restore its chrome theme during ready(); apply LOOP's monochrome chrome once more.
+  app.setHeaderColor?.('#000000');
+  app.setBackgroundColor?.('#000000');
+  app.setBottomBarColor?.('#000000');
   return true;
 }
 

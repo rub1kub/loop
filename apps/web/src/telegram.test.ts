@@ -24,11 +24,15 @@ describe('Telegram launch compatibility', () => {
 
   it('initializes partial desktop SDKs without throwing and clears the native main button', () => {
     const hide = vi.fn();
+    const setHeaderColor = vi.fn();
+    const setBottomBarColor = vi.fn();
     const ready = vi.fn();
     window.Telegram = {
       WebApp: {
         initData: 'sdk-init-data',
         MainButton: { hide },
+        setHeaderColor,
+        setBottomBarColor,
         ready,
       } as unknown as TelegramWebApp,
     };
@@ -36,6 +40,8 @@ describe('Telegram launch compatibility', () => {
     expect(initializeTelegram()).toBe(true);
     expect(hide).toHaveBeenCalledOnce();
     expect(ready).toHaveBeenCalledOnce();
+    expect(setHeaderColor).toHaveBeenCalledWith('#000000');
+    expect(setBottomBarColor).toHaveBeenCalledWith('#000000');
     expect(telegramInitData()).toBe('sdk-init-data');
   });
 });
