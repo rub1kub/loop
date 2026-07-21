@@ -49,6 +49,14 @@ The bot supports:
 
 The production webhook uses an unguessable path and validates Telegram's secret-token header. Bot API configuration may set the webhook and menu, but inline capability itself must be enabled once through BotFather `/setinline`. Deployment acceptance checks `getMe.supports_inline_queries`.
 
+The application configures the public bot name, description, short description, `/start` command, and **Открыть LOOP** menu button at API startup so a container restart cannot restore obsolete wallet-first copy.
+
+BotFather-only presentation settings cannot be changed through Bot API:
+
+- `/setinline` → `@getloopbot` → placeholder `Брось вызов в LOOP`;
+- `/setuserpic` → `@getloopbot` → upload [`docs/brand/loop-avatar.png`](brand/loop-avatar.png);
+- group membership may remain disabled unless a future product flow explicitly requires the bot to join chats; inline sharing works without membership.
+
 Primary specifications:
 
 - <https://core.telegram.org/bots/webapps>
