@@ -24,8 +24,10 @@ width = 100
 ignore = ["wrappers"]
 
 [scripts]
-deploy-emulation = "acton script scripts/deploy.tolk"
-deploy-testnet = "acton script scripts/deploy.tolk --net testnet"
+deploy-bank-emulation = "acton script scripts/deploy-bank.tolk"
+deploy-bank-testnet = "acton script scripts/deploy-bank.tolk --net testnet"
+deploy-duel-emulation = "acton script scripts/deploy-duel.tolk"
+deploy-duel-testnet = "acton script scripts/deploy-duel.tolk --net testnet"
 
 [import-mappings]
 acton = ".acton"
