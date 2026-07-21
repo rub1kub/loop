@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import secrets
 import time
@@ -20,7 +21,7 @@ from .config import get_settings
 from .database import Base, create_database
 from .nonce_store import RedisChallengeStore
 from .routes import router
-from .ton import TonClient
+from .ton import TonClient, TonProviderError
 
 logger = structlog.get_logger()
 
@@ -36,9 +37,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.http = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0))
     app.state.ton_client = TonClient(app.state.http, settings)
     if settings.app_env == "production":
-        actual_code_hash = await app.state.ton_client.get_contract_code_hash(
-            settings.ton_contract_address
-        )
+        actual_code_hash = ""
+        for attempt in range(3):
+            try:
+                actual_code_hash = await app.state.ton_client.get_contract_code_hash(
+                    settings.ton_contract_address
+                )
+                break
+            except TonProviderError:
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(2**attempt)
         expected_code_hash = settings.ton_contract_code_hash.removeprefix("0x").upper()
         if not secrets.compare_digest(actual_code_hash, expected_code_hash):
             raise RuntimeError("configured TON contract code hash mismatch")

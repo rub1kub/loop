@@ -111,6 +111,8 @@ services:
     mem_limit: 384m
     cpus: 0.75
     stop_grace_period: 30s
+    healthcheck:
+      disable: true
 
   migrate:
     <<: *api-environment
@@ -120,6 +122,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      disable: true
 
 networks:
   backend:

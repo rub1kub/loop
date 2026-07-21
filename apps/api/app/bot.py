@@ -1,8 +1,10 @@
+import asyncio
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
 
 from aiogram import Bot, Dispatcher, Router
+from aiogram.exceptions import TelegramRetryAfter
 from aiogram.filters import CommandStart
 from aiogram.types import (
     InlineKeyboardButton,
@@ -106,12 +108,28 @@ def create_dispatcher(
 
 async def configure_bot(bot: Bot, settings: Settings) -> None:
     webhook_url = f"{settings.public_origin}{settings.webhook_path}"
-    await bot.set_webhook(
-        webhook_url,
-        secret_token=settings.telegram_webhook_secret.get_secret_value(),
-        allowed_updates=["message", "inline_query", "callback_query"],
-        drop_pending_updates=False,
-    )
-    await bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(text="LOOP", web_app=WebAppInfo(url=settings.public_origin))
-    )
+    for attempt in range(3):
+        try:
+            await bot.set_webhook(
+                webhook_url,
+                secret_token=settings.telegram_webhook_secret.get_secret_value(),
+                allowed_updates=["message", "inline_query", "callback_query"],
+                drop_pending_updates=False,
+            )
+            break
+        except TelegramRetryAfter as exc:
+            if attempt == 2:
+                raise
+            await asyncio.sleep(float(exc.retry_after) + 0.25)
+    for attempt in range(3):
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="LOOP", web_app=WebAppInfo(url=settings.public_origin)
+                )
+            )
+            break
+        except TelegramRetryAfter as exc:
+            if attempt == 2:
+                raise
+            await asyncio.sleep(float(exc.retry_after) + 0.25)
