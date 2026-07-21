@@ -99,6 +99,16 @@ async def create_offer_quote(
     )
     if wallet is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "verified testnet wallet required")
+    now = datetime.now(UTC)
+    await db.execute(
+        update(DuelOffer)
+        .where(
+            DuelOffer.wallet_id == wallet.id,
+            DuelOffer.state == OfferState.PENDING_FUNDING.value,
+            DuelOffer.expires_at < now,
+        )
+        .values(state=OfferState.EXPIRED.value)
+    )
     active = await db.scalar(
         select(DuelOffer.id).where(
             DuelOffer.wallet_id == wallet.id,
@@ -115,7 +125,6 @@ async def create_offer_quote(
     if active:
         raise HTTPException(status.HTTP_409_CONFLICT, "wallet already has an active DUEL")
 
-    now = datetime.now(UTC)
     await db.execute(
         update(DuelOffer)
         .where(

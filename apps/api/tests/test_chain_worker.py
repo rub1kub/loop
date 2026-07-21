@@ -208,7 +208,9 @@ async def test_bank_projection_is_fifo_proof_bound_and_idempotent(app) -> None:
 
 
 @pytest.mark.asyncio
-async def test_bank_projection_retries_invalid_source_without_state_change(app) -> None:
+async def test_bank_projection_tracks_permissionless_position_and_detaches_stale_intent(
+    app,
+) -> None:
     settings = get_settings()
     async with app.state.session_factory() as db:
         user = User(telegram_id=1003, first_name="Bank")
@@ -244,10 +246,52 @@ async def test_bank_projection_retries_invalid_source_without_state_change(app) 
             bank_create_body(102, 1_000_000_000, 12_500),
             1_080_000_000,
         )
-        assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.RETRY
-        await db.rollback()
+        assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.APPLIED
+        await db.commit()
         await db.refresh(position)
-        assert position.current_status == BankPositionStatus.PENDING_CONFIRMATION.value
+        assert position.user_id is None
+        assert position.wallet_id is None
+        assert position.owner_wallet == "0:" + "ff" * 32
+        assert position.current_status == BankPositionStatus.QUEUED.value
+
+
+@pytest.mark.asyncio
+async def test_empty_contract_topup_is_ignored_instead_of_blocking_projection(app) -> None:
+    settings = get_settings()
+    async with app.state.session_factory() as db:
+        tx = transaction(
+            settings.bank_contract_address,
+            "0:" + "ee" * 32,
+            12,
+            "",
+            1_000_000,
+        )
+        assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.IGNORED
+
+
+@pytest.mark.asyncio
+async def test_duel_projection_tracks_permissionless_offer(app) -> None:
+    settings = get_settings()
+    expires_at = 1_800_000_900
+    body = body_b64(
+        DUEL_OPEN_OFFER,
+        [(64, 777), (256, 123), (16, 2500), (0, 4_000_000_000), (32, expires_at), (64, 0)],
+    )
+    async with app.state.session_factory() as db:
+        tx = transaction(
+            settings.effective_duel_contract_address,
+            "0:" + "5a" * 32,
+            13,
+            body,
+            1_050_000_000,
+        )
+        assert await apply_transaction(db, settings, tx, "duel") == ProjectionResult.APPLIED
+        await db.commit()
+        offer = await db.scalar(select(DuelOffer).where(DuelOffer.onchain_offer_id == 777))
+        assert offer is not None
+        assert offer.user_id is None and offer.wallet_id is None
+        assert offer.owner_wallet == "0:" + "5a" * 32
+        assert offer.state == OfferState.OPEN.value
 
 
 @pytest.mark.asyncio

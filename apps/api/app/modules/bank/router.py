@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from ...dependencies import Config, CurrentUser, Db
 from ...models import Wallet
@@ -111,6 +111,18 @@ async def quote_position(
     ):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "principal is outside limits")
     wallet = await active_wallet(db, user.id, settings.ton_network_id)
+    await db.execute(
+        update(BankPosition)
+        .where(
+            BankPosition.wallet_id == wallet.id,
+            BankPosition.current_status == BankPositionStatus.PENDING_CONFIRMATION.value,
+            BankPosition.created_at < datetime.now(UTC) - timedelta(minutes=15),
+        )
+        .values(
+            current_status=BankPositionStatus.FAILED.value,
+            failure_reason="funding intent expired before on-chain confirmation",
+        )
+    )
     active = await db.scalar(
         select(BankPosition.id).where(
             BankPosition.wallet_id == wallet.id,

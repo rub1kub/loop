@@ -55,8 +55,8 @@ class BankPosition(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     position_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    wallet_id: Mapped[str] = mapped_column(ForeignKey("wallets.id"), nullable=False, index=True)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+    wallet_id: Mapped[str | None] = mapped_column(ForeignKey("wallets.id"), index=True)
     owner_wallet: Mapped[str] = mapped_column(String(68), nullable=False)
     network: Mapped[int] = mapped_column(Integer, nullable=False)
     contract_address: Mapped[str] = mapped_column(String(68), nullable=False)

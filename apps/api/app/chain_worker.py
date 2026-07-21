@@ -265,6 +265,19 @@ async def apply_bank_transaction(
     opcode = decoded["opcode"]
     if opcode != BANK_CREATE_POSITION:
         return ProjectionResult.IGNORED
+    incoming = transaction.get("in_msg") or {}
+    source = message_address(incoming, "source", "src", "source_address")
+    value = message_value(incoming)
+    principal = decoded["principal_nano"]
+    multiplier = decoded["multiplier_bps"]
+    if (
+        source is None
+        or value is None
+        or value < principal + settings.bank_position_gas_nano
+        or not settings.bank_min_principal_nano <= principal <= settings.bank_max_principal_nano
+        or multiplier not in {12_500, 15_000, 20_000}
+    ):
+        return ProjectionResult.IGNORED
     position = await db.scalar(
         select(BankPosition).where(
             BankPosition.network == settings.ton_network_id,
@@ -273,20 +286,42 @@ async def apply_bank_transaction(
         )
     )
     if position is None:
-        return ProjectionResult.IGNORED
-    incoming = transaction.get("in_msg") or {}
-    source = message_address(incoming, "source", "src", "source_address")
-    value = message_value(incoming)
-    expected_source = normalize_address(position.owner_wallet)
-    if (
-        source != expected_source
-        or value is None
-        or value < position.principal_nano + settings.bank_position_gas_nano
+        target = principal * multiplier // 10_000
+        position = BankPosition(
+            position_id=decoded["position_id"],
+            query_id=decoded["query_id"],
+            user_id=None,
+            wallet_id=None,
+            owner_wallet=source,
+            network=settings.ton_network_id,
+            contract_address=settings.bank_contract_address,
+            principal_nano=principal,
+            multiplier_bps=multiplier,
+            target_payout_nano=target,
+            remaining_amount_nano=target,
+        )
+        db.add(position)
+        await db.flush()
+    elif (
+        source != normalize_address(position.owner_wallet)
         or decoded["query_id"] != position.query_id
-        or decoded["principal_nano"] != position.principal_nano
-        or decoded["multiplier_bps"] != position.multiplier_bps
+        or principal != position.principal_nano
+        or multiplier != position.multiplier_bps
     ):
-        return ProjectionResult.RETRY
+        # The identifier was funded outside the API before the local intent.
+        # Keep the authoritative public-chain position and detach the stale
+        # application intent so it cannot poison all later FIFO projections.
+        target = principal * multiplier // 10_000
+        position.user_id = None
+        position.wallet_id = None
+        position.owner_wallet = source
+        position.query_id = decoded["query_id"]
+        position.principal_nano = principal
+        position.multiplier_bps = multiplier
+        position.target_payout_nano = target
+        position.funded_amount_nano = 0
+        position.remaining_amount_nano = target
+        position.failure_reason = "local intent superseded by permissionless on-chain position"
 
     fee = position.principal_nano * settings.bank_fee_bps // 10_000
     available = position.principal_nano - fee
@@ -372,6 +407,8 @@ async def apply_bank_transaction(
 
 
 async def qualify_referral(db: Any, offer: MatchmakingOffer, duel: Duel, tx_hash: str) -> None:
+    if offer.user_id is None:
+        return
     attribution = await db.scalar(
         select(ReferralAttribution).where(
             ReferralAttribution.invitee_user_id == offer.user_id,
@@ -445,12 +482,44 @@ async def apply_duel_transaction(
                 MatchmakingOffer.onchain_offer_id == decoded["offer_id"],
             )
         )
-        if offer is None:
-            return ProjectionResult.IGNORED
         if (
-            source != normalize_address(offer.owner_wallet)
+            source is None
             or value is None
-            or value < offer.stake_nano + settings.offer_gas_nano
+            or decoded["chance_bps"] not in {2500, 5000, 7500}
+            or decoded["total_pool_nano"] % 4 != 0
+            or not settings.min_pool_nano <= decoded["total_pool_nano"] <= settings.max_pool_nano
+        ):
+            return ProjectionResult.IGNORED
+        stake = decoded["total_pool_nano"] * decoded["chance_bps"] // 10_000
+        if value < stake + settings.offer_gas_nano:
+            return ProjectionResult.IGNORED
+        if offer is None:
+            payout = decoded["total_pool_nano"] - (
+                decoded["total_pool_nano"] * settings.duel_fee_bps // 10_000
+            )
+            offer = MatchmakingOffer(
+                onchain_offer_id=decoded["offer_id"],
+                query_id=decoded["query_id"],
+                user_id=None,
+                wallet_id=None,
+                owner_wallet=source,
+                network=settings.ton_network_id,
+                contract_address=account,
+                chance_bps=decoded["chance_bps"],
+                total_pool_nano=decoded["total_pool_nano"],
+                stake_nano=stake,
+                opponent_stake_nano=decoded["total_pool_nano"] - stake,
+                fee_bps=settings.duel_fee_bps,
+                payout_nano=payout,
+                commitment_hex=f"{decoded['commitment']:064x}",
+                counter_offer_id=decoded["counter_offer_id"],
+                mode="external",
+                expires_at=datetime.fromtimestamp(decoded["expires_at"], UTC),
+            )
+            db.add(offer)
+            await db.flush()
+        elif (
+            source != normalize_address(offer.owner_wallet)
             or decoded["query_id"] != offer.query_id
             or decoded["commitment"] != int(offer.commitment_hex, 16)
             or decoded["chance_bps"] != offer.chance_bps
@@ -458,7 +527,23 @@ async def apply_duel_transaction(
             or decoded["counter_offer_id"] != offer.counter_offer_id
             or decoded["expires_at"] != int(offer.expires_at.timestamp())
         ):
-            return ProjectionResult.RETRY
+            payout = decoded["total_pool_nano"] - (
+                decoded["total_pool_nano"] * settings.duel_fee_bps // 10_000
+            )
+            offer.user_id = None
+            offer.wallet_id = None
+            offer.owner_wallet = source
+            offer.query_id = decoded["query_id"]
+            offer.chance_bps = decoded["chance_bps"]
+            offer.total_pool_nano = decoded["total_pool_nano"]
+            offer.stake_nano = stake
+            offer.opponent_stake_nano = decoded["total_pool_nano"] - stake
+            offer.fee_bps = settings.duel_fee_bps
+            offer.payout_nano = payout
+            offer.commitment_hex = f"{decoded['commitment']:064x}"
+            offer.counter_offer_id = decoded["counter_offer_id"]
+            offer.mode = "external"
+            offer.expires_at = datetime.fromtimestamp(decoded["expires_at"], UTC)
         offer.state = OfferState.OPEN.value
         offer.funding_tx_hash = tx_hash
         offer.reserved_until = None
@@ -481,8 +566,9 @@ async def apply_duel_transaction(
                 OfferState.OPEN.value,
                 OfferState.RESERVED.value,
             }:
-                return ProjectionResult.RETRY
-            await create_duel_projection(db, settings, transaction, counter, offer)
+                offer.state = OfferState.OPEN.value
+            else:
+                await create_duel_projection(db, settings, transaction, counter, offer)
     elif opcode == DUEL_MATCH_OFFERS:
         first = await db.scalar(
             select(MatchmakingOffer).where(
@@ -497,7 +583,7 @@ async def apply_duel_transaction(
             )
         )
         if first is None or second is None:
-            return ProjectionResult.RETRY
+            return ProjectionResult.IGNORED
         await create_duel_projection(db, settings, transaction, first, second)
     elif opcode in {DUEL_CANCEL_OFFER, DUEL_EXPIRE_OFFER}:
         offer = await db.scalar(
@@ -521,7 +607,7 @@ async def apply_duel_transaction(
             )
         )
         if offer is None or source != normalize_address(offer.owner_wallet):
-            return ProjectionResult.RETRY
+            return ProjectionResult.IGNORED
         offer.revealed = True
         duel = await db.scalar(
             select(Duel).where(
@@ -546,7 +632,7 @@ async def apply_duel_transaction(
             )
         )
         if offer is None:
-            return ProjectionResult.RETRY
+            continue
         if (
             refund.get("destination") != normalize_address(offer.owner_wallet)
             or refund.get("value_nano") != offer.stake_nano
@@ -567,7 +653,7 @@ async def apply_duel_transaction(
             )
         )
         if duel is None or winner is None:
-            return ProjectionResult.RETRY
+            continue
         if (
             payout.get("destination") != normalize_address(winner.owner_wallet)
             or payout.get("value_nano") != winner.payout_nano
@@ -651,11 +737,11 @@ async def apply_transaction(
     incoming = transaction.get("in_msg") or {}
     body = (incoming.get("message_content") or {}).get("body")
     if not body:
-        return ProjectionResult.RETRY
+        return ProjectionResult.IGNORED
     try:
         decoded = decode_body(body)
     except Exception:
-        return ProjectionResult.RETRY
+        return ProjectionResult.IGNORED
     outgoing = decode_outgoing(transaction)
     if actual_mode == "bank":
         return await apply_bank_transaction(db, settings, transaction, decoded, outgoing)
@@ -669,9 +755,9 @@ async def run_contract_once(
     *,
     mode: str,
     address: str,
-) -> int:
+) -> tuple[int, bool]:
     if not address:
-        return 0
+        return 0, False
     key = f"{mode}:{settings.ton_network_id}:{address}"
     async with session_factory() as db:
         checkpoint = await db.get(ChainCheckpoint, key)
@@ -688,6 +774,7 @@ async def run_contract_once(
     response.raise_for_status()
     transactions = response.json().get("transactions", [])
     applied = 0
+    blocked = False
     async with session_factory() as db:
         checkpoint = await db.get(ChainCheckpoint, key) or ChainCheckpoint(key=key, last_lt=0)
         db.add(checkpoint)
@@ -702,12 +789,33 @@ async def run_contract_once(
                 raise
             if result == ProjectionResult.RETRY:
                 await savepoint.rollback()
+                blocked = True
                 break
             await savepoint.commit()
             if result == ProjectionResult.APPLIED:
                 applied += 1
             checkpoint.last_lt = max(checkpoint.last_lt, int(transaction["lt"]) + 1)
-        checkpoint.heartbeat_at = datetime.now(UTC)
+        if not blocked:
+            checkpoint.heartbeat_at = datetime.now(UTC)
+        await db.execute(
+            update(BankPosition)
+            .where(
+                BankPosition.current_status == BankPositionStatus.PENDING_CONFIRMATION.value,
+                BankPosition.created_at < datetime.now(UTC) - timedelta(minutes=15),
+            )
+            .values(
+                current_status=BankPositionStatus.FAILED.value,
+                failure_reason="funding intent expired before on-chain confirmation",
+            )
+        )
+        await db.execute(
+            update(MatchmakingOffer)
+            .where(
+                MatchmakingOffer.state == OfferState.PENDING_FUNDING.value,
+                MatchmakingOffer.expires_at < datetime.now(UTC),
+            )
+            .values(state=OfferState.EXPIRED.value)
+        )
         await db.execute(
             update(MatchmakingOffer)
             .where(
@@ -732,24 +840,26 @@ async def run_contract_once(
             .values(state=ChallengeState.EXPIRED.value)
         )
         await db.commit()
-    return applied
+    return applied, blocked
 
 
 async def run_once(http: httpx.AsyncClient, session_factory: Any, settings: Any) -> int:
-    bank = await run_contract_once(
+    bank, bank_blocked = await run_contract_once(
         http,
         session_factory,
         settings,
         mode="bank",
         address=settings.bank_contract_address,
     )
-    duel = await run_contract_once(
+    duel, duel_blocked = await run_contract_once(
         http,
         session_factory,
         settings,
         mode="duel",
         address=settings.effective_duel_contract_address,
     )
+    if bank_blocked or duel_blocked:
+        raise RuntimeError("chain projection is blocked on incomplete authoritative data")
     await asyncio.to_thread(
         HEARTBEAT_FILE.write_text,
         str(int(datetime.now(UTC).timestamp())),
@@ -782,12 +892,15 @@ async def main() -> None:
     timeout = httpx.Timeout(15.0, connect=3.0)
     async with httpx.AsyncClient(timeout=timeout) as http:
         await attest_contracts(http, settings)
+        retry_delay = 5
         while True:
             try:
                 await run_once(http, session_factory, settings)
+                retry_delay = 5
             except Exception as exc:
                 logger.error("chain_worker_failed", error=type(exc).__name__)
-            await asyncio.sleep(5)
+                retry_delay = min(retry_delay * 2, 60)
+            await asyncio.sleep(retry_delay)
     await engine.dispose()
 
 
