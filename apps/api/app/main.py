@@ -9,6 +9,7 @@ import httpx
 import redis.asyncio as redis
 import structlog
 from aiogram import Bot
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import Update
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -72,7 +73,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.bot = Bot(settings.bot_token.get_secret_value())
         app.state.dispatcher = create_dispatcher(settings, session_factory)
         if settings.app_env == "production":
-            await configure_bot(app.state.bot, settings)
+            try:
+                await asyncio.wait_for(configure_bot(app.state.bot, settings), timeout=20)
+            except (TimeoutError, TelegramAPIError) as exc:
+                # Bot profile synchronization is operational metadata. A
+                # Telegram flood-wait must not take the authenticated API,
+                # contract recovery paths or chain projections offline.
+                logger.warning("bot_configuration_deferred", error=type(exc).__name__)
     yield
     if app.state.bot:
         await app.state.bot.session.close()

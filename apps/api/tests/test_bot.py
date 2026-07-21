@@ -19,7 +19,7 @@ def test_inline_amount_format_is_human_readable() -> None:
     assert format_gram(1_250_000_000) == "1.25"
 
 
-def test_bot_profile_describes_social_loop() -> None:
+def test_bot_profile_describes_independent_bank_and_duel() -> None:
     copy = f"{BOT_DESCRIPTION} {BOT_SHORT_DESCRIPTION} {BOT_MENU_TEXT}".lower()
     assert "bank" in copy
     assert "duel" in copy
