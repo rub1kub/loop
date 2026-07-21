@@ -1,32 +1,70 @@
 # Deployment and operations
 
+LOOP ships immutable, testnet-only releases. Mainnet is disabled in application validation and is not deployed by CI.
+
 ## Production topology
 
-On the shared target VPS, the existing Apache edge owns ports 80/443 and forwards only the LOOP SNI host to nginx on `127.0.0.1:18791`. nginx serves immutable frontend files, applies request limits and security headers, and proxies the API on `127.0.0.1:8000`. PostgreSQL, Redis, API and workers otherwise use an internal Docker network. Images run as non-root with read-only filesystems, dropped capabilities, `no-new-privileges`, health checks and explicit resource limits. PostgreSQL and Redis are never bound to a public host interface.
+On the current shared VPS, Apache owns ports 80/443 and forwards only the LOOP SNI host to nginx on `127.0.0.1:18791`. nginx serves the compiled Mini App and proxies the API on `127.0.0.1:8000`. PostgreSQL, Redis, API, migrations, and the chain worker share a private Docker network; databases are not exposed publicly.
 
-TLS uses Let's Encrypt with monitored renewal. nginx enforces request limits, exact CORS, CSP, HSTS after a staged rollout, `nosniff`, a restrictive referrer policy and per-route rate limiting. Telegram framing behavior must be verified before tightening `frame-ancestors`.
+Application containers run without root, with read-only filesystems, dropped capabilities, `no-new-privileges`, health checks, bounded logs, and explicit resource limits. nginx applies exact CORS, CSP, request limits, safe framing for Telegram, HSTS after staged validation, `nosniff`, and a restrictive referrer policy.
 
-## Deployment order
+## Configuration
 
-1. Configure DNS and copy `.env.example` to a root-owned environment file without placing values in shell history.
-2. Start PostgreSQL and Redis; run the one-shot migration container with a DDL-only database role.
-3. Deploy immutable API/frontend images, then verify `/live`, `/ready` and the public TON Connect manifest.
-4. Configure the bot webhook and menu only after HTTPS is healthy.
-5. Run the indexer in shadow mode and reconcile from finalized history before enabling matchmaking.
-6. Enable testnet/invite-only low-cap duels; exercise settle, cancel, expiry and restart recovery.
+Create `/opt/loop/shared/.env.production` as a root-owned `0600` file outside every release directory. Use deployment secrets or an interactive secret manager; never paste credentials into a command, CI log, repository, or support ticket.
 
-Mainnet deployment is a separate manual multisig change and is not performed by CI.
+Required production values include:
 
-Telegram inline mode is the one BotFather-only setting: run `/setinline` for `@getloopbot`, provide a short duel placeholder, then verify `getMe.supports_inline_queries=true`. The Bot API cannot enable this capability.
+- Telegram bot token, username, webhook secret, and session secret;
+- exact public origin and CORS origin;
+- PostgreSQL and Redis credentials;
+- TON testnet endpoint, contract address, and audited code hash;
+- metrics authentication token.
 
-On a shared host, keep the existing Apache default vhost order unchanged. The three nginx LOOP files under `/etc/nginx` may point to `/opt/loop/current/deploy/nginx/`; release activation validates the new configuration and restores the previous release symlink if validation fails. After key-based deployment is verified, rotate the bootstrap root password through the hosting control plane.
+Production startup fails when required values are missing, secrets are too short, HTTPS is absent, mainnet is selected, or the configured contract hash cannot be attested.
 
-## Backups and monitoring
+## Release flow
 
-Archive PostgreSQL WAL continuously and take encrypted off-site base backups. Target RPO is 5 minutes and RTO is 60 minutes; verify every backup and perform an isolated restore monthly. Redis is disposable.
+The `main` workflow runs web, API, and contract gates. A successful release is uploaded into `/opt/loop/releases/<git-sha>` and activated by `deploy/activate-release.sh`.
 
-Alert independently of the production bot for service health, 5xx rate, database locks, disk/inodes, Redis eviction, certificate age, chain checkpoint lag, RPC divergence, overdue duels, bounced payouts, escrow reconciliation mismatch, keeper gas and backup/restore age.
+Activation performs this sequence:
 
-## Rollback
+1. build the API image under the immutable Git SHA;
+2. wait for PostgreSQL and Redis;
+3. run Alembic migrations as a one-shot container;
+4. start API and finalized chain worker;
+5. verify local readiness;
+6. atomically switch `/opt/loop/current`;
+7. validate and reload nginx;
+8. verify public HTTPS readiness.
 
-Disable only new offers and referrals. Never disable reveal, settlement, cancellation or timeout refunds. Drain and reconcile active rounds, then roll application images back by digest while retaining chain events and database audit history.
+The activation script restores the previous symlink when nginx validation fails.
+
+Manual topology checks use the same Compose file:
+
+```bash
+docker compose --env-file .env.production config
+docker compose --env-file .env.production up -d --wait db redis
+docker compose --env-file .env.production run --rm migrate
+docker compose --env-file .env.production up -d api worker
+curl --fail --silent --show-error https://144-31-30-62.sslip.io/ready
+```
+
+## Telegram activation
+
+Configure the webhook and menu only after HTTPS is ready. Inline mode is the one BotFather-only setting: run `/setinline` for the bot and verify that Bot API `getMe` reports `supports_inline_queries=true`.
+
+## Monitoring
+
+Alert outside the production bot for service health, 5xx rate, database locks, disk and inodes, Redis eviction, certificate age, chain checkpoint lag, missing masterchain finality, RPC divergence, overdue duels, bounced payouts, escrow reconciliation mismatch, and backup age.
+
+The chain worker must fail closed. An RPC payload without successful execution, expected account, transaction identity, or masterchain inclusion is retried and cannot advance the checkpoint.
+
+## Backups
+
+Archive PostgreSQL WAL continuously and take encrypted off-site base backups. The operating target is RPO 5 minutes and RTO 60 minutes. Verify every backup and perform an isolated restore monthly. Redis is disposable.
+
+## Rollback and incident mode
+
+Disable only new offers and matchmaking. Never disable reveal, cancellation, settlement, expiry, or refund paths. Drain and reconcile active duels, then roll application images back by digest while preserving chain events, BANK proofs, and database audit history.
+
+Rotating an exposed bot token, wallet seed, password, API key, or TLS key is an incident-response action and must happen before redeployment. Do not attempt to sanitize a leaked credential by merely deleting it from the latest commit.

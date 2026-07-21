@@ -1,11 +1,57 @@
 # Telegram integration
 
-The Mini App loads Telegram's official bridge before application code, calls `ready()` and `expand()`, adopts theme/safe-area values, requests fullscreen when supported and uses native BackButton, MainButton and HapticFeedback with feature checks.
+Telegram is LOOP's identity and social transport. It does not define financial state and is never trusted to supply duel terms.
 
-Only the raw `Telegram.WebApp.initData` string is sent to `/api/v1/auth/telegram`. `initDataUnsafe`, URL query values and `tgWebAppStartParam` are display hints until the server verifies the signed fields. Authentication data is never persisted in browser storage.
+## Mini App lifecycle
 
-The bot supports `/start`, a menu Web App button and inline duel invitations. Invite codes are opaque, expire, and are resolved only after the accepting user has authenticated. The production webhook requires Telegram's secret-token header on an unguessable path.
+The document loads Telegram's official bridge before application code. The client feature-checks and uses:
 
-Webhook and menu configuration use the Bot API. Inline capability itself must be enabled once through BotFather `/setinline`; deployment acceptance checks the `supports_inline_queries` flag returned by `getMe`.
+- `ready()` and `expand()`;
+- viewport and safe-area variables;
+- BackButton and MainButton;
+- HapticFeedback for primary actions, success, warning, and error;
+- fullscreen requests where supported;
+- theme parameters while retaining LOOP's monochrome product palette.
 
-Primary specification: <https://core.telegram.org/bots/webapps>.
+Only the raw `Telegram.WebApp.initData` string is sent to `/api/v1/auth/telegram`. The API validates the Bot API HMAC construction, duplicate keys, age, and future skew before issuing a short-lived session. `initDataUnsafe`, URL values, and `tgWebAppStartParam` are display hints until the server verifies them. Raw authentication data is not persisted in browser storage.
+
+## Inline DUEL
+
+After a creator's offer is finalized on TON, **Пригласить в игру** invokes `switchInlineQuery` with the exact on-chain offer id. The bot resolves that offer under the authenticated application model and returns a message containing:
+
+```text
+LOOP DUEL
+
+Игрок вызывает тебя.
+
+Вклад:
+2 GRAM
+
+Условия:
+Равные · 50/50
+
+[ПРИНЯТЬ]
+```
+
+The button opens the Mini App with an opaque, expiring challenge code. After Telegram authentication, the API resolves the code to the creator user, creator offer, fixed contribution, total pool, 50/50 condition, state, and expiry. A direct offer names that exact counter-offer and never enters generic AFK matchmaking.
+
+Inline messages cannot override an amount, wallet, contract, probability, expiry, or offer state. Deleted, expired, funded by the accepter, non-50/50, or already-consumed challenges are rejected server-side.
+
+## Bot surface
+
+The bot supports:
+
+- `/start` with a Mini App button;
+- a persistent menu Web App button;
+- inline duel invitations;
+- start parameters for direct challenges and referrals;
+- outbox-backed notifications for important social and on-chain states.
+
+The production webhook uses an unguessable path and validates Telegram's secret-token header. Bot API configuration may set the webhook and menu, but inline capability itself must be enabled once through BotFather `/setinline`. Deployment acceptance checks `getMe.supports_inline_queries`.
+
+Primary specifications:
+
+- <https://core.telegram.org/bots/webapps>
+- <https://core.telegram.org/bots/webapps#initializing-mini-apps>
+- <https://core.telegram.org/bots/inline>
+- <https://core.telegram.org/bots/api>
