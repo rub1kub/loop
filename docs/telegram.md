@@ -4,16 +4,16 @@ Telegram is LOOP's identity and social transport. It does not define financial s
 
 ## Mini App lifecycle
 
-The document loads Telegram's official bridge before application code. The client feature-checks and uses:
+The application reads Telegram's signed launch payload immediately and loads the official bridge asynchronously, so a slow `telegram.org` response cannot block startup on desktop. The client feature-checks and uses:
 
 - `ready()` and `expand()`;
 - viewport and safe-area variables;
-- BackButton and MainButton;
+- BackButton; the native MainButton is hidden so DUEL actions stay inside LOOP's monochrome interface;
 - HapticFeedback for primary actions, success, warning, and error;
 - fullscreen requests where supported;
 - theme parameters while retaining LOOP's monochrome product palette.
 
-Only the raw `Telegram.WebApp.initData` string is sent to `/api/v1/auth/telegram`. The API validates the Bot API HMAC construction, duplicate keys, age, and future skew before issuing a short-lived session. `initDataUnsafe`, URL values, and `tgWebAppStartParam` are display hints until the server verifies them. Raw authentication data is not persisted in browser storage.
+Only the raw signed `initData` string is sent to `/api/v1/auth/telegram`. It comes from `Telegram.WebApp.initData` when the bridge is ready, or from Telegram's original `tgWebAppData` launch parameter as a desktop fallback. The API validates the Bot API HMAC construction, duplicate keys, age, and future skew before issuing a bounded session. `initDataUnsafe` and `tgWebAppStartParam` are display hints until the server verifies the signed payload. Raw authentication data is not persisted in browser storage.
 
 ## Inline DUEL
 

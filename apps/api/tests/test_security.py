@@ -43,16 +43,20 @@ def test_validates_telegram_init_data() -> None:
 
 def test_rejects_tampering_duplicates_and_expiry() -> None:
     now = datetime.now(UTC).replace(microsecond=0)
+    settings = get_settings()
     raw = signed_init_data("123456:test-token", now)
     with pytest.raises(AuthenticationError):
-        validate_telegram_init_data(
-            raw.replace("Loop", "Loot"), "123456:test-token", get_settings(), now
-        )
+        validate_telegram_init_data(raw.replace("Loop", "Loot"), "123456:test-token", settings, now)
     with pytest.raises(AuthenticationError):
-        validate_telegram_init_data(raw + "&auth_date=1", "123456:test-token", get_settings(), now)
-    expired = signed_init_data("123456:test-token", now - timedelta(minutes=10))
+        validate_telegram_init_data(raw + "&auth_date=1", "123456:test-token", settings, now)
+    desktop_launch = signed_init_data("123456:test-token", now - timedelta(minutes=30))
+    validate_telegram_init_data(desktop_launch, "123456:test-token", settings, now)
+    expired = signed_init_data(
+        "123456:test-token",
+        now - timedelta(seconds=settings.telegram_auth_max_age_seconds + 1),
+    )
     with pytest.raises(AuthenticationError):
-        validate_telegram_init_data(expired, "123456:test-token", get_settings(), now)
+        validate_telegram_init_data(expired, "123456:test-token", settings, now)
 
 
 @given(st.text(min_size=0, max_size=300))

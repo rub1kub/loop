@@ -12,13 +12,13 @@ export interface TelegramWebApp {
   isFullscreen?: boolean;
   safeAreaInset?: { top: number; bottom: number; left: number; right: number };
   contentSafeAreaInset?: { top: number; bottom: number; left: number; right: number };
-  ready(): void;
-  expand(): void;
-  isVersionAtLeast(version: string): boolean;
+  ready?(): void;
+  expand?(): void;
+  isVersionAtLeast?(version: string): boolean;
   requestFullscreen?(): void;
   exitFullscreen?(): void;
-  setHeaderColor(color: string): void;
-  setBackgroundColor(color: string): void;
+  setHeaderColor?(color: string): void;
+  setBackgroundColor?(color: string): void;
   setBottomBarColor?(color: string): void;
   disableVerticalSwipes?(): void;
   enableClosingConfirmation?(): void;

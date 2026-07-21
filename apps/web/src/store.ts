@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import { api } from './api';
-import { isMockTelegram, telegram } from './telegram';
+import { isMockTelegram, telegramInitData, telegramStartParam } from './telegram';
 import type { Duel, Invite, Offer, Profile, Tab } from './types';
 
 const mockParameters = new URLSearchParams(window.location.search);
@@ -104,14 +104,14 @@ export const useLoopStore = create<LoopState>((set, get) => ({
       let profile: Profile;
       if (isMockTelegram()) profile = demoProfile;
       else {
-        const initData = telegram()?.initData;
+        const initData = telegramInitData();
         if (!initData) throw new Error('Откройте LOOP внутри Telegram');
         profile = (await api.authenticate(initData)).profile;
       }
       const delay = Math.max(0, 1500 - (performance.now() - started));
       await new Promise((resolve) => setTimeout(resolve, delay));
       let invite: Invite | null = null;
-      const startParam = telegram()?.initDataUnsafe?.start_param;
+      const startParam = telegramStartParam();
       if (!isMockTelegram() && startParam?.startsWith('duel_')) {
         try {
           invite = await api.invite(startParam.slice(5));

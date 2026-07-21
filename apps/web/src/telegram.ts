@@ -1,29 +1,64 @@
 import type { TelegramWebApp } from './types';
 
 const mockTelegram = import.meta.env.VITE_MOCK_TELEGRAM === 'true';
+const telegramSdkUrl = 'https://telegram.org/js/telegram-web-app.js?63';
+let telegramSdkPromise: Promise<void> | null = null;
 
 export function telegram(): TelegramWebApp | undefined {
   return window.Telegram?.WebApp;
 }
 
-export function initializeTelegram(): void {
-  if (isMockTelegram()) return;
+export function telegramInitData(): string {
+  const sdkInitData = telegram()?.initData?.trim();
+  if (sdkInitData) return sdkInitData;
+
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const search = new URLSearchParams(window.location.search);
+  return hash.get('tgWebAppData')?.trim() || search.get('tgWebAppData')?.trim() || '';
+}
+
+export function telegramStartParam(): string | undefined {
+  const unsafeStartParam = telegram()?.initDataUnsafe?.start_param;
+  if (unsafeStartParam) return unsafeStartParam;
+  const startParam = new URLSearchParams(telegramInitData()).get('start_param')?.trim();
+  return startParam || undefined;
+}
+
+export function loadTelegramSdk(): Promise<void> {
+  if (isMockTelegram() || telegram()) return Promise.resolve();
+  if (telegramSdkPromise) return telegramSdkPromise;
+
+  telegramSdkPromise = new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = telegramSdkUrl;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => resolve();
+    document.head.append(script);
+  });
+  return telegramSdkPromise;
+}
+
+export function initializeTelegram(): boolean {
+  if (isMockTelegram()) return true;
   const app = telegram();
-  if (!app) return;
-  app.setHeaderColor('#000000');
-  app.setBackgroundColor('#000000');
+  if (!app) return false;
+  app.setHeaderColor?.('#000000');
+  app.setBackgroundColor?.('#000000');
   app.setBottomBarColor?.('#000000');
-  app.expand();
+  app.MainButton?.hide();
+  app.expand?.();
   app.disableVerticalSwipes?.();
   app.enableClosingConfirmation?.();
-  if (app.isVersionAtLeast('8.0') && !app.isFullscreen) {
+  if (app.isVersionAtLeast?.('8.0') && !app.isFullscreen) {
     try {
       app.requestFullscreen?.();
     } catch {
       // Older clients may report a version before exposing fullscreen in this launch mode.
     }
   }
-  app.ready();
+  app.ready?.();
+  return true;
 }
 
 export function isMockTelegram(): boolean {
@@ -51,25 +86,6 @@ export function setBackAction(action?: () => void): () => void {
   }
   button.show();
   button.onClick(action);
-  return () => {
-    button.offClick(action);
-    button.hide();
-  };
-}
-
-export function setMainAction(label: string, action?: () => void, enabled = true): () => void {
-  if (isMockTelegram()) return () => undefined;
-  const button = telegram()?.MainButton;
-  if (!button) return () => undefined;
-  if (!action) {
-    button.hide();
-    return () => undefined;
-  }
-  button.setText(label);
-  if (enabled) button.enable();
-  else button.disable();
-  button.onClick(action);
-  button.show();
   return () => {
     button.offClick(action);
     button.hide();
@@ -114,7 +130,7 @@ export async function removeDuelSecret(offerId: number): Promise<void> {
 
 export function toggleFullscreen(): void {
   const app = telegram();
-  if (app?.isVersionAtLeast('8.0')) {
+  if (app?.isVersionAtLeast?.('8.0')) {
     if (app.isFullscreen) app.exitFullscreen?.();
     else app.requestFullscreen?.();
     return;

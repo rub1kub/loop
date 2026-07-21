@@ -199,6 +199,8 @@ async def authenticate(body: TelegramAuthRequest, db: Db, settings: Config) -> A
         )
     elif exchange.user_id != user.id:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "initData replay rejected")
+    else:
+        exchange.expires_at = expires
     try:
         await db.commit()
     except IntegrityError as exc:

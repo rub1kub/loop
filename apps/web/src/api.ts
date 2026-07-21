@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { telegramInitData } from './telegram';
 import type {
   ActionIntent,
   Duel,
@@ -13,6 +14,7 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 let accessToken: string | null = null;
+let reauthentication: Promise<boolean> | null = null;
 
 const userSchema = z.object({
   id: z.string(),
@@ -54,11 +56,38 @@ const profileSchema = z.object({
   bank: bankCycleSchema.nullable(),
 });
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function restoreSession(): Promise<boolean> {
+  const initData = telegramInitData();
+  if (!initData) return false;
+  if (!reauthentication) {
+    reauthentication = request<{ access_token: string }>(
+      '/auth/telegram',
+      {
+        method: 'POST',
+        body: JSON.stringify({ init_data: initData }),
+      },
+      false,
+    )
+      .then((auth) => {
+        accessToken = auth.access_token;
+        return true;
+      })
+      .finally(() => {
+        reauthentication = null;
+      });
+  }
+  return reauthentication;
+}
+
+async function request<T>(path: string, init?: RequestInit, retryUnauthorized = true): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set('Content-Type', 'application/json');
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  if (response.status === 401 && retryUnauthorized && path !== '/auth/telegram') {
+    accessToken = null;
+    if (await restoreSession()) return request<T>(path, init, false);
+  }
   if (!response.ok) {
     const body = (await response.json().catch(() => ({ detail: 'Ошибка соединения' }))) as {
       detail?: string;

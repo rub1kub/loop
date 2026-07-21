@@ -14,6 +14,7 @@ import {
   haptic,
   initializeTelegram,
   isMockTelegram,
+  loadTelegramSdk,
   removeDuelSecret,
   toggleFullscreen,
 } from './telegram';
@@ -33,6 +34,7 @@ export default function App() {
 
   useEffect(() => {
     initializeTelegram();
+    void loadTelegramSdk().then(() => initializeTelegram());
     void bootstrap();
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === 'f') toggleFullscreen();
@@ -42,7 +44,7 @@ export default function App() {
   }, [bootstrap]);
 
   useEffect(() => {
-    if (state.loading || isMockTelegram() || proofConfigured.current) return;
+    if (state.loading || !state.profile || isMockTelegram() || proofConfigured.current) return;
     proofConfigured.current = true;
     tonConnectUI.setConnectRequestParameters({ state: 'loading' });
     void api
@@ -54,7 +56,7 @@ export default function App() {
         proofConfigured.current = false;
         setError(error instanceof Error ? error.message : 'Не удалось создать TON proof');
       });
-  }, [setError, state.loading, tonConnectUI]);
+  }, [setError, state.loading, state.profile, tonConnectUI]);
 
   useEffect(() => {
     if (!wallet || isMockTelegram() || state.profile?.wallet?.address === wallet.account.address)

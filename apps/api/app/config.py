@@ -20,11 +20,11 @@ class Settings(BaseSettings):
     bot_token: SecretStr = SecretStr("")
     bot_username: str = ""
     telegram_webhook_secret: SecretStr = SecretStr("")
-    telegram_auth_max_age_seconds: int = 300
+    telegram_auth_max_age_seconds: int = 21_600
     telegram_future_skew_seconds: int = 30
 
     session_secret: SecretStr = SecretStr("development-only-change-me")
-    session_ttl_seconds: int = 3600
+    session_ttl_seconds: int = 21_600
     public_origin: str = "http://localhost:5173"
     cors_origins: str = "http://localhost:5173"
 
@@ -71,11 +71,14 @@ class Settings(BaseSettings):
             raise ValueError("production public origin must use HTTPS")
         if self.session_secret.get_secret_value() == "development-only-change-me":
             raise ValueError("production session secret is unsafe")
-        if min(
-            len(self.session_secret.get_secret_value()),
-            len(self.telegram_webhook_secret.get_secret_value()),
-            len(self.metrics_token.get_secret_value()),
-        ) < 32:
+        if (
+            min(
+                len(self.session_secret.get_secret_value()),
+                len(self.telegram_webhook_secret.get_secret_value()),
+                len(self.metrics_token.get_secret_value()),
+            )
+            < 32
+        ):
             raise ValueError("production secrets must be at least 32 characters")
         try:
             if len(bytes.fromhex(self.ton_contract_code_hash.removeprefix("0x"))) != 32:

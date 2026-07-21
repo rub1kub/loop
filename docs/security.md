@@ -7,7 +7,7 @@ The Telegram WebView, client JavaScript, wallet bridge, RPC responses, inline-me
 ## Identity and session controls
 
 - Telegram authorization validates raw `initData`, rejects duplicate keys, and enforces age and future-skew windows.
-- Reusing a valid Telegram payload cannot extend its original session lifetime; exchange digests are idempotent.
+- Desktop/WebView exchanges and sessions are bounded to six hours by default. Reusing a valid Telegram payload cannot extend its original lifetime; exchange digests are idempotent.
 - Sessions are short-lived and audience-bound. Raw `initData`, wallet proofs, secrets, and full Telegram identifiers are not logged.
 - Wallet binding uses a fresh, one-use, session-bound TON proof for the exact domain and network.
 - The API compares the signed public key with the wallet's on-chain key and canonicalizes addresses before uniqueness checks.
