@@ -1,6 +1,7 @@
 import asyncio
 import re
 import secrets
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
 from aiogram import Bot, Dispatcher, Router
@@ -158,35 +159,56 @@ def create_dispatcher(
     return dispatcher
 
 
-async def configure_bot(bot: Bot, settings: Settings) -> None:
-    webhook_url = f"{settings.public_origin}{settings.webhook_path}"
+async def apply_bot_setting(operation: Callable[[], Awaitable[bool]]) -> None:
     for attempt in range(3):
         try:
-            await bot.set_webhook(
-                webhook_url,
-                secret_token=settings.telegram_webhook_secret.get_secret_value(),
-                allowed_updates=["message", "inline_query", "callback_query"],
-                drop_pending_updates=False,
-            )
-            break
+            await operation()
+            return
         except TelegramRetryAfter as exc:
             if attempt == 2:
                 raise
             await asyncio.sleep(float(exc.retry_after) + 0.25)
-    for attempt in range(3):
-        try:
-            await bot.set_my_name(BOT_NAME)
-            await bot.set_my_description(BOT_DESCRIPTION)
-            await bot.set_my_short_description(BOT_SHORT_DESCRIPTION)
-            await bot.set_my_commands([BotCommand(command="start", description="Открыть LOOP")])
-            await bot.set_chat_menu_button(
+
+
+async def configure_bot(bot: Bot, settings: Settings) -> None:
+    webhook_url = f"{settings.public_origin}{settings.webhook_path}"
+    allowed_updates = ["message", "inline_query", "callback_query"]
+    webhook = await bot.get_webhook_info()
+    if webhook.url != webhook_url or set(webhook.allowed_updates or []) != set(allowed_updates):
+        await apply_bot_setting(
+            lambda: bot.set_webhook(
+                webhook_url,
+                secret_token=settings.telegram_webhook_secret.get_secret_value(),
+                allowed_updates=allowed_updates,
+                drop_pending_updates=False,
+            )
+        )
+
+    if (await bot.get_my_name()).name != BOT_NAME:
+        await apply_bot_setting(lambda: bot.set_my_name(BOT_NAME))
+    if (await bot.get_my_description()).description != BOT_DESCRIPTION:
+        await apply_bot_setting(lambda: bot.set_my_description(BOT_DESCRIPTION))
+    if (await bot.get_my_short_description()).short_description != BOT_SHORT_DESCRIPTION:
+        await apply_bot_setting(lambda: bot.set_my_short_description(BOT_SHORT_DESCRIPTION))
+
+    expected_commands = [BotCommand(command="start", description="Открыть LOOP")]
+    current_commands = await bot.get_my_commands()
+    if [(item.command, item.description) for item in current_commands] != [
+        (item.command, item.description) for item in expected_commands
+    ]:
+        await apply_bot_setting(lambda: bot.set_my_commands(expected_commands))
+
+    menu = await bot.get_chat_menu_button()
+    if (
+        not isinstance(menu, MenuButtonWebApp)
+        or menu.text != BOT_MENU_TEXT
+        or menu.web_app.url != settings.public_origin
+    ):
+        await apply_bot_setting(
+            lambda: bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(
                     text=BOT_MENU_TEXT,
                     web_app=WebAppInfo(url=settings.public_origin),
-                )
+                ),
             )
-            break
-        except TelegramRetryAfter as exc:
-            if attempt == 2:
-                raise
-            await asyncio.sleep(float(exc.retry_after) + 0.25)
+        )
