@@ -100,7 +100,9 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
           tar --exclude-vcs --exclude=node_modules --exclude=.venv --exclude=.acton \
-            --exclude=build --exclude=output --exclude='.env*' -czf /tmp/loop-release.tgz .
+            --exclude=build --exclude=output --exclude=sources --exclude=wallets.toml \
+            --exclude=coverage.txt --exclude=AGENTS.md --exclude='.env*' \
+            -czf /tmp/loop-release.tgz .
           ssh "$VPS_USER@$VPS_HOST" "mkdir -p /opt/loop/incoming /opt/loop/releases/${GITHUB_SHA}"
           scp /tmp/loop-release.tgz "$VPS_USER@$VPS_HOST:/opt/loop/incoming/${GITHUB_SHA}.tgz"
           ssh "$VPS_USER@$VPS_HOST" \
