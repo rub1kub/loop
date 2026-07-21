@@ -4,15 +4,21 @@ import { useEffect, useState } from 'react';
 import { haptic, setBackAction } from '../telegram';
 
 const stories = [
-  'Один цикл\nначинается с одного шага.',
-  'GRAM\nсоединяет людей.',
-  'Создавай.\nИграй.\nПобеждай.',
-  'Твой кошелёк.\nТвои средства.',
+  'Два режима.\nДве разные игры.',
+  'BANK — очередь,\nкоторую двигают следующие участники.',
+  'DUEL — прямой вызов\nмежду двумя игроками.',
+  'Все расчёты подтверждаются\nв TON testnet.',
   'Добро пожаловать\nв LOOP.',
 ];
 
-export function Onboarding({ onDone }: { onDone: () => void }) {
-  const [page, setPage] = useState(0);
+export function Onboarding({
+  onDone,
+  initialPage = 0,
+}: {
+  onDone: () => void;
+  initialPage?: number;
+}) {
+  const [page, setPage] = useState(initialPage);
 
   useEffect(() => setBackAction(page ? () => setPage((value) => value - 1) : undefined), [page]);
 
@@ -24,6 +30,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   return (
     <main className="onboarding">
+      <span className="onboarding-brand">LOOP · TESTNET</span>
       <div className="story-stage" onClick={next} role="presentation">
         <AnimatePresence mode="wait">
           <motion.h1

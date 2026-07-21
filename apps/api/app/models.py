@@ -24,27 +24,15 @@ def new_id() -> str:
     return str(uuid.uuid4())
 
 
-class OfferState(enum.StrEnum):
-    PENDING_FUNDING = "pending_funding"
-    OPEN = "open"
-    MATCHED = "matched"
-    CANCELLED = "cancelled"
-    EXPIRED = "expired"
-    REJECTED = "rejected"
-    SETTLED = "settled"
-    REFUNDED = "refunded"
-
-
-class DuelState(enum.StrEnum):
-    REVEALING = "revealing"
-    SETTLED = "settled"
-    REFUNDED = "refunded"
-    EXPIRED = "expired"
+class ProofType(enum.StrEnum):
+    SYSTEM = "system"
+    TELEGRAM = "telegram"
+    TON_TRANSACTION = "ton_transaction"
+    TON_STATE = "ton_state"
 
 
 class User(Base):
     __tablename__ = "users"
-
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
     username: Mapped[str | None] = mapped_column(String(64))
@@ -54,6 +42,7 @@ class User(Base):
     photo_url: Mapped[str | None] = mapped_column(Text)
     referred_by_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     onboarding_seen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    onboarding_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
@@ -62,7 +51,6 @@ class User(Base):
 
 class AuthExchange(Base):
     __tablename__ = "auth_exchanges"
-
     digest: Mapped[bytes] = mapped_column(LargeBinary(32), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
     auth_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -72,8 +60,16 @@ class AuthExchange(Base):
 
 class Wallet(Base):
     __tablename__ = "wallets"
-    __table_args__ = (UniqueConstraint("network", "address", name="wallet_network_address"),)
-
+    __table_args__ = (
+        UniqueConstraint("network", "address", name="wallet_network_address"),
+        Index(
+            "uq_active_wallet_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("active = true"),
+            sqlite_where=text("active = 1"),
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     network: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -83,112 +79,52 @@ class Wallet(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
-class BankPosition(Base):
-    __tablename__ = "bank_positions"
-
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
-    target_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, onupdate=utc_now
-    )
-
-
 class ReferralCode(Base):
     __tablename__ = "referral_codes"
-
     code: Mapped[str] = mapped_column(String(24), primary_key=True)
     owner_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
-class MatchmakingOffer(Base):
-    __tablename__ = "matchmaking_offers"
+class ReferralAttribution(Base):
+    __tablename__ = "referral_attributions"
     __table_args__ = (
-        UniqueConstraint("network", "onchain_offer_id", name="offer_network_chain_id"),
-        Index(
-            "uq_active_offer_wallet",
-            "wallet_id",
-            unique=True,
-            postgresql_where=text("state IN ('pending_funding', 'open', 'matched')"),
-            sqlite_where=text("state IN ('pending_funding', 'open', 'matched')"),
-        ),
+        UniqueConstraint("invitee_user_id", name="referral_invitee_once"),
+        UniqueConstraint("inviter_user_id", "invitee_user_id", name="referral_edge_once"),
     )
-
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    onchain_offer_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    wallet_id: Mapped[str] = mapped_column(ForeignKey("wallets.id"), nullable=False)
-    network: Mapped[int] = mapped_column(Integer, nullable=False)
-    contract_address: Mapped[str] = mapped_column(String(68), nullable=False)
-    chance_bps: Mapped[int] = mapped_column(Integer, nullable=False)
-    total_pool_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    stake_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    commitment_hex: Mapped[str] = mapped_column(String(64), nullable=False)
-    counter_offer_id: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
-    state: Mapped[str] = mapped_column(
-        String(24), default=OfferState.PENDING_FUNDING.value, nullable=False, index=True
-    )
-    revealed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    funding_tx_hash: Mapped[str | None] = mapped_column(String(96))
+    inviter_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    invitee_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(ForeignKey("referral_codes.code"), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False)
+    qualified_tx_hash: Mapped[str | None] = mapped_column(String(96))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    qualified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-class Duel(Base):
-    __tablename__ = "duels"
-    __table_args__ = (UniqueConstraint("network", "onchain_duel_id", name="duel_chain_id"),)
-
+class ReferralReward(Base):
+    __tablename__ = "referral_rewards"
+    __table_args__ = (UniqueConstraint("attribution_id", "cause", name="referral_reward_cause"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    onchain_duel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    network: Mapped[int] = mapped_column(Integer, nullable=False)
-    offer_a_id: Mapped[str] = mapped_column(ForeignKey("matchmaking_offers.id"), nullable=False)
-    offer_b_id: Mapped[str] = mapped_column(ForeignKey("matchmaking_offers.id"), nullable=False)
-    state: Mapped[str] = mapped_column(
-        String(24), default=DuelState.REVEALING.value, nullable=False, index=True
+    attribution_id: Mapped[str] = mapped_column(
+        ForeignKey("referral_attributions.id"), nullable=False, index=True
     )
-    winner_wallet: Mapped[str | None] = mapped_column(String(68))
-    reveal_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    settled_tx_hash: Mapped[str | None] = mapped_column(String(96))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-
-class InlineInvite(Base):
-    __tablename__ = "inline_invites"
-
-    code: Mapped[str] = mapped_column(String(24), primary_key=True)
-    creator_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    stake_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    chance_bps: Mapped[int] = mapped_column(Integer, nullable=False)
-    accepted_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-
-
-class ChainEvent(Base):
-    __tablename__ = "chain_events"
-    __table_args__ = (
-        UniqueConstraint("network", "account", "lt", "tx_hash", name="chain_event_identity"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    network: Mapped[int] = mapped_column(Integer, nullable=False)
-    account: Mapped[str] = mapped_column(String(68), nullable=False)
-    lt: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    tx_hash: Mapped[str] = mapped_column(String(96), nullable=False)
-    opcode: Mapped[int | None] = mapped_column(BigInteger)
-    body_hash: Mapped[str | None] = mapped_column(String(96))
-    applied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    payload_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    cause: Mapped[str] = mapped_column(String(64), nullable=False)
+    reward_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    payout_tx_hash: Mapped[str | None] = mapped_column(String(96), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class ChainCheckpoint(Base):
     __tablename__ = "chain_checkpoints"
-
     key: Mapped[str] = mapped_column(String(128), primary_key=True)
     last_lt: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+
+# Register bounded-context tables in the shared SQLAlchemy metadata.
+from .modules.bank import models as _bank_models  # noqa: E402,F401
+from .modules.duel import models as _duel_models  # noqa: E402,F401

@@ -9,6 +9,7 @@ os.environ.update(
     LOOP_SESSION_SECRET="test-session-secret-with-enough-entropy",
     LOOP_PUBLIC_ORIGIN="https://loop.test",
     LOOP_CORS_ORIGINS="https://loop.test",
+    LOOP_BANK_CONTRACT_ADDRESS="0:" + "12" * 32,
     LOOP_TON_CONTRACT_ADDRESS="0:" + "11" * 32,
 )
 

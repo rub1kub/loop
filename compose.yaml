@@ -20,7 +20,7 @@ x-api-environment: &api-environment
 
 services:
   db:
-    image: postgres:17-bookworm
+    image: postgres:17-bookworm@sha256:67870dc097790edf2bd6726658db995dcc830f799d41bb2b78ef07c9a2d5f010
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
@@ -47,7 +47,7 @@ services:
         max-file: '5'
 
   redis:
-    image: redis:8-bookworm
+    image: redis:8-bookworm@sha256:0a0f28c99ae50da4e0504499d2cd5b41746135c64f28ec42c88dafad93f60d41
     restart: unless-stopped
     command:
       - redis-server
@@ -112,7 +112,13 @@ services:
     cpus: 0.75
     stop_grace_period: 30s
     healthcheck:
-      disable: true
+      test:
+        - CMD-SHELL
+        - python -c "import os,time; p='/tmp/loop-worker-heartbeat'; assert os.path.exists(p) and time.time()-os.path.getmtime(p)<90"
+      interval: 20s
+      timeout: 5s
+      start_period: 30s
+      retries: 4
 
   migrate:
     <<: *api-environment

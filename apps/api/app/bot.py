@@ -1,12 +1,14 @@
 import asyncio
 import re
 import secrets
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.exceptions import TelegramRetryAfter
 from aiogram.filters import CommandStart
 from aiogram.types import (
+    BotCommand,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InlineQuery,
@@ -20,9 +22,31 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .config import Settings
-from .models import InlineInvite
+from .models import User
+from .modules.duel.models import (
+    ChallengeState,
+    DuelChallenge,
+    MatchmakingOffer,
+    OfferState,
+)
 
-INLINE_PATTERN = re.compile(r"^\s*(\d+(?:\.\d{1,9})?)\s+(25|50|75)\s*$")
+INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
+BOT_NAME = "LOOP"
+BOT_DESCRIPTION = (
+    "LOOP — два независимых режима в TON testnet. BANK — FIFO-очередь позиций. "
+    "DUEL — PvP-вызовы с шансами 25%, 50% или 75%."
+)
+BOT_SHORT_DESCRIPTION = "BANK FIFO и PvP DUEL на тестовых GRAM в TON testnet."
+BOT_MENU_TEXT = "Открыть LOOP"
+
+
+def as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def format_gram(nano: int) -> str:
+    value = nano / 1_000_000_000
+    return f"{value:.9f}".rstrip("0").rstrip(".")
 
 
 def create_dispatcher(
@@ -41,7 +65,9 @@ def create_dispatcher(
                 ]
             ]
         )
-        await message.answer("LOOP\nТвой кошелёк. Твои средства.", reply_markup=keyboard)
+        await message.answer(
+            "LOOP\nBANK и DUEL работают только в TON testnet.", reply_markup=keyboard
+        )
 
     @router.inline_query()
     async def inline_duel(query: InlineQuery) -> None:
@@ -49,50 +75,77 @@ def create_dispatcher(
         if not match:
             await query.answer([], cache_time=1, is_personal=True)
             return
-        whole, fractional = (match.group(1).split(".", 1) + [""])[:2]
-        stake_nano = int(whole) * 1_000_000_000 + int(fractional.ljust(9, "0"))
-        chance = int(match.group(2))
-        chance_bps = chance * 100
-        if stake_nano * 10_000 % chance_bps:
-            await query.answer([], cache_time=1, is_personal=True)
-            return
-        total_pool = stake_nano * 10_000 // chance_bps
-        if not settings.min_pool_nano <= total_pool <= settings.max_pool_nano:
-            await query.answer([], cache_time=1, is_personal=True)
-            return
-        code = secrets.token_urlsafe(9)
-        expires = datetime.now(UTC) + timedelta(hours=1)
+        offer_id = int(match.group(1))
         async with session_factory() as db:
-            active_invites = await db.scalar(
-                select(func.count())
-                .select_from(InlineInvite)
-                .where(
-                    InlineInvite.creator_telegram_id == query.from_user.id,
-                    InlineInvite.expires_at > datetime.now(UTC),
-                )
-            )
-            if (active_invites or 0) >= 20:
+            creator = await db.scalar(select(User).where(User.telegram_id == query.from_user.id))
+            if creator is None:
                 await query.answer([], cache_time=1, is_personal=True)
                 return
-            db.add(
-                InlineInvite(
-                    code=code,
-                    creator_telegram_id=query.from_user.id,
-                    stake_nano=stake_nano,
-                    chance_bps=chance_bps,
-                    expires_at=expires,
+            offer = await db.scalar(
+                select(MatchmakingOffer).where(
+                    MatchmakingOffer.user_id == creator.id,
+                    MatchmakingOffer.onchain_offer_id == offer_id,
+                    MatchmakingOffer.network == settings.ton_network_id,
+                    MatchmakingOffer.contract_address == settings.effective_duel_contract_address,
+                    MatchmakingOffer.mode == "direct",
+                    MatchmakingOffer.state == OfferState.OPEN.value,
+                    MatchmakingOffer.expires_at > datetime.now(UTC),
                 )
             )
+            if offer is None:
+                await query.answer([], cache_time=1, is_personal=True)
+                return
+            challenge = await db.scalar(
+                select(DuelChallenge).where(DuelChallenge.creator_offer_id == offer.id)
+            )
+            if challenge is not None and (
+                challenge.state != ChallengeState.OPEN.value
+                or as_utc(challenge.expires_at) <= datetime.now(UTC)
+            ):
+                await query.answer([], cache_time=1, is_personal=True)
+                return
+            active_challenges = await db.scalar(
+                select(func.count())
+                .select_from(DuelChallenge)
+                .where(
+                    DuelChallenge.creator_user_id == creator.id,
+                    DuelChallenge.state.in_(
+                        [ChallengeState.OPEN.value, ChallengeState.ACCEPTED.value]
+                    ),
+                    DuelChallenge.expires_at > datetime.now(UTC),
+                )
+            )
+            if challenge is None and (active_challenges or 0) >= 20:
+                await query.answer([], cache_time=1, is_personal=True)
+                return
+            if challenge is None:
+                challenge = DuelChallenge(
+                    code=secrets.token_urlsafe(9),
+                    creator_user_id=creator.id,
+                    creator_offer_id=offer.id,
+                    expires_at=min(
+                        as_utc(offer.expires_at),
+                        datetime.now(UTC) + timedelta(hours=1),
+                    ),
+                )
+                db.add(challenge)
+                await db.flush()
             await db.commit()
-        deep_link = f"https://t.me/{settings.bot_username}?startapp=duel_{code}"
+        amount = format_gram(offer.opponent_stake_nano)
+        receiver_chance = 10_000 - offer.chance_bps
+        profit = format_gram(offer.payout_nano - offer.opponent_stake_nano)
+        deep_link = f"https://t.me/{settings.bot_username}?startapp=duel_{challenge.code}"
         article = InlineQueryResultArticle(
-            id=code,
+            id=challenge.code,
             title="LOOP DUEL",
-            description=f"{match.group(1)} GRAM · шанс {chance}%",
+            description=f"Внести {amount} GRAM · шанс {receiver_chance // 100}%",
             input_message_content=InputTextMessageContent(
                 message_text=(
-                    f"LOOP DUEL\n\nИгрок вызывает тебя.\n"
-                    f"Ставка: {match.group(1)} GRAM\nШанс: {100 - chance}%"
+                    f"LOOP DUEL\n\n{creator.first_name} бросает тебе вызов.\n\n"
+                    f"Твоя ставка: {amount} GRAM\n"
+                    f"Твой шанс: {receiver_chance // 100}%\n"
+                    f"Чистая прибыль при победе: {profit} GRAM\n\n"
+                    "Прими вызов и подтверди участие в LOOP."
                 )
             ),
             reply_markup=InlineKeyboardMarkup(
@@ -106,30 +159,56 @@ def create_dispatcher(
     return dispatcher
 
 
+async def apply_bot_setting(operation: Callable[[], Awaitable[bool]]) -> None:
+    for attempt in range(3):
+        try:
+            await operation()
+            return
+        except TelegramRetryAfter as exc:
+            if attempt == 2:
+                raise
+            await asyncio.sleep(float(exc.retry_after) + 0.25)
+
+
 async def configure_bot(bot: Bot, settings: Settings) -> None:
     webhook_url = f"{settings.public_origin}{settings.webhook_path}"
-    for attempt in range(3):
-        try:
-            await bot.set_webhook(
+    allowed_updates = ["message", "inline_query", "callback_query"]
+    webhook = await bot.get_webhook_info()
+    if webhook.url != webhook_url or set(webhook.allowed_updates or []) != set(allowed_updates):
+        await apply_bot_setting(
+            lambda: bot.set_webhook(
                 webhook_url,
                 secret_token=settings.telegram_webhook_secret.get_secret_value(),
-                allowed_updates=["message", "inline_query", "callback_query"],
+                allowed_updates=allowed_updates,
                 drop_pending_updates=False,
             )
-            break
-        except TelegramRetryAfter as exc:
-            if attempt == 2:
-                raise
-            await asyncio.sleep(float(exc.retry_after) + 0.25)
-    for attempt in range(3):
-        try:
-            await bot.set_chat_menu_button(
+        )
+
+    if (await bot.get_my_name()).name != BOT_NAME:
+        await apply_bot_setting(lambda: bot.set_my_name(BOT_NAME))
+    if (await bot.get_my_description()).description != BOT_DESCRIPTION:
+        await apply_bot_setting(lambda: bot.set_my_description(BOT_DESCRIPTION))
+    if (await bot.get_my_short_description()).short_description != BOT_SHORT_DESCRIPTION:
+        await apply_bot_setting(lambda: bot.set_my_short_description(BOT_SHORT_DESCRIPTION))
+
+    expected_commands = [BotCommand(command="start", description="Открыть LOOP")]
+    current_commands = await bot.get_my_commands()
+    if [(item.command, item.description) for item in current_commands] != [
+        (item.command, item.description) for item in expected_commands
+    ]:
+        await apply_bot_setting(lambda: bot.set_my_commands(expected_commands))
+
+    menu = await bot.get_chat_menu_button()
+    if (
+        not isinstance(menu, MenuButtonWebApp)
+        or menu.text != BOT_MENU_TEXT
+        or menu.web_app.url != settings.public_origin
+    ):
+        await apply_bot_setting(
+            lambda: bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(
-                    text="LOOP", web_app=WebAppInfo(url=settings.public_origin)
-                )
+                    text=BOT_MENU_TEXT,
+                    web_app=WebAppInfo(url=settings.public_origin),
+                ),
             )
-            break
-        except TelegramRetryAfter as exc:
-            if attempt == 2:
-                raise
-            await asyncio.sleep(float(exc.retry_after) + 0.25)
+        )

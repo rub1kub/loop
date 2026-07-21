@@ -1,32 +1,29 @@
 # TON integration
 
-## Network and units
+LOOP uses TON testnet for BANK and DUEL settlement. It creates no wallet and keeps no internal user balance.
 
-The default network is testnet. GRAM is the native currency described by current TON documentation, represented as integer nano units. Asset labels or token metadata are never used as identity. Plush Brick eligibility uses the configured Jetton master address and a derived holder wallet on the matching network.
+## TON Connect boundary
 
-## TON Connect
+The API issues a one-use TON proof challenge. It verifies origin, timestamp, network, payload, signature, public key and canonical address before binding a wallet. Transaction requests expire quickly. A wallet callback means only “submitted”; the chain worker waits for successful execution and masterchain inclusion.
 
-The frontend requests a `ton_proof` challenge before connection. The API verifies the proof's domain, timestamp, network, payload, signature and wallet binding before persisting an address. Transaction requests have a short `validUntil`; frontend callbacks mean submitted, not settled. The chain indexer alone advances financial projections after finalized successful execution.
+## Contracts
 
-## Contract
+BankQueue and DuelEscrow are independent Tolk contracts with independent storage, fees, messages and deployment manifests. Their current addresses and reproducible evidence are documented in [contracts.md](contracts.md).
 
-`DuelEscrow` is a native-currency offer escrow with typed Tolk messages and storage. It supports open, compatible match, reveal, cancel, expiry, pause-safe recovery and getters. Payout destinations always come from stored authenticated senders, never message body input.
+## Read-only audit CLI
 
-Commit-reveal follows TON's recommendation for monetary games. Commitments are created with the same canonical cell layout in TypeScript and Tolk. If only one player reveals, withholding loses after deadline; if neither reveals, both principals are recoverable.
+```bash
+.venv/bin/loop-onchain-audit contract --mode bank
+.venv/bin/loop-onchain-audit contract --mode duel
+.venv/bin/loop-onchain-audit wallet --address <wallet-address>
+.venv/bin/loop-onchain-audit transaction --hash <transaction-hash> --account <account-address>
+.venv/bin/loop-onchain-audit jetton --owner <wallet-address> --master <jetton-master>
+```
 
-## Verified testnet deployment
+Jetton checks verify owner, master and derived wallet balance. User labels and user-supplied Jetton wallet addresses are not accepted as ownership evidence.
 
-- Address: [`kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a`](https://testnet.tonviewer.com/kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a)
-- Raw address: `0:5775D65530EB5E1180FCEEE48E7C800F2F73F852E23455FFDF500C862D2E65DB`
-- Code hash: `1D8330B799875E54680D3180703A2CC0A3C3FFE4C763B6A9D2980E910252B63D`
-- Initial state: active, fee `250` bps, `paused=false`, `locked=0`.
+## Finality and projections
 
-The API refuses production startup if TON Center reports a different code hash or an inactive account.
+The worker verifies account, sender/destination, opcode, value, query/entity identifiers, canonical terms, compute/action success and positive masterchain sequence. BANK and DUEL use separate event identities and checkpoints; a failure rolls back only the event projection and is safe to retry.
 
-Primary references:
-
-- <https://docs.ton.org/start-here>
-- <https://docs.ton.org/contracts/techniques/security>
-- <https://docs.ton.org/contracts/techniques/random>
-- <https://docs.ton.org/applications/ton-connect/overview>
-- <https://ton-blockchain.github.io/acton/docs/welcome>
+Primary references: [TON Connect](https://docs.ton.org/applications/ton-connect/overview), [transactions](https://docs.ton.org/develop/dapps/transactions), [smart-contract security](https://docs.ton.org/develop/smart-contracts/security), [Tolk](https://docs.ton.org/v3/documentation/smart-contracts/tolk/overview) and [Acton](https://ton-blockchain.github.io/acton/docs/welcome).

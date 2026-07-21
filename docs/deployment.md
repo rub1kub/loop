@@ -1,32 +1,48 @@
 # Deployment and operations
 
-## Production topology
+The published environment uses Docker Compose behind nginx at `144-31-30-62.sslip.io`. It is testnet-only.
 
-On the shared target VPS, the existing Apache edge owns ports 80/443 and forwards only the LOOP SNI host to nginx on `127.0.0.1:18791`. nginx serves immutable frontend files, applies request limits and security headers, and proxies the API on `127.0.0.1:8000`. PostgreSQL, Redis, API and workers otherwise use an internal Docker network. Images run as non-root with read-only filesystems, dropped capabilities, `no-new-privileges`, health checks and explicit resource limits. PostgreSQL and Redis are never bound to a public host interface.
+## Required configuration
 
-TLS uses Let's Encrypt with monitored renewal. nginx enforces request limits, exact CORS, CSP, HSTS after a staged rollout, `nosniff`, a restrictive referrer policy and per-route rate limiting. Telegram framing behavior must be verified before tightening `frame-ancestors`.
+Copy `.env.example` to the protected production environment and replace secrets. Production validation requires HTTPS, strong session/webhook/metrics secrets, bot identity, both contract addresses and both 32-byte code hashes. Secret files are never committed.
 
-## Deployment order
+## Release
 
-1. Configure DNS and copy `.env.example` to a root-owned environment file without placing values in shell history.
-2. Start PostgreSQL and Redis; run the one-shot migration container with a DDL-only database role.
-3. Deploy immutable API/frontend images, then verify `/live`, `/ready` and the public TON Connect manifest.
-4. Configure the bot webhook and menu only after HTTPS is healthy.
-5. Run the indexer in shadow mode and reconcile from finalized history before enabling matchmaking.
-6. Enable testnet/invite-only low-cap duels; exercise settle, cancel, expiry and restart recovery.
+1. All static, unit, browser and contract checks pass.
+2. `scripts/verify-contracts.py` matches local builds, manifests and finalized testnet state.
+3. The immutable Git commit is uploaded to `/opt/loop/releases/<sha>`.
+4. PostgreSQL backup completes before migration.
+5. API image and web assets build; database and Redis become healthy.
+6. Alembic upgrades to head.
+7. API startup attests BankQueue and DuelEscrow code hashes.
+8. API and worker health pass before nginx reload and public smoke.
 
-Mainnet deployment is a separate manual multisig change and is not performed by CI.
+```bash
+make deploy RELEASE=<40-character-git-sha>
+make smoke-test
+```
 
-Telegram inline mode is the one BotFather-only setting: run `/setinline` for `@getloopbot`, provide a short duel placeholder, then verify `getMe.supports_inline_queries=true`. The Bot API cannot enable this capability.
+The BANK/DUEL split migration archives old cycle-era tables under `legacy_*`; it does not reinterpret their records as financial state. The activation script stops writers before backup and automatically restores both the pre-migration database and previous immutable release if migration, health, nginx or public smoke validation fails.
 
-On a shared host, keep the existing Apache default vhost order unchanged. The three nginx LOOP files under `/etc/nginx` may point to `/opt/loop/current/deploy/nginx/`; release activation validates the new configuration and restores the previous release symlink if validation fails. After key-based deployment is verified, rotate the bootstrap root password through the hosting control plane.
+## Health checks
 
-## Backups and monitoring
+```bash
+curl --fail https://144-31-30-62.sslip.io/health
+curl --fail https://144-31-30-62.sslip.io/ready
+```
 
-Archive PostgreSQL WAL continuously and take encrypted off-site base backups. Target RPO is 5 minutes and RTO is 60 minutes; verify every backup and perform an isolated restore monthly. Redis is disposable.
+Readiness checks PostgreSQL, Redis and configured contract attestation. Operations additionally inspect worker heartbeat, current Alembic revision, webhook URL/status, container health and hashed frontend asset delivery.
 
-Alert independently of the production bot for service health, 5xx rate, database locks, disk/inodes, Redis eviction, certificate age, chain checkpoint lag, RPC divergence, overdue duels, bounced payouts, escrow reconciliation mismatch, keeper gas and backup/restore age.
+## Contract deployment
 
-## Rollback
+Normal application releases never deploy contracts. Explicit testnet broadcasting requires:
 
-Disable only new offers and referrals. Never disable reveal, settlement, cancellation or timeout refunds. Drain and reconcile active rounds, then roll application images back by digest while retaining chain events and database audit history.
+```bash
+ALLOW_TESTNET_DEPLOY=1 make contracts-deploy-testnet
+```
+
+After any deployment, update the relevant manifest and environment hash, run `make contracts-verify`, then release the application. Mainnet deployment is blocked in settings until external audit, governance, legal and recovery gates are documented.
+
+## Backup and recovery
+
+`deploy/backup-postgres.sh` creates timestamped compressed database dumps with restricted permissions and returns the validated archive path to the activation script. Failed activation restores that archive before restarting the prior release. A disaster-recovery restore is still an operator action into a clean database, followed by migration validation and deterministic chain replay. Contract funds remain recoverable through permissionless contract timeouts even if LOOP is unavailable.

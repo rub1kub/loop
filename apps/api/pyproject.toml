@@ -35,6 +35,9 @@ dev = [
   "ruff==0.15.22",
 ]
 
+[project.scripts]
+loop-onchain-audit = "app.onchain_audit:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]

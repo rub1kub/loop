@@ -1,0 +1,27 @@
+{
+  "contract": "BankQueue",
+  "address": "kQCrJa3LWrkb7iKbz5aZQw8dWl7zo2McsZah8YB2uPQKvX81",
+  "network": "testnet",
+  "workchain": 0,
+  "deployed_at": "2026-07-21T19:55:34Z",
+  "deploy_transaction": "Ex9tz2G/16Y39aUJ1CnDmjf35rt7Qa+JaUF9q2nx2Jo=",
+  "deploy_transaction_lt": 84649886000003,
+  "code_hash": "F159981F1D449107C4BD1B52715BAD5F8F2546C71E54B74CCC2B1CB3696FF15B",
+  "data_hash": "E141C4A0B17A0CF39F32822D9AE6C27913B3DB524C4C25EB7797A2134CB2CB83",
+  "source_commit": "1bfc7bc6134d2fa0237709a79d2753ebaf1c230f",
+  "compiler_version": "Tolk 1.4.0",
+  "acton_version": "1.0.0",
+  "configuration": {
+    "version": "1.0.0",
+    "owner": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
+    "treasury": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
+    "fee_bps": 100,
+    "paused": false,
+    "min_principal_nano": 1000000000,
+    "max_principal_nano": 100000000000,
+    "multipliers_bps": [12500, 15000, 20000]
+  },
+  "supported_opcodes": [1279413761, 1279413762, 1279413777, 1279413778],
+  "getters": ["contractConfig", "queueData", "positionData", "activePosition"],
+  "explorer_url": "https://testnet.tonviewer.com/kQCrJa3LWrkb7iKbz5aZQw8dWl7zo2McsZah8YB2uPQKvX81"
+}

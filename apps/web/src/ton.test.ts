@@ -46,6 +46,7 @@ describe('TON duel encoding', () => {
       contract_address: `0:${'22'.repeat(32)}`,
       amount_nano: '30000000',
       valid_until: 2_000_000_000,
+      network: -3,
     };
     const request = buildActionTransaction(
       intent,

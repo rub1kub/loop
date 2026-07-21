@@ -1,8 +1,9 @@
 import { Address, beginCell } from '@ton/core';
 import type { SendTransactionRequest } from '@tonconnect/ui-react';
 
-import type { ActionIntent, OfferQuote } from './types';
+import type { ActionIntent, BankQuote, OfferQuote } from './types';
 
+export const BANK_CREATE_POSITION_OPCODE = 0x4c424e01;
 export const OPEN_OFFER_OPCODE = 0x4c4f4f01;
 export const CANCEL_OFFER_OPCODE = 0x4c4f4f02;
 export const REVEAL_OPCODE = 0x4c4f4f04;
@@ -21,6 +22,34 @@ export function newSecret(): bigint {
   return BigInt(`0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`);
 }
 
+function requireTestnet(network: string): asserts network is '-3' {
+  if (network !== '-3') throw new Error('LOOP работает только в TON testnet');
+}
+
+export function buildBankPositionTransaction(
+  quote: BankQuote,
+  from: string,
+  network: string,
+): SendTransactionRequest {
+  requireTestnet(network);
+  const tx = quote.transaction;
+  const payload = beginCell()
+    .storeUint(BANK_CREATE_POSITION_OPCODE, 32)
+    .storeUint(tx.query_id, 64)
+    .storeUint(tx.position_id, 64)
+    .storeCoins(BigInt(tx.principal_nano))
+    .storeUint(tx.multiplier_bps, 16)
+    .endCell()
+    .toBoc()
+    .toString('base64');
+  return {
+    validUntil: tx.valid_until,
+    network,
+    from,
+    messages: [{ address: tx.contract_address, amount: tx.amount_nano, payload }],
+  };
+}
+
 export function commitmentForOffer(offerId: number, walletAddress: string, secret: bigint): string {
   return beginCell()
     .storeUint(COMMITMENT_DOMAIN, 32)
@@ -35,8 +64,9 @@ export function commitmentForOffer(offerId: number, walletAddress: string, secre
 export function buildOpenOfferTransaction(
   quote: OfferQuote,
   from: string,
-  network: '-3' | '-239',
+  network: string,
 ): SendTransactionRequest {
+  requireTestnet(network);
   const tx = quote.transaction;
   const payload = beginCell()
     .storeUint(OPEN_OFFER_OPCODE, 32)
@@ -61,9 +91,10 @@ export function buildOpenOfferTransaction(
 export function buildActionTransaction(
   intent: ActionIntent,
   from: string,
-  network: '-3' | '-239',
+  network: string,
   secretHex?: string,
 ): SendTransactionRequest {
+  requireTestnet(network);
   const body = beginCell();
   if (intent.operation === 'reveal') {
     if (!secretHex || !/^[0-9a-f]{64}$/i.test(secretHex)) {

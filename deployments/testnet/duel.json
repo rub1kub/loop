@@ -1,0 +1,30 @@
+{
+  "contract": "DuelEscrow",
+  "address": "kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a",
+  "network": "testnet",
+  "workchain": 0,
+  "deployed_at": "2026-07-21T13:24:45Z",
+  "deploy_transaction": "nc6cEJPIMdzyvdL94LDObKxQsxRlS1nXkzAYxvGX/Tw=",
+  "deploy_transaction_lt": 84590812000001,
+  "code_hash": "1D8330B799875E54680D3180703A2CC0A3C3FFE4C763B6A9D2980E910252B63D",
+  "data_hash": "6988A4164FDB4CA5766A21247D918C02C174C4D088F29822F606DDFCB8373363",
+  "source_commit": "1bfc7bc6134d2fa0237709a79d2753ebaf1c230f",
+  "compiler_version": "Tolk 1.4.0",
+  "acton_version": "1.0.0",
+  "configuration": {
+    "version": "1.0.0",
+    "owner": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
+    "treasury": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
+    "fee_bps": 250,
+    "paused": false,
+    "min_pool_nano": 1000000000,
+    "max_pool_nano": 100000000000,
+    "chances_bps": [2500, 5000, 7500]
+  },
+  "supported_opcodes": [
+    1280265985, 1280265986, 1280265987, 1280265988, 1280265989, 1280265990, 1280265991, 1280266001,
+    1280266002, 1280266003
+  ],
+  "getters": ["contractConfig", "offerData", "duelData", "activeOffer"],
+  "explorer_url": "https://testnet.tonviewer.com/kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a"
+}

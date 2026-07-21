@@ -1,36 +1,35 @@
 # Setup
 
-## Prerequisites
+## Requirements
 
-Use Node.js 22+, Python 3.12+, PostgreSQL 16+, Redis 7+ and Acton 1.0.0. Copy `.env.example` to an ignored `.env`; never reuse test or production credentials.
+- Node.js 22 and npm
+- Python 3.12+
+- Docker with Compose
+- Acton 1.0 with Tolk 1.4
 
-## Application
+## Install
 
 ```bash
-npm ci
-npm run dev:web
+cp .env.example .env
+make setup
+```
 
-python3.13 -m venv .venv
-.venv/bin/pip install -e 'apps/api[dev]'
+For a browser-only UI preview:
+
+```bash
+VITE_MOCK_TELEGRAM=true make dev
+```
+
+For the API, set a development database/Redis URL and run:
+
+```bash
 .venv/bin/uvicorn app.main:app --app-dir apps/api --reload
 ```
 
-Set `VITE_MOCK_TELEGRAM=true` only for browser UI development. Real authentication must run in a Telegram WebView with signed `initData`.
+## Telegram configuration
 
-## Contract
+Set the bot token, username, webhook secret, HTTPS public origin and session secret. The API configures the menu button, commands, webhook and inline mode during startup. Unsigned browser identity is rejected unless the compile-time mock flag was intentionally enabled for a local build.
 
-```bash
-acton build
-acton check
-acton test --coverage --coverage-format text --coverage-minimum-percent 75
-```
+## TON configuration
 
-Acton wallet files and compiled artifacts are ignored. Import or generate a testnet wallet through Acton's secure wallet store; never put a mnemonic in `.env`, shell history or repository files.
-
-## Verification
-
-```bash
-npm run check
-.venv/bin/pytest apps/api/tests --cov=app --cov-fail-under=60
-npm --workspace @loop/web run e2e
-```
+Use network id `-3`, the testnet provider, and the addresses/hashes in `deployments/testnet`. Never put a wallet seed or private key in application environment variables: users sign through TON Connect, while contract deployment is an explicit operator workflow in Acton.

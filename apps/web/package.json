@@ -12,6 +12,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "@ton/core": "0.63.1",
     "@tonconnect/ui-react": "3.0.0",
     "buffer": "6.0.3",

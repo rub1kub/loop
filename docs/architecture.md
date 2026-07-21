@@ -1,55 +1,43 @@
 # Architecture
 
-## System boundaries
-
-LOOP is a modular monolith deployed as independently scalable processes:
+## Bounded contexts
 
 ```text
-Telegram / browser
-       │ HTTPS
-       ▼
-Apache SNI edge → nginx ─┬─ static Mini App
-       ├─ FastAPI + aiogram webhook
-       └─ health and metrics
-              │
-        PostgreSQL ── durable users, offers, projections, outbox, checkpoints
-        Redis      ── rate limits, short-lived locks and cache only
-              │
-        TON indexer / matcher / notifier
-              │
-        TON testnet + DuelEscrow contract
+                     Telegram identity
+                            │
+          ┌─────────────────┴─────────────────┐
+          ▼                                   ▼
+   BANK API module                      DUEL API module
+   BankPosition                         DuelOffer / Duel
+   BankPayout                           DuelInvitation
+   BankChainEvent                       DuelChainEvent
+   BankCheckpoint                       DuelCheckpoint
+          │                                   │
+          ▼                                   ▼
+     BankQueue.tolk                     DuelEscrow.tolk
 ```
 
-The chain is authoritative for locked value, duel state and payouts. PostgreSQL is authoritative for off-chain identity, matchmaking intent, notification delivery, idempotency and indexed projections. Redis can be deleted without losing correctness.
+There is no universal cycle entity. Shared packages contain only identity, verified wallet ownership, referral attribution, provider access and delivery infrastructure.
 
-## Duel protocol
+## Request path
 
-Amounts are unsigned integer nano units. `chance_bps` is one of `2500`, `5000`, or `7500`; `stake = total_pool * chance_bps / 10_000`. A pair is compatible only when network, contract, pool and fee match, chances sum to 10,000, and user and wallet differ.
+1. Telegram sends signed `initData`; the API verifies HMAC, age and replay nonce.
+2. The user proves control of an external testnet wallet through TON proof.
+3. The API validates terms and returns a deterministic contract message. It does not mark funding complete.
+4. TON Connect asks the external wallet to sign and broadcast.
+5. The worker reads the contract account, verifies message identity, values, opcode, exit status and masterchain inclusion.
+6. A database transaction applies the idempotent BANK or DUEL projection.
 
-1. The client generates a 256-bit secret and commitment bound to the offer id and wallet.
-2. `OpenOffer` locks the exact principal plus an explicit gas budget in the contract.
-3. A complementary offer can name the first offer, or anyone can call `MatchOffers`; the contract validates all terms.
-4. Each wallet sends `Reveal`. After both valid reveals, the contract hashes a deterministic transcript and selects a winner weighted by principal.
-5. One reveal followed by timeout awards the pool to the revealer. No reveals followed by timeout refunds both principals.
-6. Unmatched offers can be cancelled by their owner or expired permissionlessly. Pausing blocks new offers and matches but never reveal, settle, cancel or refund.
+## Data and concurrency
 
-Every transition is replay-safe and terminal outcomes are mutually exclusive. No backend decision can alter a valid outcome or redirect a payout.
+PostgreSQL is the durable projection store. Partial unique indexes prevent concurrent active positions/offers per wallet. Matchmaking locks compatible rows with `FOR UPDATE SKIP LOCKED`, records an expiring reservation and revalidates it on funding. Chain event identities are unique by network, account, logical time, transaction hash and event index.
 
-## Backend modules
+Redis provides rate limits and short-lived distributed locks. It is never authoritative for offers, positions or payouts.
 
-- `auth`: strict Telegram `initData` verification and short-lived signed sessions.
-- `wallets`: one-use TON proof challenges and canonical wallet binding.
-- `matchmaking`: SQL row locking and deterministic compatibility rules.
-- `duels`: transaction payload construction; a signed/submitted transaction is never considered final.
-- `chain`: finalized event ingestion, overlap backfill and idempotent projections.
-- `referrals`: immutable first attribution, self/cycle prevention and chain-qualified rewards.
-- `bot`: menu button, start parameters, inline invitations and outbox notifications.
+## Failure model
 
-## Data invariants
-
-- one Telegram id maps to one user; one canonical `(network, address)` has one active owner;
-- one active offer per wallet and matchmaking scope;
-- one chain event identity can cause one state transition;
-- one duel has exactly one terminal result;
-- one referred user has at most one immutable inviter;
-- no database column represents spendable user funds.
+- Provider outage: keep the record pending and retry; do not infer success.
+- Malformed or failed transaction: record no financial transition.
+- Projection exception: roll back to a savepoint and retry safely.
+- Worker restart: resume from per-contract checkpoints; duplicate events are ignored.
+- Wallet callback without a block: remain pending.

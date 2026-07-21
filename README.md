@@ -1,76 +1,166 @@
 # LOOP
 
-LOOP is a Telegram Mini App that turns native TON/GRAM interactions into a small, monochrome, wallet-first experience. The application never keeps an off-chain user balance: funds remain in the user's wallet or in the verifiable escrow state of a smart contract.
+LOOP — Telegram Mini App с двумя независимыми режимами в TON testnet.
 
-## Product
+**BANK** — открытая тестовая симуляция FIFO-пирамиды. Пользователь создаёт позицию и выбирает целевую выплату; следующие депозиты последовательно финансируют более ранние позиции. Доход не гарантирован: если новые позиции не появляются, очередь останавливается.
 
-- **BANK** — a non-custodial savings goal driven by the connected wallet balance.
-- **DUEL** — funded 25/50/75 probability offers with complementary stakes, commit-reveal entropy, timeout recovery, and contract payouts.
-- **PROFILE** — Telegram identity, verified wallet, duel history, referrals, holder benefits, and settings.
-- **Telegram** — validated Mini App `initData`, native buttons, safe areas, haptics, bot menu, notifications, and inline duel invitations.
-- **TON** — TON Connect, Tolk contracts built by Acton, chain-confirmed state, and permissionless recovery paths.
+**DUEL** — отдельная PvP-игра. Два пользователя блокируют тестовые GRAM в escrow-контракте, выбирают шанс 25%, 50% или 75%, а результат фиксируется через commit–reveal. Победителю автоматически отправляется общий пул за вычетом комиссии.
 
-## Live testnet
+LOOP не является кошельком и не хранит внутренний баланс. TON Connect подключает внешний кошелёк только для подписания транзакций и получения выплат. On-chain состояние — источник истины.
+
+[![CI](https://github.com/rub1kub/loop/actions/workflows/ci.yml/badge.svg)](https://github.com/rub1kub/loop/actions/workflows/ci.yml)
+[![TON testnet](https://img.shields.io/badge/TON-testnet-black)](docs/contracts.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-white)](LICENSE)
+
+## Demo
 
 - Mini App: <https://144-31-30-62.sslip.io>
-- Telegram bot: <https://t.me/getloopbot>
-- Escrow: [`kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a`](https://testnet.tonviewer.com/kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a)
+- Telegram: <https://t.me/getloopbot>
+- BANK: [`kQCr…KvX81`](https://testnet.tonviewer.com/kQCrJa3LWrkb7iKbz5aZQw8dWl7zo2McsZah8YB2uPQKvX81)
+- DUEL: [`kQBX…5l212a`](https://testnet.tonviewer.com/kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a)
 
-The deployed contract bytecode is attested at API startup against code hash `1D8330B799875E54680D3180703A2CC0A3C3FFE4C763B6A9D2980E910252B63D`.
+> В опубликованной версии используются только тестовые GRAM. Не отправляйте mainnet-активы на адреса testnet.
 
-## Repository
+## Product preview
+
+| BANK: пустая очередь                           | BANK: активная позиция                           | BANK: создание позиции                                             |
+| ---------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------ |
+| ![BANK empty](docs/screenshots/bank-empty.png) | ![BANK active](docs/screenshots/bank-active.png) | ![BANK create position](docs/screenshots/bank-create-position.png) |
+
+| DUEL: условия                                    | DUEL: AFK-поиск                                            | DUEL: результат                                  |
+| ------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------ |
+| ![DUEL create](docs/screenshots/duel-create.png) | ![DUEL matchmaking](docs/screenshots/duel-matchmaking.png) | ![DUEL result](docs/screenshots/duel-result.png) |
+
+| Onboarding BANK                                          | Onboarding DUEL                                          | Profile                                  |
+| -------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------- |
+| ![Onboarding BANK](docs/screenshots/onboarding-bank.png) | ![Onboarding DUEL](docs/screenshots/onboarding-duel.png) | ![Profile](docs/screenshots/profile.png) |
+
+## What is implemented
+
+- FIFO BANK contract with 1.25×, 1.5× and 2× targets, partial funding, cascading settlement, deterministic fee and automatic payouts.
+- DUEL escrow with canonical 25/75, 50/50 and 75/25 terms, commit–reveal, permissionless timeouts, refunds and replay protection.
+- AFK matchmaking with durable reservations and direct Telegram invites that reload and revalidate terms before acceptance.
+- Independent BANK and DUEL models, API routers, database tables, chain event logs and checkpoints.
+- Fail-closed chain worker: verifies sender, destination, value, opcode, identifiers, terms, exit status and masterchain finality before projecting state.
+- Telegram auth, TON ownership proof, idempotency, rate limits, referrals and independent BANK/DUEL history.
+- Monochrome responsive UI with Telegram safe areas, black header/bottom chrome, haptics and reduced-motion support.
+
+## Architecture
 
 ```text
-apps/web/       React + TypeScript Mini App
-apps/api/       FastAPI + aiogram API, bot and workers
-contracts/      Tolk sources, Acton wrappers and tests
-deploy/         Docker, nginx, TLS and operational scripts
-docs/           Architecture, security and operations
+Telegram Mini App
+       │ signed initData / TON Connect request
+       ▼
+ FastAPI + aiogram
+   ├── BANK API ─── BANK tables ─── BANK chain events
+   ├── DUEL API ─── DUEL tables ─── DUEL chain events
+   ├── referrals / wallet proof / Telegram inline
+   └── finalized chain worker
+              │
+        TON testnet
+        ├── BankQueue
+        └── DuelEscrow
 ```
 
-## Local development
+PostgreSQL stores projections and Telegram product state. Redis stores disposable locks and rate limits. The contracts, not the API or wallet callback, decide financial state.
 
-Requirements: Node.js 22+, Python 3.12+, PostgreSQL 16+, Redis 7+, and Acton 1.0.0.
+Read [product](docs/product.md), [architecture](docs/architecture.md), [BANK](docs/bank.md), [DUEL](docs/duel.md) and [contracts](docs/contracts.md).
+
+## Stack
+
+| Layer        | Technology                                          |
+| ------------ | --------------------------------------------------- |
+| Mini App     | React 19, TypeScript, Vite, Motion, TON Connect UI  |
+| API and bot  | FastAPI, aiogram, SQLAlchemy, Alembic, Pydantic     |
+| Data         | PostgreSQL 17, Redis 8                              |
+| Contracts    | Tolk 1.4, Acton 1.0, TVM                            |
+| Verification | pytest, Vitest, Playwright, Ruff, mypy, Acton tests |
+| Delivery     | Docker Compose, nginx, immutable releases           |
+
+## Local setup
+
+Requirements: Node.js 22+, Python 3.12+, Docker and Acton 1.0.
 
 ```bash
 cp .env.example .env
-npm ci
-npm run dev:web
-
-python3.13 -m venv .venv
-.venv/bin/pip install -e 'apps/api[dev]'
-.venv/bin/uvicorn app.main:app --app-dir apps/api --reload
-
-acton build
-acton test
+make setup
 ```
 
-The browser-only demo uses `VITE_MOCK_TELEGRAM=true`; production rejects unsigned Telegram identity. See [deployment](docs/deployment.md) and [security](docs/security.md) before enabling any funded environment.
-
-## Quality gates
+Start the web app:
 
 ```bash
-npm run check
-.venv/bin/pytest apps/api/tests
-acton fmt --check
-acton check
-acton test --coverage --coverage-format text
+VITE_MOCK_TELEGRAM=true make dev
 ```
 
-## Release policy
+Start PostgreSQL, Redis, API and worker with production-like settings:
 
-Testnet is the only enabled chain in the default configuration. Mainnet requires all of the following: an independent contract audit, legal/compliance approval for each served jurisdiction, verified contract source/hash, multisig ownership, rehearsed refunds and restored off-site backups.
+```bash
+cp .env.example .env.production
+make docker-up
+```
 
-## Documentation
+The browser mock contains no real authentication or transaction signing and is never enabled in production.
 
-- [Product vision](docs/product.md)
-- [Setup](docs/setup.md)
-- [Architecture](docs/architecture.md)
-- [TON integration](docs/ton.md)
-- [Telegram integration](docs/telegram.md)
-- [Security model](docs/security.md)
-- [Deployment and operations](docs/deployment.md)
+## Quality commands
+
+Discover all supported commands:
+
+```bash
+make help
+```
+
+Run code checks:
+
+```bash
+make lint
+make typecheck
+make test
+make test-e2e
+make test-security
+```
+
+Build and verify both contracts against finalized testnet state:
+
+```bash
+make contracts-build
+make contracts-test
+make contracts-verify
+make contracts-inspect
+```
+
+Generate screenshots from the production build:
+
+```bash
+make screenshots
+```
+
+See [testing](docs/testing.md) for suite boundaries and [setup](docs/setup.md) for configuration.
+
+## Deployment
+
+Production releases are immutable. Deployment builds the API and web bundle, backs up PostgreSQL, runs Alembic, starts API and worker, validates contract code hashes, then checks internal and public readiness.
+
+```bash
+make deploy RELEASE=<40-character-git-sha>
+make smoke-test
+```
+
+Full runbook: [deployment](docs/deployment.md).
+
+## Security and honest limits
+
+- BANK is intentionally a pyramid simulation. Payouts depend on later deposits and can stop indefinitely.
+- BANK seed remainder becomes protocol reserve; it does not create a hidden position.
+- DUEL V1 has one global 2.5% on-chain fee. PLUSH BRICK ownership is verified, but a holder discount is disabled until a contract version can enforce it on-chain across networks.
+- Financial contracts run on testnet, while the configured PLUSH BRICK Jetton exists on mainnet; the two proofs are explicitly separated.
+- No internal balance, seed phrase, private key or custodial wallet exists in LOOP.
+
+Read [security](docs/security.md) and report vulnerabilities according to [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+Changes use Conventional Commits and must pass the affected checks. See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-MIT
+[MIT](LICENSE)

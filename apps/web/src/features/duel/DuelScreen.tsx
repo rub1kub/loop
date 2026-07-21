@@ -1,0 +1,410 @@
+import {
+  ArrowRight,
+  ArrowSquareOut,
+  HourglassSimple,
+  PaperPlaneTilt,
+  ShieldCheck,
+  User,
+  UserPlus,
+} from '@phosphor-icons/react';
+import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { api } from '../../api';
+import { haptic, isMockTelegram, readDuelSecret, storeDuelSecret, telegram } from '../../telegram';
+import {
+  buildActionTransaction,
+  buildOpenOfferTransaction,
+  commitmentForOffer,
+  formatGram,
+  newOfferId,
+  newSecret,
+  parseGram,
+} from '../../ton';
+import type { Duel, Invite, Offer, Profile } from '../../types';
+
+const chances = [2500, 5000, 7500] as const;
+
+function canonicalTerms(requestedStake: number, chanceBps: number) {
+  const quarterUnits = chanceBps / 2500;
+  const poolUnit = Math.floor((requestedStake + quarterUnits - 1) / quarterUnits);
+  const stake = quarterUnits * poolUnit;
+  const opponentStake = (4 - quarterUnits) * poolUnit;
+  return { stake, opponentStake, totalPool: 4 * poolUnit };
+}
+
+export function DuelScreen({
+  profile,
+  offers,
+  duels,
+  invite,
+  onRefresh,
+}: {
+  profile: Profile;
+  offers: Offer[];
+  duels: Duel[];
+  invite: Invite | null;
+  onRefresh: () => Promise<void>;
+}) {
+  const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
+  const [stake, setStake] = useState(() => (invite ? formatGram(invite.stake_nano, 3) : '1'));
+  const [chance, setChance] = useState<(typeof chances)[number]>(invite?.chance_bps ?? 5000);
+  const [mode, setMode] = useState<'afk' | 'direct'>(invite ? 'direct' : 'afk');
+  const [busy, setBusy] = useState(false);
+  const [mockSearching, setMockSearching] = useState(false);
+  const [message, setMessage] = useState(
+    invite
+      ? `${invite.creator_name} бросил тебе вызов.`
+      : 'Выбери условия. Всё остальное сделает контракт.',
+  );
+  const [now, setNow] = useState(0);
+  const locked = useRef(false);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const activeOffer = offers.find((offer) =>
+    ['pending_funding', 'open', 'reserved', 'matched'].includes(offer.state),
+  );
+  const activeDuel = activeOffer
+    ? duels.find(
+        (duel) => duel.offer_id === activeOffer.onchain_offer_id && duel.state === 'revealing',
+      )
+    : undefined;
+  const latestDuel = duels[0];
+  const offerExpired = activeOffer ? Date.parse(activeOffer.expires_at) <= now : false;
+  const duelExpired = activeDuel ? Date.parse(activeDuel.reveal_deadline) <= now : false;
+
+  const requestedStake = useMemo(() => {
+    try {
+      return parseGram(stake);
+    } catch {
+      return 0;
+    }
+  }, [stake]);
+  const terms = useMemo(() => canonicalTerms(requestedStake, chance), [chance, requestedStake]);
+  const feeNano = (terms.totalPool * profile.plush_brick.duel_fee_bps) / 10_000;
+  const payoutNano = terms.totalPool - feeNano;
+  const profitNano = payoutNano - terms.stake;
+
+  const status =
+    activeOffer?.state === 'matched'
+      ? 'matched'
+      : activeOffer || mockSearching
+        ? 'searching'
+        : latestDuel?.state === 'settled'
+          ? 'result'
+          : 'idle';
+
+  const start = useCallback(
+    async (selectedMode: 'afk' | 'direct') => {
+      if (locked.current || activeOffer) return;
+      locked.current = true;
+      setBusy(true);
+      setMode(selectedMode);
+      try {
+        if (requestedStake < 250_000_000) throw new Error('Минимальная ставка — 0,25 GRAM');
+        if (isMockTelegram()) {
+          setMockSearching(true);
+          setMessage(
+            selectedMode === 'afk'
+              ? 'Поиск идёт. Mini App можно закрыть.'
+              : 'Вызов создан. Отправь его через Telegram.',
+          );
+          haptic('success');
+          return;
+        }
+        if (!wallet) {
+          await tonConnectUI.openModal();
+          return;
+        }
+        if (wallet.account.chain !== '-3') throw new Error('LOOP работает только в TON testnet');
+        if (!profile.wallet) throw new Error('Ждём подтверждение владения внешним кошельком');
+        let acceptedInvite = invite;
+        if (invite) acceptedInvite = await api.acceptInvite(invite.code);
+        const offerId = newOfferId();
+        const secret = newSecret();
+        const commitment = commitmentForOffer(offerId, wallet.account.address, secret);
+        const quote = await api.quoteOffer({
+          offer_id: offerId,
+          chance_bps: chance,
+          stake_nano: terms.stake,
+          commitment_hex: commitment,
+          mode: selectedMode,
+          ...(acceptedInvite ? { challenge_code: acceptedInvite.code } : {}),
+        });
+        await storeDuelSecret(offerId, secret.toString(16).padStart(64, '0'));
+        setMessage('Подтверди блокировку тестовых GRAM во внешнем кошельке.');
+        await tonConnectUI.sendTransaction(
+          buildOpenOfferTransaction(quote, wallet.account.address, wallet.account.chain),
+        );
+        setMessage('Ждём on-chain подтверждение. Callback кошелька ещё не результат.');
+        await onRefresh();
+        haptic('success');
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Не удалось создать DUEL');
+        haptic('error');
+      } finally {
+        locked.current = false;
+        setBusy(false);
+      }
+    },
+    [
+      activeOffer,
+      chance,
+      invite,
+      onRefresh,
+      profile.wallet,
+      requestedStake,
+      terms.stake,
+      tonConnectUI,
+      wallet,
+    ],
+  );
+
+  const runActiveAction = useCallback(async () => {
+    if (locked.current || !activeOffer) return;
+    if (!wallet) {
+      await tonConnectUI.openModal();
+      return;
+    }
+    locked.current = true;
+    setBusy(true);
+    try {
+      let intent;
+      let secret: string | undefined;
+      if (activeOffer.state === 'matched') {
+        if (!activeDuel) throw new Error('Синхронизируем DUEL с сетью');
+        if (duelExpired) intent = await api.expireDuelIntent(activeDuel.onchain_duel_id);
+        else {
+          if (activeDuel.own_revealed) return;
+          intent = await api.revealIntent(activeDuel.onchain_duel_id);
+          secret = (await readDuelSecret(intent.offer_id)) ?? undefined;
+        }
+      } else if (activeOffer.state === 'open' || activeOffer.state === 'reserved') {
+        intent = offerExpired
+          ? await api.expireOfferIntent(activeOffer.onchain_offer_id)
+          : await api.cancelOfferIntent(activeOffer.onchain_offer_id);
+      } else {
+        throw new Error('Ждём подтверждение TON');
+      }
+      await tonConnectUI.sendTransaction(
+        buildActionTransaction(intent, wallet.account.address, wallet.account.chain, secret),
+      );
+      setMessage('Транзакция отправлена. Ждём финализацию TON.');
+      await onRefresh();
+      haptic('success');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Действие не выполнено');
+      haptic('error');
+    } finally {
+      locked.current = false;
+      setBusy(false);
+    }
+  }, [activeDuel, activeOffer, duelExpired, offerExpired, onRefresh, tonConnectUI, wallet]);
+
+  function inviteToTelegram() {
+    if (!activeOffer || activeOffer.state !== 'open') {
+      setMessage('Сначала дождись on-chain подтверждения вызова.');
+      haptic('warning');
+      return;
+    }
+    const app = telegram();
+    if (!app?.switchInlineQuery) {
+      setMessage('Telegram inline доступен внутри Mini App.');
+      return;
+    }
+    app.switchInlineQuery(`duel ${activeOffer.onchain_offer_id}`, ['users', 'groups']);
+    haptic('light');
+  }
+
+  const activeActionLabel = activeOffer
+    ? activeOffer.state === 'matched'
+      ? duelExpired
+        ? 'ЗАВЕРШИТЬ ПО ТАЙМАУТУ'
+        : activeDuel?.own_revealed
+          ? null
+          : 'ОТКРЫТЬ РЕЗУЛЬТАТ'
+      : activeOffer.state === 'open' || activeOffer.state === 'reserved'
+        ? offerExpired
+          ? 'ВЕРНУТЬ СТАВКУ'
+          : 'ОСТАНОВИТЬ ПОИСК'
+        : null
+    : null;
+
+  return (
+    <section className="screen duel-screen" aria-labelledby="duel-title">
+      <header className="mode-header">
+        <p className="eyebrow">TESTNET · COMMIT–REVEAL</p>
+        <h1 id="duel-title">DUEL</h1>
+      </header>
+
+      <div className={`duel-stage is-${status}`}>
+        <span className="player-node">
+          <User aria-hidden="true" />
+        </span>
+        <span className="duel-link">
+          <HourglassSimple aria-hidden="true" />
+        </span>
+        <span className="player-node opponent">
+          {status === 'matched' || status === 'result' || invite ? (
+            <User weight="fill" aria-hidden="true" />
+          ) : (
+            <UserPlus aria-hidden="true" />
+          )}
+        </span>
+      </div>
+
+      {status === 'idle' && (
+        <div className="duel-form">
+          {invite ? (
+            <div className="invite-banner">
+              <p className="eyebrow">ВЫЗОВ ОТ {invite.creator_name.toUpperCase()}</p>
+              <strong>Условия проверяются заново перед принятием.</strong>
+            </div>
+          ) : (
+            <>
+              <label className="stake-input">
+                <span>ТВОЯ СТАВКА</span>
+                <div>
+                  <input
+                    inputMode="decimal"
+                    value={stake}
+                    onChange={(event) => setStake(event.target.value)}
+                  />
+                  <b>GRAM</b>
+                </div>
+              </label>
+              <div className="chance-picker" aria-label="Шанс победы">
+                {chances.map((value) => (
+                  <button
+                    key={value}
+                    className={chance === value ? 'active' : ''}
+                    onClick={() => {
+                      setChance(value);
+                      haptic('selection');
+                    }}
+                  >
+                    <strong>{value / 100}%</strong>
+                    <span>ШАНС</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          <dl className="duel-terms">
+            <Term label="Твоя ставка" value={`${formatGram(terms.stake, 3)} GRAM`} />
+            <Term label="Ставка соперника" value={`${formatGram(terms.opponentStake, 3)} GRAM`} />
+            <Term label="Общий пул" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
+            <Term
+              label={`Комиссия DUEL · ${profile.plush_brick.duel_fee_bps / 100}%`}
+              value={`${formatGram(feeNano, 4)} GRAM`}
+            />
+            <Term label="Выплата победителю" value={`${formatGram(payoutNano, 3)} GRAM`} />
+            <Term label="Твоя чистая прибыль" value={`${formatGram(profitNano, 3)} GRAM`} />
+          </dl>
+        </div>
+      )}
+
+      {(status === 'searching' || status === 'matched') && (
+        <div className="duel-live-state">
+          <p className="eyebrow">
+            {status === 'matched'
+              ? 'СОПЕРНИК НАЙДЕН'
+              : mode === 'direct'
+                ? 'ПРЯМОЙ ВЫЗОВ'
+                : 'AFK ПОИСК'}
+          </p>
+          <strong>
+            {status === 'matched'
+              ? 'Открой результат до таймаута.'
+              : 'Поиск продолжается on-chain.'}
+          </strong>
+          {activeOffer && (
+            <div className="duel-live-numbers">
+              <span>{activeOffer.chance_bps / 100}% шанс</span>
+              <span>{formatGram(activeOffer.stake_nano, 3)} GRAM</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {status === 'result' && latestDuel && (
+        <div className="duel-result">
+          <p className="eyebrow">РЕЗУЛЬТАТ ПОДТВЕРЖДЁН</p>
+          <h2>{latestDuel.winner_wallet === profile.wallet?.address ? 'ПОБЕДА' : 'ЗАВЕРШЕНО'}</h2>
+          <strong>{formatGram(latestDuel.payout_nano, 3)} GRAM</strong>
+          {latestDuel.settlement_proof_url && (
+            <a href={latestDuel.settlement_proof_url} target="_blank" rel="noreferrer">
+              Проверить settlement <ArrowSquareOut aria-hidden="true" />
+            </a>
+          )}
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        <motion.p
+          key={message}
+          className="duel-message"
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+        >
+          <ShieldCheck aria-hidden="true" /> {message}
+        </motion.p>
+      </AnimatePresence>
+
+      <div className="duel-actions">
+        {status === 'idle' && (
+          <>
+            <button
+              className="primary-button"
+              disabled={busy}
+              onClick={() => void start(invite ? 'direct' : 'afk')}
+            >
+              {busy ? 'ГОТОВИМ…' : invite ? 'ПРИНЯТЬ ВЫЗОВ' : 'НАЙТИ СОПЕРНИКА'}
+            </button>
+            {!invite && (
+              <button
+                className="secondary-button"
+                disabled={busy}
+                onClick={() => void start('direct')}
+              >
+                <PaperPlaneTilt aria-hidden="true" /> СОЗДАТЬ ПРЯМОЙ ВЫЗОВ
+              </button>
+            )}
+          </>
+        )}
+        {(activeOffer?.mode === 'direct' || (mockSearching && mode === 'direct')) &&
+          status === 'searching' && (
+            <button className="primary-button" onClick={inviteToTelegram}>
+              ПРИГЛАСИТЬ В TELEGRAM <ArrowRight aria-hidden="true" />
+            </button>
+          )}
+        {activeActionLabel && (
+          <button
+            className="secondary-button"
+            disabled={busy}
+            onClick={() => void runActiveAction()}
+          >
+            {activeActionLabel}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Term({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}

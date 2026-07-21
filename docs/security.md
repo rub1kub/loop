@@ -2,27 +2,37 @@
 
 ## Trust boundaries
 
-The Telegram WebView, client JavaScript, wallet bridge, RPC responses and all API input are untrusted. Contract state is the financial source of truth. Chain ingestion is reconciled from overlapping finalized history; a stream is only a low-latency hint.
+- Telegram identity is trusted only after server-side `initData` HMAC, age, future-skew and replay checks.
+- Wallet ownership is trusted only after a scoped TON proof bound to origin, payload, public key, network and expiration.
+- A TON Connect callback is never financial proof.
+- Contract state and successful masterchain-finalized transactions are authoritative.
+- PostgreSQL is an idempotent projection, not a ledger of custody.
 
-## Controls
+## Contract invariants
 
-- Telegram authorization validates the raw query with the Bot API HMAC construction, rejects duplicate keys and enforces a short age/future-skew window. Reusing the same valid payload cannot extend its original session expiry, and its exchange digest is stored idempotently.
-- Sessions are short-lived, audience-bound HMAC tokens. Secrets, raw `initData`, wallet proofs and full Telegram identifiers are never logged.
-- Wallet binding requires a fresh, one-use, session-bound TON proof for the exact domain and network. Wallet address formatting is canonicalized before uniqueness checks.
-- Mutations require bearer authorization, exact production CORS/origin policy, size limits and layered Redis/API/nginx rate limits.
-- SQL is parameterized through SQLAlchemy. Outbound HTTP targets come only from operator configuration; user-controlled URLs are never fetched.
-- Matchmaking correctness uses PostgreSQL transactions and uniqueness constraints; Redis locks only reduce contention.
-- The escrow authenticates `in.senderAddress`, uses fixed-width payloads, checks principal and deadlines, rejects replays, preserves timeout recovery while paused and has no admin seizure path.
-- On-chain randomness alone is not used. Commitments bind secrets before participants are paired, and non-reveal cannot improve a player's payout.
+BankQueue rejects unsupported multipliers, amounts outside limits, duplicate identifiers, concurrent owner positions, malformed messages and underfunded gas. FIFO allocation cannot consume the new position itself. Fees and payouts are deterministic integer calculations.
 
-## Mainnet release gate
+DuelEscrow rejects noncanonical pools, incompatible matches, repeated owners, commitment mismatch, early timeout, duplicate reveal/acceptance and dust messages. Pausing does not disable cancel, expiry, reveal or settlement. Outcomes do not depend on backend randomness.
 
-Mainnet is intentionally disabled until an independent Tolk/TVM audit, jurisdiction-specific legal review, multisig governance, incident/refund rehearsal and restoration of an encrypted off-site PostgreSQL backup have all completed. Single-block TON PRNG is not an acceptable substitute for the commit-reveal protocol.
+## Chain worker
 
-## Secret handling
+Each projection checks contract address, message direction, sender, value, opcode, query and entity identifiers, canonical terms, compute/action success and masterchain sequence. Unknown, failed or incomplete transactions remain unprojected. Checkpoints and event identities make replay idempotent.
 
-`.env`, Acton wallet files, mnemonics, bot tokens, RPC keys, database passwords and TLS private keys are ignored by Git. Production consumes a deployment-only `0600` secret file outside release directories. Deployment/admin keys stay offline or in multisig custody; a low-value keeper, if used, has no privileged contract role.
+## Application controls
 
-## Reporting
+- restrictive CORS and production HTTPS;
+- signed sessions with short expiry;
+- rate limiting and bounded request schemas;
+- SQL row locks and partial unique constraints for races;
+- redacted structured logs and no secret material in API responses;
+- read-only containers, dropped Linux capabilities and no-new-privileges;
+- startup attestation of both configured contract code hashes.
 
-Please disclose vulnerabilities privately to the repository owner. Do not create a public issue containing an exploit, credentials or personally identifiable data.
+## Known limits
+
+- The project is testnet-only and has not received an external professional audit.
+- Referral anti-abuse prevents direct self-referral and duplicate qualification but cannot prove two Telegram accounts are unrelated people.
+- PLUSH BRICK is a mainnet Jetton while contracts are testnet. V1 holder fee discounts are disabled rather than trusted to the backend.
+- BANK depends entirely on later deposits; a stalled queue is expected behavior, not a solvency guarantee.
+
+For private vulnerability reporting, see the repository [security policy](../SECURITY.md).

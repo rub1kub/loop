@@ -1,15 +1,21 @@
-# Product vision
+# Product
 
-LOOP makes wallet-native TON actions feel understandable inside Telegram without becoming a custodian. The product uses a deliberately narrow monochrome interface, immediate system feedback and progressive disclosure: the user sees a savings goal or a duel decision first, while protocol detail remains inspectable when needed.
+LOOP is a Telegram Mini App with two deliberately independent testnet modes.
 
-## Product principles
+## BANK
 
-- **Self-custody first:** LOOP never creates an internal spendable balance and never asks for a seed phrase.
-- **Visible state:** submitted, chain-confirmed, revealing, settled and refundable are distinct states.
-- **Recovery over novelty:** every funded path has a permissionless timeout or owner cancellation path.
-- **Telegram-native:** safe areas, native buttons, haptics, theme parameters, start parameters and inline invitations are treated as first-class platform behavior.
-- **Small trustworthy surface:** BANK is a wallet goal, DUEL is one audited protocol shape, and PROFILE explains identity, wallet and history without unrelated financial features.
+BANK is a transparent simulation of a FIFO financial pyramid. A user contributes test GRAM and selects a 1.25×, 1.5× or 2× target. Each later contribution first pays the oldest unfinished position, then continues through the queue. There is no yield source, guarantee or DUEL subsidy. If contributions stop, payouts stop.
 
-## Release scope
+## DUEL
 
-The public release is testnet-only. BANK is non-custodial, DUEL uses native TON testnet value, referrals award non-transferable LOOP points, and Plush Brick holder benefits remain informational until mainnet release gates are complete.
+DUEL is a two-player game. A player chooses a test-GRAM stake and a 25%, 50% or 75% chance. The counterparty contribution is computed so both positions share one canonical pool. Commit–reveal prevents either player or the backend from selecting the result after matching. Timeouts preserve permissionless recovery.
+
+## Shared product layer
+
+Telegram identity, an external TON Connect wallet, referrals and profile navigation are shared. Financial state is not. BANK and DUEL have separate contracts, projections, history, fees and screens. Neither mode writes into the other.
+
+LOOP has no wallet creation, portfolio, internal balance or custody. A wallet connection proves an address and signs a transaction; only a finalized on-chain transaction changes a financial projection.
+
+## Network boundary
+
+Financial actions are hard-disabled outside TON testnet (`-3`). The UI labels every transaction as testnet. The browser demo never broadcasts transactions.

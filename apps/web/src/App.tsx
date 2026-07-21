@@ -3,16 +3,18 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useRef } from 'react';
 
 import { api } from './api';
-import { BankScreen } from './components/BankScreen';
-import { DuelScreen } from './components/DuelScreen';
+import { InlineDuelPreview } from './components/InlineDuelPreview';
 import { Loader } from './components/Loader';
 import { Onboarding } from './components/Onboarding';
 import { ProfileScreen } from './components/ProfileScreen';
 import { TabBar } from './components/TabBar';
+import { BankScreen } from './features/bank/BankScreen';
+import { DuelScreen } from './features/duel/DuelScreen';
 import {
   haptic,
   initializeTelegram,
   isMockTelegram,
+  loadTelegramSdk,
   removeDuelSecret,
   toggleFullscreen,
 } from './telegram';
@@ -32,6 +34,7 @@ export default function App() {
 
   useEffect(() => {
     initializeTelegram();
+    void loadTelegramSdk().then(() => initializeTelegram());
     void bootstrap();
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === 'f') toggleFullscreen();
@@ -41,7 +44,7 @@ export default function App() {
   }, [bootstrap]);
 
   useEffect(() => {
-    if (state.loading || isMockTelegram() || proofConfigured.current) return;
+    if (state.loading || !state.profile || isMockTelegram() || proofConfigured.current) return;
     proofConfigured.current = true;
     tonConnectUI.setConnectRequestParameters({ state: 'loading' });
     void api
@@ -53,7 +56,7 @@ export default function App() {
         proofConfigured.current = false;
         setError(error instanceof Error ? error.message : 'Не удалось создать TON proof');
       });
-  }, [setError, state.loading, tonConnectUI]);
+  }, [setError, state.loading, state.profile, tonConnectUI]);
 
   useEffect(() => {
     if (!wallet || isMockTelegram() || state.profile?.wallet?.address === wallet.account.address)
@@ -75,15 +78,22 @@ export default function App() {
   }, [refresh, setError, state.profile?.wallet?.address, tonConnectUI, wallet]);
 
   useEffect(() => {
-    if (!state.offers.some((offer) => ['pending_funding', 'open', 'matched'].includes(offer.state)))
-      return;
+    const bankActive =
+      state.bankPosition &&
+      ['pending_confirmation', 'queued', 'partially_funded', 'completed'].includes(
+        state.bankPosition.current_status,
+      );
+    const duelActive = state.offers.some((offer) =>
+      ['pending_funding', 'open', 'reserved', 'matched'].includes(offer.state),
+    );
+    if (!bankActive && !duelActive) return;
     const timer = window.setInterval(() => {
       void refresh().catch((error: unknown) => {
         setError(error instanceof Error ? error.message : 'Не удалось обновить дуэль');
       });
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [refresh, setError, state.offers]);
+  }, [refresh, setError, state.bankPosition, state.offers]);
 
   useEffect(() => {
     for (const duel of state.duels) {
@@ -93,12 +103,18 @@ export default function App() {
     }
   }, [state.duels]);
 
+  const documentationScreen = isMockTelegram()
+    ? new URLSearchParams(window.location.search).get('screen')
+    : null;
+  if (documentationScreen === 'loader') return <Loader />;
+  if (documentationScreen === 'inline') return <InlineDuelPreview />;
+
   if (state.loading) return <Loader />;
 
   if (state.error && !state.profile) {
     return (
       <main className="fatal-screen">
-        <span className="fatal-mark">∞</span>
+        <img className="fatal-mark" src="/assets/loop-loader.webp" alt="" />
         <h1>LOOP недоступен</h1>
         <p>{state.error}</p>
         <button className="primary-button" onClick={() => window.location.reload()}>
@@ -109,14 +125,18 @@ export default function App() {
   }
 
   if (!state.profile) return null;
-  if (state.showOnboarding) return <Onboarding onDone={() => void state.finishOnboarding()} />;
+  if (state.showOnboarding)
+    return (
+      <Onboarding initialPage={state.onboardingPage} onDone={() => void state.finishOnboarding()} />
+    );
 
   const screen = {
     bank: (
       <BankScreen
         profile={state.profile}
+        position={state.bankPosition}
         onRefresh={() => state.refresh()}
-        onConnect={() => void tonConnectUI.openModal()}
+        onMockCreated={(position) => state.setMockBankPosition(position)}
       />
     ),
     duel: (
@@ -131,26 +151,16 @@ export default function App() {
     profile: (
       <ProfileScreen
         profile={state.profile}
-        offers={state.offers}
+        bankHistory={state.bankHistory}
         duels={state.duels}
         onReplay={() => state.replayOnboarding()}
+        onSetOnboarding={(enabled) => state.setOnboardingEnabled(enabled)}
       />
     ),
   }[state.activeTab];
 
   return (
     <main className="app-shell">
-      <div className="brand-bar">
-        <span className="brand">LOOP</span>
-        <button
-          className={`connect-pill ${wallet ? 'connected' : ''}`}
-          onClick={() => void tonConnectUI.openModal()}
-        >
-          <i />
-          {wallet ? 'CONNECTED' : 'CONNECT'}
-        </button>
-      </div>
-
       <AnimatePresence mode="wait">
         <motion.div
           key={state.activeTab}
