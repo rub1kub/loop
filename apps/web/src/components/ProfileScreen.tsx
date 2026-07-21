@@ -1,11 +1,11 @@
 import {
   ArrowRight,
+  ArrowSquareOut,
   GearSix,
   Infinity as InfinityIcon,
   Link,
   PaperPlaneTilt,
   ShieldCheck,
-  Trophy,
   UsersThree,
   Wallet,
   X,
@@ -16,34 +16,43 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../api';
 import { haptic, isMockTelegram, telegram } from '../telegram';
-import type { Duel, Profile, Referral } from '../types';
+import { formatGram } from '../ton';
+import type { BankPosition, Duel, Profile, Referral } from '../types';
 
 function shortAddress(address: string): string {
-  return `${address.slice(0, 6)}…${address.slice(-6)}`;
+  return `${address.slice(0, 7)}…${address.slice(-5)}`;
 }
+
+const demoReferral: Referral = {
+  code: 'LOOPDEMO',
+  url: 'https://t.me/getloopbot?startapp=ref_LOOPDEMO',
+  invited: 3,
+  qualified: 1,
+  reward_points: 100,
+  history: [],
+};
 
 export function ProfileScreen({
   profile,
+  bankHistory,
   duels,
   onReplay,
+  onSetOnboarding,
 }: {
   profile: Profile;
+  bankHistory: BankPosition[];
   duels: Duel[];
   onReplay: () => void;
+  onSetOnboarding: (enabled: boolean) => Promise<void>;
 }) {
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(
+    () =>
+      isMockTelegram() && new URLSearchParams(window.location.search).get('screen') === 'settings',
+  );
   const [referral, setReferral] = useState<Referral | null>(() =>
-    isMockTelegram()
-      ? {
-          code: 'LOOPDEMO',
-          url: 'https://t.me/loop?startapp=ref_LOOPDEMO',
-          invited: 3,
-          qualified: 1,
-          reward_points: 100,
-        }
-      : null,
+    isMockTelegram() ? demoReferral : null,
   );
 
   useEffect(() => {
@@ -57,15 +66,13 @@ export function ProfileScreen({
   async function shareReferral() {
     if (!referral) return;
     haptic('light');
-    const url = `https://t.me/share/url?url=${encodeURIComponent(referral.url)}&text=${encodeURIComponent('Встретимся в LOOP.')}`;
+    const url = `https://t.me/share/url?url=${encodeURIComponent(referral.url)}&text=${encodeURIComponent('Попробуй BANK и DUEL в LOOP testnet.')}`;
     if (telegram()) telegram()?.openTelegramLink(url);
     else await navigator.clipboard.writeText(referral.url);
   }
 
-  const wins = duels.filter(
-    (duel) => duel.state === 'settled' && duel.winner_wallet === profile.wallet?.address,
-  ).length;
-  const cycleEvents = profile.bank?.event_count ?? 0;
+  const recentBank = bankHistory.find((item) => item.proof_url);
+  const recentDuel = duels.find((item) => item.settlement_proof_url);
 
   return (
     <section className="screen profile-screen" aria-labelledby="profile-title">
@@ -78,7 +85,7 @@ export function ProfileScreen({
           </div>
         )}
         <div>
-          <p className="eyebrow">В LOOP</p>
+          <p className="eyebrow">PROFILE</p>
           <h1 id="profile-title">{profile.user.first_name}</h1>
           <span>{profile.user.username ? `@${profile.user.username}` : 'Telegram user'}</span>
         </div>
@@ -91,67 +98,97 @@ export function ProfileScreen({
         </button>
       </header>
 
-      <div className="profile-stats" aria-label="Статистика LOOP">
-        <div>
-          <strong>{cycleEvents}</strong>
-          <span>СОБЫТИЙ</span>
-        </div>
-        <div>
-          <strong>{duels.length}</strong>
-          <span>ДУЭЛЕЙ</span>
-        </div>
-        <div>
-          <strong>{referral?.invited ?? 0}</strong>
-          <span>ДРУЗЕЙ</span>
-        </div>
-      </div>
-
-      <div className="profile-highlight">
-        <span className="profile-highlight-icon">
-          {wins ? <Trophy aria-hidden="true" /> : <InfinityIcon aria-hidden="true" />}
-        </span>
-        <div>
-          <p className="eyebrow">ТВОЙ СЛЕД</p>
-          <strong>{wins ? `${wins} побед в этом LOOP` : 'Первый цикл уже живёт'}</strong>
-          <small>
-            {profile.bank
-              ? `Цикл ${String(profile.bank.sequence_number).padStart(2, '0')}`
-              : 'Начни с BANK'}
-          </small>
-        </div>
+      <div className="mode-stats" aria-label="Отдельная статистика BANK и DUEL">
+        <article>
+          <p className="eyebrow">BANK</p>
+          <strong>{profile.bank.completed}</strong>
+          <span>ВЫПЛАТ</span>
+          <small>{profile.bank.active ? `${profile.bank.active} активно` : 'нет активных'}</small>
+        </article>
+        <article>
+          <p className="eyebrow">DUEL</p>
+          <strong>{profile.duel.completed}</strong>
+          <span>ЗАВЕРШЕНО</span>
+          <small>{profile.duel.active ? `${profile.duel.active} активно` : 'нет активных'}</small>
+        </article>
       </div>
 
       <div className="section-label">
-        <span>SOCIAL</span>
-        <small>{referral?.reward_points ?? 0} LOOP POINTS</small>
+        <span>ВНЕШНИЙ КОШЕЛЁК</span>
       </div>
-      <button className="profile-row" onClick={() => void shareReferral()} disabled={!referral}>
-        <span className="row-icon">
-          <UsersThree aria-hidden="true" />
-        </span>
+      <button className="profile-row" onClick={() => void tonConnectUI.openModal()}>
+        <span className="row-icon">{profile.wallet ? <ShieldCheck /> : <Wallet />}</span>
         <div>
-          <b>Позвать друга в LOOP</b>
-          <small>Новый человек — новое событие цикла</small>
-        </div>
-        <PaperPlaneTilt aria-hidden="true" />
-      </button>
-
-      <div className="section-label">
-        <span>ПОДТВЕРЖДЕНИЯ</span>
-      </div>
-      <button className="profile-row proof-row" onClick={() => void tonConnectUI.openModal()}>
-        <span className="row-icon">
-          {profile.wallet ? <ShieldCheck aria-hidden="true" /> : <Wallet aria-hidden="true" />}
-        </span>
-        <div>
-          <b>{profile.wallet ? 'Внешний кошелёк подтверждён' : 'Подключить внешний кошелёк'}</b>
+          <b>{profile.wallet ? 'Адрес подтверждён' : 'Подключить TON Connect'}</b>
           <small>
-            {wallet
-              ? shortAddress(wallet.account.address)
-              : 'Только для транзакций и получения результата'}
+            {profile.wallet
+              ? shortAddress(profile.wallet.address)
+              : 'Для подписания транзакций и получения выплат'}
           </small>
         </div>
         <ArrowRight aria-hidden="true" />
+      </button>
+
+      <div className="section-label">
+        <span>PLUSH BRICK</span>
+      </div>
+      <div className="profile-row static-row">
+        <span className="row-icon">
+          <InfinityIcon />
+        </span>
+        <div>
+          <b>{profile.plush_brick.holder ? 'Holder подтверждён' : 'Jetton не найден'}</b>
+          <small>
+            {profile.plush_brick.verified
+              ? `Проверено по master · комиссия DUEL ${profile.plush_brick.duel_fee_bps / 100}%${profile.plush_brick.fee_discount_active ? ' со скидкой' : ''}`
+              : 'Проверка временно недоступна'}
+          </small>
+        </div>
+        <ShieldCheck aria-hidden="true" />
+      </div>
+
+      <div className="section-label">
+        <span>ON-CHAIN ИСТОРИЯ</span>
+        <small>BANK И DUEL РАЗДЕЛЕНЫ</small>
+      </div>
+      <div className="proof-history">
+        <ProofRow
+          mode="BANK"
+          title={
+            recentBank
+              ? `${formatGram(recentBank.principal_nano, 3)} GRAM · позиция`
+              : 'Операций пока нет'
+          }
+          url={recentBank?.proof_url ?? null}
+        />
+        <ProofRow
+          mode="DUEL"
+          title={
+            recentDuel
+              ? `${formatGram(recentDuel.payout_nano, 3)} GRAM · settlement`
+              : 'Операций пока нет'
+          }
+          url={recentDuel?.settlement_proof_url ?? null}
+        />
+      </div>
+
+      <div className="section-label">
+        <span>РЕФЕРАЛЫ</span>
+        <small>{referral?.reward_points ?? 0} POINTS</small>
+      </div>
+      <button className="profile-row" onClick={() => void shareReferral()} disabled={!referral}>
+        <span className="row-icon">
+          <UsersThree />
+        </span>
+        <div>
+          <b>Пригласить в LOOP</b>
+          <small>
+            {referral
+              ? `${referral.qualified} подтверждено из ${referral.invited}`
+              : 'Загружаем ссылку'}
+          </small>
+        </div>
+        <PaperPlaneTilt aria-hidden="true" />
       </button>
 
       <AnimatePresence>
@@ -173,13 +210,27 @@ export function ProfileScreen({
             >
               <div className="sheet-title-row">
                 <div>
-                  <p className="eyebrow">LOOP</p>
+                  <p className="eyebrow">LOOP · TESTNET</p>
                   <h2>Настройки</h2>
                 </div>
-                <button className="round-icon-button" onClick={() => setSettingsOpen(false)}>
-                  <X aria-label="Закрыть" />
+                <button
+                  className="round-icon-button"
+                  onClick={() => setSettingsOpen(false)}
+                  aria-label="Закрыть"
+                >
+                  <X aria-hidden="true" />
                 </button>
               </div>
+              <label className="settings-toggle">
+                <span>
+                  <InfinityIcon /> Показывать onboarding
+                </span>
+                <input
+                  type="checkbox"
+                  checked={profile.user.onboarding_enabled}
+                  onChange={(event) => void onSetOnboarding(event.target.checked)}
+                />
+              </label>
               <button
                 className="settings-row"
                 onClick={() => {
@@ -188,25 +239,42 @@ export function ProfileScreen({
                 }}
               >
                 <span>
-                  <InfinityIcon aria-hidden="true" />
-                  Повторить вступление
+                  <InfinityIcon /> Повторить onboarding
                 </span>
-                <ArrowRight aria-hidden="true" />
+                <ArrowRight />
               </button>
               {wallet && (
                 <button className="settings-row" onClick={() => void tonConnectUI.disconnect()}>
                   <span>
-                    <Link aria-hidden="true" />
-                    Отключить внешний кошелёк
+                    <Link /> Отключить внешний кошелёк
                   </span>
-                  <ArrowRight aria-hidden="true" />
+                  <ArrowRight />
                 </button>
               )}
-              <p>LOOP · TESTNET</p>
+              <p>LOOP НЕ ХРАНИТ ВНУТРЕННИЙ БАЛАНС</p>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
     </section>
+  );
+}
+
+function ProofRow({ mode, title, url }: { mode: string; title: string; url: string | null }) {
+  const content = (
+    <>
+      <span>
+        <b>{mode}</b>
+        <small>{title}</small>
+      </span>
+      {url ? <ArrowSquareOut aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
+    </>
+  );
+  return url ? (
+    <a href={url} target="_blank" rel="noreferrer">
+      {content}
+    </a>
+  ) : (
+    <div>{content}</div>
   );
 }

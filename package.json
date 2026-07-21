@@ -10,6 +10,8 @@
     "build:web": "npm --workspace @loop/web run build",
     "test:web": "npm --workspace @loop/web run test",
     "lint:web": "npm --workspace @loop/web run lint",
+    "test:e2e": "npm --workspace @loop/web run e2e",
+    "screenshots": "VITE_MOCK_TELEGRAM=true npm run build:web && node scripts/capture-screenshots.mjs",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "check": "npm run lint:web && npm run test:web && npm run build:web && npm run format:check"

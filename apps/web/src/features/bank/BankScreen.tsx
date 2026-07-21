@@ -1,0 +1,390 @@
+import { ArrowRight, ArrowSquareOut, Check, X } from '@phosphor-icons/react';
+import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+import { api } from '../../api';
+import { haptic, isMockTelegram, setBackAction } from '../../telegram';
+import { buildBankPositionTransaction, formatGram, newOfferId, parseGram } from '../../ton';
+import type { BankPosition, BankPreview, Profile } from '../../types';
+
+type WizardStep = 'amount' | 'multiplier' | 'confirm' | 'waiting';
+const multipliers = [12500, 15000, 20000] as const;
+
+const statusCopy: Record<BankPosition['current_status'], string> = {
+  pending_confirmation: 'Ждём подтверждение TON',
+  queued: 'В очереди',
+  partially_funded: 'Позиция финансируется',
+  completed: 'Готовим выплату',
+  payout_sent: 'Выплата отправлена',
+  failed: 'Позиция не подтверждена',
+};
+
+export function BankScreen({
+  profile,
+  position,
+  onRefresh,
+  onMockCreated,
+}: {
+  profile: Profile;
+  position: BankPosition | null;
+  onRefresh: () => Promise<void>;
+  onMockCreated: (position: BankPosition) => void;
+}) {
+  const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
+  const [wizard, setWizard] = useState<WizardStep | null>(null);
+  const [details, setDetails] = useState(false);
+  const [amount, setAmount] = useState('2');
+  const [multiplier, setMultiplier] = useState<(typeof multipliers)[number]>(15000);
+  const [preview, setPreview] = useState<BankPreview | null>(null);
+  const [message, setMessage] = useState('');
+  const locked = useRef(false);
+
+  const principalNano = useMemo(() => {
+    try {
+      return parseGram(amount);
+    } catch {
+      return 0;
+    }
+  }, [amount]);
+
+  useEffect(() => {
+    if (!wizard) return setBackAction();
+    return setBackAction(() => {
+      if (wizard === 'amount') setWizard(null);
+      else if (wizard === 'multiplier') setWizard('amount');
+      else if (wizard === 'confirm') setWizard('multiplier');
+    });
+  }, [wizard]);
+
+  async function showConfirmation() {
+    if (principalNano < 1_000_000_000) {
+      setMessage('Минимальная сумма — 1 GRAM');
+      haptic('warning');
+      return;
+    }
+    if (isMockTelegram()) {
+      setPreview({
+        principal_nano: principalNano,
+        multiplier_bps: multiplier,
+        target_payout_nano: (principalNano * multiplier) / 10_000,
+        fee_nano: principalNano / 100,
+        gas_nano: 80_000_000,
+        transaction_amount_nano: principalNano + 80_000_000,
+        contract_address: `0:${'12'.repeat(32)}`,
+        network: -3,
+      });
+      setWizard('confirm');
+      return;
+    }
+    if (!wallet) {
+      await tonConnectUI.openModal();
+      return;
+    }
+    if (wallet.account.chain !== '-3') {
+      setMessage('LOOP работает только в TON testnet');
+      haptic('error');
+      return;
+    }
+    if (!profile.wallet) {
+      setMessage('Подтверждаем владение внешним кошельком…');
+      return;
+    }
+    try {
+      const result = await api.previewBankPosition({
+        principal_nano: principalNano,
+        multiplier_bps: multiplier,
+      });
+      setPreview(result);
+      setWizard('confirm');
+      haptic('light');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Не удалось рассчитать позицию');
+      haptic('error');
+    }
+  }
+
+  async function confirmPosition() {
+    if (locked.current || !preview) return;
+    locked.current = true;
+    try {
+      if (isMockTelegram()) {
+        const created: BankPosition = {
+          id: `bank-${Date.now()}`,
+          position_id: newOfferId(),
+          owner_wallet: profile.wallet?.address ?? `0:${'42'.repeat(32)}`,
+          principal_nano: preview.principal_nano,
+          multiplier_bps: multiplier,
+          target_payout_nano: preview.target_payout_nano,
+          funded_amount_nano: 0,
+          remaining_amount_nano: preview.target_payout_nano,
+          progress_bps: 0,
+          queue_index: 18,
+          current_status: 'queued',
+          funding_transaction: 'demo-bank-transaction',
+          payout_transaction: null,
+          proof_url: null,
+          created_at: new Date().toISOString(),
+          completed_at: null,
+        };
+        onMockCreated(created);
+        setWizard(null);
+        haptic('success');
+        return;
+      }
+      if (!wallet || wallet.account.chain !== '-3') {
+        throw new Error('Подключите внешний кошелёк TON testnet');
+      }
+      const quote = await api.quoteBankPosition({
+        position_id: newOfferId(),
+        principal_nano: preview.principal_nano,
+        multiplier_bps: preview.multiplier_bps,
+      });
+      setWizard('waiting');
+      await tonConnectUI.sendTransaction(
+        buildBankPositionTransaction(quote, wallet.account.address, wallet.account.chain),
+      );
+      setMessage('Транзакция отправлена. Ждём подтверждённый блок TON.');
+      await onRefresh();
+      haptic('success');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Не удалось создать позицию');
+      setWizard('confirm');
+      haptic('error');
+    } finally {
+      locked.current = false;
+    }
+  }
+
+  const progress = position?.progress_bps ?? 0;
+
+  return (
+    <section className="screen bank-screen" aria-labelledby="bank-title">
+      <header className="mode-header">
+        <p className="eyebrow">TESTNET · FIFO</p>
+        <h1 id="bank-title">BANK</h1>
+      </header>
+
+      <button
+        className={`bank-object ${position ? 'is-active' : 'is-empty'}`}
+        onClick={() => (position ? setDetails(true) : setWizard('amount'))}
+        aria-label={position ? 'Открыть детали позиции' : 'Создать позицию BANK'}
+      >
+        <motion.img
+          src={position ? '/assets/living-jar.webp' : '/assets/empty-jar.webp'}
+          alt=""
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 115, damping: 23 }}
+        />
+        {position && (
+          <span className="bank-progress-fill" style={{ height: `${progress / 100}%` }} />
+        )}
+      </button>
+
+      {position ? (
+        <div className="bank-state">
+          <strong>{Math.round(progress / 100)}%</strong>
+          <span>{statusCopy[position.current_status]}</span>
+          <button className="primary-button" onClick={() => setDetails(true)}>
+            ДЕТАЛИ ПОЗИЦИИ
+          </button>
+        </div>
+      ) : (
+        <div className="bank-state bank-empty-state">
+          <h2>Очередь начинается здесь.</h2>
+          <p>Следующие депозиты финансируют более ранние позиции.</p>
+          <button className="primary-button" onClick={() => setWizard('amount')}>
+            НАЧАТЬ
+          </button>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {details && position && (
+          <motion.div
+            className="sheet-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setDetails(false)}
+          >
+            <motion.div
+              className="sheet"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <SheetTitle title="Позиция BANK" onClose={() => setDetails(false)} />
+              <div className="big-progress">{Math.round(position.progress_bps / 100)}%</div>
+              <div className="progress-track">
+                <span style={{ width: `${position.progress_bps / 100}%` }} />
+              </div>
+              <dl className="detail-list">
+                <Detail label="Внесено" value={`${formatGram(position.principal_nano, 3)} GRAM`} />
+                <Detail
+                  label="Целевая выплата"
+                  value={`${formatGram(position.target_payout_nano, 3)} GRAM`}
+                />
+                <Detail
+                  label="Осталось профинансировать"
+                  value={`${formatGram(position.remaining_amount_nano, 3)} GRAM`}
+                />
+                <Detail
+                  label="Место в очереди"
+                  value={
+                    position.queue_index === null
+                      ? 'Подтверждается'
+                      : `#${position.queue_index + 1}`
+                  }
+                />
+                <Detail label="Статус" value={statusCopy[position.current_status]} />
+              </dl>
+              {position.proof_url && (
+                <a
+                  className="secondary-button"
+                  href={position.proof_url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  ПРОВЕРИТЬ В TON
+                  <ArrowSquareOut aria-hidden="true" />
+                </a>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {wizard && (
+          <motion.div
+            className="sheet-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="sheet bank-wizard"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+            >
+              <SheetTitle title="Новая позиция" onClose={() => setWizard(null)} />
+              {wizard === 'amount' && (
+                <div className="wizard-step">
+                  <p className="eyebrow">ШАГ 1 ИЗ 3 · СУММА</p>
+                  <label className="amount-input">
+                    <input
+                      inputMode="decimal"
+                      value={amount}
+                      onChange={(event) => setAmount(event.target.value)}
+                      autoFocus
+                      aria-label="Сумма в GRAM"
+                    />
+                    <span>GRAM</span>
+                  </label>
+                  <p className="form-note">Только тестовые GRAM. Минимум 1 GRAM.</p>
+                  <button className="primary-button" onClick={() => setWizard('multiplier')}>
+                    ДАЛЬШЕ
+                    <ArrowRight aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+              {wizard === 'multiplier' && (
+                <div className="wizard-step">
+                  <p className="eyebrow">ШАГ 2 ИЗ 3 · ЦЕЛЬ</p>
+                  <h3>Выбери целевую выплату.</h3>
+                  <div className="choice-list">
+                    {multipliers.map((value) => (
+                      <button
+                        key={value}
+                        className={multiplier === value ? 'active' : ''}
+                        onClick={() => {
+                          setMultiplier(value);
+                          haptic('selection');
+                        }}
+                      >
+                        <span>×{value / 10_000}</span>
+                        <strong>{formatGram((principalNano * value) / 10_000, 3)} GRAM</strong>
+                        {multiplier === value && <Check aria-hidden="true" />}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="primary-button" onClick={() => void showConfirmation()}>
+                    ПРОВЕРИТЬ
+                  </button>
+                </div>
+              )}
+              {wizard === 'confirm' && preview && (
+                <div className="wizard-step">
+                  <p className="eyebrow">ШАГ 3 ИЗ 3 · ПОДТВЕРЖДЕНИЕ</p>
+                  <h3>Проверь условия.</h3>
+                  <dl className="detail-list">
+                    <Detail
+                      label="Вносится"
+                      value={`${formatGram(preview.principal_nano, 3)} GRAM`}
+                    />
+                    <Detail
+                      label="Целевая выплата"
+                      value={`${formatGram(preview.target_payout_nano, 3)} GRAM`}
+                    />
+                    <Detail
+                      label="Комиссия BANK"
+                      value={`${formatGram(preview.fee_nano, 4)} GRAM`}
+                    />
+                    <Detail label="Сеть" value="TON testnet" />
+                    <Detail
+                      label="Контракт"
+                      value={`${preview.contract_address.slice(0, 7)}…${preview.contract_address.slice(-5)}`}
+                    />
+                  </dl>
+                  {message && <p className="form-note is-error">{message}</p>}
+                  <button className="primary-button" onClick={() => void confirmPosition()}>
+                    ПОДТВЕРДИТЬ В TON
+                  </button>
+                </div>
+              )}
+              {wizard === 'waiting' && (
+                <div className="wizard-step waiting-step">
+                  <span className="waiting-ring" />
+                  <h3>Подтверждаем в TON</h3>
+                  <p>Callback кошелька не считается успехом. LOOP ждёт транзакцию в блоке.</p>
+                  {message && <p className="form-note">{message}</p>}
+                  <button className="secondary-button" onClick={() => setWizard(null)}>
+                    ЗАКРЫТЬ
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
+
+function SheetTitle({ title, onClose }: { title: string; onClose: () => void }) {
+  return (
+    <div className="sheet-title-row">
+      <div>
+        <p className="eyebrow">LOOP · TESTNET</p>
+        <h2>{title}</h2>
+      </div>
+      <button className="round-icon-button" onClick={onClose} aria-label="Закрыть">
+        <X aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}

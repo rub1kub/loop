@@ -3,13 +3,13 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useRef } from 'react';
 
 import { api } from './api';
-import { BankScreen } from './components/BankScreen';
-import { DuelScreen } from './components/DuelScreen';
 import { InlineDuelPreview } from './components/InlineDuelPreview';
 import { Loader } from './components/Loader';
 import { Onboarding } from './components/Onboarding';
 import { ProfileScreen } from './components/ProfileScreen';
 import { TabBar } from './components/TabBar';
+import { BankScreen } from './features/bank/BankScreen';
+import { DuelScreen } from './features/duel/DuelScreen';
 import {
   haptic,
   initializeTelegram,
@@ -78,15 +78,22 @@ export default function App() {
   }, [refresh, setError, state.profile?.wallet?.address, tonConnectUI, wallet]);
 
   useEffect(() => {
-    if (!state.offers.some((offer) => ['pending_funding', 'open', 'matched'].includes(offer.state)))
-      return;
+    const bankActive =
+      state.bankPosition &&
+      ['pending_confirmation', 'queued', 'partially_funded', 'completed'].includes(
+        state.bankPosition.current_status,
+      );
+    const duelActive = state.offers.some((offer) =>
+      ['pending_funding', 'open', 'reserved', 'matched'].includes(offer.state),
+    );
+    if (!bankActive && !duelActive) return;
     const timer = window.setInterval(() => {
       void refresh().catch((error: unknown) => {
         setError(error instanceof Error ? error.message : 'Не удалось обновить дуэль');
       });
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [refresh, setError, state.offers]);
+  }, [refresh, setError, state.bankPosition, state.offers]);
 
   useEffect(() => {
     for (const duel of state.duels) {
@@ -118,14 +125,18 @@ export default function App() {
   }
 
   if (!state.profile) return null;
-  if (state.showOnboarding) return <Onboarding onDone={() => void state.finishOnboarding()} />;
+  if (state.showOnboarding)
+    return (
+      <Onboarding initialPage={state.onboardingPage} onDone={() => void state.finishOnboarding()} />
+    );
 
   const screen = {
     bank: (
       <BankScreen
         profile={state.profile}
-        onStart={() => state.startCycle()}
-        onContinue={() => state.setTab('duel')}
+        position={state.bankPosition}
+        onRefresh={() => state.refresh()}
+        onMockCreated={(position) => state.setMockBankPosition(position)}
       />
     ),
     duel: (
@@ -140,18 +151,16 @@ export default function App() {
     profile: (
       <ProfileScreen
         profile={state.profile}
+        bankHistory={state.bankHistory}
         duels={state.duels}
         onReplay={() => state.replayOnboarding()}
+        onSetOnboarding={(enabled) => state.setOnboardingEnabled(enabled)}
       />
     ),
   }[state.activeTab];
 
   return (
     <main className="app-shell">
-      <div className="brand-bar">
-        <span className="brand">LOOP</span>
-      </div>
-
       <AnimatePresence mode="wait">
         <motion.div
           key={state.activeTab}

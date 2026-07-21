@@ -10,9 +10,18 @@ const profile = {
     first_name: 'Loop',
     photo_url: null,
     onboarding_seen: true,
+    onboarding_enabled: true,
   },
   wallet: null,
-  bank: null,
+  bank: { active: 0, completed: 0, total: 0 },
+  duel: { active: 0, completed: 0, total: 0 },
+  plush_brick: {
+    verified: false,
+    balance_nano: 0,
+    holder: false,
+    duel_fee_bps: 250,
+    fee_discount_active: false,
+  },
 };
 
 describe('API session recovery', () => {

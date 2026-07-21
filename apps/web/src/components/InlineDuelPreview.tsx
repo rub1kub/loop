@@ -26,17 +26,17 @@ export function InlineDuelPreview() {
           <h1>Дмитрий бросает тебе вызов.</h1>
           <dl>
             <div>
-              <dt>ВКЛАД</dt>
-              <dd>2 GRAM</dd>
+              <dt>ТВОЯ СТАВКА</dt>
+              <dd>1 GRAM</dd>
             </div>
             <div>
-              <dt>УСЛОВИЯ</dt>
-              <dd>50 / 50</dd>
+              <dt>ТВОЙ ШАНС</dt>
+              <dd>25%</dd>
             </div>
           </dl>
           <p className="inline-proof">
             <ShieldCheck aria-hidden="true" />
-            Условия закреплены в TON
+            При победе: +2.9 GRAM · TON testnet
           </p>
           <button>ПРИНЯТЬ</button>
         </article>
