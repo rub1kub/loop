@@ -113,7 +113,11 @@ export function ProfileScreen({
         <div>
           <p className="eyebrow">ТВОЙ СЛЕД</p>
           <strong>{wins ? `${wins} побед в этом LOOP` : 'Первый цикл уже живёт'}</strong>
-          <small>{profile.bank ? `Цикл ${String(profile.bank.sequence_number).padStart(2, '0')}` : 'Начни с BANK'}</small>
+          <small>
+            {profile.bank
+              ? `Цикл ${String(profile.bank.sequence_number).padStart(2, '0')}`
+              : 'Начни с BANK'}
+          </small>
         </div>
       </div>
 

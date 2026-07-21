@@ -1,9 +1,8 @@
 import {
-  ArrowRight,
   ArrowSquareOut,
   ClockCounterClockwise,
+  Infinity as InfinityIcon,
   ShieldCheck,
-  TelegramLogo,
   X,
 } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -25,7 +24,7 @@ function relativeTime(value: string, now: number): string {
 }
 
 function ProofIcon({ event }: { event: CycleEvent }) {
-  if (event.proof_type === 'telegram') return <TelegramLogo aria-hidden="true" />;
+  if (event.proof_type === 'telegram') return <InfinityIcon aria-hidden="true" />;
   if (event.proof_type.startsWith('ton_')) return <ShieldCheck aria-hidden="true" />;
   return <ClockCounterClockwise aria-hidden="true" />;
 }
@@ -56,10 +55,7 @@ export function BankScreen({
   const progress = cycle?.progress_bps ?? 0;
   const day = useMemo(() => {
     if (!cycle) return 0;
-    return Math.min(
-      7,
-      Math.max(1, Math.floor((now - Date.parse(cycle.started_at)) / DAY_MS) + 1),
-    );
+    return Math.min(7, Math.max(1, Math.floor((now - Date.parse(cycle.started_at)) / DAY_MS) + 1));
   }, [cycle, now]);
   const latestEvent = cycle?.events[0];
 
@@ -108,15 +104,16 @@ export function BankScreen({
             <strong>{Math.round(progress / 100)}%</strong>
             <span>·</span>
             <b>{cycle.event_count} СОБЫТИЙ</b>
-            <ArrowRight aria-hidden="true" />
           </button>
           {latestEvent && (
             <button className="latest-event" onClick={() => setHistoryOpen(true)}>
               <span className="event-proof-icon">
                 <ProofIcon event={latestEvent} />
               </span>
-              <span>{latestEvent.title}</span>
-              <time>{relativeTime(latestEvent.created_at, now)}</time>
+              <span>
+                {latestEvent.title}
+                <time> · {relativeTime(latestEvent.created_at, now)}</time>
+              </span>
             </button>
           )}
           <button

@@ -27,6 +27,7 @@ body,
 
 body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   overflow: hidden;
   place-items: center;
   overscroll-behavior: none;
@@ -55,7 +56,9 @@ button:disabled {
 .fatal-screen,
 .onboarding,
 .app-shell {
-  width: min(100%, 390px);
+  width: 100%;
+  max-width: 390px;
+  min-width: 0;
   height: min(100dvh, 844px);
   background: #000;
 }
@@ -139,7 +142,9 @@ button:disabled {
   height: 5px;
   border-radius: 999px;
   background: #393939;
-  transition: width 220ms ease, background 220ms ease;
+  transition:
+    width 220ms ease,
+    background 220ms ease;
 }
 
 .story-dots span.active {
@@ -160,7 +165,10 @@ button:disabled {
   font-weight: 780;
   letter-spacing: 0.15em;
   cursor: pointer;
-  transition: opacity 120ms ease, transform 120ms ease, background 180ms ease;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    background 180ms ease;
 }
 
 .primary-button {
@@ -208,6 +216,7 @@ button:disabled {
 .screen-stage,
 .screen {
   height: 100%;
+  min-width: 0;
 }
 
 .screen {
@@ -230,7 +239,7 @@ button:disabled {
   bottom: 0;
   left: 0;
   display: grid;
-  height: calc(var(--safe-bottom) + 71px);
+  height: calc(var(--safe-bottom) + 64px);
   grid-template-columns: repeat(3, 1fr);
   padding: 7px 16px var(--safe-bottom);
   border-top: 1px solid #1d1d1d;
@@ -273,16 +282,16 @@ button:disabled {
 .bank-heading h1,
 .duel-heading h1 {
   margin: 8px 0 0;
-  font-size: 45px;
+  font-size: 43px;
   font-weight: 675;
-  letter-spacing: -0.072em;
+  letter-spacing: -0.055em;
   line-height: 0.96;
 }
 
 .bank-jar {
   display: grid;
-  width: 354px;
-  height: 404px;
+  width: 390px;
+  height: 445px;
   flex: 0 0 auto;
   margin-top: 4px;
   overflow: hidden;
@@ -291,9 +300,10 @@ button:disabled {
 
 .bank-jar img {
   display: block;
-  width: 354px;
-  height: auto;
+  width: 421px;
+  height: 463px;
   pointer-events: none;
+  transform: translate(-16px, -16px);
   user-select: none;
 }
 
@@ -348,11 +358,12 @@ button:disabled {
 .latest-event {
   display: grid;
   width: 100%;
+  max-width: 282px;
   min-height: 48px;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  margin-top: 9px;
+  margin: 14px auto 0;
   padding: 5px 14px 5px 7px;
   border: 1px solid #2b2b2b;
   border-radius: 17px;
@@ -368,6 +379,10 @@ button:disabled {
   font-weight: 570;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.latest-event > span:nth-child(2) time {
+  margin-left: 2px;
 }
 
 .latest-event time,
@@ -398,7 +413,7 @@ button:disabled {
 
 .bank-cycle-summary .primary-button,
 .bank-empty-copy .primary-button {
-  margin-top: 17px;
+  margin-top: 22px;
 }
 
 .bank-empty-copy {
@@ -958,6 +973,150 @@ button:disabled {
   font-size: 12px;
 }
 
+.inline-preview {
+  width: 100%;
+  max-width: 390px;
+  min-width: 0;
+  height: min(100dvh, 844px);
+  overflow: hidden;
+  background: #d7d7d7;
+  color: #080808;
+}
+
+.telegram-header {
+  display: grid;
+  height: 74px;
+  grid-template-columns: 28px 42px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #d0d0d0;
+  background: #f8f8f8;
+}
+
+.telegram-header > svg {
+  width: 22px;
+  height: 22px;
+}
+
+.telegram-avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: #050505;
+  color: #fff;
+}
+
+.telegram-avatar svg {
+  width: 24px;
+  height: 24px;
+}
+
+.telegram-header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.telegram-header strong {
+  font-size: 14px;
+}
+
+.telegram-header small {
+  color: #717171;
+  font-size: 10px;
+}
+
+.telegram-chat {
+  display: flex;
+  height: calc(100% - 74px);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 24px 12px 30px;
+}
+
+.inline-duel-card {
+  width: 326px;
+  padding: 22px 18px 10px;
+  border: 1px solid #c8c8c8;
+  border-radius: 23px 23px 23px 7px;
+  background: #fff;
+}
+
+.inline-duel-card h1 {
+  margin: 10px 0 25px;
+  font-size: 30px;
+  font-weight: 680;
+  letter-spacing: -0.055em;
+  line-height: 1.02;
+}
+
+.inline-duel-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  margin: 0;
+  border-top: 1px solid #dedede;
+  border-bottom: 1px solid #dedede;
+}
+
+.inline-duel-card dl div {
+  display: grid;
+  gap: 5px;
+  padding: 14px 0;
+}
+
+.inline-duel-card dl div + div {
+  padding-left: 16px;
+  border-left: 1px solid #dedede;
+}
+
+.inline-duel-card dt {
+  color: #797979;
+  font-size: 8px;
+  font-weight: 760;
+  letter-spacing: 0.18em;
+}
+
+.inline-duel-card dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 670;
+}
+
+.inline-proof {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 17px;
+  color: #666;
+  font-size: 9px;
+}
+
+.inline-proof svg {
+  width: 15px;
+  height: 15px;
+}
+
+.inline-duel-card button {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  background: #050505;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 780;
+  letter-spacing: 0.16em;
+}
+
+.telegram-chat > time {
+  margin: 7px 0 0 9px;
+  color: #737373;
+  font-size: 9px;
+}
+
 @media (max-height: 760px) {
   .screen {
     padding-top: calc(var(--safe-top) + 67px);
@@ -974,7 +1133,9 @@ button:disabled {
   }
 
   .bank-jar img {
-    width: 300px;
+    width: 320px;
+    height: 352px;
+    transform: translate(-8px, -12px);
   }
 
   .duel-players {

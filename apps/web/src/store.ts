@@ -26,7 +26,7 @@ const demoProfile: Profile = {
           sequence_number: 4,
           status: mockState === 'completed' ? 'completed' : 'active',
           goal_events: 8,
-          event_count: mockState === 'completed' ? 8 : 5,
+          event_count: mockState === 'completed' ? 8 : 4,
           progress_bps: mockState === 'completed' ? 10_000 : 6_200,
           started_at: new Date(mockNow - 2 * 86_400_000).toISOString(),
           ends_at: new Date(mockNow + 5 * 86_400_000).toISOString(),
@@ -35,7 +35,7 @@ const demoProfile: Profile = {
             {
               id: 'event-1',
               kind: 'invite_accepted',
-              title: 'Миша принял вызов',
+              title: 'Миша принял твой вызов',
               proof_type: 'telegram',
               proof_ref: 'demo-invite',
               proof_url: null,

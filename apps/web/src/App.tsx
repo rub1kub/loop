@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { api } from './api';
 import { BankScreen } from './components/BankScreen';
 import { DuelScreen } from './components/DuelScreen';
+import { InlineDuelPreview } from './components/InlineDuelPreview';
 import { Loader } from './components/Loader';
 import { Onboarding } from './components/Onboarding';
 import { ProfileScreen } from './components/ProfileScreen';
@@ -92,6 +93,12 @@ export default function App() {
       }
     }
   }, [state.duels]);
+
+  const documentationScreen = isMockTelegram()
+    ? new URLSearchParams(window.location.search).get('screen')
+    : null;
+  if (documentationScreen === 'loader') return <Loader />;
+  if (documentationScreen === 'inline') return <InlineDuelPreview />;
 
   if (state.loading) return <Loader />;
 

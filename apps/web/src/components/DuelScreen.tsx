@@ -334,13 +334,19 @@ export function DuelScreen({
         {!activeOffer && effectiveStatus !== 'searching' && (
           <>
             <button className="primary-button" onClick={() => void start()}>
-              {invite ? 'ПРИНЯТЬ ВЫЗОВ' : wallet || isMockTelegram() ? 'НАЙТИ СОПЕРНИКА' : 'ПРОДОЛЖИТЬ'}
+              {invite
+                ? 'ПРИНЯТЬ ВЫЗОВ'
+                : wallet || isMockTelegram()
+                  ? 'НАЙТИ СОПЕРНИКА'
+                  : 'ПРОДОЛЖИТЬ'}
             </button>
             {!invite && (
               <button
                 className="secondary-button"
                 onClick={() => {
-                  setMessage('Создай on-chain вызов — после подтверждения отправим его в Telegram.');
+                  setMessage(
+                    'Создай on-chain вызов — после подтверждения отправим его в Telegram.',
+                  );
                   void start();
                 }}
               >
