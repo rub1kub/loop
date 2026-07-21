@@ -2,53 +2,37 @@
 
 ## Trust boundaries
 
-The Telegram WebView, client JavaScript, wallet bridge, RPC responses, inline-message payloads, and all API input are untrusted. The contract is authoritative for locked value and terminal outcomes. PostgreSQL stores replay-safe social projections; Redis is never a correctness dependency.
+- Telegram identity is trusted only after server-side `initData` HMAC, age, future-skew and replay checks.
+- Wallet ownership is trusted only after a scoped TON proof bound to origin, payload, public key, network and expiration.
+- A TON Connect callback is never financial proof.
+- Contract state and successful masterchain-finalized transactions are authoritative.
+- PostgreSQL is an idempotent projection, not a ledger of custody.
 
-## Identity and session controls
+## Contract invariants
 
-- Telegram authorization validates raw `initData`, rejects duplicate keys, and enforces age and future-skew windows.
-- Desktop/WebView exchanges and sessions are bounded to six hours by default. Reusing a valid Telegram payload cannot extend its original lifetime; exchange digests are idempotent.
-- Sessions are short-lived and audience-bound. Raw `initData`, wallet proofs, secrets, and full Telegram identifiers are not logged.
-- Wallet binding uses a fresh, one-use, session-bound TON proof for the exact domain and network.
-- The API compares the signed public key with the wallet's on-chain key and canonicalizes addresses before uniqueness checks.
+BankQueue rejects unsupported multipliers, amounts outside limits, duplicate identifiers, concurrent owner positions, malformed messages and underfunded gas. FIFO allocation cannot consume the new position itself. Fees and payouts are deterministic integer calculations.
+
+DuelEscrow rejects noncanonical pools, incompatible matches, repeated owners, commitment mismatch, early timeout, duplicate reveal/acceptance and dust messages. Pausing does not disable cancel, expiry, reveal or settlement. Outcomes do not depend on backend randomness.
+
+## Chain worker
+
+Each projection checks contract address, message direction, sender, value, opcode, query and entity identifiers, canonical terms, compute/action success and masterchain sequence. Unknown, failed or incomplete transactions remain unprojected. Checkpoints and event identities make replay idempotent.
 
 ## Application controls
 
-- Mutations require bearer authorization, exact production origin/CORS checks, size limits, and layered Redis, API, and nginx rate limits.
-- SQL is parameterized through SQLAlchemy. User-controlled URLs are never fetched.
-- AFK matchmaking uses PostgreSQL transactions and uniqueness constraints; Redis locks only reduce contention.
-- Direct challenge codes are opaque, expire, bind to one existing creator offer, and cannot silently enter the AFK pool.
-- The product and API accept only equal 50/50 duels even though the verified historical contract ABI has wider weighted compatibility.
-- No database field is a spendable balance and no backend action can redirect a contract payout.
+- restrictive CORS and production HTTPS;
+- signed sessions with short expiry;
+- rate limiting and bounded request schemas;
+- SQL row locks and partial unique constraints for races;
+- redacted structured logs and no secret material in API responses;
+- read-only containers, dropped Linux capabilities and no-new-privileges;
+- startup attestation of both configured contract code hashes.
 
-## On-chain controls
+## Known limits
 
-- Funding, matching, settlement, and refund projections require successful non-emulated execution for the configured contract plus masterchain inclusion.
-- Unfinalized or malformed transactions do not advance the chain checkpoint.
-- Chain events are idempotent by network, account, logical time, and hash.
-- Commitments bind domain, offer id, owner, and secret before matching.
-- A missing reveal cannot improve the non-revealer's payout: one revealer wins after timeout, while zero reveals refund both principals.
-- Stored owners determine refunds and payouts. Message bodies cannot supply an arbitrary payout destination.
-- Owner pause authority cannot seize funds or block reveal, cancel, settle, expiry, or refund paths.
+- The project is testnet-only and has not received an external professional audit.
+- Referral anti-abuse prevents direct self-referral and duplicate qualification but cannot prove two Telegram accounts are unrelated people.
+- PLUSH BRICK is a mainnet Jetton while contracts are testnet. V1 holder fee discounts are disabled rather than trusted to the backend.
+- BANK depends entirely on later deposits; a stalled queue is expected behavior, not a solvency guarantee.
 
-## Secret handling
-
-`.env`, Acton wallet files, mnemonics, bot tokens, RPC keys, database passwords, and TLS private keys are ignored by Git. Production consumes a deployment-only `0600` secret file outside immutable release directories.
-
-Never pass a seed phrase or password as a command argument, commit it to history, paste it into CI output, or send it in a vulnerability report. Any credential disclosed in chat or logs must be rotated; deleting the text later does not restore secrecy.
-
-## Mainnet release gate
-
-Mainnet remains disabled until all of the following are complete:
-
-- independent Tolk/TVM and application security audits;
-- jurisdiction-specific legal and compliance review;
-- multisig governance and documented pause ownership;
-- verified public source and bytecode provenance;
-- funded-path incident and refund rehearsal;
-- encrypted off-site backup restoration test;
-- monitored, low-cap canary release and reconciliation.
-
-## Reporting
-
-Follow the private process in [../SECURITY.md](../SECURITY.md). Do not create a public issue containing an exploit, credentials, Telegram identity data, or wallet secrets.
+For private vulnerability reporting, see the repository [security policy](../SECURITY.md).

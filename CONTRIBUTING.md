@@ -1,6 +1,6 @@
 # Contributing to LOOP
 
-Thanks for helping build LOOP as a social Telegram Mini App for TON. Contributions must preserve the core boundary: LOOP is not a wallet, does not hold an internal user balance, and uses TON Connect only for external wallet proofs and transactions.
+Thanks for helping build LOOP as a Telegram Mini App for TON testnet. Contributions must preserve the BANK/DUEL boundary: LOOP is not a wallet, does not hold an internal balance, and uses TON Connect only for external wallet proofs and transactions.
 
 ## Development workflow
 
@@ -49,14 +49,14 @@ acton test --coverage --coverage-format text --coverage-minimum-percent 75
 Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```text
-feat(bank): add verified cycle event
+feat(bank): add verified fifo payout
 fix(duel): keep direct invitations out of AFK matching
 docs(ton): record deployment verification
 ```
 
 ## Pull request checklist
 
-- Product language describes a cycle or social challenge, not a wallet or casino.
+- Product language describes the explicit testnet BANK simulation or DUEL challenge, not a wallet dashboard.
 - No seed, private key, token, credential, Telegram payload, or PII is committed or logged.
 - New funded paths have cancellation or timeout recovery and documented proof semantics.
 - Contract address, network, amount units, and transaction finality are explicit.

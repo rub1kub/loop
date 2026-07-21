@@ -17,25 +17,25 @@ Only the raw signed `initData` string is sent to `/api/v1/auth/telegram`. It com
 
 ## Inline DUEL
 
-After a creator's offer is finalized on TON, **Пригласить в игру** invokes `switchInlineQuery` with the exact on-chain offer id. The bot resolves that offer under the authenticated application model and returns a message containing:
+After a creator's offer is finalized on TON, **Пригласить в Telegram** invokes `switchInlineQuery` with the exact on-chain offer id. The bot resolves that offer under the authenticated application model and returns a message containing:
 
 ```text
 LOOP DUEL
 
 Игрок вызывает тебя.
 
-Вклад:
-2 GRAM
+Твоя ставка:
+1 GRAM
 
-Условия:
-Равные · 50/50
+Твой шанс:
+25%
 
 [ПРИНЯТЬ]
 ```
 
-The button opens the Mini App with an opaque, expiring challenge code. After Telegram authentication, the API resolves the code to the creator user, creator offer, fixed contribution, total pool, 50/50 condition, state, and expiry. A direct offer names that exact counter-offer and never enters generic AFK matchmaking.
+The button opens the Mini App with an opaque, expiring challenge code. After Telegram authentication, the API resolves the creator, offer, stake, pool, 25/50/75 chance, state and expiry. A direct offer names that exact counter-offer and never enters generic AFK matchmaking.
 
-Inline messages cannot override an amount, wallet, contract, probability, expiry, or offer state. Deleted, expired, funded by the accepter, non-50/50, or already-consumed challenges are rejected server-side.
+Inline messages cannot override an amount, wallet, contract, probability, expiry or offer state. Deleted, expired, self-funded, incompatible or already-consumed challenges are rejected server-side.
 
 ## Bot surface
 
