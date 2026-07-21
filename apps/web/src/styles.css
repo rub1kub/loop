@@ -28,7 +28,7 @@ body,
 body {
   display: grid;
   overflow: hidden;
-  place-items: center;
+  place-items: start center;
   overscroll-behavior: none;
 }
 
@@ -56,7 +56,7 @@ a:focus-visible {
   width: 100%;
   max-width: 430px;
   min-width: 0;
-  height: 100dvh;
+  height: min(var(--loop-stable-height, 100dvh), 932px);
   max-height: 932px;
   background: #000;
 }
@@ -257,6 +257,21 @@ a:focus-visible {
   border-top: 1px solid #1e1e1e;
   background: rgb(0 0 0 / 96%);
   backdrop-filter: blur(24px);
+  transition:
+    opacity 160ms ease,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 160ms;
+}
+
+.keyboard-open .tab-bar {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(100%);
+}
+
+.keyboard-open .screen-stage {
+  height: 100%;
 }
 
 .tab-bar button {
@@ -287,10 +302,10 @@ a:focus-visible {
 .bank-object {
   position: relative;
   display: grid;
-  width: min(100vw, 390px);
+  width: min(calc(100% + 42px), 430px);
   height: min(47dvh, 405px);
   flex: 0 0 auto;
-  margin: 7px -21px 0;
+  margin: 7px 0 0;
   overflow: hidden;
   place-items: center;
   border: 0;
@@ -300,8 +315,9 @@ a:focus-visible {
 
 .bank-object img {
   display: block;
-  width: min(112vw, 455px);
+  width: min(106%, 455px);
   max-width: none;
+  justify-self: center;
   pointer-events: none;
   user-select: none;
 }
@@ -373,6 +389,17 @@ a:focus-visible {
   border-radius: 28px 28px 0 0;
   background: #111;
   scrollbar-width: none;
+}
+
+.keyboard-open .sheet-backdrop {
+  top: var(--loop-visual-offset-top, 0px);
+  bottom: auto;
+  height: var(--loop-visual-height, 100dvh);
+}
+
+.keyboard-open .sheet {
+  max-height: calc(var(--loop-visual-height, 100dvh) - 8px);
+  padding-bottom: 20px;
 }
 
 .sheet-title-row {
@@ -1287,6 +1314,7 @@ a:focus-visible {
     font-size: 39px;
   }
   .bank-object {
+    width: min(calc(100% + 34px), 430px);
     height: min(40dvh, 310px);
   }
   .bank-state > strong {

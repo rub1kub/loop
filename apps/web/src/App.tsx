@@ -19,6 +19,7 @@ import {
   toggleFullscreen,
 } from './telegram';
 import { useLoopStore } from './store';
+import { installViewportBehavior } from './viewport';
 
 export default function App() {
   const state = useLoopStore();
@@ -33,14 +34,21 @@ export default function App() {
   const refresh = useCallback(() => useLoopStore.getState().refresh(), []);
 
   useEffect(() => {
+    const cleanupViewport = installViewportBehavior();
     initializeTelegram();
-    void loadTelegramSdk().then(() => initializeTelegram());
+    void loadTelegramSdk().then(() => {
+      initializeTelegram();
+      window.dispatchEvent(new Event('resize'));
+    });
     void bootstrap();
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === 'f') toggleFullscreen();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      cleanupViewport();
+      window.removeEventListener('keydown', onKey);
+    };
   }, [bootstrap]);
 
   useEffect(() => {
