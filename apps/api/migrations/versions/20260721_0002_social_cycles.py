@@ -25,13 +25,9 @@ def upgrade() -> None:
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["user_id"], ["users.id"], name="fk_bank_cycles_user_id_users"
-        ),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_bank_cycles_user_id_users"),
         sa.PrimaryKeyConstraint("id", name="pk_bank_cycles"),
-        sa.UniqueConstraint(
-            "user_id", "sequence_number", name="bank_cycle_user_sequence"
-        ),
+        sa.UniqueConstraint("user_id", "sequence_number", name="bank_cycle_user_sequence"),
     )
     op.create_index("ix_bank_cycles_status", "bank_cycles", ["status"], unique=False)
     op.create_index("ix_bank_cycles_user_id", "bank_cycles", ["user_id"], unique=False)
@@ -61,9 +57,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["cycle_id"], ["bank_cycles.id"], name="fk_cycle_events_cycle_id_bank_cycles"
         ),
-        sa.ForeignKeyConstraint(
-            ["user_id"], ["users.id"], name="fk_cycle_events_user_id_users"
-        ),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_cycle_events_user_id_users"),
         sa.PrimaryKeyConstraint("id", name="pk_cycle_events"),
         sa.UniqueConstraint("cycle_id", "dedupe_key", name="cycle_event_dedupe"),
     )

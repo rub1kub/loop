@@ -31,6 +31,16 @@ class Settings(BaseSettings):
     ton_network_id: int = -3
     toncenter_url: str = "https://testnet.toncenter.com"
     toncenter_api_key: SecretStr = SecretStr("")
+    bank_contract_address: str = ""
+    bank_contract_code_hash: str = ""
+    bank_fee_bps: int = 100
+    bank_position_gas_nano: int = 80_000_000
+    bank_min_principal_nano: int = 1_000_000_000
+    bank_max_principal_nano: int = 100_000_000_000
+    duel_contract_address: str = ""
+    duel_contract_code_hash: str = ""
+    duel_fee_bps: int = 250
+    # Legacy names are read during the one-release migration window.
     ton_contract_address: str = ""
     ton_contract_code_hash: str = ""
     ton_proof_ttl_seconds: int = 300
@@ -42,7 +52,10 @@ class Settings(BaseSettings):
     fee_bps: int = 250
 
     plush_brick_master: str = "EQAJ40p3zlCoomgANMQ4u5eIktLMZtWP87GGKDKlyW_EZBwt"
+    plush_brick_network_id: int = -239
+    plush_brick_toncenter_url: str = "https://toncenter.com"
     holder_min_balance_nano: int = 1
+    plush_brick_fee_bps: int = 0
 
     webhook_path: str = "/api/internal/telegram/webhook"
     metrics_token: SecretStr = SecretStr("")
@@ -50,6 +63,14 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def effective_duel_contract_address(self) -> str:
+        return self.duel_contract_address or self.ton_contract_address
+
+    @property
+    def effective_duel_contract_code_hash(self) -> str:
+        return self.duel_contract_code_hash or self.ton_contract_code_hash
 
     @model_validator(mode="after")
     def validate_production(self) -> "Settings":
@@ -60,8 +81,10 @@ class Settings(BaseSettings):
             "LOOP_BOT_USERNAME": self.bot_username,
             "LOOP_TELEGRAM_WEBHOOK_SECRET": self.telegram_webhook_secret.get_secret_value(),
             "LOOP_SESSION_SECRET": self.session_secret.get_secret_value(),
-            "LOOP_TON_CONTRACT_ADDRESS": self.ton_contract_address,
-            "LOOP_TON_CONTRACT_CODE_HASH": self.ton_contract_code_hash,
+            "LOOP_BANK_CONTRACT_ADDRESS": self.bank_contract_address,
+            "LOOP_BANK_CONTRACT_CODE_HASH": self.bank_contract_code_hash,
+            "LOOP_DUEL_CONTRACT_ADDRESS": self.effective_duel_contract_address,
+            "LOOP_DUEL_CONTRACT_CODE_HASH": self.effective_duel_contract_code_hash,
             "LOOP_METRICS_TOKEN": self.metrics_token.get_secret_value(),
         }
         missing = [name for name, value in required.items() if not value]
@@ -81,10 +104,14 @@ class Settings(BaseSettings):
         ):
             raise ValueError("production secrets must be at least 32 characters")
         try:
-            if len(bytes.fromhex(self.ton_contract_code_hash.removeprefix("0x"))) != 32:
+            hashes = (
+                self.bank_contract_code_hash,
+                self.effective_duel_contract_code_hash,
+            )
+            if any(len(bytes.fromhex(value.removeprefix("0x"))) != 32 for value in hashes):
                 raise ValueError
         except ValueError as exc:
-            raise ValueError("TON contract code hash must be 32-byte hex") from exc
+            raise ValueError("TON contract code hashes must be 32-byte hex") from exc
         if self.ton_network_id != -3:
             raise ValueError("mainnet is disabled until the documented release gate is complete")
         return self

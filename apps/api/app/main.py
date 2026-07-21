@@ -19,6 +19,8 @@ from starlette.responses import JSONResponse
 from .bot import configure_bot, create_dispatcher
 from .config import get_settings
 from .database import Base, create_database
+from .modules.bank.router import router as bank_router
+from .modules.duel.router import router as duel_router
 from .nonce_store import RedisChallengeStore
 from .routes import router
 from .ton import TonClient, TonProviderError
@@ -36,21 +38,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.challenge_store = RedisChallengeStore(app.state.redis)
     app.state.http = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0))
     app.state.ton_client = TonClient(app.state.http, settings)
+    app.state.plush_ton_client = TonClient(
+        app.state.http,
+        settings,
+        base_url=settings.plush_brick_toncenter_url,
+    )
     if settings.app_env == "production":
-        actual_code_hash = ""
-        for attempt in range(3):
-            try:
-                actual_code_hash = await app.state.ton_client.get_contract_code_hash(
-                    settings.ton_contract_address
-                )
-                break
-            except TonProviderError:
-                if attempt == 2:
-                    raise
-                await asyncio.sleep(2**attempt)
-        expected_code_hash = settings.ton_contract_code_hash.removeprefix("0x").upper()
-        if not secrets.compare_digest(actual_code_hash, expected_code_hash):
-            raise RuntimeError("configured TON contract code hash mismatch")
+        contracts = {
+            "BANK": (settings.bank_contract_address, settings.bank_contract_code_hash),
+            "DUEL": (
+                settings.effective_duel_contract_address,
+                settings.effective_duel_contract_code_hash,
+            ),
+        }
+        for name, (address, expected) in contracts.items():
+            actual_code_hash = ""
+            for attempt in range(3):
+                try:
+                    actual_code_hash = await app.state.ton_client.get_contract_code_hash(address)
+                    break
+                except TonProviderError:
+                    if attempt == 2:
+                        raise
+                    await asyncio.sleep(2**attempt)
+            if not secrets.compare_digest(actual_code_hash, expected.removeprefix("0x").upper()):
+                raise RuntimeError(f"configured {name} contract code hash mismatch")
     app.state.bot = None
     app.state.dispatcher = None
     if settings.auto_create_schema:
@@ -87,6 +99,8 @@ def create_app() -> FastAPI:
         max_age=600,
     )
     app.include_router(router)
+    app.include_router(bank_router, prefix="/api/v1")
+    app.include_router(duel_router, prefix="/api/v1")
 
     @app.middleware("http")
     async def protect_api(

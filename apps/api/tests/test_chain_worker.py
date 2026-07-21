@@ -1,229 +1,348 @@
 import base64
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import func, select
 from tonsdk.boc import Cell
 
 from app.chain_worker import (
+    BANK_CREATE_POSITION,
+    BANK_PAYOUT,
+    DUEL_OPEN_OFFER,
     DUEL_PAYOUT,
-    OPEN_OFFER,
-    REVEAL,
+    DUEL_REVEAL,
+    ProjectionResult,
     apply_transaction,
     decode_body,
 )
 from app.config import get_settings
-from app.cycles import start_cycle
-from app.models import (
-    ChainEvent,
-    ChallengeState,
-    CycleEvent,
+from app.models import User, Wallet
+from app.modules.bank.models import BankChainEvent, BankPosition, BankPositionStatus
+from app.modules.duel.models import (
     Duel,
-    DuelChallenge,
+    DuelChainEvent,
+    DuelOffer,
     DuelState,
-    MatchmakingOffer,
     OfferState,
-    User,
-    Wallet,
 )
 
 
-def body_b64(opcode: int, fields: list[tuple[int, int | str]]) -> str:
+def body_b64(opcode: int, fields: list[tuple[int, int]]) -> str:
     cell = Cell()
     cell.bits.write_uint(opcode, 32)
     cell.bits.write_uint(1, 64)
     for bits, value in fields:
         if bits == 0:
-            cell.bits.write_coins(int(value))
+            cell.bits.write_coins(value)
         else:
-            cell.bits.write_uint(int(value), bits)
+            cell.bits.write_uint(value, bits)
     return base64.b64encode(cell.to_boc(has_idx=False)).decode()
 
 
 def transaction(
+    account: str,
+    source: str,
     lt: int,
     body: str,
+    value_nano: int,
     *,
-    outputs: list[str] | None = None,
-    timestamp: int = 1_800_000_000,
+    outputs: list[tuple[str, str, int]] | None = None,
+    finalized: bool = True,
 ) -> dict[str, object]:
     return {
-        "account": "0:" + "11" * 32,
+        "account": account,
         "lt": str(lt),
         "hash": f"tx-{lt}",
-        "now": timestamp,
+        "now": 1_800_000_000,
         "emulated": False,
-        "mc_block_seqno": 12_345,
+        "mc_block_seqno": 12_345 if finalized else 0,
         "description": {
             "aborted": False,
             "compute_ph": {"success": True},
             "action": {"success": True},
         },
-        "in_msg": {"message_content": {"body": body, "hash": f"body-{lt}"}},
+        "in_msg": {
+            "source": source,
+            "value": str(value_nano),
+            "message_content": {"body": body},
+        },
         "out_msgs": [
-            {"message_content": {"body": output, "hash": f"out-{index}"}}
-            for index, output in enumerate(outputs or [])
+            {
+                "destination": destination,
+                "value": str(value),
+                "message_content": {"body": output_body},
+            }
+            for destination, output_body, value in (outputs or [])
         ],
     }
 
 
-def open_body(offer_id: int, counter_offer_id: int) -> str:
+def bank_create_body(position_id: int, principal: int, multiplier: int) -> str:
     return body_b64(
-        OPEN_OFFER,
+        BANK_CREATE_POSITION,
+        [(64, position_id), (0, principal), (16, multiplier)],
+    )
+
+
+def bank_payout_body(position_id: int, principal: int, target: int) -> str:
+    return body_b64(BANK_PAYOUT, [(64, position_id), (0, principal), (0, target)])
+
+
+def duel_open_body(offer: DuelOffer) -> str:
+    return body_b64(
+        DUEL_OPEN_OFFER,
         [
-            (64, offer_id),
-            (256, 123),
-            (16, 2500),
-            (0, 4_000_000_000),
-            (32, 1_800_000_900),
-            (64, counter_offer_id),
+            (64, offer.onchain_offer_id),
+            (256, int(offer.commitment_hex, 16)),
+            (16, offer.chance_bps),
+            (0, offer.total_pool_nano),
+            (32, int(offer.expires_at.timestamp())),
+            (64, offer.counter_offer_id),
         ],
     )
 
 
-def reveal_body(duel_id: int, offer_id: int) -> str:
-    return body_b64(REVEAL, [(64, duel_id), (64, offer_id), (256, offer_id + 99)])
+def duel_reveal_body(duel_id: int, offer_id: int) -> str:
+    return body_b64(DUEL_REVEAL, [(64, duel_id), (64, offer_id), (256, 777)])
 
 
-def payout_body(duel_id: int, offer_id: int) -> str:
+def duel_payout_body(duel_id: int, offer_id: int) -> str:
     return body_b64(DUEL_PAYOUT, [(64, duel_id), (64, offer_id), (8, 1)])
 
 
-def test_decodes_contract_layout() -> None:
-    decoded = decode_body(open_body(100, 900))
-    assert decoded["offer_id"] == 100
-    assert decoded["counter_offer_id"] == 900
-    assert decoded["total_pool_nano"] == 4_000_000_000
+def test_decodes_independent_bank_and_duel_layouts() -> None:
+    bank = decode_body(bank_create_body(101, 2_000_000_000, 15_000))
+    duel = decode_body(
+        body_b64(
+            DUEL_OPEN_OFFER,
+            [(64, 202), (256, 123), (16, 2500), (0, 4_000_000_000), (32, 99), (64, 0)],
+        )
+    )
+    assert bank == {
+        "opcode": BANK_CREATE_POSITION,
+        "query_id": 1,
+        "position_id": 101,
+        "principal_nano": 2_000_000_000,
+        "multiplier_bps": 15_000,
+    }
+    assert duel["offer_id"] == 202
+    assert duel["chance_bps"] == 2500
 
 
 @pytest.mark.asyncio
-async def test_projection_is_idempotent_and_uses_terminal_payout(app) -> None:
+async def test_bank_projection_is_fifo_proof_bound_and_idempotent(app) -> None:
     settings = get_settings()
     async with app.state.session_factory() as db:
-        first_user = User(telegram_id=1001, first_name="First")
-        second_user = User(telegram_id=1002, first_name="Second")
+        older_user = User(telegram_id=1001, first_name="Older")
+        newer_user = User(telegram_id=1002, first_name="Newer")
+        db.add_all([older_user, newer_user])
+        await db.flush()
+        older_wallet = Wallet(
+            user_id=older_user.id,
+            network=-3,
+            address="0:" + "1a" * 32,
+            public_key="2a" * 32,
+        )
+        newer_wallet = Wallet(
+            user_id=newer_user.id,
+            network=-3,
+            address="0:" + "1b" * 32,
+            public_key="2b" * 32,
+        )
+        db.add_all([older_wallet, newer_wallet])
+        await db.flush()
+        older = BankPosition(
+            position_id=100,
+            query_id=100,
+            user_id=older_user.id,
+            wallet_id=older_wallet.id,
+            owner_wallet=older_wallet.address,
+            network=-3,
+            contract_address=settings.bank_contract_address,
+            principal_nano=1_000_000_000,
+            multiplier_bps=12_500,
+            target_payout_nano=1_250_000_000,
+            funded_amount_nano=250_000_000,
+            remaining_amount_nano=1_000_000_000,
+            queue_index=0,
+            current_status=BankPositionStatus.PARTIALLY_FUNDED.value,
+        )
+        newer = BankPosition(
+            position_id=101,
+            query_id=1,
+            user_id=newer_user.id,
+            wallet_id=newer_wallet.id,
+            owner_wallet=newer_wallet.address,
+            network=-3,
+            contract_address=settings.bank_contract_address,
+            principal_nano=2_000_000_000,
+            multiplier_bps=15_000,
+            target_payout_nano=3_000_000_000,
+            remaining_amount_nano=3_000_000_000,
+        )
+        db.add_all([older, newer])
+        await db.commit()
+
+        tx = transaction(
+            settings.bank_contract_address,
+            newer_wallet.address,
+            10,
+            bank_create_body(101, 2_000_000_000, 15_000),
+            2_080_000_000,
+            outputs=[
+                (
+                    older_wallet.address,
+                    bank_payout_body(100, 1_000_000_000, 1_250_000_000),
+                    1_250_000_000,
+                )
+            ],
+        )
+        assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.APPLIED
+        await db.commit()
+        await db.refresh(older)
+        await db.refresh(newer)
+        assert older.current_status == BankPositionStatus.PAYOUT_SENT.value
+        assert newer.queue_index == 1
+        assert await db.scalar(select(func.count()).select_from(BankChainEvent)) == 1
+        assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.IGNORED
+
+
+@pytest.mark.asyncio
+async def test_bank_projection_retries_invalid_source_without_state_change(app) -> None:
+    settings = get_settings()
+    async with app.state.session_factory() as db:
+        user = User(telegram_id=1003, first_name="Bank")
+        db.add(user)
+        await db.flush()
+        wallet = Wallet(
+            user_id=user.id,
+            network=-3,
+            address="0:" + "1c" * 32,
+            public_key="2c" * 32,
+        )
+        db.add(wallet)
+        await db.flush()
+        position = BankPosition(
+            position_id=102,
+            query_id=1,
+            user_id=user.id,
+            wallet_id=wallet.id,
+            owner_wallet=wallet.address,
+            network=-3,
+            contract_address=settings.bank_contract_address,
+            principal_nano=1_000_000_000,
+            multiplier_bps=12_500,
+            target_payout_nano=1_250_000_000,
+            remaining_amount_nano=1_250_000_000,
+        )
+        db.add(position)
+        await db.commit()
+        tx = transaction(
+            settings.bank_contract_address,
+            "0:" + "ff" * 32,
+            11,
+            bank_create_body(102, 1_000_000_000, 12_500),
+            1_080_000_000,
+        )
+        assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.RETRY
+        await db.rollback()
+        await db.refresh(position)
+        assert position.current_status == BankPositionStatus.PENDING_CONFIRMATION.value
+
+
+@pytest.mark.asyncio
+async def test_duel_projection_validates_funding_and_terminal_payout(app) -> None:
+    settings = get_settings()
+    expires = datetime.fromtimestamp(1_800_000_900, UTC)
+    async with app.state.session_factory() as db:
+        first_user = User(telegram_id=2001, first_name="First")
+        second_user = User(telegram_id=2002, first_name="Second")
         db.add_all([first_user, second_user])
         await db.flush()
-        await start_cycle(db, first_user)
-        await start_cycle(db, second_user)
         first_wallet = Wallet(
             user_id=first_user.id,
             network=-3,
-            address="0:" + "10" * 32,
-            public_key="20" * 32,
+            address="0:" + "3a" * 32,
+            public_key="4a" * 32,
         )
         second_wallet = Wallet(
             user_id=second_user.id,
             network=-3,
-            address="0:" + "30" * 32,
-            public_key="40" * 32,
+            address="0:" + "3b" * 32,
+            public_key="4b" * 32,
         )
         db.add_all([first_wallet, second_wallet])
         await db.flush()
-        expires = datetime.now(UTC) + timedelta(minutes=15)
-        counter = MatchmakingOffer(
+        counter = DuelOffer(
             onchain_offer_id=900,
+            query_id=900,
             user_id=first_user.id,
             wallet_id=first_wallet.id,
+            owner_wallet=first_wallet.address,
             network=-3,
-            contract_address=settings.ton_contract_address,
+            contract_address=settings.effective_duel_contract_address,
             chance_bps=7500,
             total_pool_nano=4_000_000_000,
             stake_nano=3_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+            fee_bps=250,
+            payout_nano=3_900_000_000,
             commitment_hex="aa" * 32,
             state=OfferState.OPEN.value,
             expires_at=expires,
         )
-        newcomer = MatchmakingOffer(
+        newcomer = DuelOffer(
             onchain_offer_id=100,
+            query_id=1,
             user_id=second_user.id,
             wallet_id=second_wallet.id,
+            owner_wallet=second_wallet.address,
             network=-3,
-            contract_address=settings.ton_contract_address,
+            contract_address=settings.effective_duel_contract_address,
             chance_bps=2500,
             total_pool_nano=4_000_000_000,
             stake_nano=1_000_000_000,
+            opponent_stake_nano=3_000_000_000,
+            fee_bps=250,
+            payout_nano=3_900_000_000,
             commitment_hex="bb" * 32,
             counter_offer_id=900,
             expires_at=expires,
         )
         db.add_all([counter, newcomer])
-        await db.flush()
-        challenge = DuelChallenge(
-            code="bound-chain-challenge",
-            creator_user_id=first_user.id,
-            creator_offer_id=counter.id,
-            accepted_by_user_id=second_user.id,
-            state=ChallengeState.FUNDING.value,
-            expires_at=expires,
-        )
-        db.add(challenge)
         await db.commit()
 
-        unfinalized = transaction(9, open_body(100, 900))
-        unfinalized.pop("mc_block_seqno")
-        assert await apply_transaction(db, settings, unfinalized) is False
-        assert await db.scalar(select(func.count()).select_from(ChainEvent)) == 0
-
-        opened = transaction(10, open_body(100, 900))
-        assert await apply_transaction(db, settings, opened) is True
+        opened = transaction(
+            settings.effective_duel_contract_address,
+            second_wallet.address,
+            20,
+            duel_open_body(newcomer),
+            1_050_000_000,
+        )
+        assert await apply_transaction(db, settings, opened, "duel") == ProjectionResult.APPLIED
         await db.commit()
         duel = await db.scalar(select(Duel))
-        assert duel is not None
-        assert duel.onchain_duel_id == 900
-        assert duel.offer_a_id == newcomer.id
-        assert duel.offer_b_id == counter.id
-        await db.refresh(challenge)
-        assert challenge.state == ChallengeState.MATCHED.value
+        assert duel is not None and duel.onchain_duel_id == 900
+        assert counter.state == OfferState.MATCHED.value
+        assert newcomer.state == OfferState.MATCHED.value
 
-        assert await apply_transaction(db, settings, opened) is False
-        await db.commit()
-        assert await db.scalar(select(func.count()).select_from(ChainEvent)) == 1
-
-        assert await apply_transaction(db, settings, transaction(11, reveal_body(900, 900)))
-        await db.commit()
-        second_reveal = transaction(
-            12,
-            reveal_body(900, 100),
-            outputs=[payout_body(900, 100)],
+        settled = transaction(
+            settings.effective_duel_contract_address,
+            second_wallet.address,
+            21,
+            duel_reveal_body(900, 100),
+            30_000_000,
+            outputs=[
+                (
+                    second_wallet.address,
+                    duel_payout_body(900, 100),
+                    3_900_000_000,
+                )
+            ],
         )
-        assert await apply_transaction(db, settings, second_reveal)
+        assert await apply_transaction(db, settings, settled, "duel") == ProjectionResult.APPLIED
         await db.commit()
-
         await db.refresh(duel)
-        await db.refresh(counter)
-        await db.refresh(newcomer)
         assert duel.state == DuelState.SETTLED.value
         assert duel.winner_wallet == second_wallet.address
-        assert counter.state == OfferState.SETTLED.value
-        assert newcomer.state == OfferState.SETTLED.value
-        first_events = list(
-            (
-                await db.scalars(
-                    select(CycleEvent)
-                    .where(CycleEvent.user_id == first_user.id)
-                    .order_by(CycleEvent.created_at)
-                )
-            ).all()
-        )
-        second_events = list(
-            (
-                await db.scalars(
-                    select(CycleEvent)
-                    .where(CycleEvent.user_id == second_user.id)
-                    .order_by(CycleEvent.created_at)
-                )
-            ).all()
-        )
-        assert [event.kind for event in first_events] == [
-            "cycle_started",
-            "duel_matched",
-            "duel_settled",
-        ]
-        assert [event.kind for event in second_events] == [
-            "cycle_started",
-            "duel_funded",
-            "duel_matched",
-            "duel_settled",
-        ]
-        assert {event.proof_ref for event in second_events[1:]} == {"tx-10", "tx-12"}
+        assert await db.scalar(select(func.count()).select_from(DuelChainEvent)) == 2

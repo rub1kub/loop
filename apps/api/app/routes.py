@@ -2,50 +2,34 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import aliased
 
-from .cycles import (
-    ActiveCycleExistsError,
-    cycle_events,
-    latest_cycle,
-    progress_bps,
-    record_cycle_event,
-    start_cycle,
-)
 from .dependencies import Config, CurrentUser, Db
 from .models import (
     AuthExchange,
-    BankCycle,
-    ChallengeState,
-    CycleEvent,
-    CycleEventKind,
-    Duel,
-    DuelChallenge,
-    DuelState,
-    MatchmakingOffer,
-    OfferState,
-    ProofType,
+    ReferralAttribution,
     ReferralCode,
+    ReferralReward,
     User,
     Wallet,
 )
+from .modules.bank.models import BankPosition, BankPositionStatus
+from .modules.duel.models import (
+    ChallengeState,
+    DuelInvitation,
+    MatchmakingOffer,
+    OfferState,
+)
 from .schemas import (
-    ActionIntent,
     AuthResponse,
-    BankCycleStart,
-    BankCycleView,
-    ContractCall,
     ContractStateView,
-    CycleEventView,
-    DuelView,
     InviteView,
     JettonBalanceView,
-    OfferQuoteRequest,
-    OfferQuoteResponse,
-    OfferView,
+    ModeStatsView,
+    PlushBrickView,
     ProfileView,
+    ReferralRewardView,
     ReferralView,
     SettingsUpdate,
     TelegramAuthRequest,
@@ -64,29 +48,9 @@ from .ton import TonProviderError, explorer_transaction_url
 
 router = APIRouter(prefix="/api/v1")
 
-ACTION_GAS_NANO = 30_000_000
-
 
 def as_utc(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
-
-
-def action_intent(
-    operation: str,
-    contract_address: str,
-    *,
-    offer_id: int = 0,
-    duel_id: int = 0,
-) -> ActionIntent:
-    return ActionIntent(
-        operation=operation,
-        query_id=secrets.randbelow(9_007_199_254_740_990) + 1,
-        offer_id=offer_id,
-        duel_id=duel_id,
-        contract_address=contract_address,
-        amount_nano=str(ACTION_GAS_NANO),
-        valid_until=int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
-    )
 
 
 def user_view(user: User) -> UserView:
@@ -97,56 +61,36 @@ def user_view(user: User) -> UserView:
         first_name=user.first_name,
         photo_url=user.photo_url,
         onboarding_seen=user.onboarding_seen,
+        onboarding_enabled=user.onboarding_enabled,
     )
 
 
-def cycle_event_view(event: CycleEvent, network: int) -> CycleEventView:
-    proof_url = (
-        explorer_transaction_url(network, event.proof_ref)
-        if event.proof_type == ProofType.TON_TRANSACTION.value and event.proof_ref
-        else None
+async def record_referral_attribution(
+    db: Db,
+    user: User,
+    start_param: str | None,
+) -> None:
+    if not start_param or not start_param.startswith("ref_"):
+        return
+    code = start_param[4:]
+    referral = await db.get(ReferralCode, code)
+    if referral is None or referral.owner_user_id == user.id:
+        return
+    owner = await db.get(User, referral.owner_user_id)
+    if owner is None or owner.telegram_id == user.telegram_id:
+        return
+    existing = await db.scalar(
+        select(ReferralAttribution.id).where(ReferralAttribution.invitee_user_id == user.id)
     )
-    return CycleEventView(
-        id=event.id,
-        kind=event.kind,
-        title=event.title,
-        proof_type=event.proof_type,
-        proof_ref=event.proof_ref,
-        proof_url=proof_url,
-        created_at=event.created_at,
-    )
-
-
-def bank_cycle_view(cycle: BankCycle, events: list[CycleEvent], network: int) -> BankCycleView:
-    return BankCycleView(
-        id=cycle.id,
-        sequence_number=cycle.sequence_number,
-        status=cycle.status,
-        goal_events=cycle.goal_events,
-        event_count=cycle.event_count,
-        progress_bps=progress_bps(cycle),
-        started_at=cycle.started_at,
-        ends_at=cycle.ends_at,
-        completed_at=cycle.completed_at,
-        events=[cycle_event_view(event, network) for event in events],
-    )
-
-
-def offer_view(offer: MatchmakingOffer) -> OfferView:
-    return OfferView(
-        id=offer.id,
-        onchain_offer_id=offer.onchain_offer_id,
-        chance_bps=offer.chance_bps,
-        total_pool_nano=offer.total_pool_nano,
-        stake_nano=offer.stake_nano,
-        state=offer.state,
-        expires_at=offer.expires_at,
-        funding_tx_hash=offer.funding_tx_hash,
-        funding_proof_url=(
-            explorer_transaction_url(offer.network, offer.funding_tx_hash)
-            if offer.funding_tx_hash
-            else None
-        ),
+    if existing is not None:
+        return
+    user.referred_by_id = owner.id
+    db.add(
+        ReferralAttribution(
+            inviter_user_id=owner.id,
+            invitee_user_id=user.id,
+            code=code,
+        )
     )
 
 
@@ -169,14 +113,9 @@ async def authenticate(body: TelegramAuthRequest, db: Db, settings: Config) -> A
             language_code=identity.language_code,
             photo_url=identity.photo_url,
         )
-        if identity.start_param and identity.start_param.startswith("ref_"):
-            referral = await db.get(ReferralCode, identity.start_param[4:])
-            if referral:
-                owner = await db.get(User, referral.owner_user_id)
-                if owner and owner.telegram_id != identity.telegram_id:
-                    user.referred_by_id = owner.id
         db.add(user)
         await db.flush()
+        await record_referral_attribution(db, user, identity.start_param)
     else:
         user.username = identity.username
         user.first_name = identity.first_name
@@ -212,13 +151,76 @@ async def authenticate(body: TelegramAuthRequest, db: Db, settings: Config) -> A
 
 
 @router.get("/me", response_model=ProfileView)
-async def get_me(user: CurrentUser, db: Db, settings: Config) -> ProfileView:
+async def get_me(user: CurrentUser, db: Db, request: Request, settings: Config) -> ProfileView:
     wallet = await db.scalar(
         select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True))
     )
-    cycle = await latest_cycle(db, user.id)
-    events = await cycle_events(db, user.id, cycle.id) if cycle else []
-    await db.commit()
+    bank_total = await db.scalar(
+        select(func.count()).select_from(BankPosition).where(BankPosition.user_id == user.id)
+    )
+    bank_completed = await db.scalar(
+        select(func.count())
+        .select_from(BankPosition)
+        .where(
+            BankPosition.user_id == user.id,
+            BankPosition.current_status == BankPositionStatus.PAYOUT_SENT.value,
+        )
+    )
+    bank_active = await db.scalar(
+        select(func.count())
+        .select_from(BankPosition)
+        .where(
+            BankPosition.user_id == user.id,
+            BankPosition.current_status.in_(
+                [
+                    BankPositionStatus.PENDING_CONFIRMATION.value,
+                    BankPositionStatus.QUEUED.value,
+                    BankPositionStatus.PARTIALLY_FUNDED.value,
+                    BankPositionStatus.COMPLETED.value,
+                ]
+            ),
+        )
+    )
+    duel_total = await db.scalar(
+        select(func.count())
+        .select_from(MatchmakingOffer)
+        .where(MatchmakingOffer.user_id == user.id)
+    )
+    duel_completed = await db.scalar(
+        select(func.count())
+        .select_from(MatchmakingOffer)
+        .where(
+            MatchmakingOffer.user_id == user.id,
+            MatchmakingOffer.state.in_([OfferState.SETTLED.value, OfferState.REFUNDED.value]),
+        )
+    )
+    duel_active = await db.scalar(
+        select(func.count())
+        .select_from(MatchmakingOffer)
+        .where(
+            MatchmakingOffer.user_id == user.id,
+            MatchmakingOffer.state.in_(
+                [
+                    OfferState.PENDING_FUNDING.value,
+                    OfferState.OPEN.value,
+                    OfferState.RESERVED.value,
+                    OfferState.MATCHED.value,
+                ]
+            ),
+        )
+    )
+    plush_balance = 0
+    plush_verified = False
+    if wallet is not None and hasattr(request.app.state, "plush_ton_client"):
+        try:
+            plush = await request.app.state.plush_ton_client.get_jetton_wallet(
+                wallet.address, settings.plush_brick_master
+            )
+            plush_balance = plush.balance_nano
+            plush_verified = True
+        except TonProviderError:
+            pass
+    holder = plush_verified and plush_balance >= settings.holder_min_balance_nano
     return ProfileView(
         user=user_view(user),
         wallet=(
@@ -230,44 +232,43 @@ async def get_me(user: CurrentUser, db: Db, settings: Config) -> ProfileView:
             if wallet
             else None
         ),
-        bank=bank_cycle_view(cycle, events, settings.ton_network_id) if cycle else None,
+        bank=ModeStatsView(
+            active=bank_active or 0,
+            completed=bank_completed or 0,
+            total=bank_total or 0,
+        ),
+        duel=ModeStatsView(
+            active=duel_active or 0,
+            completed=duel_completed or 0,
+            total=duel_total or 0,
+        ),
+        plush_brick=PlushBrickView(
+            verified=plush_verified,
+            balance_nano=plush_balance,
+            holder=holder,
+            # DuelEscrow V1 only exposes one global on-chain fee. Reporting a
+            # holder discount here would make the quote disagree with settlement.
+            duel_fee_bps=settings.duel_fee_bps,
+            fee_discount_active=False,
+        ),
     )
 
 
 @router.patch("/me/settings", response_model=UserView)
 async def update_settings(body: SettingsUpdate, user: CurrentUser, db: Db) -> UserView:
-    user.onboarding_seen = body.onboarding_seen
+    if body.onboarding_seen is not None:
+        user.onboarding_seen = body.onboarding_seen
+    if body.onboarding_enabled is not None:
+        user.onboarding_enabled = body.onboarding_enabled
     await db.commit()
     return user_view(user)
 
 
-@router.post("/bank/cycles", response_model=BankCycleView, status_code=status.HTTP_201_CREATED)
-async def create_bank_cycle(
-    body: BankCycleStart, user: CurrentUser, db: Db, settings: Config
-) -> BankCycleView:
-    try:
-        cycle = await start_cycle(db, user, body.goal_events)
-    except ActiveCycleExistsError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, "active cycle already exists") from exc
-    await db.commit()
-    await db.refresh(cycle)
-    events = await cycle_events(db, user.id, cycle.id)
-    return bank_cycle_view(cycle, events, settings.ton_network_id)
-
-
-@router.get("/bank/cycles/current", response_model=BankCycleView | None)
-async def current_bank_cycle(user: CurrentUser, db: Db, settings: Config) -> BankCycleView | None:
-    cycle = await latest_cycle(db, user.id)
-    if cycle is None:
-        return None
-    events = await cycle_events(db, user.id, cycle.id)
-    await db.commit()
-    return bank_cycle_view(cycle, events, settings.ton_network_id)
-
-
 @router.post("/wallet/challenge", response_model=WalletChallengeResponse)
 async def wallet_challenge(
-    user: CurrentUser, request: Request, settings: Config
+    user: CurrentUser,
+    request: Request,
+    settings: Config,
 ) -> WalletChallengeResponse:
     payload = secrets.token_urlsafe(32)
     expires = datetime.now(UTC) + timedelta(seconds=settings.ton_proof_ttl_seconds)
@@ -291,6 +292,8 @@ async def wallet_verify(
     request: Request,
     settings: Config,
 ) -> WalletView:
+    if body.network != settings.ton_network_id or body.network != -3:
+        raise HTTPException(status.HTTP_409_CONFLICT, "only TON testnet wallets are supported")
     challenge = await request.app.state.challenge_store.consume(body.proof.payload)
     if not challenge or challenge.get("user_id") != user.id:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wallet challenge is invalid or used")
@@ -318,25 +321,39 @@ async def wallet_verify(
     if existing and existing.user_id != user.id:
         raise HTTPException(status.HTTP_409_CONFLICT, "wallet is bound to another account")
     current = await db.scalar(
-        select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True))
+        select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True)).with_for_update()
     )
     if current and current.address != address:
-        active_offer = await db.scalar(
+        bank_active = await db.scalar(
+            select(BankPosition.id).where(
+                BankPosition.wallet_id == current.id,
+                BankPosition.current_status.in_(
+                    [
+                        BankPositionStatus.PENDING_CONFIRMATION.value,
+                        BankPositionStatus.QUEUED.value,
+                        BankPositionStatus.PARTIALLY_FUNDED.value,
+                        BankPositionStatus.COMPLETED.value,
+                    ]
+                ),
+            )
+        )
+        duel_active = await db.scalar(
             select(MatchmakingOffer.id).where(
                 MatchmakingOffer.wallet_id == current.id,
                 MatchmakingOffer.state.in_(
                     [
                         OfferState.PENDING_FUNDING.value,
                         OfferState.OPEN.value,
+                        OfferState.RESERVED.value,
                         OfferState.MATCHED.value,
                     ]
                 ),
             )
         )
-        if active_offer:
+        if bank_active or duel_active:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                "settle or cancel the active duel before changing wallet",
+                "finish active BANK and DUEL operations before changing wallet",
             )
         current.active = False
     wallet = existing or Wallet(
@@ -350,14 +367,29 @@ async def wallet_verify(
     db.add(wallet)
     await db.commit()
     return WalletView(
-        address=wallet.address, network=wallet.network, verified_at=wallet.verified_at
+        address=wallet.address,
+        network=wallet.network,
+        verified_at=wallet.verified_at,
     )
 
 
-@router.get("/onchain/contract", response_model=ContractStateView)
-async def onchain_contract(
-    user: CurrentUser, db: Db, request: Request, settings: Config
+async def contract_state(
+    mode: str,
+    user: User,
+    db: Db,
+    request: Request,
+    settings: Config,
 ) -> ContractStateView:
+    if mode == "bank":
+        address = settings.bank_contract_address
+        expected = settings.bank_contract_code_hash
+    elif mode == "duel":
+        address = settings.effective_duel_contract_address
+        expected = settings.effective_duel_contract_code_hash
+    else:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown contract mode")
+    if not address:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "contract is not configured")
     wallet = await db.scalar(
         select(Wallet).where(
             Wallet.user_id == user.id,
@@ -366,9 +398,7 @@ async def onchain_contract(
         )
     )
     try:
-        contract = await request.app.state.ton_client.get_contract_state(
-            settings.ton_contract_address
-        )
+        contract = await request.app.state.ton_client.get_contract_state(address)
         wallet_balance = (
             await request.app.state.ton_client.get_native_balance(wallet.address)
             if wallet
@@ -376,8 +406,9 @@ async def onchain_contract(
         )
     except TonProviderError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
-    expected_hash = settings.ton_contract_code_hash.removeprefix("0x").upper()
+    expected_hash = expected.removeprefix("0x").upper()
     return ContractStateView(
+        mode=mode,
         network=settings.ton_network_id,
         address=contract.address,
         status=contract.status,
@@ -395,6 +426,27 @@ async def onchain_contract(
     )
 
 
+@router.get("/onchain/contracts/{mode}", response_model=ContractStateView)
+async def onchain_contract(
+    mode: str,
+    user: CurrentUser,
+    db: Db,
+    request: Request,
+    settings: Config,
+) -> ContractStateView:
+    return await contract_state(mode, user, db, request, settings)
+
+
+@router.get("/onchain/contract", response_model=ContractStateView, include_in_schema=False)
+async def legacy_onchain_contract(
+    user: CurrentUser,
+    db: Db,
+    request: Request,
+    settings: Config,
+) -> ContractStateView:
+    return await contract_state("duel", user, db, request, settings)
+
+
 @router.get("/onchain/jettons/{jetton_master}", response_model=JettonBalanceView)
 async def onchain_jetton(
     jetton_master: str,
@@ -403,23 +455,21 @@ async def onchain_jetton(
     request: Request,
     settings: Config,
 ) -> JettonBalanceView:
+    if jetton_master != settings.plush_brick_master:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Jetton master is not supported")
     wallet = await db.scalar(
-        select(Wallet).where(
-            Wallet.user_id == user.id,
-            Wallet.network == settings.ton_network_id,
-            Wallet.active.is_(True),
-        )
+        select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True))
     )
     if wallet is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "verified wallet required")
     try:
-        state = await request.app.state.ton_client.get_jetton_wallet(
+        state = await request.app.state.plush_ton_client.get_jetton_wallet(
             wallet.address, jetton_master
         )
     except TonProviderError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
     return JettonBalanceView(
-        network=settings.ton_network_id,
+        network=settings.plush_brick_network_id,
         owner_address=state.owner_address,
         jetton_master=state.jetton_master,
         jetton_wallet=state.wallet_address,
@@ -428,377 +478,141 @@ async def onchain_jetton(
     )
 
 
-@router.post("/duels/quote", response_model=OfferQuoteResponse)
-async def create_offer_quote(
-    body: OfferQuoteRequest, user: CurrentUser, db: Db, settings: Config
-) -> OfferQuoteResponse:
-    if not settings.ton_contract_address:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "duel contract is not configured")
-    if not settings.min_pool_nano <= body.total_pool_nano <= settings.max_pool_nano:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "pool is outside limits")
-    if body.total_pool_nano % 4:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "pool must be divisible by four")
-    wallet = await db.scalar(
-        select(Wallet).where(
-            Wallet.user_id == user.id,
-            Wallet.network == settings.ton_network_id,
-            Wallet.active.is_(True),
-        )
-    )
-    if wallet is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "verified wallet required")
-    active = await db.scalar(
-        select(MatchmakingOffer).where(
-            MatchmakingOffer.wallet_id == wallet.id,
-            MatchmakingOffer.state.in_(
-                [OfferState.PENDING_FUNDING.value, OfferState.OPEN.value, OfferState.MATCHED.value]
-            ),
-        )
-    )
-    if active:
-        raise HTTPException(status.HTTP_409_CONFLICT, "wallet already has an active offer")
-    challenge = None
-    if body.challenge_code:
-        challenge = await db.scalar(
-            select(DuelChallenge)
-            .where(DuelChallenge.code == body.challenge_code)
-            .with_for_update()
-        )
-        if challenge is None or as_utc(challenge.expires_at) <= datetime.now(UTC):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "challenge not found")
-        if (
-            challenge.accepted_by_user_id != user.id
-            or challenge.state != ChallengeState.ACCEPTED.value
-        ):
-            raise HTTPException(status.HTTP_409_CONFLICT, "challenge is not reserved for this user")
-        counter = await db.get(MatchmakingOffer, challenge.creator_offer_id)
-        if (
-            counter is None
-            or counter.state != OfferState.OPEN.value
-            or as_utc(counter.expires_at) <= datetime.now(UTC)
-            or counter.network != settings.ton_network_id
-            or counter.contract_address != settings.ton_contract_address
-            or counter.user_id == user.id
-            or counter.total_pool_nano != body.total_pool_nano
-            or counter.chance_bps != body.chance_bps
-        ):
-            raise HTTPException(status.HTTP_409_CONFLICT, "challenge offer is no longer available")
-    else:
-        counter = await db.scalar(
-            select(MatchmakingOffer)
-            .where(
-                MatchmakingOffer.network == settings.ton_network_id,
-                MatchmakingOffer.contract_address == settings.ton_contract_address,
-                MatchmakingOffer.total_pool_nano == body.total_pool_nano,
-                MatchmakingOffer.chance_bps == body.chance_bps,
-                MatchmakingOffer.state == OfferState.OPEN.value,
-                MatchmakingOffer.wallet_id != wallet.id,
-                MatchmakingOffer.user_id != user.id,
-                MatchmakingOffer.expires_at > datetime.now(UTC),
-                ~MatchmakingOffer.id.in_(
-                    select(DuelChallenge.creator_offer_id).where(
-                        DuelChallenge.state.in_(
-                            [
-                                ChallengeState.OPEN.value,
-                                ChallengeState.ACCEPTED.value,
-                                ChallengeState.FUNDING.value,
-                            ]
-                        ),
-                        DuelChallenge.expires_at > datetime.now(UTC),
-                    )
-                ),
+async def get_or_create_referral_code(db: Db, user_id: str) -> ReferralCode:
+    existing = await db.scalar(select(ReferralCode).where(ReferralCode.owner_user_id == user_id))
+    if existing is not None:
+        return existing
+    for _ in range(3):
+        referral = ReferralCode(code=secrets.token_urlsafe(9), owner_user_id=user_id)
+        db.add(referral)
+        try:
+            await db.commit()
+            return referral
+        except IntegrityError:
+            await db.rollback()
+            existing_after_conflict: ReferralCode | None = await db.scalar(
+                select(ReferralCode).where(ReferralCode.owner_user_id == user_id)
             )
-            .order_by(MatchmakingOffer.created_at)
-            .with_for_update(skip_locked=True)
-        )
-    offer_id = body.offer_id
-    duplicate = await db.scalar(
-        select(MatchmakingOffer.id).where(
-            MatchmakingOffer.network == settings.ton_network_id,
-            MatchmakingOffer.onchain_offer_id == offer_id,
-        )
-    )
-    if duplicate:
-        raise HTTPException(status.HTTP_409_CONFLICT, "offer id already exists")
-    expires = datetime.now(UTC) + timedelta(seconds=settings.offer_ttl_seconds)
-    stake = body.total_pool_nano * body.chance_bps // 10_000
-    offer = MatchmakingOffer(
-        onchain_offer_id=offer_id,
-        user_id=user.id,
-        wallet_id=wallet.id,
-        network=settings.ton_network_id,
-        contract_address=settings.ton_contract_address,
-        chance_bps=body.chance_bps,
-        total_pool_nano=body.total_pool_nano,
-        stake_nano=stake,
-        commitment_hex=body.commitment_hex,
-        counter_offer_id=counter.onchain_offer_id if counter else 0,
-        expires_at=expires,
-    )
-    db.add(offer)
-    if challenge is not None:
-        challenge.state = ChallengeState.FUNDING.value
-    await db.commit()
-    await db.refresh(offer)
-    view = offer_view(offer)
-    return OfferQuoteResponse(
-        offer=view,
-        transaction=ContractCall(
-            operation="open_offer",
-            query_id=offer_id,
-            offer_id=offer_id,
-            counter_offer_id=offer.counter_offer_id,
-            contract_address=offer.contract_address,
-            amount_nano=str(stake + settings.offer_gas_nano),
-            valid_until=int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
-            chance_bps=offer.chance_bps,
-            total_pool_nano=str(offer.total_pool_nano),
-            commitment_hex=offer.commitment_hex,
-            expires_at=int(offer.expires_at.timestamp()),
-            commitment_domain=0x4C4F4F50,
-        ),
-    )
-
-
-@router.get("/duels/offers", response_model=list[OfferView])
-async def list_offers(user: CurrentUser, db: Db, settings: Config) -> list[OfferView]:
-    offers = (
-        await db.scalars(
-            select(MatchmakingOffer)
-            .where(
-                MatchmakingOffer.user_id == user.id,
-                MatchmakingOffer.network == settings.ton_network_id,
-            )
-            .order_by(MatchmakingOffer.created_at.desc())
-            .limit(50)
-        )
-    ).all()
-    return [
-        offer_view(offer)
-        for offer in offers
-    ]
-
-
-@router.get("/duels", response_model=list[DuelView])
-async def list_duels(user: CurrentUser, db: Db, settings: Config) -> list[DuelView]:
-    offer_a = aliased(MatchmakingOffer)
-    offer_b = aliased(MatchmakingOffer)
-    rows = (
-        await db.execute(
-            select(Duel, offer_a, offer_b)
-            .join(offer_a, Duel.offer_a_id == offer_a.id)
-            .join(offer_b, Duel.offer_b_id == offer_b.id)
-            .where(
-                Duel.network == settings.ton_network_id,
-                or_(offer_a.user_id == user.id, offer_b.user_id == user.id),
-            )
-            .order_by(Duel.created_at.desc())
-            .limit(50)
-        )
-    ).all()
-    result: list[DuelView] = []
-    for duel, first, second in rows:
-        own_offer = first if first.user_id == user.id else second
-        result.append(
-            DuelView(
-                id=duel.id,
-                onchain_duel_id=duel.onchain_duel_id,
-                state=duel.state,
-                offer_id=own_offer.onchain_offer_id,
-                own_revealed=own_offer.revealed,
-                chance_bps=own_offer.chance_bps,
-                total_pool_nano=own_offer.total_pool_nano,
-                reveal_deadline=duel.reveal_deadline,
-                winner_wallet=duel.winner_wallet,
-                settled_tx_hash=duel.settled_tx_hash,
-                settlement_proof_url=(
-                    explorer_transaction_url(duel.network, duel.settled_tx_hash)
-                    if duel.settled_tx_hash
-                    else None
-                ),
-            )
-        )
-    return result
-
-
-async def owned_offer_for_duel(
-    db: Db, duel_id: int, user: User, settings: Config
-) -> tuple[Duel, MatchmakingOffer]:
-    duel = await db.scalar(
-        select(Duel).where(
-            Duel.onchain_duel_id == duel_id, Duel.network == settings.ton_network_id
-        )
-    )
-    if duel is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "duel not found")
-    first = await db.get(MatchmakingOffer, duel.offer_a_id)
-    second = await db.get(MatchmakingOffer, duel.offer_b_id)
-    own_offer = first if first and first.user_id == user.id else second
-    if own_offer is None or own_offer.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "duel not found")
-    return duel, own_offer
-
-
-@router.post("/duels/{duel_id}/reveal-intent", response_model=ActionIntent)
-async def reveal_intent(
-    duel_id: int, user: CurrentUser, db: Db, settings: Config
-) -> ActionIntent:
-    duel, offer = await owned_offer_for_duel(db, duel_id, user, settings)
-    if duel.state != DuelState.REVEALING.value:
-        raise HTTPException(status.HTTP_409_CONFLICT, "duel is already terminal")
-    if offer.revealed:
-        raise HTTPException(status.HTTP_409_CONFLICT, "secret is already revealed")
-    if as_utc(duel.reveal_deadline) <= datetime.now(UTC):
-        raise HTTPException(status.HTTP_409_CONFLICT, "reveal deadline passed")
-    return action_intent(
-        "reveal",
-        offer.contract_address,
-        offer_id=offer.onchain_offer_id,
-        duel_id=duel.onchain_duel_id,
-    )
-
-
-@router.post("/duels/offers/{offer_id}/cancel-intent", response_model=ActionIntent)
-async def cancel_offer_intent(
-    offer_id: int, user: CurrentUser, db: Db, settings: Config
-) -> ActionIntent:
-    offer = await db.scalar(
-        select(MatchmakingOffer).where(
-            MatchmakingOffer.onchain_offer_id == offer_id,
-            MatchmakingOffer.user_id == user.id,
-            MatchmakingOffer.network == settings.ton_network_id,
-        )
-    )
-    if offer is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "offer not found")
-    if offer.state != OfferState.OPEN.value:
-        raise HTTPException(status.HTTP_409_CONFLICT, "only an open offer can be cancelled")
-    return action_intent(
-        "cancel_offer", offer.contract_address, offer_id=offer.onchain_offer_id
-    )
-
-
-@router.post("/duels/offers/{offer_id}/expire-intent", response_model=ActionIntent)
-async def expire_offer_intent(
-    offer_id: int, user: CurrentUser, db: Db, settings: Config
-) -> ActionIntent:
-    offer = await db.scalar(
-        select(MatchmakingOffer).where(
-            MatchmakingOffer.onchain_offer_id == offer_id,
-            MatchmakingOffer.user_id == user.id,
-            MatchmakingOffer.network == settings.ton_network_id,
-        )
-    )
-    if offer is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "offer not found")
-    if offer.state != OfferState.OPEN.value or as_utc(offer.expires_at) >= datetime.now(UTC):
-        raise HTTPException(status.HTTP_409_CONFLICT, "offer is not ready for expiry")
-    return action_intent(
-        "expire_offer", offer.contract_address, offer_id=offer.onchain_offer_id
-    )
-
-
-@router.post("/duels/{duel_id}/expire-intent", response_model=ActionIntent)
-async def expire_duel_intent(
-    duel_id: int, user: CurrentUser, db: Db, settings: Config
-) -> ActionIntent:
-    duel, offer = await owned_offer_for_duel(db, duel_id, user, settings)
-    if (
-        duel.state != DuelState.REVEALING.value
-        or as_utc(duel.reveal_deadline) >= datetime.now(UTC)
-    ):
-        raise HTTPException(status.HTTP_409_CONFLICT, "duel is not ready for expiry")
-    return action_intent(
-        "expire_duel",
-        offer.contract_address,
-        offer_id=offer.onchain_offer_id,
-        duel_id=duel.onchain_duel_id,
-    )
+            if existing_after_conflict is not None:
+                return existing_after_conflict
+    raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "could not create referral code")
 
 
 @router.get("/referrals", response_model=ReferralView)
 async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView:
-    referral = await db.scalar(select(ReferralCode).where(ReferralCode.owner_user_id == user.id))
-    if referral is None:
-        referral = ReferralCode(code=secrets.token_urlsafe(9), owner_user_id=user.id)
-        db.add(referral)
-        await db.commit()
+    referral = await get_or_create_referral_code(db, user.id)
     invited = await db.scalar(
-        select(func.count()).select_from(User).where(User.referred_by_id == user.id)
+        select(func.count())
+        .select_from(ReferralAttribution)
+        .where(ReferralAttribution.inviter_user_id == user.id)
     )
     qualified = await db.scalar(
-        select(func.count(func.distinct(User.id)))
-        .select_from(User)
-        .join(MatchmakingOffer, MatchmakingOffer.user_id == User.id)
+        select(func.count())
+        .select_from(ReferralAttribution)
         .where(
-            User.referred_by_id == user.id,
-            MatchmakingOffer.network == settings.ton_network_id,
-            MatchmakingOffer.state == OfferState.SETTLED.value,
+            ReferralAttribution.inviter_user_id == user.id,
+            ReferralAttribution.status == "qualified",
         )
     )
-    url = f"https://t.me/{settings.bot_username}?startapp=ref_{referral.code}"
-    qualified_count = qualified or 0
+    rewards = (
+        await db.scalars(
+            select(ReferralReward)
+            .join(
+                ReferralAttribution,
+                ReferralReward.attribution_id == ReferralAttribution.id,
+            )
+            .where(ReferralAttribution.inviter_user_id == user.id)
+            .order_by(ReferralReward.created_at.desc())
+            .limit(50)
+        )
+    ).all()
     return ReferralView(
         code=referral.code,
-        url=url,
+        url=f"https://t.me/{settings.bot_username}?startapp=ref_{referral.code}",
         invited=invited or 0,
-        qualified=qualified_count,
-        reward_points=min(qualified_count, 100) * 100,
+        qualified=qualified or 0,
+        reward_points=sum(reward.reward_points for reward in rewards),
+        history=[
+            ReferralRewardView(
+                cause=reward.cause,
+                reward_points=reward.reward_points,
+                payout_tx_hash=reward.payout_tx_hash,
+                created_at=reward.created_at,
+            )
+            for reward in rewards
+        ],
+    )
+
+
+async def invitation_view(invitation: DuelInvitation, db: Db) -> InviteView:
+    creator = await db.get(User, invitation.creator_user_id)
+    offer = await db.get(MatchmakingOffer, invitation.creator_offer_id)
+    if (
+        creator is None
+        or offer is None
+        or offer.state
+        not in {
+            OfferState.OPEN.value,
+            OfferState.RESERVED.value,
+        }
+    ):
+        raise HTTPException(status.HTTP_409_CONFLICT, "challenge is no longer available")
+    receiver_chance = 10_000 - offer.chance_bps
+    receiver_stake = offer.opponent_stake_nano
+    return InviteView(
+        code=invitation.code,
+        creator_name=creator.first_name,
+        creator_username=creator.username,
+        stake_nano=receiver_stake,
+        total_pool_nano=offer.total_pool_nano,
+        chance_bps=receiver_chance,
+        payout_nano=offer.payout_nano,
+        net_profit_nano=offer.payout_nano - receiver_stake,
+        counter_offer_id=offer.onchain_offer_id,
+        expires_at=invitation.expires_at,
     )
 
 
 @router.get("/invites/{code}", response_model=InviteView)
-async def resolve_invite(code: str, user: CurrentUser, db: Db) -> InviteView:
-    challenge = await db.scalar(
-        select(DuelChallenge).where(DuelChallenge.code == code).with_for_update()
-    )
-    if challenge is None:
+async def preview_invite(code: str, user: CurrentUser, db: Db) -> InviteView:
+    invitation = await db.get(DuelInvitation, code)
+    if invitation is None or as_utc(invitation.expires_at) <= datetime.now(UTC):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "invite not found")
-    if as_utc(challenge.expires_at) <= datetime.now(UTC):
-        challenge.state = ChallengeState.EXPIRED.value
-        await db.commit()
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "invite not found")
-    creator = await db.get(User, challenge.creator_user_id)
-    offer = await db.get(MatchmakingOffer, challenge.creator_offer_id)
-    if creator is None or offer is None or offer.state != OfferState.OPEN.value:
-        raise HTTPException(status.HTTP_409_CONFLICT, "challenge is no longer available")
-    if creator.id == user.id:
+    if invitation.creator_user_id == user.id:
         raise HTTPException(status.HTTP_409_CONFLICT, "self invite is not allowed")
-    if challenge.accepted_by_user_id and challenge.accepted_by_user_id != user.id:
+    return await invitation_view(invitation, db)
+
+
+@router.post("/invites/{code}/accept", response_model=InviteView)
+async def accept_invite(code: str, user: CurrentUser, db: Db) -> InviteView:
+    invitation = await db.scalar(
+        select(DuelInvitation).where(DuelInvitation.code == code).with_for_update()
+    )
+    if invitation is None or as_utc(invitation.expires_at) <= datetime.now(UTC):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "invite not found")
+    if invitation.creator_user_id == user.id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "self invite is not allowed")
+    if invitation.accepted_by_user_id not in {None, user.id}:
         raise HTTPException(status.HTTP_409_CONFLICT, "invite already accepted")
-    if challenge.state not in {ChallengeState.OPEN.value, ChallengeState.ACCEPTED.value}:
-        raise HTTPException(status.HTTP_409_CONFLICT, "challenge is already in progress")
-    challenge.accepted_by_user_id = user.id
-    challenge.accepted_at = challenge.accepted_at or datetime.now(UTC)
-    challenge.state = ChallengeState.ACCEPTED.value
-    await record_cycle_event(
-        db,
-        user_id=creator.id,
-        actor_user_id=user.id,
-        kind=CycleEventKind.INVITE_ACCEPTED,
-        title=f"{user.first_name} принял вызов",
-        proof_type=ProofType.TELEGRAM,
-        proof_ref=challenge.code,
-        dedupe_key=f"challenge-accepted:{challenge.code}",
+    active_reservations = await db.scalar(
+        select(func.count())
+        .select_from(DuelInvitation)
+        .where(
+            DuelInvitation.accepted_by_user_id == user.id,
+            DuelInvitation.state.in_([ChallengeState.ACCEPTED.value, ChallengeState.FUNDING.value]),
+            DuelInvitation.expires_at > datetime.now(UTC),
+        )
     )
-    await record_cycle_event(
-        db,
-        user_id=user.id,
-        actor_user_id=creator.id,
-        kind=CycleEventKind.INVITE_ACCEPTED,
-        title=f"Вызов {creator.first_name} принят",
-        proof_type=ProofType.TELEGRAM,
-        proof_ref=challenge.code,
-        dedupe_key=f"challenge-accepted:{challenge.code}",
+    if not invitation.accepted_by_user_id and (active_reservations or 0) >= 1:
+        raise HTTPException(status.HTTP_409_CONFLICT, "finish the current invitation first")
+    offer = await db.get(MatchmakingOffer, invitation.creator_offer_id)
+    wallet = await db.scalar(
+        select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True))
     )
+    if offer is None or (wallet is not None and offer.owner_wallet == wallet.address):
+        raise HTTPException(status.HTTP_409_CONFLICT, "same-wallet invite is not allowed")
+    invitation.accepted_by_user_id = user.id
+    invitation.accepted_at = invitation.accepted_at or datetime.now(UTC)
+    invitation.state = ChallengeState.ACCEPTED.value
     await db.commit()
-    return InviteView(
-        code=challenge.code,
-        creator_name=creator.first_name,
-        creator_username=creator.username,
-        stake_nano=offer.stake_nano,
-        total_pool_nano=offer.total_pool_nano,
-        chance_bps=offer.chance_bps,
-        counter_offer_id=offer.onchain_offer_id,
-        expires_at=challenge.expires_at,
-    )
+    return await invitation_view(invitation, db)

@@ -1,0 +1,1 @@
+"""Independent FIFO BANK domain."""

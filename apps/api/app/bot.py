@@ -21,26 +21,26 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .config import Settings
-from .cycles import as_utc, record_cycle_event
-from .models import (
+from .models import User
+from .modules.duel.models import (
     ChallengeState,
-    CycleEventKind,
     DuelChallenge,
     MatchmakingOffer,
     OfferState,
-    ProofType,
-    User,
 )
 
 INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
 BOT_NAME = "LOOP"
 BOT_DESCRIPTION = (
-    "LOOP — социальное Telegram Mini App в TON. Запускай живой цикл BANK, "
-    "бросай друзьям честные 50/50 DUEL-вызовы и проверяй on-chain события. "
-    "Средства остаются во внешнем кошельке."
+    "LOOP — два независимых режима в TON testnet. BANK — FIFO-очередь позиций. "
+    "DUEL — PvP-вызовы с шансами 25%, 50% или 75%."
 )
-BOT_SHORT_DESCRIPTION = "Живые BANK-циклы, 50/50 DUEL-вызовы и on-chain события в TON."
+BOT_SHORT_DESCRIPTION = "BANK FIFO и PvP DUEL на тестовых GRAM в TON testnet."
 BOT_MENU_TEXT = "Открыть LOOP"
+
+
+def as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def format_gram(nano: int) -> str:
@@ -64,7 +64,9 @@ def create_dispatcher(
                 ]
             ]
         )
-        await message.answer("LOOP\nЖивой цикл начинается здесь.", reply_markup=keyboard)
+        await message.answer(
+            "LOOP\nBANK и DUEL работают только в TON testnet.", reply_markup=keyboard
+        )
 
     @router.inline_query()
     async def inline_duel(query: InlineQuery) -> None:
@@ -74,9 +76,7 @@ def create_dispatcher(
             return
         offer_id = int(match.group(1))
         async with session_factory() as db:
-            creator = await db.scalar(
-                select(User).where(User.telegram_id == query.from_user.id)
-            )
+            creator = await db.scalar(select(User).where(User.telegram_id == query.from_user.id))
             if creator is None:
                 await query.answer([], cache_time=1, is_personal=True)
                 return
@@ -85,8 +85,8 @@ def create_dispatcher(
                     MatchmakingOffer.user_id == creator.id,
                     MatchmakingOffer.onchain_offer_id == offer_id,
                     MatchmakingOffer.network == settings.ton_network_id,
-                    MatchmakingOffer.contract_address == settings.ton_contract_address,
-                    MatchmakingOffer.chance_bps == 5_000,
+                    MatchmakingOffer.contract_address == settings.effective_duel_contract_address,
+                    MatchmakingOffer.mode == "direct",
                     MatchmakingOffer.state == OfferState.OPEN.value,
                     MatchmakingOffer.expires_at > datetime.now(UTC),
                 )
@@ -129,27 +129,21 @@ def create_dispatcher(
                 )
                 db.add(challenge)
                 await db.flush()
-                await record_cycle_event(
-                    db,
-                    user_id=creator.id,
-                    actor_user_id=creator.id,
-                    kind=CycleEventKind.INVITE_CREATED,
-                    title="Вызов отправлен",
-                    proof_type=ProofType.TELEGRAM,
-                    proof_ref=challenge.code,
-                    dedupe_key=f"challenge-created:{challenge.code}",
-                )
             await db.commit()
-        amount = format_gram(offer.stake_nano)
+        amount = format_gram(offer.opponent_stake_nano)
+        receiver_chance = 10_000 - offer.chance_bps
+        profit = format_gram(offer.payout_nano - offer.opponent_stake_nano)
         deep_link = f"https://t.me/{settings.bot_username}?startapp=duel_{challenge.code}"
         article = InlineQueryResultArticle(
             id=challenge.code,
             title="LOOP DUEL",
-            description=f"{amount} GRAM · равные условия",
+            description=f"Внести {amount} GRAM · шанс {receiver_chance // 100}%",
             input_message_content=InputTextMessageContent(
                 message_text=(
                     f"LOOP DUEL\n\n{creator.first_name} бросает тебе вызов.\n\n"
-                    f"Вклад: {amount} GRAM\nУсловия: 50 / 50\n\n"
+                    f"Твоя ставка: {amount} GRAM\n"
+                    f"Твой шанс: {receiver_chance // 100}%\n"
+                    f"Чистая прибыль при победе: {profit} GRAM\n\n"
                     "Прими вызов и подтверди участие в LOOP."
                 )
             ),
@@ -184,9 +178,7 @@ async def configure_bot(bot: Bot, settings: Settings) -> None:
             await bot.set_my_name(BOT_NAME)
             await bot.set_my_description(BOT_DESCRIPTION)
             await bot.set_my_short_description(BOT_SHORT_DESCRIPTION)
-            await bot.set_my_commands(
-                [BotCommand(command="start", description="Открыть LOOP")]
-            )
+            await bot.set_my_commands([BotCommand(command="start", description="Открыть LOOP")])
             await bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(
                     text=BOT_MENU_TEXT,

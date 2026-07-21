@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     contract = commands.add_parser("contract", help="Verify active state and deployed code hash")
+    contract.add_argument("--mode", choices=("bank", "duel"), default="duel")
     contract.add_argument("--address", help="Contract address; defaults to LOOP configuration")
 
     wallet = commands.add_parser("wallet", help="Read a native GRAM balance")
@@ -48,10 +49,23 @@ async def run(args: argparse.Namespace) -> int:
         client = TonClient(http, settings)
         try:
             if args.command == "contract":
-                address = str(args.address or settings.ton_contract_address)
+                configured_address = (
+                    settings.bank_contract_address
+                    if args.mode == "bank"
+                    else settings.effective_duel_contract_address
+                )
+                expected_hash = (
+                    settings.bank_contract_code_hash
+                    if args.mode == "bank"
+                    else settings.effective_duel_contract_code_hash
+                )
+                address = str(args.address or configured_address)
                 if not address:
                     raise TonProviderError("contract address is required")
-                result: Any = asdict(await client.get_contract_state(address))
+                state = await client.get_contract_state(address)
+                if expected_hash and state.code_hash != expected_hash.removeprefix("0x").upper():
+                    raise TonProviderError(f"{args.mode} contract code hash mismatch")
+                result: Any = {"mode": args.mode, **asdict(state)}
             elif args.command == "wallet":
                 result = {
                     "address": str(args.address),
@@ -59,14 +73,10 @@ async def run(args: argparse.Namespace) -> int:
                 }
             elif args.command == "transaction":
                 result = asdict(
-                    await client.verify_transaction(
-                        str(args.transaction_hash), str(args.account)
-                    )
+                    await client.verify_transaction(str(args.transaction_hash), str(args.account))
                 )
             else:
-                result = asdict(
-                    await client.get_jetton_wallet(str(args.owner), str(args.master))
-                )
+                result = asdict(await client.get_jetton_wallet(str(args.owner), str(args.master)))
         except TonProviderError as exc:
             print(json.dumps({"verified": False, "error": str(exc)}, ensure_ascii=False))
             return 1

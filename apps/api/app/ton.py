@@ -43,18 +43,28 @@ class JettonWalletState:
 
 
 class TonClient:
-    def __init__(self, http: httpx.AsyncClient, settings: Settings) -> None:
+    def __init__(
+        self,
+        http: httpx.AsyncClient,
+        settings: Settings,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ) -> None:
         self.http = http
         self.settings = settings
+        self.base_url = (base_url or settings.toncenter_url).rstrip("/")
+        self.api_key = (
+            api_key if api_key is not None else settings.toncenter_api_key.get_secret_value()
+        )
 
     @property
     def headers(self) -> dict[str, str]:
-        key = self.settings.toncenter_api_key.get_secret_value()
-        return {"X-API-Key": key} if key else {}
+        return {"X-API-Key": self.api_key} if self.api_key else {}
 
     async def get_wallet_public_key(self, address: str) -> str:
         response = await self.http.post(
-            f"{self.settings.toncenter_url}/api/v2/runGetMethod",
+            f"{self.base_url}/api/v2/runGetMethod",
             headers=self.headers,
             json={"address": address, "method": "get_public_key", "stack": []},
         )
@@ -72,7 +82,7 @@ class TonClient:
 
     async def get_native_balance(self, address: str) -> int:
         response = await self.http.get(
-            f"{self.settings.toncenter_url}/api/v2/getAddressBalance",
+            f"{self.base_url}/api/v2/getAddressBalance",
             headers=self.headers,
             params={"address": address},
         )
@@ -84,13 +94,11 @@ class TonClient:
         except (KeyError, TypeError, ValueError) as exc:
             raise TonProviderError("malformed TON balance response") from exc
 
-    async def get_jetton_wallet(
-        self, owner_address: str, jetton_master: str
-    ) -> JettonWalletState:
+    async def get_jetton_wallet(self, owner_address: str, jetton_master: str) -> JettonWalletState:
         owner = normalize_address(owner_address)
         master = normalize_address(jetton_master)
         response = await self.http.get(
-            f"{self.settings.toncenter_url}/api/v3/jetton/wallets",
+            f"{self.base_url}/api/v3/jetton/wallets",
             headers=self.headers,
             params={"owner_address": owner, "jetton_master": master, "limit": 2},
         )
@@ -127,7 +135,7 @@ class TonClient:
 
     async def get_contract_state(self, address: str) -> ContractState:
         response = await self.http.get(
-            f"{self.settings.toncenter_url}/api/v3/accountStates",
+            f"{self.base_url}/api/v3/accountStates",
             headers=self.headers,
             params={"address": address, "include_boc": "false"},
         )
@@ -176,7 +184,7 @@ class TonClient:
         normalize_hash(transaction_hash)
         expected_account = normalize_address(account)
         response = await self.http.get(
-            f"{self.settings.toncenter_url}/api/v3/transactions",
+            f"{self.base_url}/api/v3/transactions",
             headers=self.headers,
             params={"hash": transaction_hash, "limit": 2},
         )
@@ -229,7 +237,7 @@ class TonClient:
 
 def normalize_address(value: str) -> str:
     try:
-        return Address(value).to_string(is_user_friendly=False).lower()
+        return str(Address(value).to_string(is_user_friendly=False)).lower()
     except Exception as exc:
         raise TonProviderError("malformed TON address") from exc
 
