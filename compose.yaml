@@ -112,7 +112,13 @@ services:
     cpus: 0.75
     stop_grace_period: 30s
     healthcheck:
-      disable: true
+      test:
+        - CMD-SHELL
+        - python -c "import os,time; p='/tmp/loop-worker-heartbeat'; assert os.path.exists(p) and time.time()-os.path.getmtime(p)<90"
+      interval: 20s
+      timeout: 5s
+      start_period: 30s
+      retries: 4
 
   migrate:
     <<: *api-environment

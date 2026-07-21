@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+exec 9>/opt/loop/deploy.lock
+if ! flock -n 9; then
+  echo "another LOOP deployment is running" >&2
+  exit 75
+fi
+
 release_id=${1:?release id is required}
 if [[ ! $release_id =~ ^[0-9a-f]{40}$ ]]; then
   echo "invalid release id" >&2
@@ -20,9 +26,12 @@ cd "$release_dir"
 export LOOP_IMAGE_TAG="$release_id"
 docker compose --project-name loop --env-file .env.production build --pull api
 docker compose --project-name loop --env-file .env.production up -d --wait db redis
+if [[ -L "$loop_root/current" ]] && docker compose --project-name loop --env-file .env.production ps --status running --services | grep -qx db; then
+  "$loop_root/current/deploy/backup-postgres.sh"
+fi
 docker compose --project-name loop --env-file .env.production run --rm migrate
 docker compose --project-name loop --env-file .env.production up -d api worker
-docker compose --project-name loop --env-file .env.production up -d --wait --wait-timeout 120 api
+docker compose --project-name loop --env-file .env.production up -d --wait --wait-timeout 120 api worker
 curl --fail --silent --show-error http://127.0.0.1:8000/ready >/dev/null
 
 previous_release=""
@@ -39,4 +48,11 @@ if ! sudo nginx -t; then
   exit 1
 fi
 sudo systemctl reload nginx
-curl --fail --silent --show-error https://144-31-30-62.sslip.io/ready >/dev/null
+if ! curl --fail --silent --show-error https://144-31-30-62.sslip.io/ready >/dev/null; then
+  if [[ -n $previous_release ]]; then
+    ln -sfn "$previous_release" "$loop_root/current.next"
+    mv -Tf "$loop_root/current.next" "$loop_root/current"
+    sudo systemctl reload nginx
+  fi
+  exit 1
+fi
