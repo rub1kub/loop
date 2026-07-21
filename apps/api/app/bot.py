@@ -7,6 +7,7 @@ from aiogram import Bot, Dispatcher, Router
 from aiogram.exceptions import TelegramRetryAfter
 from aiogram.filters import CommandStart
 from aiogram.types import (
+    BotCommand,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InlineQuery,
@@ -32,6 +33,14 @@ from .models import (
 )
 
 INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
+BOT_NAME = "LOOP"
+BOT_DESCRIPTION = (
+    "LOOP — социальное Telegram Mini App в TON. Запускай живой цикл BANK, "
+    "бросай друзьям честные 50/50 DUEL-вызовы и проверяй on-chain события. "
+    "Средства остаются во внешнем кошельке."
+)
+BOT_SHORT_DESCRIPTION = "Живые BANK-циклы, 50/50 DUEL-вызовы и on-chain события в TON."
+BOT_MENU_TEXT = "Открыть LOOP"
 
 
 def format_gram(nano: int) -> str:
@@ -172,9 +181,16 @@ async def configure_bot(bot: Bot, settings: Settings) -> None:
             await asyncio.sleep(float(exc.retry_after) + 0.25)
     for attempt in range(3):
         try:
+            await bot.set_my_name(BOT_NAME)
+            await bot.set_my_description(BOT_DESCRIPTION)
+            await bot.set_my_short_description(BOT_SHORT_DESCRIPTION)
+            await bot.set_my_commands(
+                [BotCommand(command="start", description="Открыть LOOP")]
+            )
             await bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(
-                    text="LOOP", web_app=WebAppInfo(url=settings.public_origin)
+                    text=BOT_MENU_TEXT,
+                    web_app=WebAppInfo(url=settings.public_origin),
                 )
             )
             break
