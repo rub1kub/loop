@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  ArrowSquareOut,
   ClockCounterClockwise,
   ShieldCheck,
   TelegramLogo,
@@ -162,24 +163,45 @@ export function BankScreen({
                 </button>
               </div>
               <div className="event-list">
-                {cycle.events.map((event) => (
-                  <article className="event-row" key={event.id}>
-                    <span className="event-proof-icon">
-                      <ProofIcon event={event} />
-                    </span>
-                    <div>
-                      <strong>{event.title}</strong>
-                      <small>
-                        {event.proof_type.startsWith('ton_')
-                          ? 'Подтверждено в TON'
-                          : event.proof_type === 'telegram'
-                            ? 'Подтверждено Telegram'
-                            : 'Событие LOOP'}
-                      </small>
-                    </div>
-                    <time>{relativeTime(event.created_at, now)}</time>
-                  </article>
-                ))}
+                {cycle.events.map((event) => {
+                  const content = (
+                    <>
+                      <span className="event-proof-icon">
+                        <ProofIcon event={event} />
+                      </span>
+                      <div>
+                        <strong>{event.title}</strong>
+                        <small>
+                          {event.proof_type.startsWith('ton_')
+                            ? 'Подтверждено в TON'
+                            : event.proof_type === 'telegram'
+                              ? 'Подтверждено Telegram'
+                              : 'Событие LOOP'}
+                        </small>
+                      </div>
+                      <span className="event-meta">
+                        <time>{relativeTime(event.created_at, now)}</time>
+                        {event.proof_url && <ArrowSquareOut aria-hidden="true" />}
+                      </span>
+                    </>
+                  );
+                  return event.proof_url ? (
+                    <a
+                      className="event-row"
+                      href={event.proof_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      key={event.id}
+                      onClick={() => haptic('light')}
+                    >
+                      {content}
+                    </a>
+                  ) : (
+                    <article className="event-row" key={event.id}>
+                      {content}
+                    </article>
+                  );
+                })}
               </div>
             </motion.div>
           </motion.div>

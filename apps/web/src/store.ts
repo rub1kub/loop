@@ -38,6 +38,7 @@ const demoProfile: Profile = {
               title: 'Миша принял вызов',
               proof_type: 'telegram',
               proof_ref: 'demo-invite',
+              proof_url: null,
               created_at: new Date(mockNow - 2 * 60_000).toISOString(),
             },
             {
@@ -46,6 +47,7 @@ const demoProfile: Profile = {
               title: 'Соперник найден',
               proof_type: 'ton_transaction',
               proof_ref: 'demo-chain-proof',
+              proof_url: 'https://testnet.tonviewer.com/transaction/demo-chain-proof',
               created_at: new Date(mockNow - 42 * 60_000).toISOString(),
             },
             {
@@ -54,6 +56,7 @@ const demoProfile: Profile = {
               title: 'Цикл начат',
               proof_type: 'system',
               proof_ref: 'cycle-demo-04',
+              proof_url: null,
               created_at: new Date(mockNow - 2 * 86_400_000).toISOString(),
             },
           ],
@@ -191,6 +194,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
               title: 'Цикл начат',
               proof_type: 'system',
               proof_ref: `cycle-demo-${now}`,
+              proof_url: null,
               created_at: new Date(now).toISOString(),
             },
           ],

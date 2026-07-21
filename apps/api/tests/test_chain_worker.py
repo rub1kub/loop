@@ -13,7 +13,19 @@ from app.chain_worker import (
     decode_body,
 )
 from app.config import get_settings
-from app.models import ChainEvent, Duel, DuelState, MatchmakingOffer, OfferState, User, Wallet
+from app.cycles import start_cycle
+from app.models import (
+    ChainEvent,
+    ChallengeState,
+    CycleEvent,
+    Duel,
+    DuelChallenge,
+    DuelState,
+    MatchmakingOffer,
+    OfferState,
+    User,
+    Wallet,
+)
 
 
 def body_b64(opcode: int, fields: list[tuple[int, int | str]]) -> str:
@@ -36,10 +48,12 @@ def transaction(
     timestamp: int = 1_800_000_000,
 ) -> dict[str, object]:
     return {
+        "account": "0:" + "11" * 32,
         "lt": str(lt),
         "hash": f"tx-{lt}",
         "now": timestamp,
         "emulated": False,
+        "mc_block_seqno": 12_345,
         "description": {
             "aborted": False,
             "compute_ph": {"success": True},
@@ -90,6 +104,8 @@ async def test_projection_is_idempotent_and_uses_terminal_payout(app) -> None:
         second_user = User(telegram_id=1002, first_name="Second")
         db.add_all([first_user, second_user])
         await db.flush()
+        await start_cycle(db, first_user)
+        await start_cycle(db, second_user)
         first_wallet = Wallet(
             user_id=first_user.id,
             network=-3,
@@ -132,7 +148,22 @@ async def test_projection_is_idempotent_and_uses_terminal_payout(app) -> None:
             expires_at=expires,
         )
         db.add_all([counter, newcomer])
+        await db.flush()
+        challenge = DuelChallenge(
+            code="bound-chain-challenge",
+            creator_user_id=first_user.id,
+            creator_offer_id=counter.id,
+            accepted_by_user_id=second_user.id,
+            state=ChallengeState.FUNDING.value,
+            expires_at=expires,
+        )
+        db.add(challenge)
         await db.commit()
+
+        unfinalized = transaction(9, open_body(100, 900))
+        unfinalized.pop("mc_block_seqno")
+        assert await apply_transaction(db, settings, unfinalized) is False
+        assert await db.scalar(select(func.count()).select_from(ChainEvent)) == 0
 
         opened = transaction(10, open_body(100, 900))
         assert await apply_transaction(db, settings, opened) is True
@@ -142,6 +173,8 @@ async def test_projection_is_idempotent_and_uses_terminal_payout(app) -> None:
         assert duel.onchain_duel_id == 900
         assert duel.offer_a_id == newcomer.id
         assert duel.offer_b_id == counter.id
+        await db.refresh(challenge)
+        assert challenge.state == ChallengeState.MATCHED.value
 
         assert await apply_transaction(db, settings, opened) is False
         await db.commit()
@@ -164,3 +197,33 @@ async def test_projection_is_idempotent_and_uses_terminal_payout(app) -> None:
         assert duel.winner_wallet == second_wallet.address
         assert counter.state == OfferState.SETTLED.value
         assert newcomer.state == OfferState.SETTLED.value
+        first_events = list(
+            (
+                await db.scalars(
+                    select(CycleEvent)
+                    .where(CycleEvent.user_id == first_user.id)
+                    .order_by(CycleEvent.created_at)
+                )
+            ).all()
+        )
+        second_events = list(
+            (
+                await db.scalars(
+                    select(CycleEvent)
+                    .where(CycleEvent.user_id == second_user.id)
+                    .order_by(CycleEvent.created_at)
+                )
+            ).all()
+        )
+        assert [event.kind for event in first_events] == [
+            "cycle_started",
+            "duel_matched",
+            "duel_settled",
+        ]
+        assert [event.kind for event in second_events] == [
+            "cycle_started",
+            "duel_funded",
+            "duel_matched",
+            "duel_settled",
+        ]
+        assert {event.proof_ref for event in second_events[1:]} == {"tx-10", "tx-12"}

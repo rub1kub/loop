@@ -72,6 +72,7 @@ class CycleEventView(BaseModel):
     title: str
     proof_type: str
     proof_ref: str | None
+    proof_url: str | None
     created_at: datetime
 
 
@@ -138,6 +139,8 @@ class OfferView(BaseModel):
     stake_nano: int
     state: str
     expires_at: datetime
+    funding_tx_hash: str | None
+    funding_proof_url: str | None
 
 
 class OfferQuoteResponse(BaseModel):
@@ -155,6 +158,29 @@ class DuelView(BaseModel):
     total_pool_nano: int
     reveal_deadline: datetime
     winner_wallet: str | None
+    settled_tx_hash: str | None
+    settlement_proof_url: str | None
+
+
+class ContractStateView(BaseModel):
+    network: int
+    address: str
+    status: str
+    balance_nano: int
+    code_hash: str
+    code_hash_matches: bool
+    last_transaction_hash: str | None
+    last_transaction_url: str | None
+    wallet_balance_nano: int | None
+
+
+class JettonBalanceView(BaseModel):
+    network: int
+    owner_address: str
+    jetton_master: str
+    jetton_wallet: str | None
+    balance_nano: int
+    verified: bool
 
 
 class ActionIntent(BaseModel):

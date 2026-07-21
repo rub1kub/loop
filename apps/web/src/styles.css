@@ -855,6 +855,8 @@ button:disabled {
   align-items: center;
   gap: 11px;
   border-top: 1px solid #292929;
+  color: inherit;
+  text-decoration: none;
 }
 
 .event-row > div {
@@ -870,6 +872,18 @@ button:disabled {
 .event-row small {
   color: #696969;
   font-size: 8px;
+}
+
+.event-meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.event-meta svg {
+  width: 14px;
+  height: 14px;
+  color: #777;
 }
 
 .settings-row {

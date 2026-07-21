@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import Duel, MatchmakingOffer, OfferState, User, Wallet
+from app.ton import ContractState, JettonWalletState
 
 
 def signed_init_data() -> str:
@@ -161,3 +162,63 @@ async def test_duel_view_and_reveal_intent_never_expose_secret(client, app) -> N
     assert payload["operation"] == "reveal"
     assert payload["offer_id"] == 701
     assert "secret" not in payload
+
+
+@pytest.mark.asyncio
+async def test_onchain_diagnostics_return_verified_network_data(client, app) -> None:
+    class FakeTonClient:
+        async def get_contract_state(self, address: str) -> ContractState:
+            return ContractState(
+                address=address,
+                status="active",
+                balance_nano=123,
+                code_hash="AA" * 32,
+                last_transaction_hash="proof-hash",
+                last_transaction_lt=99,
+            )
+
+        async def get_native_balance(self, address: str) -> int:
+            assert address == "0:" + "22" * 32
+            return 456
+
+        async def get_jetton_wallet(
+            self, owner_address: str, jetton_master: str
+        ) -> JettonWalletState:
+            return JettonWalletState(
+                owner_address=owner_address,
+                jetton_master=jetton_master,
+                wallet_address="0:" + "44" * 32,
+                balance_nano=789,
+            )
+
+    app.state.ton_client = FakeTonClient()
+    auth = await client.post("/api/v1/auth/telegram", json={"init_data": signed_init_data()})
+    headers = {"Authorization": f"Bearer {auth.json()['access_token']}"}
+
+    contract = await client.get("/api/v1/onchain/contract", headers=headers)
+    assert contract.status_code == 200
+    assert contract.json()["status"] == "active"
+    assert contract.json()["wallet_balance_nano"] is None
+    assert contract.json()["last_transaction_url"].startswith("https://testnet.tonviewer.com/")
+    master = "0:" + "33" * 32
+    assert (
+        await client.get(f"/api/v1/onchain/jettons/{master}", headers=headers)
+    ).status_code == 409
+
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == 777000111))
+        db.add(
+            Wallet(
+                user_id=user.id,
+                network=-3,
+                address="0:" + "22" * 32,
+                public_key="33" * 32,
+            )
+        )
+        await db.commit()
+    contract = await client.get("/api/v1/onchain/contract", headers=headers)
+    assert contract.json()["wallet_balance_nano"] == 456
+    jetton = await client.get(f"/api/v1/onchain/jettons/{master}", headers=headers)
+    assert jetton.status_code == 200
+    assert jetton.json()["verified"] is True
+    assert jetton.json()["balance_nano"] == 789

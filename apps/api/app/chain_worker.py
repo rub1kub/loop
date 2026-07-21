@@ -11,16 +11,22 @@ from sqlalchemy.exc import IntegrityError
 from tonsdk.boc import Cell  # type: ignore[import-untyped]
 
 from .config import get_settings
+from .cycles import record_cycle_event
 from .database import create_database
 from .models import (
     ChainCheckpoint,
     ChainEvent,
+    ChallengeState,
+    CycleEventKind,
     Duel,
+    DuelChallenge,
     DuelState,
     MatchmakingOffer,
     OfferState,
+    ProofType,
     Wallet,
 )
+from .ton import TonProviderError, normalize_address
 
 logger = structlog.get_logger()
 OPEN_OFFER = 0x4C4F4F01
@@ -32,6 +38,13 @@ EXPIRE_DUEL = 0x4C4F4F06
 DUEL_PAYOUT = 0x4C4F4F11
 OFFER_REFUND = 0x4C4F4F12
 PROTOCOL_FEE = 0x4C4F4F13
+
+
+def has_masterchain_finality(transaction: dict[str, Any]) -> bool:
+    try:
+        return int(transaction.get("mc_block_seqno") or 0) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def decode_body(body_b64: str) -> dict[str, int]:
@@ -103,6 +116,28 @@ async def load_duel_offers(
     )
 
 
+async def record_offer_event(
+    db: Any,
+    offer: MatchmakingOffer,
+    *,
+    kind: CycleEventKind,
+    title: str,
+    transaction_hash: str,
+    dedupe_key: str,
+    actor_user_id: str | None = None,
+) -> None:
+    await record_cycle_event(
+        db,
+        user_id=offer.user_id,
+        actor_user_id=actor_user_id,
+        kind=kind,
+        title=title,
+        proof_type=ProofType.TON_TRANSACTION,
+        proof_ref=transaction_hash,
+        dedupe_key=dedupe_key,
+    )
+
+
 async def match_projection(
     db: Any,
     settings: Any,
@@ -126,6 +161,20 @@ async def match_projection(
         return
     first.state = OfferState.MATCHED.value
     second.state = OfferState.MATCHED.value
+    challenge = await db.scalar(
+        select(DuelChallenge).where(
+            DuelChallenge.creator_offer_id.in_([first.id, second.id]),
+            DuelChallenge.state.in_(
+                [
+                    ChallengeState.OPEN.value,
+                    ChallengeState.ACCEPTED.value,
+                    ChallengeState.FUNDING.value,
+                ]
+            ),
+        )
+    )
+    if challenge is not None:
+        challenge.state = ChallengeState.MATCHED.value
     offer_a, offer_b = sorted([first, second], key=lambda item: item.onchain_offer_id)
     duel_id = offer_b.onchain_offer_id
     existing_duel = await db.scalar(
@@ -147,6 +196,24 @@ async def match_projection(
             offer_b_id=offer_b.id,
             reveal_deadline=chain_time + timedelta(seconds=settings.reveal_ttl_seconds),
         )
+    )
+    await record_offer_event(
+        db,
+        first,
+        kind=CycleEventKind.DUEL_MATCHED,
+        title="Соперник найден",
+        transaction_hash=transaction["hash"],
+        dedupe_key=f"duel-matched:{offer_b.onchain_offer_id}",
+        actor_user_id=second.user_id,
+    )
+    await record_offer_event(
+        db,
+        second,
+        kind=CycleEventKind.DUEL_MATCHED,
+        title="Соперник найден",
+        transaction_hash=transaction["hash"],
+        dedupe_key=f"duel-matched:{offer_b.onchain_offer_id}",
+        actor_user_id=first.user_id,
     )
 
 
@@ -175,6 +242,8 @@ async def settle_projection(
         duel.state = DuelState.REFUNDED.value
         first.state = OfferState.REFUNDED.value
         second.state = OfferState.REFUNDED.value
+        event_kind = CycleEventKind.DUEL_REFUNDED
+        event_title = "Вклады возвращены контрактом"
     else:
         winner_offer = first if first.onchain_offer_id == winner_offer_id else second
         if winner_offer.onchain_offer_id != winner_offer_id:
@@ -184,11 +253,31 @@ async def settle_projection(
         duel.winner_wallet = wallet.address if wallet else None
         first.state = OfferState.SETTLED.value
         second.state = OfferState.SETTLED.value
+        event_kind = CycleEventKind.DUEL_SETTLED
+        event_title = "Результат дуэли подтверждён"
     duel.settled_tx_hash = transaction["hash"]
     duel.settled_at = timestamp
+    for offer, opponent in ((first, second), (second, first)):
+        await record_offer_event(
+            db,
+            offer,
+            kind=event_kind,
+            title=event_title,
+            transaction_hash=transaction["hash"],
+            dedupe_key=f"duel-terminal:{duel.onchain_duel_id}",
+            actor_user_id=opponent.user_id,
+        )
 
 
 async def apply_transaction(db: Any, settings: Any, transaction: dict[str, Any]) -> bool:
+    try:
+        account_matches = normalize_address(str(transaction.get("account"))) == normalize_address(
+            settings.ton_contract_address
+        )
+    except TonProviderError:
+        return False
+    if not account_matches or not has_masterchain_finality(transaction):
+        return False
     description = transaction.get("description", {})
     compute = description.get("compute_ph") or {}
     action = description.get("action") or {}
@@ -249,6 +338,14 @@ async def apply_transaction(db: Any, settings: Any, transaction: dict[str, Any])
                 OfferState.MATCHED.value if decoded["counter_offer_id"] else OfferState.OPEN.value
             )
             offer.funding_tx_hash = transaction["hash"]
+            await record_offer_event(
+                db,
+                offer,
+                kind=CycleEventKind.DUEL_FUNDED,
+                title="Участие подтверждено в TON",
+                transaction_hash=transaction["hash"],
+                dedupe_key=f"duel-funded:{offer.onchain_offer_id}",
+            )
             if decoded["counter_offer_id"]:
                 await match_projection(
                     db,
@@ -285,6 +382,32 @@ async def apply_transaction(db: Any, settings: Any, transaction: dict[str, Any])
         )
         if offer:
             offer.revealed = True
+    for refund in (item for item in outgoing if item["opcode"] == OFFER_REFUND):
+        refunded_offer = await db.scalar(
+            select(MatchmakingOffer).where(
+                MatchmakingOffer.onchain_offer_id == refund["offer_id"],
+                MatchmakingOffer.network == settings.ton_network_id,
+            )
+        )
+        if refunded_offer is None:
+            continue
+        refunded_offer.state = OfferState.REFUNDED.value
+        challenge = await db.scalar(
+            select(DuelChallenge).where(
+                DuelChallenge.creator_offer_id == refunded_offer.id,
+                DuelChallenge.state != ChallengeState.MATCHED.value,
+            )
+        )
+        if challenge is not None:
+            challenge.state = ChallengeState.EXPIRED.value
+        await record_offer_event(
+            db,
+            refunded_offer,
+            kind=CycleEventKind.DUEL_REFUNDED,
+            title="Вклад возвращён контрактом",
+            transaction_hash=transaction["hash"],
+            dedupe_key=f"offer-refunded:{refunded_offer.onchain_offer_id}",
+        )
     payout = next((item for item in outgoing if item["opcode"] == DUEL_PAYOUT), None)
     if payout:
         await settle_projection(
@@ -341,6 +464,8 @@ async def run_once(http: httpx.AsyncClient, session_factory: Any, settings: Any)
         checkpoint = await db.get(ChainCheckpoint, key) or ChainCheckpoint(key=key, last_lt=0)
         db.add(checkpoint)
         for transaction in transactions:
+            if not has_masterchain_finality(transaction):
+                break
             if await apply_transaction(db, settings, transaction):
                 applied += 1
             checkpoint.last_lt = max(checkpoint.last_lt, int(transaction["lt"]) + 1)
@@ -352,6 +477,20 @@ async def run_once(http: httpx.AsyncClient, session_factory: Any, settings: Any)
                 MatchmakingOffer.expires_at < datetime.now(UTC),
             )
             .values(state=OfferState.REJECTED.value)
+        )
+        await db.execute(
+            update(DuelChallenge)
+            .where(
+                DuelChallenge.state.in_(
+                    [
+                        ChallengeState.OPEN.value,
+                        ChallengeState.ACCEPTED.value,
+                        ChallengeState.FUNDING.value,
+                    ]
+                ),
+                DuelChallenge.expires_at < datetime.now(UTC),
+            )
+            .values(state=ChallengeState.EXPIRED.value)
         )
         await db.commit()
     return applied

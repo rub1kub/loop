@@ -29,6 +29,7 @@ const cycleEventSchema = z.object({
   title: z.string(),
   proof_type: z.enum(['system', 'telegram', 'ton_transaction', 'ton_state']),
   proof_ref: z.string().nullable(),
+  proof_url: z.string().url().nullable(),
   created_at: z.string(),
 });
 

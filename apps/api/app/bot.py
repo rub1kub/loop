@@ -88,6 +88,12 @@ def create_dispatcher(
             challenge = await db.scalar(
                 select(DuelChallenge).where(DuelChallenge.creator_offer_id == offer.id)
             )
+            if challenge is not None and (
+                challenge.state != ChallengeState.OPEN.value
+                or as_utc(challenge.expires_at) <= datetime.now(UTC)
+            ):
+                await query.answer([], cache_time=1, is_personal=True)
+                return
             active_challenges = await db.scalar(
                 select(func.count())
                 .select_from(DuelChallenge)

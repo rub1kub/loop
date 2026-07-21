@@ -72,6 +72,7 @@ export interface CycleEvent {
   title: string;
   proof_type: 'system' | 'telegram' | 'ton_transaction' | 'ton_state';
   proof_ref: string | null;
+  proof_url: string | null;
   created_at: string;
 }
 
@@ -102,6 +103,8 @@ export interface Offer {
   stake_nano: number;
   state: string;
   expires_at: string;
+  funding_tx_hash: string | null;
+  funding_proof_url: string | null;
 }
 
 export interface OfferQuote {
@@ -132,6 +135,8 @@ export interface Duel {
   total_pool_nano: number;
   reveal_deadline: string;
   winner_wallet: string | null;
+  settled_tx_hash: string | null;
+  settlement_proof_url: string | null;
 }
 
 export interface ActionIntent {

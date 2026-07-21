@@ -37,9 +37,11 @@ from .schemas import (
     BankCycleStart,
     BankCycleView,
     ContractCall,
+    ContractStateView,
     CycleEventView,
     DuelView,
     InviteView,
+    JettonBalanceView,
     OfferQuoteRequest,
     OfferQuoteResponse,
     OfferView,
@@ -58,7 +60,7 @@ from .security import (
     validate_telegram_init_data,
     verify_ton_proof,
 )
-from .ton import TonProviderError
+from .ton import TonProviderError, explorer_transaction_url
 
 router = APIRouter(prefix="/api/v1")
 
@@ -98,18 +100,24 @@ def user_view(user: User) -> UserView:
     )
 
 
-def cycle_event_view(event: CycleEvent) -> CycleEventView:
+def cycle_event_view(event: CycleEvent, network: int) -> CycleEventView:
+    proof_url = (
+        explorer_transaction_url(network, event.proof_ref)
+        if event.proof_type == ProofType.TON_TRANSACTION.value and event.proof_ref
+        else None
+    )
     return CycleEventView(
         id=event.id,
         kind=event.kind,
         title=event.title,
         proof_type=event.proof_type,
         proof_ref=event.proof_ref,
+        proof_url=proof_url,
         created_at=event.created_at,
     )
 
 
-def bank_cycle_view(cycle: BankCycle, events: list[CycleEvent]) -> BankCycleView:
+def bank_cycle_view(cycle: BankCycle, events: list[CycleEvent], network: int) -> BankCycleView:
     return BankCycleView(
         id=cycle.id,
         sequence_number=cycle.sequence_number,
@@ -120,7 +128,25 @@ def bank_cycle_view(cycle: BankCycle, events: list[CycleEvent]) -> BankCycleView
         started_at=cycle.started_at,
         ends_at=cycle.ends_at,
         completed_at=cycle.completed_at,
-        events=[cycle_event_view(event) for event in events],
+        events=[cycle_event_view(event, network) for event in events],
+    )
+
+
+def offer_view(offer: MatchmakingOffer) -> OfferView:
+    return OfferView(
+        id=offer.id,
+        onchain_offer_id=offer.onchain_offer_id,
+        chance_bps=offer.chance_bps,
+        total_pool_nano=offer.total_pool_nano,
+        stake_nano=offer.stake_nano,
+        state=offer.state,
+        expires_at=offer.expires_at,
+        funding_tx_hash=offer.funding_tx_hash,
+        funding_proof_url=(
+            explorer_transaction_url(offer.network, offer.funding_tx_hash)
+            if offer.funding_tx_hash
+            else None
+        ),
     )
 
 
@@ -184,7 +210,7 @@ async def authenticate(body: TelegramAuthRequest, db: Db, settings: Config) -> A
 
 
 @router.get("/me", response_model=ProfileView)
-async def get_me(user: CurrentUser, db: Db) -> ProfileView:
+async def get_me(user: CurrentUser, db: Db, settings: Config) -> ProfileView:
     wallet = await db.scalar(
         select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True))
     )
@@ -202,7 +228,7 @@ async def get_me(user: CurrentUser, db: Db) -> ProfileView:
             if wallet
             else None
         ),
-        bank=bank_cycle_view(cycle, events) if cycle else None,
+        bank=bank_cycle_view(cycle, events, settings.ton_network_id) if cycle else None,
     )
 
 
@@ -215,7 +241,7 @@ async def update_settings(body: SettingsUpdate, user: CurrentUser, db: Db) -> Us
 
 @router.post("/bank/cycles", response_model=BankCycleView, status_code=status.HTTP_201_CREATED)
 async def create_bank_cycle(
-    body: BankCycleStart, user: CurrentUser, db: Db
+    body: BankCycleStart, user: CurrentUser, db: Db, settings: Config
 ) -> BankCycleView:
     try:
         cycle = await start_cycle(db, user, body.goal_events)
@@ -224,17 +250,17 @@ async def create_bank_cycle(
     await db.commit()
     await db.refresh(cycle)
     events = await cycle_events(db, user.id, cycle.id)
-    return bank_cycle_view(cycle, events)
+    return bank_cycle_view(cycle, events, settings.ton_network_id)
 
 
 @router.get("/bank/cycles/current", response_model=BankCycleView | None)
-async def current_bank_cycle(user: CurrentUser, db: Db) -> BankCycleView | None:
+async def current_bank_cycle(user: CurrentUser, db: Db, settings: Config) -> BankCycleView | None:
     cycle = await latest_cycle(db, user.id)
     if cycle is None:
         return None
     events = await cycle_events(db, user.id, cycle.id)
     await db.commit()
-    return bank_cycle_view(cycle, events)
+    return bank_cycle_view(cycle, events, settings.ton_network_id)
 
 
 @router.post("/wallet/challenge", response_model=WalletChallengeResponse)
@@ -326,6 +352,80 @@ async def wallet_verify(
     )
 
 
+@router.get("/onchain/contract", response_model=ContractStateView)
+async def onchain_contract(
+    user: CurrentUser, db: Db, request: Request, settings: Config
+) -> ContractStateView:
+    wallet = await db.scalar(
+        select(Wallet).where(
+            Wallet.user_id == user.id,
+            Wallet.network == settings.ton_network_id,
+            Wallet.active.is_(True),
+        )
+    )
+    try:
+        contract = await request.app.state.ton_client.get_contract_state(
+            settings.ton_contract_address
+        )
+        wallet_balance = (
+            await request.app.state.ton_client.get_native_balance(wallet.address)
+            if wallet
+            else None
+        )
+    except TonProviderError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    expected_hash = settings.ton_contract_code_hash.removeprefix("0x").upper()
+    return ContractStateView(
+        network=settings.ton_network_id,
+        address=contract.address,
+        status=contract.status,
+        balance_nano=contract.balance_nano,
+        code_hash=contract.code_hash,
+        code_hash_matches=bool(expected_hash)
+        and secrets.compare_digest(contract.code_hash, expected_hash),
+        last_transaction_hash=contract.last_transaction_hash,
+        last_transaction_url=(
+            explorer_transaction_url(settings.ton_network_id, contract.last_transaction_hash)
+            if contract.last_transaction_hash
+            else None
+        ),
+        wallet_balance_nano=wallet_balance,
+    )
+
+
+@router.get("/onchain/jettons/{jetton_master}", response_model=JettonBalanceView)
+async def onchain_jetton(
+    jetton_master: str,
+    user: CurrentUser,
+    db: Db,
+    request: Request,
+    settings: Config,
+) -> JettonBalanceView:
+    wallet = await db.scalar(
+        select(Wallet).where(
+            Wallet.user_id == user.id,
+            Wallet.network == settings.ton_network_id,
+            Wallet.active.is_(True),
+        )
+    )
+    if wallet is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "verified wallet required")
+    try:
+        state = await request.app.state.ton_client.get_jetton_wallet(
+            wallet.address, jetton_master
+        )
+    except TonProviderError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    return JettonBalanceView(
+        network=settings.ton_network_id,
+        owner_address=state.owner_address,
+        jetton_master=state.jetton_master,
+        jetton_wallet=state.wallet_address,
+        balance_nano=state.balance_nano,
+        verified=True,
+    )
+
+
 @router.post("/duels/quote", response_model=OfferQuoteResponse)
 async def create_offer_quote(
     body: OfferQuoteRequest, user: CurrentUser, db: Db, settings: Config
@@ -393,6 +493,18 @@ async def create_offer_quote(
                 MatchmakingOffer.wallet_id != wallet.id,
                 MatchmakingOffer.user_id != user.id,
                 MatchmakingOffer.expires_at > datetime.now(UTC),
+                ~MatchmakingOffer.id.in_(
+                    select(DuelChallenge.creator_offer_id).where(
+                        DuelChallenge.state.in_(
+                            [
+                                ChallengeState.OPEN.value,
+                                ChallengeState.ACCEPTED.value,
+                                ChallengeState.FUNDING.value,
+                            ]
+                        ),
+                        DuelChallenge.expires_at > datetime.now(UTC),
+                    )
+                ),
             )
             .order_by(MatchmakingOffer.created_at)
             .with_for_update(skip_locked=True)
@@ -426,15 +538,7 @@ async def create_offer_quote(
         challenge.state = ChallengeState.FUNDING.value
     await db.commit()
     await db.refresh(offer)
-    view = OfferView(
-        id=offer.id,
-        onchain_offer_id=offer.onchain_offer_id,
-        chance_bps=offer.chance_bps,
-        total_pool_nano=offer.total_pool_nano,
-        stake_nano=offer.stake_nano,
-        state=offer.state,
-        expires_at=offer.expires_at,
-    )
+    view = offer_view(offer)
     return OfferQuoteResponse(
         offer=view,
         transaction=ContractCall(
@@ -468,15 +572,7 @@ async def list_offers(user: CurrentUser, db: Db, settings: Config) -> list[Offer
         )
     ).all()
     return [
-        OfferView(
-            id=offer.id,
-            onchain_offer_id=offer.onchain_offer_id,
-            chance_bps=offer.chance_bps,
-            total_pool_nano=offer.total_pool_nano,
-            stake_nano=offer.stake_nano,
-            state=offer.state,
-            expires_at=offer.expires_at,
-        )
+        offer_view(offer)
         for offer in offers
     ]
 
@@ -512,6 +608,12 @@ async def list_duels(user: CurrentUser, db: Db, settings: Config) -> list[DuelVi
                 total_pool_nano=own_offer.total_pool_nano,
                 reveal_deadline=duel.reveal_deadline,
                 winner_wallet=duel.winner_wallet,
+                settled_tx_hash=duel.settled_tx_hash,
+                settlement_proof_url=(
+                    explorer_transaction_url(duel.network, duel.settled_tx_hash)
+                    if duel.settled_tx_hash
+                    else None
+                ),
             )
         )
     return result

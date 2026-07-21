@@ -174,6 +174,55 @@ async def test_quote_selects_only_complementary_open_counterparty(client, app) -
 
 
 @pytest.mark.asyncio
+async def test_afk_matchmaking_does_not_take_a_reserved_direct_challenge(client, app) -> None:
+    owner_id, seeker_id = 710_003, 710_004
+    await auth_headers(client, owner_id)
+    seeker_headers = await auth_headers(client, seeker_id)
+    owner_wallet = await add_wallet(app, owner_id, "c")
+    await add_wallet(app, seeker_id, "d")
+    async with app.state.session_factory() as db:
+        owner = await db.scalar(select(User).where(User.telegram_id == owner_id))
+        assert owner is not None
+        offer = MatchmakingOffer(
+            onchain_offer_id=3_101,
+            user_id=owner.id,
+            wallet_id=owner_wallet.id,
+            network=-3,
+            contract_address="0:" + "11" * 32,
+            chance_bps=5000,
+            total_pool_nano=4_000_000_000,
+            stake_nano=2_000_000_000,
+            commitment_hex="ac" * 32,
+            state=OfferState.OPEN.value,
+            expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        )
+        db.add(offer)
+        await db.flush()
+        db.add(
+            DuelChallenge(
+                code="reserved-direct",
+                creator_user_id=owner.id,
+                creator_offer_id=offer.id,
+                expires_at=datetime.now(UTC) + timedelta(minutes=10),
+            )
+        )
+        await db.commit()
+
+    quote = await client.post(
+        "/api/v1/duels/quote",
+        headers=seeker_headers,
+        json={
+            "offer_id": 3_102,
+            "chance_bps": 5000,
+            "total_pool_nano": 4_000_000_000,
+            "commitment_hex": "ad" * 32,
+        },
+    )
+    assert quote.status_code == 200, quote.text
+    assert quote.json()["transaction"]["counter_offer_id"] == 0
+
+
+@pytest.mark.asyncio
 async def test_action_intents_enforce_ownership_state_and_deadlines(client, app) -> None:
     own_id, other_id = 700_005, 700_006
     headers = await auth_headers(client, own_id)
