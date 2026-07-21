@@ -82,7 +82,7 @@ docker compose --project-name loop --env-file .env.production up -d --wait db re
 if [[ -n $previous_release ]]; then
   rollback_armed=true
   docker compose --project-name loop --env-file .env.production stop api worker
-  backup_path=$("$previous_release/deploy/backup-postgres.sh")
+  backup_path=$("$release_dir/deploy/backup-postgres.sh")
   if [[ $backup_path != "$loop_root/backups/"*.dump || ! -s $backup_path ]]; then
     echo "database backup was not created at the expected path" >&2
     false
