@@ -6,10 +6,10 @@
 import "@acton/build"
 import "@acton/emulation/network"
 import "@acton/testing/assert"
-import "@contracts/messages"
-import "@contracts/storage"
+import "@contracts/duel/messages"
+import "@contracts/duel/storage"
 
-/// Storage `Storage` is defined in `@contracts/storage`
+/// Storage `Storage` is defined in `@contracts/duel/storage`
 struct DuelEscrow {
     address: address
     stateInit: ContractState? = null

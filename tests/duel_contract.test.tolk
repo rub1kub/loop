@@ -2,10 +2,10 @@ import "@acton/emulation/network"
 import "@acton/emulation/testing"
 import "@acton/testing/expect"
 
-import "@contracts/errors"
-import "@contracts/messages"
-import "@contracts/storage"
 import "@wrappers/DuelEscrow.gen"
+import "@contracts/duel/errors"
+import "@contracts/duel/messages"
+import "@contracts/duel/storage"
 
 const TEST_COMMITMENT_DOMAIN = 0x4C4F4F50
 const TEST_OUTCOME_DOMAIN = 0x4C4F4F51

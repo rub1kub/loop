@@ -1,0 +1,200 @@
+import "errors"
+import "messages"
+import "storage"
+
+const BANK_BASIS_POINTS = 10_000
+const BANK_MIN_PRINCIPAL = 1_000_000_000
+const BANK_MAX_PRINCIPAL = 100_000_000_000
+const BANK_OPEN_GAS_BUFFER = 80_000_000
+const BANK_MIN_ADMIN_GAS = 20_000_000
+// At most 80 minimum-size targets can be closed by one maximum-size deposit,
+// plus one partially funded position. Keep the loop explicitly bounded for gas safety.
+const BANK_MAX_ALLOCATION_STEPS = 81
+
+contract BankQueue {
+    author: "LOOP"
+    version: "1.0.0"
+    description: "Testnet-only FIFO payout queue for LOOP BANK"
+    storage: BankStorage
+    incomingMessages: BankAllowedMessage
+}
+
+type BankAllowedMessage = CreatePosition | SetBankPaused
+
+fun validMultiplier(multiplierBps: uint16): bool {
+    return multiplierBps == 12_500 || multiplierBps == 15_000 || multiplierBps == 20_000;
+}
+
+fun sendBankPayout(
+    queryId: uint64,
+    positionId: uint64,
+    position: BankPositionData,
+) {
+    val payout = createMessage({
+        bounce: BounceMode.NoBounce,
+        dest: position.owner,
+        value: position.targetPayout,
+        body: BankPayout {
+            queryId,
+            positionId,
+            principal: position.principal,
+            targetPayout: position.targetPayout,
+        },
+    });
+    payout.send(SEND_MODE_PAY_FEES_SEPARATELY);
+}
+
+fun sendBankFee(queryId: uint64, positionId: uint64, treasury: address, fee: coins) {
+    if (fee > 0) {
+        val feeMessage = createMessage({
+            bounce: BounceMode.NoBounce,
+            dest: treasury,
+            value: fee,
+            body: BankProtocolFee { queryId, positionId },
+        });
+        feeMessage.send(SEND_MODE_PAY_FEES_SEPARATELY);
+    }
+}
+
+fun BankStorage.allocateDeposit(mutate self, queryId: uint64, available: coins): coins {
+    var remaining = available;
+    var steps = 0;
+    while (
+        remaining > 0 && self.headQueueIndex < self.nextQueueIndex && steps <
+        BANK_MAX_ALLOCATION_STEPS
+    ) {
+        val positionId = self
+            .queue
+            .mustGet(
+                self.headQueueIndex,
+                BankErrors.PositionMissing,
+            );
+        var position = self.loadPosition(positionId);
+        val needed = position.targetPayout - position.fundedAmount;
+        val allocation = remaining < needed ? remaining : needed;
+
+        position.fundedAmount += allocation;
+        self.lockedFunding += allocation;
+        remaining -= allocation;
+
+        if (position.fundedAmount == position.targetPayout) {
+            position.status = BANK_POSITION_PAYOUT_SENT;
+            position.completedAt = blockchain.now();
+            self.lockedFunding -= position.targetPayout;
+            self.activePositions.delete(position.owner);
+            self.positions.set(positionId, position.toCell());
+            self.queue.delete(self.headQueueIndex);
+            self.headQueueIndex += 1;
+            sendBankPayout(queryId, positionId, position);
+        } else {
+            position.status = BANK_POSITION_PARTIALLY_FUNDED;
+            self.positions.set(positionId, position.toCell());
+        }
+        steps += 1;
+    }
+    assert (
+        remaining == 0 || self.headQueueIndex == self.nextQueueIndex
+    ) throw BankErrors.AllocationLimit;
+    return remaining;
+}
+
+fun onInternalMessage(in: InMessage) {
+    val msg = lazy BankAllowedMessage.fromSlice(in.body);
+
+    match (msg) {
+        CreatePosition => {
+            var storage = BankStorage.load();
+            assert (!storage.paused) throw BankErrors.Paused;
+            assert (storage.feeBps <= 1_000) throw BankErrors.InvalidFee;
+            assert (msg.positionId != 0) throw BankErrors.PositionAlreadyUsed;
+            assert (
+                !storage.usedPositionIds.exists(msg.positionId)
+            ) throw BankErrors.PositionAlreadyUsed;
+            assert (
+                !storage.activePositions.exists(in.senderAddress)
+            ) throw BankErrors.OwnerAlreadyActive;
+            assert (
+                msg.principal >= BANK_MIN_PRINCIPAL && msg.principal <= BANK_MAX_PRINCIPAL
+            ) throw BankErrors.InvalidPrincipal;
+            assert (validMultiplier(msg.multiplierBps)) throw BankErrors.InvalidMultiplier;
+            assert (
+                in.valueCoins >= msg.principal + BANK_OPEN_GAS_BUFFER
+            ) throw BankErrors.InsufficientValue;
+
+            val fee = mulDivFloor(msg.principal, storage.feeBps, BANK_BASIS_POINTS);
+            val distributable = msg.principal - fee;
+            val unallocated = storage.allocateDeposit(msg.queryId, distributable);
+            storage.protocolReserve += unallocated;
+
+            val queueIndex = storage.nextQueueIndex;
+            val targetPayout = mulDivFloor(
+                msg.principal,
+                msg.multiplierBps,
+                BANK_BASIS_POINTS,
+            );
+            val position = BankPositionData {
+                owner: in.senderAddress,
+                principal: msg.principal,
+                multiplierBps: msg.multiplierBps,
+                targetPayout,
+                fundedAmount: 0,
+                queueIndex,
+                createdAt: blockchain.now(),
+                completedAt: 0,
+                status: BANK_POSITION_QUEUED,
+            };
+            storage.positions.set(msg.positionId, position.toCell());
+            storage.queue.set(queueIndex, msg.positionId);
+            storage.activePositions.set(in.senderAddress, msg.positionId);
+            storage.usedPositionIds.set(msg.positionId, true);
+            storage.nextQueueIndex += 1;
+            storage.save();
+            sendBankFee(msg.queryId, msg.positionId, storage.treasury, fee);
+        }
+        SetBankPaused => {
+            assert (in.valueCoins >= BANK_MIN_ADMIN_GAS) throw BankErrors.InsufficientValue;
+            var storage = BankStorage.load();
+            assert (storage.owner == in.senderAddress) throw BankErrors.NotOwner;
+            storage.paused = msg.paused;
+            storage.save();
+        }
+        else => {
+            assert (in.body.isEmpty()) throw BankErrors.InvalidMessage;
+        }
+    }
+}
+
+fun onBouncedMessage(_in: InMessageBounced) {}
+
+get fun contractConfig(): BankContractConfigView {
+    val storage = BankStorage.load();
+    return {
+        owner: storage.owner,
+        treasury: storage.treasury,
+        feeBps: storage.feeBps,
+        paused: storage.paused,
+        headQueueIndex: storage.headQueueIndex,
+        nextQueueIndex: storage.nextQueueIndex,
+        lockedFunding: storage.lockedFunding,
+        protocolReserve: storage.protocolReserve,
+    };
+}
+
+get fun queueData(): BankQueueView {
+    val storage = BankStorage.load();
+    return {
+        headQueueIndex: storage.headQueueIndex,
+        nextQueueIndex: storage.nextQueueIndex,
+        openPositions: storage.nextQueueIndex - storage.headQueueIndex,
+    };
+}
+
+get fun positionData(positionId: uint64): BankPositionData {
+    val storage = BankStorage.load();
+    return storage.loadPosition(positionId);
+}
+
+get fun activePosition(owner: address): uint64 {
+    val storage = BankStorage.load();
+    return storage.activePositions.mustGet(owner, BankErrors.PositionMissing);
+}
