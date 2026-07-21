@@ -1,6 +1,15 @@
 import { z } from 'zod';
 
-import type { Offer, OfferQuote, Profile, Referral, Wallet } from './types';
+import type {
+  ActionIntent,
+  Duel,
+  Invite,
+  Offer,
+  OfferQuote,
+  Profile,
+  Referral,
+  Wallet,
+} from './types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 let accessToken: string | null = null;
@@ -98,7 +107,37 @@ export const api = {
     return await request('/duels/offers');
   },
 
+  async duels(): Promise<Duel[]> {
+    return await request('/duels');
+  },
+
+  async revealIntent(duelId: number): Promise<ActionIntent> {
+    return await request(`/duels/${duelId}/reveal-intent`, { method: 'POST', body: '{}' });
+  },
+
+  async cancelOfferIntent(offerId: number): Promise<ActionIntent> {
+    return await request(`/duels/offers/${offerId}/cancel-intent`, {
+      method: 'POST',
+      body: '{}',
+    });
+  },
+
+  async expireOfferIntent(offerId: number): Promise<ActionIntent> {
+    return await request(`/duels/offers/${offerId}/expire-intent`, {
+      method: 'POST',
+      body: '{}',
+    });
+  },
+
+  async expireDuelIntent(duelId: number): Promise<ActionIntent> {
+    return await request(`/duels/${duelId}/expire-intent`, { method: 'POST', body: '{}' });
+  },
+
   async referrals(): Promise<Referral> {
     return await request('/referrals');
+  },
+
+  async invite(code: string): Promise<Invite> {
+    return await request(`/invites/${encodeURIComponent(code)}`);
   },
 };

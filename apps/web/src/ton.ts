@@ -1,9 +1,13 @@
 import { Address, beginCell } from '@ton/core';
 import type { SendTransactionRequest } from '@tonconnect/ui-react';
 
-import type { OfferQuote } from './types';
+import type { ActionIntent, OfferQuote } from './types';
 
 export const OPEN_OFFER_OPCODE = 0x4c4f4f01;
+export const CANCEL_OFFER_OPCODE = 0x4c4f4f02;
+export const REVEAL_OPCODE = 0x4c4f4f04;
+export const EXPIRE_OFFER_OPCODE = 0x4c4f4f05;
+export const EXPIRE_DUEL_OPCODE = 0x4c4f4f06;
 export const COMMITMENT_DOMAIN = 0x4c4f4f50;
 
 export function newOfferId(random = crypto.getRandomValues(new Uint32Array(2))): number {
@@ -51,6 +55,51 @@ export function buildOpenOfferTransaction(
     network,
     from,
     messages: [{ address: tx.contract_address, amount: tx.amount_nano, payload }],
+  };
+}
+
+export function buildActionTransaction(
+  intent: ActionIntent,
+  from: string,
+  network: '-3' | '-239',
+  secretHex?: string,
+): SendTransactionRequest {
+  const body = beginCell();
+  if (intent.operation === 'reveal') {
+    if (!secretHex || !/^[0-9a-f]{64}$/i.test(secretHex)) {
+      throw new Error('Секрет дуэли недоступен на этом устройстве');
+    }
+    body
+      .storeUint(REVEAL_OPCODE, 32)
+      .storeUint(intent.query_id, 64)
+      .storeUint(intent.duel_id, 64)
+      .storeUint(intent.offer_id, 64)
+      .storeUint(BigInt(`0x${secretHex}`), 256);
+  } else if (intent.operation === 'cancel_offer' || intent.operation === 'expire_offer') {
+    body
+      .storeUint(
+        intent.operation === 'cancel_offer' ? CANCEL_OFFER_OPCODE : EXPIRE_OFFER_OPCODE,
+        32,
+      )
+      .storeUint(intent.query_id, 64)
+      .storeUint(intent.offer_id, 64);
+  } else {
+    body
+      .storeUint(EXPIRE_DUEL_OPCODE, 32)
+      .storeUint(intent.query_id, 64)
+      .storeUint(intent.duel_id, 64);
+  }
+  return {
+    validUntil: intent.valid_until,
+    network,
+    from,
+    messages: [
+      {
+        address: intent.contract_address,
+        amount: intent.amount_nano,
+        payload: body.endCell().toBoc().toString('base64'),
+      },
+    ],
   };
 }
 

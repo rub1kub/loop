@@ -9,7 +9,13 @@ import { Loader } from './components/Loader';
 import { Onboarding } from './components/Onboarding';
 import { ProfileScreen } from './components/ProfileScreen';
 import { TabBar } from './components/TabBar';
-import { haptic, initializeTelegram, isMockTelegram, toggleFullscreen } from './telegram';
+import {
+  haptic,
+  initializeTelegram,
+  isMockTelegram,
+  removeDuelSecret,
+  toggleFullscreen,
+} from './telegram';
 import { useLoopStore } from './store';
 
 export default function App() {
@@ -68,6 +74,25 @@ export default function App() {
       });
   }, [refresh, setError, state.profile?.wallet?.address, tonConnectUI, wallet]);
 
+  useEffect(() => {
+    if (!state.offers.some((offer) => ['pending_funding', 'open', 'matched'].includes(offer.state)))
+      return;
+    const timer = window.setInterval(() => {
+      void refresh().catch((error: unknown) => {
+        setError(error instanceof Error ? error.message : 'Не удалось обновить дуэль');
+      });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [refresh, setError, state.offers]);
+
+  useEffect(() => {
+    for (const duel of state.duels) {
+      if (['settled', 'refunded', 'expired'].includes(duel.state)) {
+        void removeDuelSecret(duel.offer_id).catch(() => undefined);
+      }
+    }
+  }, [state.duels]);
+
   if (state.loading) return <Loader />;
 
   if (state.error && !state.profile) {
@@ -95,12 +120,19 @@ export default function App() {
       />
     ),
     duel: (
-      <DuelScreen profile={state.profile} offers={state.offers} onRefresh={() => state.refresh()} />
+      <DuelScreen
+        profile={state.profile}
+        offers={state.offers}
+        duels={state.duels}
+        invite={state.invite}
+        onRefresh={() => state.refresh()}
+      />
     ),
     profile: (
       <ProfileScreen
         profile={state.profile}
         offers={state.offers}
+        duels={state.duels}
         onReplay={() => state.replayOnboarding()}
       />
     ),

@@ -6,7 +6,7 @@ The Telegram WebView, client JavaScript, wallet bridge, RPC responses and all AP
 
 ## Controls
 
-- Telegram authorization validates the raw query with the Bot API HMAC construction, rejects duplicate keys, enforces a short age/future-skew window and consumes an exchange digest once.
+- Telegram authorization validates the raw query with the Bot API HMAC construction, rejects duplicate keys and enforces a short age/future-skew window. Reusing the same valid payload cannot extend its original session expiry, and its exchange digest is stored idempotently.
 - Sessions are short-lived, audience-bound HMAC tokens. Secrets, raw `initData`, wallet proofs and full Telegram identifiers are never logged.
 - Wallet binding requires a fresh, one-use, session-bound TON proof for the exact domain and network. Wallet address formatting is canonicalized before uniqueness checks.
 - Mutations require bearer authorization, exact production CORS/origin policy, size limits and layered Redis/API/nginx rate limits.
@@ -21,9 +21,8 @@ Mainnet is intentionally disabled until an independent Tolk/TVM audit, jurisdict
 
 ## Secret handling
 
-`.env`, Acton wallet files, mnemonics, bot tokens, RPC keys, database passwords and TLS private keys are ignored by Git. Production consumes root-owned `0400` secret files. Deployment/admin keys stay offline or in multisig custody; a low-value keeper, if used, has no privileged contract role.
+`.env`, Acton wallet files, mnemonics, bot tokens, RPC keys, database passwords and TLS private keys are ignored by Git. Production consumes a deployment-only `0600` secret file outside release directories. Deployment/admin keys stay offline or in multisig custody; a low-value keeper, if used, has no privileged contract role.
 
 ## Reporting
 
 Please disclose vulnerabilities privately to the repository owner. Do not create a public issue containing an exploit, credentials or personally identifiable data.
-

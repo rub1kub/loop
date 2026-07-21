@@ -23,6 +23,7 @@ export interface TelegramWebApp {
   disableVerticalSwipes?(): void;
   enableClosingConfirmation?(): void;
   openTelegramLink(url: string): void;
+  switchInlineQuery?(query: string, chooseChatTypes?: string[]): void;
   BackButton: {
     show(): void;
     hide(): void;
@@ -105,9 +106,40 @@ export interface OfferQuote {
   };
 }
 
+export interface Duel {
+  id: string;
+  onchain_duel_id: number;
+  state: string;
+  offer_id: number;
+  own_revealed: boolean;
+  chance_bps: number;
+  total_pool_nano: number;
+  reveal_deadline: string;
+  winner_wallet: string | null;
+}
+
+export interface ActionIntent {
+  operation: 'reveal' | 'cancel_offer' | 'expire_offer' | 'expire_duel';
+  query_id: number;
+  offer_id: number;
+  duel_id: number;
+  contract_address: string;
+  amount_nano: string;
+  valid_until: number;
+}
+
 export interface Referral {
   code: string;
   url: string;
   invited: number;
   qualified: number;
+  reward_points: number;
+}
+
+export interface Invite {
+  code: string;
+  creator_telegram_id: number;
+  stake_nano: number;
+  chance_bps: number;
+  expires_at: string;
 }

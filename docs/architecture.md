@@ -8,7 +8,7 @@ LOOP is a modular monolith deployed as independently scalable processes:
 Telegram / browser
        │ HTTPS
        ▼
-nginx ─┬─ static Mini App
+Apache SNI edge → nginx ─┬─ static Mini App
        ├─ FastAPI + aiogram webhook
        └─ health and metrics
               │
@@ -53,4 +53,3 @@ Every transition is replay-safe and terminal outcomes are mutually exclusive. No
 - one duel has exactly one terminal result;
 - one referred user has at most one immutable inviter;
 - no database column represents spendable user funds.
-

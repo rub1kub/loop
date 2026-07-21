@@ -5,7 +5,7 @@ import json
 import struct
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qsl
 
 from cryptography.exceptions import InvalidSignature
@@ -129,7 +129,10 @@ def decode_session(token: str, settings: Settings, now: datetime | None = None) 
         ).digest()
         if not hmac.compare_digest(expected, _b64url_decode(supplied_signature)):
             raise AuthenticationError("invalid session")
-        payload = json.loads(_b64url_decode(encoded))
+        decoded = json.loads(_b64url_decode(encoded))
+        if not isinstance(decoded, dict):
+            raise AuthenticationError("invalid session claims")
+        payload = cast(dict[str, Any], decoded)
     except (ValueError, TypeError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise AuthenticationError("invalid session") from exc
     current_ts = int((now or datetime.now(UTC)).timestamp())

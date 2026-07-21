@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { api } from './api';
 import { isMockTelegram, telegram } from './telegram';
-import type { Offer, Profile, Tab } from './types';
+import type { Duel, Invite, Offer, Profile, Tab } from './types';
 
 const demoProfile: Profile = {
   user: {
@@ -30,6 +30,8 @@ interface LoopState {
   activeTab: Tab;
   profile: Profile | null;
   offers: Offer[];
+  duels: Duel[];
+  invite: Invite | null;
   error: string | null;
   showOnboarding: boolean;
   bootstrap(): Promise<void>;
@@ -46,6 +48,8 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   activeTab: initialTab,
   profile: null,
   offers: [],
+  duels: [],
+  invite: null,
   error: null,
   showOnboarding: false,
 
@@ -61,13 +65,27 @@ export const useLoopStore = create<LoopState>((set, get) => ({
       }
       const delay = Math.max(0, 1500 - (performance.now() - started));
       await new Promise((resolve) => setTimeout(resolve, delay));
+      let invite: Invite | null = null;
+      const startParam = telegram()?.initDataUnsafe?.start_param;
+      if (!isMockTelegram() && startParam?.startsWith('duel_')) {
+        try {
+          invite = await api.invite(startParam.slice(5));
+        } catch {
+          invite = null;
+        }
+      }
+      const [offers, duels] = isMockTelegram()
+        ? [[], []]
+        : await Promise.all([api.offers(), api.duels()]);
       set({
         profile,
         loading: false,
         showOnboarding:
           !profile.user.onboarding_seen &&
           !(isMockTelegram() && mockParameters.get('skipOnboarding') === '1'),
-        offers: isMockTelegram() ? [] : await api.offers(),
+        offers,
+        duels,
+        invite,
       });
     } catch (error) {
       set({
@@ -79,8 +97,8 @@ export const useLoopStore = create<LoopState>((set, get) => ({
 
   async refresh() {
     if (isMockTelegram()) return;
-    const [profile, offers] = await Promise.all([api.me(), api.offers()]);
-    set({ profile, offers });
+    const [profile, offers, duels] = await Promise.all([api.me(), api.offers(), api.duels()]);
+    set({ profile, offers, duels });
   },
 
   setTab(activeTab) {

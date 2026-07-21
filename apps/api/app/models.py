@@ -31,6 +31,8 @@ class OfferState(enum.StrEnum):
     CANCELLED = "cancelled"
     EXPIRED = "expired"
     REJECTED = "rejected"
+    SETTLED = "settled"
+    REFUNDED = "refunded"
 
 
 class DuelState(enum.StrEnum):

@@ -1,4 +1,7 @@
-from collections.abc import AsyncIterator
+import hashlib
+import secrets
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 import httpx
@@ -9,6 +12,8 @@ from aiogram.types import Update
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from redis.exceptions import RedisError
+from starlette.responses import JSONResponse
 
 from .bot import configure_bot, create_dispatcher
 from .config import get_settings
@@ -30,6 +35,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.challenge_store = RedisChallengeStore(app.state.redis)
     app.state.http = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0))
     app.state.ton_client = TonClient(app.state.http, settings)
+    if settings.app_env == "production":
+        actual_code_hash = await app.state.ton_client.get_contract_code_hash(
+            settings.ton_contract_address
+        )
+        expected_code_hash = settings.ton_contract_code_hash.removeprefix("0x").upper()
+        if not secrets.compare_digest(actual_code_hash, expected_code_hash):
+            raise RuntimeError("configured TON contract code hash mismatch")
     app.state.bot = None
     app.state.dispatcher = None
     if settings.auto_create_schema:
@@ -66,6 +78,45 @@ def create_app() -> FastAPI:
         max_age=600,
     )
     app.include_router(router)
+
+    @app.middleware("http")
+    async def protect_api(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        is_mutation = request.method in {"POST", "PUT", "PATCH", "DELETE"}
+        if not is_mutation or not request.url.path.startswith("/api/v1"):
+            return await call_next(request)
+        if settings.app_env != "test" and request.headers.get("origin") != settings.public_origin:
+            return JSONResponse({"detail": "origin rejected"}, status_code=403)
+        if settings.app_env != "production":
+            return await call_next(request)
+
+        authorization = request.headers.get("authorization", "")
+        source = (
+            hashlib.sha256(authorization.encode()).hexdigest()[:24]
+            if authorization.startswith("Bearer ")
+            else request.headers.get("x-real-ip")
+            or (request.client.host if request.client else "unknown")
+        )
+        group = "auth" if request.url.path.endswith("/auth/telegram") else "api"
+        limit = 20 if group == "auth" else 120
+        bucket = int(time.time() // 60)
+        key = f"loop:rate:{group}:{source}:{bucket}"
+        try:
+            async with request.app.state.redis.pipeline(transaction=True) as pipeline:
+                pipeline.incr(key)
+                pipeline.expire(key, 90)
+                current, _ = await pipeline.execute()
+        except RedisError as exc:
+            logger.error("rate_limit_unavailable", error=type(exc).__name__)
+            return JSONResponse({"detail": "service temporarily unavailable"}, status_code=503)
+        if int(current) > limit:
+            return JSONResponse(
+                {"detail": "rate limit exceeded"},
+                status_code=429,
+                headers={"Retry-After": "60"},
+            )
+        return await call_next(request)
 
     @app.get("/live", include_in_schema=False)
     async def live() -> dict[str, str]:

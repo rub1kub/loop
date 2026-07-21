@@ -60,7 +60,11 @@ export function setBackAction(action?: () => void): () => void {
 export function setMainAction(label: string, action?: () => void, enabled = true): () => void {
   if (isMockTelegram()) return () => undefined;
   const button = telegram()?.MainButton;
-  if (!button || !action) return () => undefined;
+  if (!button) return () => undefined;
+  if (!action) {
+    button.hide();
+    return () => undefined;
+  }
   button.setText(label);
   if (enabled) button.enable();
   else button.disable();
@@ -94,6 +98,18 @@ export async function readDuelSecret(offerId: number): Promise<string | null> {
     });
   }
   return isMockTelegram() ? sessionStorage.getItem(key) : null;
+}
+
+export async function removeDuelSecret(offerId: number): Promise<void> {
+  const key = `loop-duel-${offerId}`;
+  const storage = telegram()?.SecureStorage;
+  if (storage) {
+    await new Promise<void>((resolve, reject) => {
+      storage.removeItem(key, (error) => (error ? reject(new Error(error)) : resolve()));
+    });
+  } else if (isMockTelegram()) {
+    sessionStorage.removeItem(key);
+  }
 }
 
 export function toggleFullscreen(): void {

@@ -1,0 +1,30 @@
+[package]
+name = "loop"
+description = "LOOP native TON duel escrow"
+version = "0.1.0"
+license = "MIT"
+
+[toolchain]
+acton = "1.0.0"
+
+[contracts.DuelEscrow]
+display-name = "LOOP Duel Escrow"
+src = "contracts/DuelEscrow.tolk"
+depends = []
+
+[test]
+
+[fmt]
+width = 100
+ignore = ["wrappers"]
+
+[scripts]
+deploy-emulation = "acton script scripts/deploy.tolk"
+deploy-testnet = "acton script scripts/deploy.tolk --net testnet"
+
+[import-mappings]
+acton = ".acton"
+contracts = "contracts"
+gen = "gen"
+tests = "tests"
+wrappers = "wrappers"

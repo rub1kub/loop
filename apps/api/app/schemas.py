@@ -120,11 +120,34 @@ class OfferQuoteResponse(BaseModel):
     transaction: ContractCall
 
 
+class DuelView(BaseModel):
+    id: str
+    onchain_duel_id: int
+    state: str
+    offer_id: int
+    own_revealed: bool
+    chance_bps: int
+    total_pool_nano: int
+    reveal_deadline: datetime
+    winner_wallet: str | None
+
+
+class ActionIntent(BaseModel):
+    operation: str
+    query_id: int
+    offer_id: int
+    duel_id: int
+    contract_address: str
+    amount_nano: str
+    valid_until: int
+
+
 class ReferralView(BaseModel):
     code: str
     url: str
     invited: int
     qualified: int
+    reward_points: int
 
 
 class InviteView(BaseModel):

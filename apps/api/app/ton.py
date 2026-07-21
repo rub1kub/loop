@@ -1,3 +1,4 @@
+import base64
 import hashlib
 
 import httpx
@@ -63,6 +64,36 @@ class TonClient:
         if not wallets:
             return 0
         return int(wallets[0]["balance"])
+
+    async def get_contract_code_hash(self, address: str) -> str:
+        response = await self.http.get(
+            f"{self.settings.toncenter_url}/api/v3/accountStates",
+            headers=self.headers,
+            params={"address": address, "include_boc": "false"},
+        )
+        if response.status_code != 200:
+            raise TonProviderError("TON contract state provider unavailable")
+        accounts = response.json().get("accounts", [])
+        if len(accounts) != 1 or accounts[0].get("status") != "active":
+            raise TonProviderError("TON contract is not active")
+        code_hash = accounts[0].get("code_hash")
+        if not isinstance(code_hash, str):
+            raise TonProviderError("TON contract code hash is missing")
+        return normalize_hash(code_hash)
+
+
+def normalize_hash(value: str) -> str:
+    raw = value.removeprefix("0x")
+    try:
+        decoded = bytes.fromhex(raw)
+    except ValueError:
+        try:
+            decoded = base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_")
+        except (ValueError, TypeError) as exc:
+            raise TonProviderError("malformed TON code hash") from exc
+    if len(decoded) != 32:
+        raise TonProviderError("malformed TON code hash")
+    return decoded.hex().upper()
 
 
 def commitment_context_hash(offer_id: int, address: str) -> str:

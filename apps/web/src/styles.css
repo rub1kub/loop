@@ -591,6 +591,18 @@ input:focus-visible {
   margin-top: auto;
 }
 
+.duel-invite {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 4px;
+  border: 0;
+  background: transparent;
+  color: #6d6d6d;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
 .profile-identity {
   display: grid;
   grid-template-columns: 58px 1fr 36px;

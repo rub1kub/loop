@@ -57,9 +57,12 @@ class Settings(BaseSettings):
             return self
         required = {
             "LOOP_BOT_TOKEN": self.bot_token.get_secret_value(),
+            "LOOP_BOT_USERNAME": self.bot_username,
             "LOOP_TELEGRAM_WEBHOOK_SECRET": self.telegram_webhook_secret.get_secret_value(),
             "LOOP_SESSION_SECRET": self.session_secret.get_secret_value(),
             "LOOP_TON_CONTRACT_ADDRESS": self.ton_contract_address,
+            "LOOP_TON_CONTRACT_CODE_HASH": self.ton_contract_code_hash,
+            "LOOP_METRICS_TOKEN": self.metrics_token.get_secret_value(),
         }
         missing = [name for name, value in required.items() if not value]
         if missing:
@@ -68,6 +71,17 @@ class Settings(BaseSettings):
             raise ValueError("production public origin must use HTTPS")
         if self.session_secret.get_secret_value() == "development-only-change-me":
             raise ValueError("production session secret is unsafe")
+        if min(
+            len(self.session_secret.get_secret_value()),
+            len(self.telegram_webhook_secret.get_secret_value()),
+            len(self.metrics_token.get_secret_value()),
+        ) < 32:
+            raise ValueError("production secrets must be at least 32 characters")
+        try:
+            if len(bytes.fromhex(self.ton_contract_code_hash.removeprefix("0x"))) != 32:
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError("TON contract code hash must be 32-byte hex") from exc
         if self.ton_network_id != -3:
             raise ValueError("mainnet is disabled until the documented release gate is complete")
         return self

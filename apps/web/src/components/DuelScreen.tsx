@@ -3,8 +3,16 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api';
-import { haptic, isMockTelegram, setMainAction, storeDuelSecret } from '../telegram';
 import {
+  haptic,
+  isMockTelegram,
+  readDuelSecret,
+  setMainAction,
+  storeDuelSecret,
+  telegram,
+} from '../telegram';
+import {
+  buildActionTransaction,
   buildOpenOfferTransaction,
   commitmentForOffer,
   formatGram,
@@ -12,7 +20,7 @@ import {
   newSecret,
   parseGram,
 } from '../ton';
-import type { Offer, Profile } from '../types';
+import type { Duel, Invite, Offer, Profile } from '../types';
 import { ProbabilityCanvas } from './ProbabilityCanvas';
 
 type DuelStatus = 'idle' | 'preparing' | 'wallet' | 'searching' | 'matched';
@@ -20,21 +28,43 @@ type DuelStatus = 'idle' | 'preparing' | 'wallet' | 'searching' | 'matched';
 export function DuelScreen({
   profile,
   offers,
+  duels,
+  invite,
   onRefresh,
 }: {
   profile: Profile;
   offers: Offer[];
+  duels: Duel[];
+  invite: Invite | null;
   onRefresh: () => Promise<void>;
 }) {
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
-  const [chance, setChance] = useState(50);
-  const [pool, setPool] = useState('4');
+  const [chance, setChance] = useState(() => (invite ? 100 - invite.chance_bps / 100 : 50));
+  const [pool, setPool] = useState(() =>
+    invite ? String((invite.stake_nano * 10_000) / invite.chance_bps / 1_000_000_000) : '4',
+  );
   const [status, setStatus] = useState<DuelStatus>('idle');
-  const [message, setMessage] = useState('Выбери свою долю шанса.');
+  const [message, setMessage] = useState(
+    invite ? 'Вызов принят. Проверь условия и заблокируй ставку.' : 'Выбери свою долю шанса.',
+  );
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const activeOffer = offers.find((offer) =>
     ['pending_funding', 'open', 'matched'].includes(offer.state),
   );
+  const activeDuel = activeOffer
+    ? duels.find(
+        (duel) => duel.offer_id === activeOffer.onchain_offer_id && duel.state === 'revealing',
+      )
+    : undefined;
+  const duelExpired = activeDuel ? Date.parse(activeDuel.reveal_deadline) < now : false;
+  const offerExpired = activeOffer ? Date.parse(activeOffer.expires_at) < now : false;
   const effectiveStatus: DuelStatus = activeOffer
     ? activeOffer.state === 'matched'
       ? 'matched'
@@ -42,8 +72,18 @@ export function DuelScreen({
     : status;
   const effectiveMessage = activeOffer
     ? activeOffer.state === 'matched'
-      ? 'Соперник найден. Открой уведомление, чтобы раскрыть секрет.'
-      : 'Ищем соперника. Можно закрыть LOOP — мы уведомим.'
+      ? !activeDuel
+        ? 'Матч подтверждён. Синхронизируем раунд…'
+        : duelExpired
+          ? 'Окно раскрытия закрыто. Заверши расчёт в контракте.'
+          : activeDuel.own_revealed
+            ? 'Секрет раскрыт. Ждём соперника до дедлайна.'
+            : 'Соперник найден. Раскрой секрет до дедлайна.'
+      : activeOffer.state === 'open'
+        ? offerExpired
+          ? 'Срок поиска истёк. Верни ставку из контракта.'
+          : 'Ищем соперника. Можно закрыть LOOP — мы уведомим.'
+        : 'Ждём подтверждения транзакции в TON.'
     : message;
 
   const totalPoolNano = useMemo(() => {
@@ -106,10 +146,79 @@ export function DuelScreen({
     }
   }, [activeOffer, chance, onRefresh, pool, profile.wallet, tonConnectUI, wallet]);
 
-  useEffect(
-    () => setMainAction('ИСКАТЬ СОПЕРНИКА', () => void start(), !activeOffer),
-    [activeOffer, start],
-  );
+  const runActiveAction = useCallback(async () => {
+    if (!activeOffer || !wallet) {
+      await tonConnectUI.openModal();
+      return;
+    }
+    try {
+      setStatus('wallet');
+      let intent;
+      let secret: string | undefined;
+      if (activeOffer.state === 'matched') {
+        if (!activeDuel) throw new Error('Матч ещё синхронизируется');
+        if (duelExpired) intent = await api.expireDuelIntent(activeDuel.onchain_duel_id);
+        else {
+          if (activeDuel.own_revealed) return;
+          intent = await api.revealIntent(activeDuel.onchain_duel_id);
+          secret = (await readDuelSecret(intent.offer_id)) ?? undefined;
+        }
+      } else if (activeOffer.state === 'open') {
+        intent = offerExpired
+          ? await api.expireOfferIntent(activeOffer.onchain_offer_id)
+          : await api.cancelOfferIntent(activeOffer.onchain_offer_id);
+      } else {
+        throw new Error('Транзакция ещё не подтверждена сетью');
+      }
+      await tonConnectUI.sendTransaction(
+        buildActionTransaction(
+          intent,
+          wallet.account.address,
+          wallet.account.chain as '-3' | '-239',
+          secret,
+        ),
+      );
+      setMessage('Транзакция отправлена. Ждём финализации TON.');
+      haptic('success');
+      await onRefresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Не удалось выполнить действие');
+      haptic('error');
+    }
+  }, [activeDuel, activeOffer, duelExpired, offerExpired, onRefresh, tonConnectUI, wallet]);
+
+  const activeActionLabel = activeOffer
+    ? activeOffer.state === 'matched'
+      ? duelExpired
+        ? 'ЗАВЕРШИТЬ РАУНД'
+        : activeDuel?.own_revealed
+          ? null
+          : 'РАСКРЫТЬ СЕКРЕТ'
+      : activeOffer.state === 'open'
+        ? offerExpired
+          ? 'ВЕРНУТЬ СТАВКУ'
+          : 'ОТМЕНИТЬ ПОИСК'
+        : null
+    : null;
+
+  const inviteToDuel = useCallback(() => {
+    const app = telegram();
+    if (!app?.switchInlineQuery) {
+      setMessage('Inline-вызов доступен внутри Telegram');
+      haptic('warning');
+      return;
+    }
+    app.switchInlineQuery(`${pool} ${chance}`, ['users', 'groups']);
+    haptic('light');
+  }, [chance, pool]);
+
+  useEffect(() => {
+    if (activeActionLabel) {
+      return setMainAction(activeActionLabel, () => void runActiveAction());
+    }
+    if (!activeOffer) return setMainAction('ИСКАТЬ СОПЕРНИКА', () => void start());
+    return setMainAction('', undefined, false);
+  }, [activeActionLabel, activeOffer, runActiveAction, start]);
 
   return (
     <section className="screen duel-screen" aria-labelledby="duel-title">
@@ -170,8 +279,18 @@ export function DuelScreen({
       </AnimatePresence>
 
       {!activeOffer && (
-        <button className="primary-button duel-action" onClick={() => void start()}>
-          {wallet ? 'ИСКАТЬ' : 'ПОДКЛЮЧИТЬ КОШЕЛЁК'}
+        <>
+          <button className="primary-button duel-action" onClick={() => void start()}>
+            {wallet ? 'ИСКАТЬ' : 'ПОДКЛЮЧИТЬ КОШЕЛЁК'}
+          </button>
+          <button className="duel-invite" onClick={inviteToDuel}>
+            ПРИГЛАСИТЬ В ИГРУ
+          </button>
+        </>
+      )}
+      {activeActionLabel && (
+        <button className="primary-button duel-action" onClick={() => void runActiveAction()}>
+          {activeActionLabel}
         </button>
       )}
     </section>

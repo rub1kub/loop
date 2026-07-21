@@ -14,6 +14,15 @@ The frontend requests a `ton_proof` challenge before connection. The API verifie
 
 Commit-reveal follows TON's recommendation for monetary games. Commitments are created with the same canonical cell layout in TypeScript and Tolk. If only one player reveals, withholding loses after deadline; if neither reveals, both principals are recoverable.
 
+## Verified testnet deployment
+
+- Address: [`kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a`](https://testnet.tonviewer.com/kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a)
+- Raw address: `0:5775D65530EB5E1180FCEEE48E7C800F2F73F852E23455FFDF500C862D2E65DB`
+- Code hash: `1D8330B799875E54680D3180703A2CC0A3C3FFE4C763B6A9D2980E910252B63D`
+- Initial state: active, fee `250` bps, `paused=false`, `locked=0`.
+
+The API refuses production startup if TON Center reports a different code hash or an inactive account.
+
 Primary references:
 
 - <https://docs.ton.org/start-here>
@@ -21,4 +30,3 @@ Primary references:
 - <https://docs.ton.org/contracts/techniques/random>
 - <https://docs.ton.org/applications/ton-connect/overview>
 - <https://ton-blockchain.github.io/acton/docs/welcome>
-

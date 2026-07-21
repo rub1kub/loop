@@ -1,13 +1,13 @@
 import hashlib
 import hmac
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import pytest
 from sqlalchemy import select
 
-from app.models import User, Wallet
+from app.models import Duel, MatchmakingOffer, OfferState, User, Wallet
 
 
 def signed_init_data() -> str:
@@ -77,3 +77,77 @@ async def test_quote_requires_verified_wallet(client, app) -> None:
     result = quote.json()
     assert result["offer"]["stake_nano"] == 1_000_000_000
     assert result["transaction"]["amount_nano"] == "1050000000"
+
+
+@pytest.mark.asyncio
+async def test_duel_view_and_reveal_intent_never_expose_secret(client, app) -> None:
+    auth = await client.post("/api/v1/auth/telegram", json={"init_data": signed_init_data()})
+    headers = {"Authorization": f"Bearer {auth.json()['access_token']}"}
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == 777000111))
+        opponent = User(telegram_id=777000222, first_name="Opponent")
+        db.add(opponent)
+        await db.flush()
+        own_wallet = Wallet(
+            user_id=user.id,
+            network=-3,
+            address="0:" + "22" * 32,
+            public_key="33" * 32,
+        )
+        other_wallet = Wallet(
+            user_id=opponent.id,
+            network=-3,
+            address="0:" + "44" * 32,
+            public_key="55" * 32,
+        )
+        db.add_all([own_wallet, other_wallet])
+        await db.flush()
+        expires = datetime.now(UTC) + timedelta(minutes=15)
+        own_offer = MatchmakingOffer(
+            onchain_offer_id=701,
+            user_id=user.id,
+            wallet_id=own_wallet.id,
+            network=-3,
+            contract_address="0:" + "11" * 32,
+            chance_bps=2500,
+            total_pool_nano=4_000_000_000,
+            stake_nano=1_000_000_000,
+            commitment_hex="aa" * 32,
+            state=OfferState.MATCHED.value,
+            expires_at=expires,
+        )
+        other_offer = MatchmakingOffer(
+            onchain_offer_id=702,
+            user_id=opponent.id,
+            wallet_id=other_wallet.id,
+            network=-3,
+            contract_address="0:" + "11" * 32,
+            chance_bps=7500,
+            total_pool_nano=4_000_000_000,
+            stake_nano=3_000_000_000,
+            commitment_hex="bb" * 32,
+            state=OfferState.MATCHED.value,
+            expires_at=expires,
+        )
+        db.add_all([own_offer, other_offer])
+        await db.flush()
+        db.add(
+            Duel(
+                onchain_duel_id=702,
+                network=-3,
+                offer_a_id=own_offer.id,
+                offer_b_id=other_offer.id,
+                reveal_deadline=datetime.now(UTC) + timedelta(minutes=5),
+            )
+        )
+        await db.commit()
+
+    duels = await client.get("/api/v1/duels", headers=headers)
+    assert duels.status_code == 200, duels.text
+    assert duels.json()[0]["offer_id"] == 701
+    intent = await client.post("/api/v1/duels/702/reveal-intent", headers=headers, json={})
+    assert intent.status_code == 200, intent.text
+    payload = intent.json()
+    assert payload["operation"] == "reveal"
+    assert payload["offer_id"] == 701
+    assert "secret" not in payload

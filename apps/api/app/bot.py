@@ -10,9 +10,11 @@ from aiogram.types import (
     InlineQuery,
     InlineQueryResultArticle,
     InputTextMessageContent,
+    MenuButtonWebApp,
     Message,
     WebAppInfo,
 )
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .config import Settings
@@ -48,15 +50,34 @@ def create_dispatcher(
         whole, fractional = (match.group(1).split(".", 1) + [""])[:2]
         stake_nano = int(whole) * 1_000_000_000 + int(fractional.ljust(9, "0"))
         chance = int(match.group(2))
+        chance_bps = chance * 100
+        if stake_nano * 10_000 % chance_bps:
+            await query.answer([], cache_time=1, is_personal=True)
+            return
+        total_pool = stake_nano * 10_000 // chance_bps
+        if not settings.min_pool_nano <= total_pool <= settings.max_pool_nano:
+            await query.answer([], cache_time=1, is_personal=True)
+            return
         code = secrets.token_urlsafe(9)
         expires = datetime.now(UTC) + timedelta(hours=1)
         async with session_factory() as db:
+            active_invites = await db.scalar(
+                select(func.count())
+                .select_from(InlineInvite)
+                .where(
+                    InlineInvite.creator_telegram_id == query.from_user.id,
+                    InlineInvite.expires_at > datetime.now(UTC),
+                )
+            )
+            if (active_invites or 0) >= 20:
+                await query.answer([], cache_time=1, is_personal=True)
+                return
             db.add(
                 InlineInvite(
                     code=code,
                     creator_telegram_id=query.from_user.id,
                     stake_nano=stake_nano,
-                    chance_bps=chance * 100,
+                    chance_bps=chance_bps,
                     expires_at=expires,
                 )
             )
@@ -90,4 +111,7 @@ async def configure_bot(bot: Bot, settings: Settings) -> None:
         secret_token=settings.telegram_webhook_secret.get_secret_value(),
         allowed_updates=["message", "inline_query", "callback_query"],
         drop_pending_updates=False,
+    )
+    await bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(text="LOOP", web_app=WebAppInfo(url=settings.public_origin))
     )

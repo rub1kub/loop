@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../api';
 import { haptic, isMockTelegram, telegram } from '../telegram';
-import type { Offer, Profile, Referral } from '../types';
+import type { Duel, Offer, Profile, Referral } from '../types';
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-6)}`;
@@ -13,10 +13,12 @@ function shortAddress(address: string): string {
 export function ProfileScreen({
   profile,
   offers,
+  duels,
   onReplay,
 }: {
   profile: Profile;
   offers: Offer[];
+  duels: Duel[];
   onReplay: () => void;
 }) {
   const wallet = useTonWallet();
@@ -29,6 +31,7 @@ export function ProfileScreen({
           url: 'https://t.me/loop?startapp=ref_LOOPDEMO',
           invited: 3,
           qualified: 1,
+          reward_points: 100,
         }
       : null,
   );
@@ -88,11 +91,18 @@ export function ProfileScreen({
 
       <div className="profile-stats">
         <div>
-          <strong>{offers.length}</strong>
+          <strong>{duels.length}</strong>
           <span>ДУЭЛИ</span>
         </div>
         <div>
-          <strong>{offers.filter((offer) => offer.state === 'settled').length}</strong>
+          <strong>
+            {
+              duels.filter(
+                (duel) =>
+                  duel.state === 'settled' && duel.winner_wallet === profile.wallet?.address,
+              ).length
+            }
+          </strong>
           <span>ПОБЕДЫ</span>
         </div>
         <div>
@@ -103,7 +113,7 @@ export function ProfileScreen({
 
       <div className="section-label">
         <span>РЕФЕРАЛЫ</span>
-        <small>{referral?.qualified ?? 0} подтверждено</small>
+        <small>{referral?.reward_points ?? 0} LOOP POINTS</small>
       </div>
       <button className="referral-row" onClick={() => void shareReferral()} disabled={!referral}>
         <span>∞</span>

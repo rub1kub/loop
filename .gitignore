@@ -12,6 +12,8 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.txt
+lcov.info
 htmlcov/
 node_modules/
 dist/
