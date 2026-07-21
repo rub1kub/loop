@@ -13,7 +13,9 @@ Original prompt: Build a production-ready LOOP Telegram Mini App for TON/GRAM wi
 - Architecture and threat model drafted from the product brief and current TON/Telegram guidance.
 - FastAPI/aiogram backend implemented with strict Telegram authentication, signed sessions, TON proof verification, wallet binding, non-custodial BANK goals, deterministic duel quotes, referrals, inline invites, durable models, migrations and chain projection worker.
 - Backend lint and focused unit/API/property tests pass.
+- Responsive Telegram Mini App implemented with native theme/safe-area integration, loader, five-step onboarding, BANK/DUEL/PROFILE screens, TON Connect proof binding, encrypted local duel secrets, deterministic canvas visualization and native haptics/navigation.
+- Frontend lint, unit tests, production build, Playwright end-to-end flow and the deterministic game-style browser harness pass; mobile screenshots were reviewed visually.
 
 ## Remaining
 
-- Implement and validate frontend, contract, deployment, and live testnet flow.
+- Implement and validate the contract, deployment, and live testnet flow.

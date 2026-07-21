@@ -292,7 +292,15 @@ async def create_offer_quote(
         .order_by(MatchmakingOffer.created_at)
         .with_for_update(skip_locked=True)
     )
-    offer_id = secrets.randbelow(2**63 - 1) + 1
+    offer_id = body.offer_id
+    duplicate = await db.scalar(
+        select(MatchmakingOffer.id).where(
+            MatchmakingOffer.network == settings.ton_network_id,
+            MatchmakingOffer.onchain_offer_id == offer_id,
+        )
+    )
+    if duplicate:
+        raise HTTPException(status.HTTP_409_CONFLICT, "offer id already exists")
     expires = datetime.now(UTC) + timedelta(seconds=settings.offer_ttl_seconds)
     stake = body.total_pool_nano * body.chance_bps // 10_000
     offer = MatchmakingOffer(
@@ -334,6 +342,7 @@ async def create_offer_quote(
             total_pool_nano=str(offer.total_pool_nano),
             commitment_hex=offer.commitment_hex,
             expires_at=int(offer.expires_at.timestamp()),
+            commitment_domain=0x4C4F4F50,
         ),
     )
 

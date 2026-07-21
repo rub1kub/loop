@@ -27,6 +27,7 @@ libraries.toml
 *.boc
 *.fif
 *.log
+*.tsbuildinfo
 postgres-data/
 redis-data/
 certbot/

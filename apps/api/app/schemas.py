@@ -71,6 +71,7 @@ class BankPositionView(BaseModel):
 
 
 class OfferQuoteRequest(BaseModel):
+    offer_id: int = Field(ge=1, le=9_007_199_254_740_991)
     chance_bps: int
     total_pool_nano: int
     commitment_hex: str = Field(min_length=64, max_length=64)
@@ -101,6 +102,7 @@ class ContractCall(BaseModel):
     total_pool_nano: str
     commitment_hex: str
     expires_at: int
+    commitment_domain: int
 
 
 class OfferView(BaseModel):

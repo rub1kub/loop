@@ -44,7 +44,12 @@ async def test_quote_requires_verified_wallet(client, app) -> None:
     denied = await client.post(
         "/api/v1/duels/quote",
         headers=headers,
-        json={"chance_bps": 2500, "total_pool_nano": 4_000_000_000, "commitment_hex": "ab" * 32},
+        json={
+            "offer_id": 12345,
+            "chance_bps": 2500,
+            "total_pool_nano": 4_000_000_000,
+            "commitment_hex": "ab" * 32,
+        },
     )
     assert denied.status_code == 409
     async with app.state.session_factory() as db:
@@ -61,7 +66,12 @@ async def test_quote_requires_verified_wallet(client, app) -> None:
     quote = await client.post(
         "/api/v1/duels/quote",
         headers=headers,
-        json={"chance_bps": 2500, "total_pool_nano": 4_000_000_000, "commitment_hex": "ab" * 32},
+        json={
+            "offer_id": 12345,
+            "chance_bps": 2500,
+            "total_pool_nano": 4_000_000_000,
+            "commitment_hex": "ab" * 32,
+        },
     )
     assert quote.status_code == 200, quote.text
     result = quote.json()

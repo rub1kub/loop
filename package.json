@@ -1,0 +1,25 @@
+{
+  "name": "loop",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace @loop/web run dev",
+    "build:web": "npm --workspace @loop/web run build",
+    "test:web": "npm --workspace @loop/web run test",
+    "lint:web": "npm --workspace @loop/web run lint",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "check": "npm run lint:web && npm run test:web && npm run build:web && npm run format:check"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.7.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.3",
+    "prettier": "3.9.6",
+    "typescript-eslint": "8.65.0"
+  }
+}
