@@ -98,6 +98,6 @@ ln -sfn "$release_dir" "$loop_root/current.next"
 mv -Tf "$loop_root/current.next" "$loop_root/current"
 sudo nginx -t
 sudo systemctl reload nginx
-curl --fail --silent --show-error https://144-31-30-62.sslip.io/ready >/dev/null
+curl --fail --silent --show-error https://app.tonsuite.org/ready >/dev/null
 rollback_armed=false
 trap - ERR
