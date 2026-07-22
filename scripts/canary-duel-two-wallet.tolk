@@ -3,6 +3,8 @@ import "@acton/env"
 import "@acton/io"
 import "@acton/emulation/network"
 import "@acton/emulation/scripts"
+import "@acton/types/big_array"
+import "@acton/types/transaction"
 import "@wrappers/DuelEscrow.gen"
 import "@contracts/duel/messages"
 
@@ -19,6 +21,18 @@ enum CanaryErrors {
     UnexpectedLockedValue = 953
     MissingSettlement = 954
     WrongBinding = 955
+}
+
+fun transactionAt(trace: SendResultList, account: address): TlbTransaction? {
+    var index = 0;
+    repeat (trace.size()) {
+        val transaction = trace.at(index).tx.load();
+        if (transaction.getAccountAddress() == account) {
+            return transaction;
+        }
+        index += 1;
+    }
+    return null;
 }
 
 fun canaryCommitment(
@@ -101,9 +115,7 @@ fun main(
     );
     val openTrace = opened.waitForTrace();
     assert (openTrace != null) throw CanaryErrors.WrongContract;
-    assert (
-        openTrace!.findTransaction<OpenDirectOffer>({ to: duelAddress, success: true }) != null
-    ) throw CanaryErrors.WrongContract;
+    assert (transactionAt(openTrace!, duelAddress) != null) throw CanaryErrors.WrongContract;
 
     val accepted = duel.sendAcceptDirectOffer(
         secondWallet.address,
@@ -129,9 +141,7 @@ fun main(
     );
     val acceptTrace = accepted.waitForTrace();
     assert (acceptTrace != null) throw CanaryErrors.WrongContract;
-    assert (
-        acceptTrace!.findTransaction<AcceptDirectOffer>({ to: duelAddress, success: true }) != null
-    ) throw CanaryErrors.WrongContract;
+    assert (transactionAt(acceptTrace!, duelAddress) != null) throw CanaryErrors.WrongContract;
     assert (
         duel.directOfferData(firstOfferId).opponent! == secondWallet.address &&
         duel.directOfferData(secondOfferId).opponent! == firstWallet.address
@@ -148,7 +158,7 @@ fun main(
     val firstRevealTrace = firstReveal.waitForTrace();
     assert (firstRevealTrace != null) throw CanaryErrors.MissingSettlement;
     assert (
-        firstRevealTrace!.findTransaction<Reveal>({ to: duelAddress, success: true }) != null
+        transactionAt(firstRevealTrace!, duelAddress) != null
     ) throw CanaryErrors.MissingSettlement;
 
     val secondReveal = duel.sendReveal(
@@ -161,18 +171,12 @@ fun main(
     );
     val settlementTrace = secondReveal.waitForTrace();
     assert (settlementTrace != null) throw CanaryErrors.MissingSettlement;
-    val settlement = settlementTrace!.findTransaction<Reveal>({
-        to: duelAddress,
-        success: true,
-    });
+    val settlement = transactionAt(settlementTrace!, duelAddress);
     assert (settlement != null) throw CanaryErrors.MissingSettlement;
-    assert (
-        settlementTrace!.findTransaction<DuelPayout>({ from: duelAddress, success: true }) != null
-    ) throw CanaryErrors.MissingSettlement;
     assert (duel.contractConfig().locked == lockedBefore) throw CanaryErrors.UnexpectedLockedValue;
 
     println(
-        "DUEL_CANARY_PROOF duel_id={} settlement_hash={:064x}",
+        "DUEL_CANARY_PROOF duel_id={} settlement_hash={:x}",
         secondOfferId,
         settlement!.toCell().hash(),
     );

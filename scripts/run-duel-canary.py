@@ -9,7 +9,7 @@ import time
 import urllib.request
 
 PROOF_PATTERN = re.compile(
-    r"DUEL_CANARY_PROOF duel_id=(?P<duel_id>\d+) settlement_hash=(?P<hash>[0-9a-fA-F]{64})"
+    r"DUEL_CANARY_PROOF duel_id=(?P<duel_id>\d+) settlement_hash=(?P<hash>[0-9a-fA-F]{1,64})"
 )
 
 
@@ -58,9 +58,7 @@ def main() -> None:
     expires_at = now + 600
     environment = os.environ.copy()
     environment["LOOP_DUEL_CANARY_SIGNING_SEED"] = f"0x{signing_key}"
-    common = [
-        "acton",
-        "script",
+    script_args = [
         "scripts/canary-duel-two-wallet.tolk",
         args.contract,
         args.first_wallet,
@@ -69,8 +67,11 @@ def main() -> None:
         str(second_offer_id),
         str(expires_at),
     ]
-    run([*common, "--fork-net", "testnet"], environment)
-    live_output = run([*common, "--net", "testnet", "--explorer", "tonviewer"], environment)
+    run(["acton", "script", "--fork-net", "testnet", *script_args], environment)
+    live_output = run(
+        ["acton", "script", "--net", "testnet", "--explorer", "tonviewer", *script_args],
+        environment,
+    )
     proof = PROOF_PATTERN.search(live_output)
     if not proof:
         raise SystemExit("canary completed without a parseable settlement proof")
@@ -80,7 +81,7 @@ def main() -> None:
             "network": -3,
             "contract_address": args.contract,
             "duel_id": int(proof.group("duel_id")),
-            "settlement_tx_hash": proof.group("hash"),
+            "settlement_tx_hash": proof.group("hash").zfill(64),
         }
     ).encode()
     request = urllib.request.Request(
