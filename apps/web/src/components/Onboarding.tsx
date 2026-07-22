@@ -4,11 +4,31 @@ import { useEffect, useState } from 'react';
 import { haptic, setBackAction } from '../telegram';
 
 const stories = [
-  'Два режима.\nДве разные игры.',
-  'BANK — очередь,\nкоторую двигают следующие участники.',
-  'DUEL — прямой вызов\nмежду двумя игроками.',
-  'Все расчёты подтверждаются\nв TON testnet.',
-  'Добро пожаловать\nв LOOP.',
+  {
+    signal: 'LOOP · TESTNET',
+    title: 'Цикл уже\nначался.',
+    detail: 'BANK и DUEL — два режима одной живой системы.',
+  },
+  {
+    signal: '01 · BANK',
+    title: 'Следующие\nдвигают первых.',
+    detail: 'Создай позицию. Новые участники продвигают очередь.',
+  },
+  {
+    signal: '02 · DUEL',
+    title: 'Кто-то должен\nпринять вызов.',
+    detail: 'Задай условия, найди соперника или пригласи человека напрямую.',
+  },
+  {
+    signal: '03 · TON',
+    title: 'Каждое действие\nоставляет след.',
+    detail: 'Кошелёк остаётся у тебя. Транзакции подтверждаются в TON testnet.',
+  },
+  {
+    signal: '04 · ВХОД',
+    title: 'Теперь ты знаешь\nдостаточно.',
+    detail: 'Начни цикл в BANK или открой DUEL.',
+  },
 ];
 
 export function Onboarding({
@@ -19,6 +39,7 @@ export function Onboarding({
   initialPage?: number;
 }) {
   const [page, setPage] = useState(initialPage);
+  const story = stories[page];
 
   useEffect(() => setBackAction(page ? () => setPage((value) => value - 1) : undefined), [page]);
 
@@ -31,29 +52,35 @@ export function Onboarding({
   return (
     <main className="onboarding">
       <span className="onboarding-brand">LOOP · TESTNET</span>
-      <div className="story-stage" onClick={next} role="presentation">
+      <button className="story-stage" onClick={next} aria-label="Продолжить историю LOOP">
         <AnimatePresence mode="wait">
-          <motion.h1
+          <motion.div
+            className="story-copy"
             key={page}
             initial={{ opacity: 0, y: 18, filter: 'blur(8px)' }}
             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
             exit={{ opacity: 0, y: -12, filter: 'blur(6px)' }}
-            transition={{ type: 'spring', stiffness: 180, damping: 24 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           >
-            {stories[page].split('\n').map((line) => (
-              <span key={line}>{line}</span>
-            ))}
-          </motion.h1>
+            <img className="story-mark" src="/assets/loop-loader.webp" alt="" />
+            <p className="story-signal">{story.signal}</p>
+            <h1 aria-label={story.title.replace('\n', ' ')}>
+              {story.title.split('\n').map((line) => (
+                <span key={line}>{line}</span>
+              ))}
+            </h1>
+            <p className="story-detail">{story.detail}</p>
+          </motion.div>
         </AnimatePresence>
-      </div>
+      </button>
       <div className="story-footer">
         <div className="story-dots" aria-label={`Экран ${page + 1} из ${stories.length}`}>
           {stories.map((story, index) => (
-            <span key={story} className={index === page ? 'active' : ''} />
+            <span key={story.signal} className={index === page ? 'active' : ''} />
           ))}
         </div>
         <button className="primary-button" onClick={next}>
-          {page === stories.length - 1 ? 'ВОЙТИ' : 'ДАЛЬШЕ'}
+          {page === stories.length - 1 ? 'ВОЙТИ В LOOP' : page === 0 ? 'ПРОДОЛЖИТЬ' : 'ДАЛЬШЕ'}
         </button>
       </div>
     </main>

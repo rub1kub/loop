@@ -24,6 +24,11 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
   await expect(page.locator('.bank-flow-screen')).toHaveCSS('transform', 'none');
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
   const bankAmount = page.getByLabel('Сумма в GRAM');
+  const titleBeforeKeyboard = await page
+    .getByRole('heading', { name: 'Новая позиция' })
+    .boundingBox();
+  const inputBeforeKeyboard = await bankAmount.boundingBox();
+  const nextBeforeKeyboard = await page.getByRole('button', { name: /ДАЛЬШЕ/ }).boundingBox();
   await bankAmount.fill('2');
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
   const bankViewport = page.viewportSize()!;
@@ -31,12 +36,20 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
   const inputBox = await bankAmount.boundingBox();
   const nextBox = await page.getByRole('button', { name: /ДАЛЬШЕ/ }).boundingBox();
   const closeBox = await page.getByRole('button', { name: 'Закрыть' }).boundingBox();
+  const titleBox = await page.getByRole('heading', { name: 'Новая позиция' }).boundingBox();
   expect(inputBox).not.toBeNull();
   expect(nextBox).not.toBeNull();
   expect(closeBox).not.toBeNull();
-  expect(closeBox!.y).toBeGreaterThanOrEqual(84);
-  expect(inputBox!.y + inputBox!.height).toBeLessThanOrEqual(404);
-  expect(nextBox!.y + nextBox!.height).toBeLessThanOrEqual(404);
+  expect(titleBox).not.toBeNull();
+  expect(titleBeforeKeyboard).not.toBeNull();
+  expect(inputBeforeKeyboard).not.toBeNull();
+  expect(nextBeforeKeyboard).not.toBeNull();
+  expect(closeBox!.y).toBeGreaterThanOrEqual(100);
+  expect(titleBox!.y).toBeCloseTo(titleBeforeKeyboard!.y, 0);
+  expect(inputBox!.y).toBeCloseTo(inputBeforeKeyboard!.y, 0);
+  expect(nextBox!.y).toBeCloseTo(nextBeforeKeyboard!.y, 0);
+  await page.getByRole('button', { name: /ДАЛЬШЕ/ }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole('button', { name: /ДАЛЬШЕ/ })).toBeVisible();
   await page.setViewportSize(bankViewport);
   await bankAmount.blur();
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');

@@ -140,7 +140,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   invite: null,
   error: null,
   showOnboarding: false,
-  onboardingPage: mockScreen === 'onboarding-duel' ? 2 : 1,
+  onboardingPage: mockScreen === 'onboarding-bank' ? 1 : mockScreen === 'onboarding-duel' ? 2 : 0,
 
   async bootstrap() {
     const started = performance.now();
@@ -159,7 +159,10 @@ export const useLoopStore = create<LoopState>((set, get) => ({
           duels: mockScreen === 'duel-result' ? [demoDuel] : [],
           invite: mockScreen === 'duel-invite' ? demoInvite : null,
           loading: false,
-          showOnboarding: mockScreen === 'onboarding-bank' || mockScreen === 'onboarding-duel',
+          showOnboarding:
+            mockScreen === 'onboarding' ||
+            mockScreen === 'onboarding-bank' ||
+            mockScreen === 'onboarding-duel',
         });
         return;
       }
