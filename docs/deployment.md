@@ -1,6 +1,6 @@
 # Deployment and operations
 
-The published environment uses Docker Compose behind nginx at `144-31-30-62.sslip.io`. It is testnet-only.
+The published environment uses Docker Compose behind Apache and nginx at `app.tonsuite.org`. It is testnet-only.
 
 ## Required configuration
 
@@ -27,8 +27,8 @@ The BANK/DUEL split migration archives old cycle-era tables under `legacy_*`; it
 ## Health checks
 
 ```bash
-curl --fail https://144-31-30-62.sslip.io/health
-curl --fail https://144-31-30-62.sslip.io/ready
+curl --fail https://app.tonsuite.org/health
+curl --fail https://app.tonsuite.org/ready
 ```
 
 Readiness checks PostgreSQL, Redis and configured contract attestation. Operations additionally inspect worker heartbeat, current Alembic revision, webhook URL/status, container health and hashed frontend asset delivery.

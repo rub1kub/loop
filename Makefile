@@ -80,4 +80,4 @@ deploy: ## Activate an immutable server release (RELEASE=<40-char SHA>)
 	deploy/activate-release.sh "$(RELEASE)"
 
 smoke-test: ## Verify production readiness and public health
-	curl --fail --silent --show-error https://144-31-30-62.sslip.io/ready
+	curl --fail --silent --show-error https://app.tonsuite.org/ready
