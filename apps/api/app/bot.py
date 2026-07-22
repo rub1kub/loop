@@ -1,8 +1,7 @@
 import asyncio
 import re
-import secrets
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.exceptions import TelegramRetryAfter
@@ -18,7 +17,7 @@ from aiogram.types import (
     Message,
     WebAppInfo,
 )
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .config import Settings
@@ -108,32 +107,12 @@ def create_dispatcher(
             ):
                 await query.answer([], cache_time=1, is_personal=True)
                 return
-            active_challenges = await db.scalar(
-                select(func.count())
-                .select_from(DuelChallenge)
-                .where(
-                    DuelChallenge.creator_user_id == creator.id,
-                    DuelChallenge.state.in_(
-                        [ChallengeState.OPEN.value, ChallengeState.ACCEPTED.value]
-                    ),
-                    DuelChallenge.expires_at > datetime.now(UTC),
-                )
-            )
-            if challenge is None and (active_challenges or 0) >= 20:
+            if challenge is None:
+                # V1.1 creates the invitation id before the creator signs the
+                # on-chain offer. Generating it here would not be covered by
+                # the contract's address-bound acceptance permit.
                 await query.answer([], cache_time=1, is_personal=True)
                 return
-            if challenge is None:
-                challenge = DuelChallenge(
-                    code=secrets.token_urlsafe(9),
-                    creator_user_id=creator.id,
-                    creator_offer_id=offer.id,
-                    expires_at=min(
-                        as_utc(offer.expires_at),
-                        datetime.now(UTC) + timedelta(hours=1),
-                    ),
-                )
-                db.add(challenge)
-                await db.flush()
             await db.commit()
         amount = format_gram(offer.opponent_stake_nano)
         receiver_chance = 10_000 - offer.chance_bps

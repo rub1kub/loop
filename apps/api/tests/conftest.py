@@ -11,6 +11,12 @@ os.environ.update(
     LOOP_CORS_ORIGINS="https://loop.test",
     LOOP_BANK_CONTRACT_ADDRESS="0:" + "12" * 32,
     LOOP_TON_CONTRACT_ADDRESS="0:" + "11" * 32,
+    LOOP_DUEL_INVITE_SIGNING_KEY=(
+        "0102030405060708090a0b0c0d0e0f00112233445566778899aabbccddeeff00"
+    ),
+    LOOP_DUEL_INVITE_PUBLIC_KEY=(
+        "42a8ada72bbd29ec106cc16aaca1b6d6d572962f7b8de922c295b30b5594bffd"
+    ),
 )
 
 import pytest

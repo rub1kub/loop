@@ -16,8 +16,11 @@ fi
 loop_root=/opt/loop
 release_dir="$loop_root/releases/$release_id"
 shared_env="$loop_root/shared/.env.production"
+pending_env="$loop_root/shared/.env.production.next"
 previous_release=""
 backup_path=""
+env_backup=""
+env_changed=false
 rollback_armed=false
 database_changed=false
 
@@ -34,6 +37,9 @@ rollback_release() {
 
   set +e
   echo "release activation failed; restoring the previous application and database" >&2
+  if [[ $env_changed == true && -n $env_backup && -s $env_backup ]]; then
+    install -m 600 "$env_backup" "$shared_env"
+  fi
   cd "$release_dir"
   export LOOP_IMAGE_TAG="$release_id"
   docker compose --project-name loop --env-file .env.production stop api worker >/dev/null
@@ -72,6 +78,10 @@ trap rollback_release ERR
 
 test -d "$release_dir"
 test -f "$shared_env"
+if [[ -e $pending_env && $(stat -c '%a' "$pending_env") != 600 ]]; then
+  echo "pending production environment must have mode 600" >&2
+  exit 3
+fi
 if [[ ! -s "$release_dir/apps/web/dist/index.html" ]]; then
   echo "release is missing the built web entrypoint: apps/web/dist/index.html" >&2
   exit 3
@@ -86,6 +96,28 @@ docker compose --project-name loop --env-file .env.production up -d --wait db re
 if [[ -n $previous_release ]]; then
   rollback_armed=true
   docker compose --project-name loop --env-file .env.production stop api worker
+  if [[ -s $pending_env ]]; then
+    env_backup="$loop_root/shared/.env.production.rollback-$release_id"
+    install -m 600 "$shared_env" "$env_backup"
+    install -m 600 "$pending_env" "$shared_env.new"
+    mv -Tf "$shared_env.new" "$shared_env"
+    rm -f "$pending_env"
+    env_changed=true
+  fi
+
+  previous_duel_manifest="$previous_release/deployments/testnet/duel.json"
+  target_duel_manifest="$release_dir/deployments/testnet/duel.json"
+  test -s "$previous_duel_manifest"
+  test -s "$target_duel_manifest"
+  previous_duel_address=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["address"])' "$previous_duel_manifest")
+  target_duel_address=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["address"])' "$target_duel_manifest")
+  if [[ $previous_duel_address != "$target_duel_address" ]]; then
+    docker compose --project-name loop --env-file .env.production run --rm --no-deps api \
+      python -m app.duel_v11_preflight \
+      --previous-contract "$previous_duel_address" \
+      --target-contract "$target_duel_address"
+  fi
+
   backup_path=$("$release_dir/deploy/backup-postgres.sh")
   if [[ $backup_path != "$loop_root/backups/"*.dump || ! -s $backup_path ]]; then
     echo "database backup was not created at the expected path" >&2
@@ -106,3 +138,6 @@ curl --fail --silent --show-error https://app.tonsuite.org/ >/dev/null
 curl --fail --silent --show-error https://app.tonsuite.org/ready >/dev/null
 rollback_armed=false
 trap - ERR
+if [[ -n $env_backup ]]; then
+  rm -f "$env_backup"
+fi

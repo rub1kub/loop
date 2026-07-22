@@ -3,7 +3,7 @@ import "@acton/emulation/network"
 import "@acton/emulation/scripts"
 import "@wrappers/DuelEscrow.gen"
 
-const SMOKE_COMMITMENT_DOMAIN = 0x4C4F4F50
+const SMOKE_COMMITMENT_DOMAIN = 0x4C4F4F60
 const SMOKE_SECRET: uint256 = 0x6C6F6F702D6475656C2D746573746E65742D736D6F6B652D76312D3030303031
 
 enum SmokeErrors {
@@ -12,9 +12,16 @@ enum SmokeErrors {
     LockedValueMismatch = 903
 }
 
-fun smokeCommitment(offerId: uint64, owner: address): uint256 {
+fun smokeCommitment(
+    networkId: int32,
+    contractAddress: address,
+    offerId: uint64,
+    owner: address,
+): uint256 {
     return beginCell()
         .storeUint(SMOKE_COMMITMENT_DOMAIN, 32)
+        .storeInt(networkId, 32)
+        .storeAddress(contractAddress)
         .storeUint(offerId, 64)
         .storeAddress(owner)
         .storeUint(SMOKE_SECRET, 256)
@@ -31,7 +38,7 @@ fun main(duelAddress: address, offerId: uint64, expiresAt: uint32) {
         deployer.address,
         offerId,
         offerId,
-        smokeCommitment(offerId, deployer.address),
+        smokeCommitment(before.networkId, before.contractAddress, offerId, deployer.address),
         5_000,
         ton("2"),
         expiresAt,

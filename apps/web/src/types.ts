@@ -153,6 +153,7 @@ export interface Offer {
   payout_nano: number;
   net_profit_nano: number;
   mode: 'afk' | 'direct';
+  direct_opponent_wallet: string | null;
   state: string;
   expires_at: string;
   funding_tx_hash: string | null;
@@ -162,7 +163,7 @@ export interface Offer {
 export interface OfferQuote {
   offer: Offer;
   transaction: {
-    operation: 'open_offer';
+    operation: 'open_offer' | 'open_direct_offer' | 'accept_direct_offer';
     query_id: number;
     offer_id: number;
     counter_offer_id: number;
@@ -178,7 +179,24 @@ export interface OfferQuote {
     expires_at: number;
     commitment_domain: number;
     fee_bps: number;
+    invite_id_hex: string | null;
+    direct_counter_offer_id: number;
+    direct_valid_until: number;
+    direct_signature_hex: string | null;
   };
+}
+
+export interface ContractState {
+  mode: 'bank' | 'duel';
+  network: number;
+  address: string;
+  status: string;
+  balance_nano: number;
+  code_hash: string;
+  code_hash_matches: boolean;
+  last_transaction_hash: string | null;
+  last_transaction_url: string | null;
+  wallet_balance_nano: number | null;
 }
 
 export interface Duel {

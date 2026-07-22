@@ -1,0 +1,45 @@
+groups:
+  - name: loop-duel
+    rules:
+      - alert: LoopDuelMetricsMissing
+        expr: absent(loop_duel_worker_healthy)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: LOOP DUEL metrics are not being scraped
+      - alert: LoopDuelProjectionStopped
+        expr: loop_duel_worker_healthy == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: LOOP DUEL projection heartbeat is stale
+      - alert: LoopDuelUnboundDirectMatch
+        expr: loop_duel_unbound_direct > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: A matched direct DUEL lacks its bound opponent address
+      - alert: LoopDuelRevealOverdue
+        expr: loop_duel_overdue_reveals > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A DUEL passed its reveal deadline without terminal projection
+      - alert: LoopDuelFundingStale
+        expr: loop_duel_stale_funding > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: A DUEL funding intent has not finalized within 15 minutes
+      - alert: LoopDuelCanaryMissing
+        expr: loop_duel_canary_success == 0 or loop_duel_canary_age_seconds > 7200
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: The live two-wallet DUEL canary is missing or older than two hours

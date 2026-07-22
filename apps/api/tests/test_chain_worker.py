@@ -8,6 +8,8 @@ from tonsdk.boc import Cell
 from app.chain_worker import (
     BANK_CREATE_POSITION,
     BANK_PAYOUT,
+    DUEL_ACCEPT_DIRECT_OFFER,
+    DUEL_OPEN_DIRECT_OFFER,
     DUEL_OPEN_OFFER,
     DUEL_PAYOUT,
     DUEL_REVEAL,
@@ -19,12 +21,15 @@ from app.config import get_settings
 from app.models import User, Wallet
 from app.modules.bank.models import BankChainEvent, BankPosition, BankPositionStatus
 from app.modules.duel.models import (
+    ChallengeState,
     Duel,
     DuelChainEvent,
+    DuelInvitation,
     DuelOffer,
     DuelState,
     OfferState,
 )
+from app.ton import sign_direct_accept_permit
 
 
 def body_b64(opcode: int, fields: list[tuple[int, int]]) -> str:
@@ -100,6 +105,38 @@ def duel_open_body(offer: DuelOffer) -> str:
             (64, offer.counter_offer_id),
         ],
     )
+
+
+def duel_direct_open_body(offer: DuelOffer) -> str:
+    assert offer.invite_id_hex
+    return body_b64(
+        DUEL_OPEN_DIRECT_OFFER,
+        [
+            (64, offer.onchain_offer_id),
+            (256, int(offer.commitment_hex, 16)),
+            (16, offer.chance_bps),
+            (0, offer.total_pool_nano),
+            (32, int(offer.expires_at.timestamp())),
+            (256, int(offer.invite_id_hex, 16)),
+        ],
+    )
+
+
+def duel_direct_accept_body(offer: DuelOffer, signature_hex: str, valid_until: int) -> str:
+    cell = Cell()
+    cell.bits.write_uint(DUEL_ACCEPT_DIRECT_OFFER, 32)
+    cell.bits.write_uint(offer.query_id, 64)
+    cell.bits.write_uint(offer.onchain_offer_id, 64)
+    cell.bits.write_uint(int(offer.commitment_hex, 16), 256)
+    cell.bits.write_uint(offer.chance_bps, 16)
+    cell.bits.write_coins(offer.total_pool_nano)
+    cell.bits.write_uint(int(offer.expires_at.timestamp()), 32)
+    acceptance = Cell()
+    acceptance.bits.write_uint(offer.counter_offer_id, 64)
+    acceptance.bits.write_uint(valid_until, 32)
+    acceptance.bits.write_uint(int(signature_hex, 16), 512)
+    cell.refs.append(acceptance)
+    return base64.b64encode(cell.to_boc(has_idx=False)).decode()
 
 
 def duel_reveal_body(duel_id: int, offer_id: int) -> str:
@@ -428,4 +465,119 @@ async def test_duel_projection_validates_funding_and_terminal_payout(app) -> Non
         await db.refresh(duel)
         assert duel.state == DuelState.SETTLED.value
         assert duel.winner_wallet == second_wallet.address
+
+
+@pytest.mark.asyncio
+async def test_duel_projection_requires_address_bound_direct_permit(app) -> None:
+    settings = get_settings()
+    expires = datetime.fromtimestamp(1_800_000_900, UTC)
+    valid_until = 1_800_000_300
+    async with app.state.session_factory() as db:
+        creator = User(telegram_id=2101, first_name="Creator")
+        invited = User(telegram_id=2102, first_name="Invited")
+        db.add_all([creator, invited])
+        await db.flush()
+        creator_wallet = Wallet(
+            user_id=creator.id,
+            network=-3,
+            address="0:" + "5a" * 32,
+            public_key="6a" * 32,
+        )
+        invited_wallet = Wallet(
+            user_id=invited.id,
+            network=-3,
+            address="0:" + "5b" * 32,
+            public_key="6b" * 32,
+        )
+        db.add_all([creator_wallet, invited_wallet])
+        await db.flush()
+        creator_offer = DuelOffer(
+            onchain_offer_id=910,
+            query_id=1,
+            user_id=creator.id,
+            wallet_id=creator_wallet.id,
+            owner_wallet=creator_wallet.address,
+            network=-3,
+            contract_address=settings.effective_duel_contract_address,
+            chance_bps=7500,
+            total_pool_nano=4_000_000_000,
+            stake_nano=3_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+            fee_bps=250,
+            payout_nano=3_900_000_000,
+            commitment_hex="ca" * 32,
+            invite_id_hex="da" * 32,
+            mode="direct",
+            expires_at=expires,
+        )
+        invited_offer = DuelOffer(
+            onchain_offer_id=911,
+            query_id=911,
+            user_id=invited.id,
+            wallet_id=invited_wallet.id,
+            owner_wallet=invited_wallet.address,
+            network=-3,
+            contract_address=settings.effective_duel_contract_address,
+            chance_bps=2500,
+            total_pool_nano=4_000_000_000,
+            stake_nano=1_000_000_000,
+            opponent_stake_nano=3_000_000_000,
+            fee_bps=250,
+            payout_nano=3_900_000_000,
+            commitment_hex="cb" * 32,
+            counter_offer_id=creator_offer.onchain_offer_id,
+            mode="direct",
+            expires_at=expires,
+        )
+        db.add_all([creator_offer, invited_offer])
+        await db.flush()
+        db.add(
+            DuelInvitation(
+                code="direct-worker-proof",
+                creator_user_id=creator.id,
+                creator_offer_id=creator_offer.id,
+                invite_id_hex=creator_offer.invite_id_hex,
+                accepted_by_user_id=invited.id,
+                accepted_wallet_address=invited_wallet.address,
+                state=ChallengeState.FUNDING.value,
+                expires_at=expires,
+            )
+        )
+        await db.commit()
+
+        opened = transaction(
+            settings.effective_duel_contract_address,
+            creator_wallet.address,
+            30,
+            duel_direct_open_body(creator_offer),
+            3_050_000_000,
+        )
+        assert await apply_transaction(db, settings, opened, "duel") == ProjectionResult.APPLIED
+        await db.commit()
+
+        signature = sign_direct_accept_permit(
+            settings.duel_invite_signing_key.get_secret_value(),
+            network=-3,
+            contract_address=settings.effective_duel_contract_address,
+            invite_id_hex=creator_offer.invite_id_hex,
+            counter_offer_id=creator_offer.onchain_offer_id,
+            invited_address=invited_wallet.address,
+            valid_until=valid_until,
+        )
+        accepted = transaction(
+            settings.effective_duel_contract_address,
+            invited_wallet.address,
+            31,
+            duel_direct_accept_body(invited_offer, signature, valid_until),
+            1_050_000_000,
+        )
+        assert await apply_transaction(db, settings, accepted, "duel") == ProjectionResult.APPLIED
+        await db.commit()
+        await db.refresh(creator_offer)
+        await db.refresh(invited_offer)
+        duel = await db.scalar(select(Duel).where(Duel.onchain_duel_id == 911))
+        assert duel is not None
+        assert creator_offer.direct_opponent_wallet == invited_wallet.address
+        assert invited_offer.direct_opponent_wallet == creator_wallet.address
+        assert creator_offer.state == invited_offer.state == OfferState.MATCHED.value
         assert await db.scalar(select(func.count()).select_from(DuelChainEvent)) == 2

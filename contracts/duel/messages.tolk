@@ -41,6 +41,37 @@ struct (0x4C4F4F07) SetPaused {
     paused: bool
 }
 
+/// Opens a Telegram direct invite. `inviteId` is public and only identifies
+/// the invite; acceptance still requires a backend Ed25519 permit bound to the
+/// accepting wallet address.
+struct (0x4C4F4F08) OpenDirectOffer {
+    queryId: uint64
+    offerId: uint64
+    commitment: uint256
+    chanceBps: uint16
+    totalPool: coins
+    expiresAt: uint32
+    inviteId: uint256
+}
+
+struct DirectAcceptance {
+    counterOfferId: uint64
+    validUntil: uint32
+    signature: bits512
+}
+
+/// Atomically opens the invited wallet's complementary offer, verifies its
+/// address-bound permit and matches the pair.
+struct (0x4C4F4F09) AcceptDirectOffer {
+    queryId: uint64
+    offerId: uint64
+    commitment: uint256
+    chanceBps: uint16
+    totalPool: coins
+    expiresAt: uint32
+    acceptance: Cell<DirectAcceptance>
+}
+
 /// Attached to every terminal winner transfer so indexers can project the result.
 struct (0x4C4F4F11) DuelPayout {
     queryId: uint64

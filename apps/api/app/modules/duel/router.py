@@ -15,7 +15,7 @@ from ...schemas import (
     OfferQuoteResponse,
     OfferView,
 )
-from ...ton import explorer_transaction_url
+from ...ton import explorer_transaction_url, sign_direct_accept_permit
 from .math import canonical_duel_terms, payout_after_fee
 from .models import ChallengeState, Duel, DuelInvitation, DuelOffer, DuelState, OfferState
 
@@ -39,6 +39,7 @@ def offer_view(offer: DuelOffer) -> OfferView:
         payout_nano=offer.payout_nano,
         net_profit_nano=offer.payout_nano - offer.stake_nano,
         mode=offer.mode,
+        direct_opponent_wallet=offer.direct_opponent_wallet,
         state=offer.state,
         expires_at=offer.expires_at,
         funding_tx_hash=offer.funding_tx_hash,
@@ -130,12 +131,12 @@ async def create_offer_quote(
         .where(
             DuelOffer.state == OfferState.RESERVED.value,
             DuelOffer.reserved_until < now,
-            DuelOffer.mode == "afk",
         )
         .values(state=OfferState.OPEN.value, reserved_until=None)
     )
     invitation: DuelInvitation | None = None
     counter: DuelOffer | None = None
+    creator_invite_id: str | None = None
     if body.challenge_code:
         invitation = await db.scalar(
             select(DuelInvitation)
@@ -147,6 +148,7 @@ async def create_offer_quote(
         if (
             invitation.accepted_by_user_id != user.id
             or invitation.state != ChallengeState.ACCEPTED.value
+            or invitation.accepted_wallet_address != wallet.address
         ):
             raise HTTPException(status.HTTP_409_CONFLICT, "challenge is not reserved for this user")
         counter = await db.get(DuelOffer, invitation.creator_offer_id)
@@ -159,6 +161,8 @@ async def create_offer_quote(
             or counter.chance_bps + body.chance_bps != 10_000
         ):
             raise HTTPException(status.HTTP_409_CONFLICT, "challenge terms are no longer available")
+        if not counter.invite_id_hex or counter.invite_id_hex != invitation.invite_id_hex:
+            raise HTTPException(status.HTTP_409_CONFLICT, "challenge permit context is invalid")
     elif body.mode == "afk":
         counter = await db.scalar(
             select(DuelOffer)
@@ -188,6 +192,8 @@ async def create_offer_quote(
     expires = now + timedelta(seconds=settings.offer_ttl_seconds)
     fee_bps = settings.duel_fee_bps
     payout = payout_after_fee(total_pool, fee_bps)
+    if body.mode == "direct" and invitation is None:
+        creator_invite_id = secrets.token_hex(32)
     offer = DuelOffer(
         onchain_offer_id=body.offer_id,
         query_id=body.offer_id,
@@ -203,22 +209,58 @@ async def create_offer_quote(
         fee_bps=fee_bps,
         payout_nano=payout,
         commitment_hex=body.commitment_hex,
+        invite_id_hex=creator_invite_id,
+        direct_opponent_wallet=counter.owner_wallet if invitation and counter else None,
         counter_offer_id=counter.onchain_offer_id if counter else 0,
-        mode="direct" if invitation else body.mode,
+        mode="direct" if invitation or body.mode == "direct" else "afk",
         expires_at=expires,
     )
     db.add(offer)
+    await db.flush()
+    if creator_invite_id:
+        invitation = DuelInvitation(
+            code=secrets.token_urlsafe(9),
+            creator_user_id=user.id,
+            creator_offer_id=offer.id,
+            invite_id_hex=creator_invite_id,
+            expires_at=expires,
+        )
+        db.add(invitation)
     if counter:
         counter.state = OfferState.RESERVED.value
         counter.reserved_until = now + timedelta(minutes=5)
-    if invitation:
+    if invitation and counter:
         invitation.state = ChallengeState.FUNDING.value
+    operation = "open_offer"
+    direct_valid_until = 0
+    direct_signature_hex: str | None = None
+    if creator_invite_id:
+        operation = "open_direct_offer"
+    elif invitation and counter:
+        operation = "accept_direct_offer"
+        direct_valid_until = int(
+            min(
+                expires,
+                as_utc(invitation.expires_at),
+                as_utc(counter.expires_at),
+                now + timedelta(minutes=5),
+            ).timestamp()
+        )
+        direct_signature_hex = sign_direct_accept_permit(
+            settings.duel_invite_signing_key.get_secret_value(),
+            network=offer.network,
+            contract_address=offer.contract_address,
+            invite_id_hex=invitation.invite_id_hex,
+            counter_offer_id=counter.onchain_offer_id,
+            invited_address=wallet.address,
+            valid_until=direct_valid_until,
+        )
     await db.commit()
     await db.refresh(offer)
     return OfferQuoteResponse(
         offer=offer_view(offer),
         transaction=ContractCall(
-            operation="open_offer",
+            operation=operation,
             query_id=offer.query_id,
             offer_id=offer.onchain_offer_id,
             counter_offer_id=offer.counter_offer_id,
@@ -232,8 +274,12 @@ async def create_offer_quote(
             total_pool_nano=str(offer.total_pool_nano),
             commitment_hex=offer.commitment_hex,
             expires_at=int(offer.expires_at.timestamp()),
-            commitment_domain=0x4C4F4F50,
+            commitment_domain=0x4C4F4F60,
             fee_bps=offer.fee_bps,
+            invite_id_hex=creator_invite_id,
+            direct_counter_offer_id=(counter.onchain_offer_id if invitation and counter else 0),
+            direct_valid_until=direct_valid_until,
+            direct_signature_hex=direct_signature_hex,
         ),
     )
 

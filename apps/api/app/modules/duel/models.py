@@ -79,6 +79,8 @@ class DuelOffer(Base):
     fee_bps: Mapped[int] = mapped_column(Integer, nullable=False)
     payout_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
     commitment_hex: Mapped[str] = mapped_column(String(64), nullable=False)
+    invite_id_hex: Mapped[str | None] = mapped_column(String(64))
+    direct_opponent_wallet: Mapped[str | None] = mapped_column(String(68))
     counter_offer_id: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     mode: Mapped[str] = mapped_column(String(16), default="afk", nullable=False)
     state: Mapped[str] = mapped_column(
@@ -183,7 +185,9 @@ class DuelInvitation(Base):
     code: Mapped[str] = mapped_column(String(24), primary_key=True)
     creator_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     creator_offer_id: Mapped[str] = mapped_column(ForeignKey("duel_offers.id"), nullable=False)
+    invite_id_hex: Mapped[str] = mapped_column(String(64), nullable=False)
     accepted_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+    accepted_wallet_address: Mapped[str | None] = mapped_column(String(68))
     state: Mapped[str] = mapped_column(
         String(24), default=ChallengeState.OPEN.value, nullable=False, index=True
     )

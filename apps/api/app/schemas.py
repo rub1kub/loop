@@ -198,6 +198,10 @@ class ContractCall(BaseModel):
     expires_at: int
     commitment_domain: int
     fee_bps: int
+    invite_id_hex: str | None = None
+    direct_counter_offer_id: int = 0
+    direct_valid_until: int = 0
+    direct_signature_hex: str | None = None
 
 
 class OfferView(BaseModel):
@@ -211,6 +215,7 @@ class OfferView(BaseModel):
     payout_nano: int
     net_profit_nano: int
     mode: str
+    direct_opponent_wallet: str | None
     state: str
     expires_at: datetime
     funding_tx_hash: str | None
@@ -299,3 +304,10 @@ class InviteView(BaseModel):
     net_profit_nano: int
     counter_offer_id: int
     expires_at: datetime
+
+
+class DuelCanaryReport(BaseModel):
+    network: int
+    contract_address: str = Field(min_length=48, max_length=68)
+    duel_id: int = Field(ge=1, le=2**64 - 1)
+    settlement_tx_hash: str = Field(min_length=43, max_length=96)

@@ -2,13 +2,48 @@ import base64
 
 import httpx
 import pytest
+from tonsdk.boc import Cell  # type: ignore[import-untyped]
 
 from app.config import get_settings
-from app.ton import TonClient, TonProviderError
+from app.ton import (
+    TonClient,
+    TonProviderError,
+    duel_invite_public_key,
+    sign_direct_accept_permit,
+    verify_direct_accept_permit,
+)
 
 
 def hash_b64(byte: int) -> str:
     return base64.b64encode(bytes([byte]) * 32).decode()
+
+
+def message_body(*values: tuple[int, int]) -> dict[str, dict[str, str]]:
+    cell = Cell()
+    for value, bits in values:
+        cell.bits.write_uint(value, bits)
+    return {"message_content": {"body": base64.b64encode(cell.to_boc(False)).decode()}}
+
+
+def test_direct_permit_is_bound_to_network_contract_offer_and_invited_wallet() -> None:
+    private_key = get_settings().duel_invite_signing_key.get_secret_value()
+    public_key = duel_invite_public_key(private_key)
+    context = {
+        "network": -3,
+        "contract_address": "0:" + "11" * 32,
+        "invite_id_hex": "22" * 32,
+        "counter_offer_id": 77,
+        "invited_address": "0:" + "33" * 32,
+        "valid_until": 2_000_000_000,
+    }
+    signature = sign_direct_accept_permit(private_key, **context)
+    assert verify_direct_accept_permit(public_key, signature, **context)
+    assert not verify_direct_accept_permit(
+        public_key,
+        signature,
+        **{**context, "invited_address": "0:" + "44" * 32},
+    )
+    assert not verify_direct_accept_permit(public_key, signature, **{**context, "network": -239})
 
 
 @pytest.mark.asyncio
@@ -117,3 +152,50 @@ async def test_transaction_without_masterchain_inclusion_is_rejected() -> None:
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
         with pytest.raises(TonProviderError, match="masterchain finality"):
             await TonClient(http, get_settings()).verify_transaction(tx_hash, account)
+
+
+@pytest.mark.asyncio
+async def test_duel_canary_requires_matching_reveal_and_payout_proof() -> None:
+    tx_hash = hash_b64(8)
+    account = "0:" + "66" * 32
+    duel_id = 8_500_000_000_000_001
+
+    transaction = {
+        "account": account,
+        "hash": tx_hash,
+        "lt": "88",
+        "now": 1_800_000_000,
+        "mc_block_seqno": 56,
+        "emulated": False,
+        "description": {
+            "aborted": False,
+            "compute_ph": {"success": True},
+            "action": {"success": True},
+        },
+        "in_msg": message_body(
+            (0x4C4F4F04, 32),
+            (duel_id, 64),
+            (duel_id, 64),
+            (duel_id, 64),
+            (1, 256),
+        ),
+        "out_msgs": [
+            message_body(
+                (0x4C4F4F11, 32),
+                (duel_id, 64),
+                (duel_id, 64),
+                (duel_id, 64),
+                (1, 8),
+            )
+        ],
+    }
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"transactions": [transaction]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        client = TonClient(http, get_settings())
+        proof = await client.verify_duel_settlement(tx_hash, account, duel_id)
+        assert proof.masterchain_seqno == 56
+        with pytest.raises(TonProviderError, match="requested DUEL settlement"):
+            await client.verify_duel_settlement(tx_hash, account, duel_id + 1)

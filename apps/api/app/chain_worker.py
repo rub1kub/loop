@@ -29,7 +29,7 @@ from .modules.duel.models import (
     MatchmakingOffer,
     OfferState,
 )
-from .ton import TonClient, TonProviderError, normalize_address
+from .ton import TonClient, TonProviderError, normalize_address, verify_direct_accept_permit
 
 logger = structlog.get_logger()
 
@@ -39,6 +39,8 @@ DUEL_MATCH_OFFERS = 0x4C4F4F03
 DUEL_REVEAL = 0x4C4F4F04
 DUEL_EXPIRE_OFFER = 0x4C4F4F05
 DUEL_EXPIRE_DUEL = 0x4C4F4F06
+DUEL_OPEN_DIRECT_OFFER = 0x4C4F4F08
+DUEL_ACCEPT_DIRECT_OFFER = 0x4C4F4F09
 DUEL_PAYOUT = 0x4C4F4F11
 DUEL_REFUND = 0x4C4F4F12
 DUEL_PROTOCOL_FEE = 0x4C4F4F13
@@ -100,15 +102,26 @@ def decode_body(body_b64: str) -> dict[str, int]:
     parser = cell.begin_parse()
     opcode = parser.read_uint(32)
     result = {"opcode": opcode, "query_id": parser.read_uint(64)}
-    if opcode == DUEL_OPEN_OFFER:
+    if opcode in {DUEL_OPEN_OFFER, DUEL_OPEN_DIRECT_OFFER, DUEL_ACCEPT_DIRECT_OFFER}:
         result.update(
             offer_id=parser.read_uint(64),
             commitment=parser.read_uint(256),
             chance_bps=parser.read_uint(16),
             total_pool_nano=parser.read_coins(),
             expires_at=parser.read_uint(32),
-            counter_offer_id=parser.read_uint(64),
         )
+        if opcode == DUEL_OPEN_OFFER:
+            result["counter_offer_id"] = parser.read_uint(64)
+        elif opcode == DUEL_OPEN_DIRECT_OFFER:
+            result["invite_id"] = parser.read_uint(256)
+            result["counter_offer_id"] = 0
+        else:
+            acceptance = parser.read_ref().begin_parse()
+            result.update(
+                counter_offer_id=acceptance.read_uint(64),
+                direct_valid_until=acceptance.read_uint(32),
+                direct_signature=acceptance.read_uint(512),
+            )
     elif opcode in {DUEL_CANCEL_OFFER, DUEL_EXPIRE_OFFER}:
         result["offer_id"] = parser.read_uint(64)
     elif opcode == DUEL_MATCH_OFFERS:
@@ -487,7 +500,7 @@ async def apply_duel_transaction(
     source = message_address(incoming, "source", "src", "source_address")
     value = message_value(incoming)
 
-    if opcode == DUEL_OPEN_OFFER:
+    if opcode in {DUEL_OPEN_OFFER, DUEL_OPEN_DIRECT_OFFER, DUEL_ACCEPT_DIRECT_OFFER}:
         offer = await db.scalar(
             select(MatchmakingOffer).where(
                 MatchmakingOffer.network == settings.ton_network_id,
@@ -524,8 +537,17 @@ async def apply_duel_transaction(
                 fee_bps=settings.duel_fee_bps,
                 payout_nano=payout,
                 commitment_hex=f"{decoded['commitment']:064x}",
+                invite_id_hex=(
+                    f"{decoded['invite_id']:064x}"
+                    if opcode == DUEL_OPEN_DIRECT_OFFER
+                    else None
+                ),
                 counter_offer_id=decoded["counter_offer_id"],
-                mode="external",
+                mode=(
+                    "external"
+                    if opcode == DUEL_OPEN_OFFER
+                    else "external_direct"
+                ),
                 expires_at=datetime.fromtimestamp(decoded["expires_at"], UTC),
             )
             db.add(offer)
@@ -537,6 +559,7 @@ async def apply_duel_transaction(
             or decoded["chance_bps"] != offer.chance_bps
             or decoded["total_pool_nano"] != offer.total_pool_nano
             or decoded["counter_offer_id"] != offer.counter_offer_id
+            or decoded.get("invite_id", 0) != int(offer.invite_id_hex or "0", 16)
             or decoded["expires_at"] != int(offer.expires_at.timestamp())
         ):
             payout = decoded["total_pool_nano"] - (
@@ -553,8 +576,11 @@ async def apply_duel_transaction(
             offer.fee_bps = settings.duel_fee_bps
             offer.payout_nano = payout
             offer.commitment_hex = f"{decoded['commitment']:064x}"
+            offer.invite_id_hex = (
+                f"{decoded['invite_id']:064x}" if opcode == DUEL_OPEN_DIRECT_OFFER else None
+            )
             offer.counter_offer_id = decoded["counter_offer_id"]
-            offer.mode = "external"
+            offer.mode = "external" if opcode == DUEL_OPEN_OFFER else "external_direct"
             offer.expires_at = datetime.fromtimestamp(decoded["expires_at"], UTC)
         offer.state = OfferState.OPEN.value
         offer.funding_tx_hash = tx_hash
@@ -567,7 +593,44 @@ async def apply_duel_transaction(
                     tx_hash=tx_hash,
                 )
             )
-        if offer.counter_offer_id:
+        if opcode == DUEL_ACCEPT_DIRECT_OFFER:
+            counter = await db.scalar(
+                select(MatchmakingOffer).where(
+                    MatchmakingOffer.network == settings.ton_network_id,
+                    MatchmakingOffer.onchain_offer_id == offer.counter_offer_id,
+                )
+            )
+            if (
+                counter is None
+                or not counter.invite_id_hex
+                or counter.state not in {
+                    OfferState.OPEN.value,
+                    OfferState.RESERVED.value,
+                }
+                or not verify_direct_accept_permit(
+                    settings.duel_invite_public_key,
+                    f"{decoded['direct_signature']:0128x}",
+                    network=settings.ton_network_id,
+                    contract_address=account,
+                    invite_id_hex=counter.invite_id_hex,
+                    counter_offer_id=counter.onchain_offer_id,
+                    invited_address=source,
+                    valid_until=decoded["direct_valid_until"],
+                )
+            ):
+                return ProjectionResult.RETRY
+            challenge = await db.scalar(
+                select(DuelChallenge).where(DuelChallenge.creator_offer_id == counter.id)
+            )
+            if challenge and (
+                not challenge.accepted_wallet_address
+                or normalize_address(challenge.accepted_wallet_address) != source
+            ):
+                return ProjectionResult.RETRY
+            counter.direct_opponent_wallet = source
+            offer.direct_opponent_wallet = counter.owner_wallet
+            await create_duel_projection(db, settings, transaction, counter, offer)
+        elif opcode == DUEL_OPEN_OFFER and offer.counter_offer_id:
             counter = await db.scalar(
                 select(MatchmakingOffer).where(
                     MatchmakingOffer.network == settings.ton_network_id,

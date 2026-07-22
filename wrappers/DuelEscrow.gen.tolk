@@ -171,6 +171,64 @@ fun DuelEscrow.sendSetPaused(
     return net.send(from, genericMsg);
 }
 
+fun DuelEscrow.sendOpenDirectOffer(
+    self,
+    from: address,
+    queryId: uint64,
+    offerId: uint64,
+    commitment: uint256,
+    chanceBps: uint16,
+    totalPool: coins,
+    expiresAt: uint32,
+    inviteId: uint256,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: OpenDirectOffer {
+            queryId,
+            offerId,
+            commitment,
+            chanceBps,
+            totalPool,
+            expiresAt,
+            inviteId,
+        },
+    });
+    return net.send(from, genericMsg);
+}
+
+fun DuelEscrow.sendAcceptDirectOffer(
+    self,
+    from: address,
+    queryId: uint64,
+    offerId: uint64,
+    commitment: uint256,
+    chanceBps: uint16,
+    totalPool: coins,
+    expiresAt: uint32,
+    acceptance: DirectAcceptance,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: AcceptDirectOffer {
+            queryId,
+            offerId,
+            commitment,
+            chanceBps,
+            totalPool,
+            expiresAt,
+            acceptance: acceptance.toCell(),
+        },
+    });
+    return net.send(from, genericMsg);
+}
+
 /// Send message to the contract with a custom body cell
 fun DuelEscrow.sendAny(self, from: address, body: cell, config: SendParams = {}): SendResultList {
     val genericMsg = createMessage({
@@ -192,6 +250,10 @@ fun DuelEscrow.offerData(self, offerId: uint64): OfferData {
 
 fun DuelEscrow.duelData(self, duelId: uint64): DuelData {
     return net.runGetMethod(self.address, "duelData", [duelId]);
+}
+
+fun DuelEscrow.directOfferData(self, offerId: uint64): DirectOfferData {
+    return net.runGetMethod(self.address, "directOfferData", [offerId]);
 }
 
 fun DuelEscrow.activeOffer(self, owner: address): uint64 {
