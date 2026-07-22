@@ -263,14 +263,16 @@ a:focus-visible {
     visibility 160ms;
 }
 
-.keyboard-open .tab-bar {
+.keyboard-open .tab-bar,
+.app-shell:has(.sheet-backdrop) .tab-bar {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
   transform: translateY(100%);
 }
 
-.keyboard-open .screen-stage {
+.keyboard-open .screen-stage,
+.app-shell:has(.sheet-backdrop) .screen-stage {
   height: 100%;
 }
 
@@ -393,8 +395,8 @@ a:focus-visible {
 
 .keyboard-open .sheet-backdrop {
   top: var(--loop-visual-offset-top, 0px);
-  bottom: auto;
-  height: var(--loop-visual-height, 100dvh);
+  bottom: var(--loop-visual-bottom-inset, 0px);
+  height: auto;
 }
 
 .keyboard-open .sheet {

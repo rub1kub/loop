@@ -30,9 +30,15 @@ describe('Telegram keyboard viewport behavior', () => {
     window.dispatchEvent(new Event('resize'));
     expect(document.documentElement.style.getPropertyValue('--loop-stable-height')).toBe('700px');
     expect(document.documentElement.style.getPropertyValue('--loop-visual-height')).toBe('430px');
+    expect(document.documentElement.style.getPropertyValue('--loop-visual-bottom-inset')).toBe(
+      '270px',
+    );
 
     input.blur();
-    vi.advanceTimersByTime(160);
+    window.dispatchEvent(new Event('resize'));
+    expect(document.documentElement).toHaveClass('keyboard-open');
+    expect(document.documentElement.style.getPropertyValue('--loop-stable-height')).toBe('700px');
+    vi.advanceTimersByTime(360);
     expect(document.documentElement).not.toHaveClass('keyboard-open');
     expect(document.documentElement.style.getPropertyValue('--loop-stable-height')).toBe('430px');
     cleanup();
