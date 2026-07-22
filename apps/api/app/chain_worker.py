@@ -278,6 +278,12 @@ async def apply_bank_transaction(
         or multiplier not in {12_500, 15_000, 20_000}
     ):
         return ProjectionResult.IGNORED
+    verified_wallet = await db.scalar(
+        select(Wallet).where(
+            Wallet.network == settings.ton_network_id,
+            func.lower(Wallet.address) == source.lower(),
+        )
+    )
     position = await db.scalar(
         select(BankPosition).where(
             BankPosition.network == settings.ton_network_id,
@@ -290,8 +296,8 @@ async def apply_bank_transaction(
         position = BankPosition(
             position_id=decoded["position_id"],
             query_id=decoded["query_id"],
-            user_id=None,
-            wallet_id=None,
+            user_id=verified_wallet.user_id if verified_wallet else None,
+            wallet_id=verified_wallet.id if verified_wallet else None,
             owner_wallet=source,
             network=settings.ton_network_id,
             contract_address=settings.bank_contract_address,
@@ -312,8 +318,8 @@ async def apply_bank_transaction(
         # Keep the authoritative public-chain position and detach the stale
         # application intent so it cannot poison all later FIFO projections.
         target = principal * multiplier // 10_000
-        position.user_id = None
-        position.wallet_id = None
+        position.user_id = verified_wallet.user_id if verified_wallet else None
+        position.wallet_id = verified_wallet.id if verified_wallet else None
         position.owner_wallet = source
         position.query_id = decoded["query_id"]
         position.principal_nano = principal
