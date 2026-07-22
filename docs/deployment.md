@@ -31,7 +31,7 @@ To stage a contract switch, create `/opt/loop/shared/.env.production.next` from 
 ## Health checks
 
 ```bash
-curl --fail https://app.tonsuite.org/health
+curl --fail https://app.tonsuite.org/live
 curl --fail https://app.tonsuite.org/ready
 ```
 
