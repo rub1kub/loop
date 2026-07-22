@@ -596,7 +596,7 @@ async def preview_invite(code: str, user: CurrentUser, db: Db) -> InviteView:
 
 
 @router.post("/invites/{code}/accept", response_model=InviteView)
-async def accept_invite(code: str, user: CurrentUser, db: Db) -> InviteView:
+async def accept_invite(code: str, user: CurrentUser, db: Db, settings: Config) -> InviteView:
     invitation = await db.scalar(
         select(DuelInvitation).where(DuelInvitation.code == code).with_for_update()
     )
@@ -619,11 +619,20 @@ async def accept_invite(code: str, user: CurrentUser, db: Db) -> InviteView:
         raise HTTPException(status.HTTP_409_CONFLICT, "finish the current invitation first")
     offer = await db.get(MatchmakingOffer, invitation.creator_offer_id)
     wallet = await db.scalar(
-        select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True))
+        select(Wallet).where(
+            Wallet.user_id == user.id,
+            Wallet.network == settings.ton_network_id,
+            Wallet.active.is_(True),
+        )
     )
-    if offer is None or (wallet is not None and offer.owner_wallet == wallet.address):
+    if wallet is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "verified testnet wallet required")
+    if invitation.accepted_wallet_address not in {None, wallet.address}:
+        raise HTTPException(status.HTTP_409_CONFLICT, "invite is bound to another wallet")
+    if offer is None or offer.owner_wallet == wallet.address:
         raise HTTPException(status.HTTP_409_CONFLICT, "same-wallet invite is not allowed")
     invitation.accepted_by_user_id = user.id
+    invitation.accepted_wallet_address = wallet.address
     invitation.accepted_at = invitation.accepted_at or datetime.now(UTC)
     invitation.state = ChallengeState.ACCEPTED.value
     await db.commit()

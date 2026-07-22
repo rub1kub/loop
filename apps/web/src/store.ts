@@ -64,6 +64,7 @@ const demoOffer: Offer = {
   payout_nano: 3_900_000_000,
   net_profit_nano: 2_900_000_000,
   mode: 'afk',
+  direct_opponent_wallet: null,
   state: mockScreen === 'duel-result' ? 'settled' : 'open',
   expires_at: new Date(now + 10 * 60_000).toISOString(),
   funding_tx_hash: 'demo-duel-funding',

@@ -9,7 +9,10 @@ export const CANCEL_OFFER_OPCODE = 0x4c4f4f02;
 export const REVEAL_OPCODE = 0x4c4f4f04;
 export const EXPIRE_OFFER_OPCODE = 0x4c4f4f05;
 export const EXPIRE_DUEL_OPCODE = 0x4c4f4f06;
-export const COMMITMENT_DOMAIN = 0x4c4f4f50;
+export const OPEN_DIRECT_OFFER_OPCODE = 0x4c4f4f08;
+export const ACCEPT_DIRECT_OFFER_OPCODE = 0x4c4f4f09;
+export const COMMITMENT_DOMAIN = 0x4c4f4f60;
+export const DUEL_OPEN_GAS_NANO = 50_000_000n;
 
 export function newOfferId(random = crypto.getRandomValues(new Uint32Array(2))): number {
   const high = random[0] & 0x1fffff;
@@ -50,15 +53,71 @@ export function buildBankPositionTransaction(
   };
 }
 
-export function commitmentForOffer(offerId: number, walletAddress: string, secret: bigint): string {
+export function commitmentForOffer(
+  offerId: number,
+  walletAddress: string,
+  secret: bigint,
+  network: number,
+  contractAddress: string,
+): string {
   return beginCell()
     .storeUint(COMMITMENT_DOMAIN, 32)
+    .storeInt(network, 32)
+    .storeAddress(Address.parse(contractAddress))
     .storeUint(offerId, 64)
     .storeAddress(Address.parse(walletAddress))
     .storeUint(secret, 256)
     .endCell()
     .hash()
     .toString('hex');
+}
+
+export function assertOpenOfferQuoteContext(
+  quote: OfferQuote,
+  expected: {
+    operation: OfferQuote['transaction']['operation'];
+    offerId: number;
+    commitmentHex: string;
+    chanceBps: number;
+    stakeNano: number;
+    opponentStakeNano: number;
+    totalPoolNano: number;
+    network: number;
+    contractAddress: string;
+    counterOfferId?: number;
+  },
+): void {
+  const tx = quote.transaction;
+  const addressMatches = (() => {
+    try {
+      return Address.parse(tx.contract_address).equals(Address.parse(expected.contractAddress));
+    } catch {
+      return false;
+    }
+  })();
+  const coreMatches =
+    tx.operation === expected.operation &&
+    tx.offer_id === expected.offerId &&
+    tx.query_id === expected.offerId &&
+    tx.commitment_hex.toLowerCase() === expected.commitmentHex.toLowerCase() &&
+    tx.commitment_domain === COMMITMENT_DOMAIN &&
+    tx.chance_bps === expected.chanceBps &&
+    BigInt(tx.stake_nano) === BigInt(expected.stakeNano) &&
+    BigInt(tx.opponent_stake_nano) === BigInt(expected.opponentStakeNano) &&
+    BigInt(tx.total_pool_nano) === BigInt(expected.totalPoolNano) &&
+    BigInt(tx.amount_nano) === BigInt(expected.stakeNano) + DUEL_OPEN_GAS_NANO &&
+    tx.network === expected.network &&
+    addressMatches;
+  const directMatches =
+    tx.operation === 'open_direct_offer'
+      ? Boolean(tx.invite_id_hex?.match(/^[0-9a-f]{64}$/i)) && !/^0+$/.test(tx.invite_id_hex ?? '')
+      : tx.operation === 'accept_direct_offer'
+        ? tx.counter_offer_id === expected.counterOfferId &&
+          tx.direct_counter_offer_id === expected.counterOfferId
+        : true;
+  if (!coreMatches || !directMatches) {
+    throw new Error('Контекст DUEL изменился. Создайте вызов заново.');
+  }
 }
 
 export function buildOpenOfferTransaction(
@@ -68,18 +127,39 @@ export function buildOpenOfferTransaction(
 ): SendTransactionRequest {
   requireTestnet(network);
   const tx = quote.transaction;
-  const payload = beginCell()
-    .storeUint(OPEN_OFFER_OPCODE, 32)
+  if (tx.network !== Number(network)) throw new Error('Сеть DUEL изменилась. Повторите попытку.');
+  const opcode =
+    tx.operation === 'open_direct_offer'
+      ? OPEN_DIRECT_OFFER_OPCODE
+      : tx.operation === 'accept_direct_offer'
+        ? ACCEPT_DIRECT_OFFER_OPCODE
+        : OPEN_OFFER_OPCODE;
+  const body = beginCell()
+    .storeUint(opcode, 32)
     .storeUint(tx.query_id, 64)
     .storeUint(tx.offer_id, 64)
     .storeUint(BigInt(`0x${tx.commitment_hex}`), 256)
     .storeUint(tx.chance_bps, 16)
     .storeCoins(BigInt(tx.total_pool_nano))
-    .storeUint(tx.expires_at, 32)
-    .storeUint(tx.counter_offer_id, 64)
-    .endCell()
-    .toBoc()
-    .toString('base64');
+    .storeUint(tx.expires_at, 32);
+  if (tx.operation === 'open_direct_offer') {
+    if (!tx.invite_id_hex) throw new Error('Идентификатор direct-вызова отсутствует');
+    body.storeUint(BigInt(`0x${tx.invite_id_hex}`), 256);
+  } else if (tx.operation === 'accept_direct_offer') {
+    if (!tx.direct_signature_hex || tx.direct_signature_hex.length !== 128) {
+      throw new Error('Подпись direct-вызова недоступна');
+    }
+    body.storeRef(
+      beginCell()
+        .storeUint(tx.direct_counter_offer_id, 64)
+        .storeUint(tx.direct_valid_until, 32)
+        .storeUint(BigInt(`0x${tx.direct_signature_hex}`), 512)
+        .endCell(),
+    );
+  } else {
+    body.storeUint(tx.counter_offer_id, 64);
+  }
+  const payload = body.endCell().toBoc().toString('base64');
   return {
     validUntil: tx.valid_until,
     network,

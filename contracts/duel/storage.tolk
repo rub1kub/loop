@@ -14,6 +14,11 @@ type ActiveOfferMap = map<address, uint64>
 
 type UsedOfferMap = map<uint64, bool>
 
+struct DirectOfferData {
+    inviteId: uint256
+    opponent: address?
+}
+
 struct OfferData {
     owner: address
     commitment: uint256
@@ -22,6 +27,7 @@ struct OfferData {
     stake: coins
     expiresAt: uint32
     state: uint8
+    direct: Cell<DirectOfferData>
 }
 
 struct DuelData {
@@ -37,6 +43,8 @@ struct Storage {
     owner: address
     treasury: address
     feeBps: uint16
+    networkId: int32
+    inviteSignerPublicKey: uint256
     paused: bool
     locked: coins
     offers: OfferMap
@@ -49,6 +57,9 @@ struct ContractConfigView {
     owner: address
     treasury: address
     feeBps: uint16
+    networkId: int32
+    inviteSignerPublicKey: uint256
+    contractAddress: address
     paused: bool
     locked: coins
 }

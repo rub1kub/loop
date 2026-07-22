@@ -6,6 +6,10 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from tonsdk.boc import Cell  # type: ignore[import-untyped]
 from tonsdk.utils import Address  # type: ignore[import-untyped]
 
 from .config import Settings
@@ -13,6 +17,11 @@ from .config import Settings
 
 class TonProviderError(RuntimeError):
     pass
+
+
+DUEL_DIRECT_ACCEPT_DOMAIN = 0x4C4F4F62
+DUEL_REVEAL = 0x4C4F4F04
+DUEL_PAYOUT = 0x4C4F4F11
 
 
 @dataclass(frozen=True)
@@ -180,7 +189,9 @@ class TonClient:
     async def get_contract_code_hash(self, address: str) -> str:
         return (await self.get_contract_state(address)).code_hash
 
-    async def verify_transaction(self, transaction_hash: str, account: str) -> TransactionProof:
+    async def _verified_transaction(
+        self, transaction_hash: str, account: str
+    ) -> tuple[TransactionProof, dict[str, Any]]:
         normalize_hash(transaction_hash)
         expected_account = normalize_address(account)
         response = await self.http.get(
@@ -226,13 +237,63 @@ class TonClient:
             confirmed_at = datetime.fromtimestamp(int(transaction["now"]), UTC)
         except (KeyError, TypeError, ValueError, OSError) as exc:
             raise TonProviderError("malformed TON transaction proof") from exc
-        return TransactionProof(
-            transaction_hash=transaction_hash,
-            account=expected_account,
-            logical_time=logical_time,
-            masterchain_seqno=mc_seqno,
-            confirmed_at=confirmed_at,
+        return (
+            TransactionProof(
+                transaction_hash=transaction_hash,
+                account=expected_account,
+                logical_time=logical_time,
+                masterchain_seqno=mc_seqno,
+                confirmed_at=confirmed_at,
+            ),
+            transaction,
         )
+
+    async def verify_transaction(self, transaction_hash: str, account: str) -> TransactionProof:
+        proof, _ = await self._verified_transaction(transaction_hash, account)
+        return proof
+
+    async def verify_duel_settlement(
+        self,
+        transaction_hash: str,
+        account: str,
+        duel_id: int,
+    ) -> TransactionProof:
+        if not 0 < duel_id < 2**64:
+            raise TonProviderError("invalid DUEL canary duel id")
+        proof, transaction = await self._verified_transaction(transaction_hash, account)
+        incoming = transaction.get("in_msg")
+        if not isinstance(incoming, dict):
+            raise TonProviderError("DUEL settlement input message is missing")
+        parser = message_body_parser(incoming)
+        try:
+            opcode = parser.read_uint(32)
+            parser.read_uint(64)
+            incoming_duel_id = parser.read_uint(64)
+        except Exception as exc:
+            raise TonProviderError("malformed DUEL settlement input message") from exc
+        if opcode != DUEL_REVEAL or incoming_duel_id != duel_id:
+            raise TonProviderError("transaction is not the requested DUEL settlement reveal")
+
+        matching_payouts = 0
+        outgoing = transaction.get("out_msgs")
+        if not isinstance(outgoing, list):
+            raise TonProviderError("DUEL settlement output messages are missing")
+        for message in outgoing:
+            if not isinstance(message, dict):
+                continue
+            payout_duel_id: int | None = None
+            try:
+                payout = message_body_parser(message)
+                if payout.read_uint(32) == DUEL_PAYOUT:
+                    payout.read_uint(64)
+                    payout_duel_id = payout.read_uint(64)
+            except Exception:
+                payout_duel_id = None
+            if payout_duel_id == duel_id:
+                matching_payouts += 1
+        if matching_payouts != 1:
+            raise TonProviderError("DUEL settlement payout proof is missing or ambiguous")
+        return proof
 
 
 def normalize_address(value: str) -> str:
@@ -240,6 +301,19 @@ def normalize_address(value: str) -> str:
         return str(Address(value).to_string(is_user_friendly=False)).lower()
     except Exception as exc:
         raise TonProviderError("malformed TON address") from exc
+
+
+def message_body_parser(message: dict[str, Any]) -> Any:
+    content = message.get("message_content")
+    body = content.get("body") if isinstance(content, dict) else None
+    if not isinstance(body, str) or not body:
+        raise TonProviderError("TON message body is missing")
+    try:
+        cells = Cell.one_from_boc(base64.b64decode(body))
+        cell = cells[0] if isinstance(cells, list) else cells
+        return cell.begin_parse()
+    except Exception as exc:
+        raise TonProviderError("malformed TON message body") from exc
 
 
 def normalize_hash(value: str) -> str:
@@ -259,6 +333,95 @@ def normalize_hash(value: str) -> str:
 def explorer_transaction_url(network: int, transaction_hash: str) -> str:
     host = "testnet.tonviewer.com" if network == -3 else "tonviewer.com"
     return f"https://{host}/transaction/{quote(transaction_hash, safe='')}"
+
+
+def duel_invite_public_key(private_seed_hex: str) -> str:
+    try:
+        seed = bytes.fromhex(private_seed_hex)
+        if len(seed) != 32:
+            raise ValueError
+        public_key = Ed25519PrivateKey.from_private_bytes(seed).public_key()
+    except ValueError as exc:
+        raise TonProviderError("DUEL invite signing key must be 32-byte hex") from exc
+    return public_key.public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+
+
+def direct_accept_permit_hash(
+    *,
+    network: int,
+    contract_address: str,
+    invite_id_hex: str,
+    counter_offer_id: int,
+    invited_address: str,
+    valid_until: int,
+) -> bytes:
+    try:
+        invite_id = int(invite_id_hex, 16)
+        if len(bytes.fromhex(invite_id_hex)) != 32:
+            raise ValueError
+        if not -(2**31) <= network < 2**31:
+            raise ValueError
+        if not 0 < counter_offer_id < 2**64 or not 0 < valid_until < 2**32:
+            raise ValueError
+        cell = Cell()
+        cell.bits.write_uint(DUEL_DIRECT_ACCEPT_DOMAIN, 32)
+        cell.bits.write_int(network, 32)
+        cell.bits.write_address(Address(contract_address))
+        cell.bits.write_uint(invite_id, 256)
+        cell.bits.write_uint(counter_offer_id, 64)
+        cell.bits.write_address(Address(invited_address))
+        cell.bits.write_uint(valid_until, 32)
+        return bytes(cell.bytes_hash())
+    except (ValueError, OverflowError, TypeError) as exc:
+        raise TonProviderError("invalid DUEL direct permit context") from exc
+
+
+def sign_direct_accept_permit(
+    private_seed_hex: str,
+    *,
+    network: int,
+    contract_address: str,
+    invite_id_hex: str,
+    counter_offer_id: int,
+    invited_address: str,
+    valid_until: int,
+) -> str:
+    try:
+        seed = bytes.fromhex(private_seed_hex)
+        if len(seed) != 32:
+            raise ValueError
+        signature = Ed25519PrivateKey.from_private_bytes(seed).sign(
+            direct_accept_permit_hash(
+                network=network,
+                contract_address=contract_address,
+                invite_id_hex=invite_id_hex,
+                counter_offer_id=counter_offer_id,
+                invited_address=invited_address,
+                valid_until=valid_until,
+            )
+        )
+    except ValueError as exc:
+        raise TonProviderError("DUEL invite signing key must be 32-byte hex") from exc
+    return signature.hex()
+
+
+def verify_direct_accept_permit(
+    public_key_hex: str,
+    signature_hex: str,
+    **context: Any,
+) -> bool:
+    try:
+        public_key = bytes.fromhex(public_key_hex)
+        signature = bytes.fromhex(signature_hex)
+        if len(public_key) != 32 or len(signature) != 64:
+            return False
+        Ed25519PublicKey.from_public_bytes(public_key).verify(
+            signature,
+            direct_accept_permit_hash(**context),
+        )
+    except (ValueError, InvalidSignature, TonProviderError):
+        return False
+    return True
 
 
 def commitment_context_hash(offer_id: int, address: str) -> str:

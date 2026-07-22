@@ -19,5 +19,8 @@ enum Errors {
     TooEarly = 117
     InvalidFee = 118
     InvalidOfferId = 119
+    DirectInviteRequired = 120
+    InvalidDirectPermit = 121
+    DirectPermitExpired = 122
     InvalidMessage = 0xFFFF
 }

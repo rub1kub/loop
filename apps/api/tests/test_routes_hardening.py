@@ -7,8 +7,10 @@ from urllib.parse import urlencode
 import pytest
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.models import ReferralAttribution, ReferralCode, User, Wallet
 from app.modules.duel.models import DuelInvitation, DuelOffer, OfferState
+from app.ton import verify_direct_accept_permit
 
 
 def signed_init_data(telegram_id: int, *, start_param: str | None = None) -> str:
@@ -174,6 +176,37 @@ async def test_afk_matchmaking_selects_only_complementary_open_offer(client, app
 
 
 @pytest.mark.asyncio
+async def test_direct_quote_creates_the_onchain_invite_id_before_inline_sharing(
+    client, app
+) -> None:
+    telegram_id = 700_010
+    headers = await auth_headers(client, telegram_id)
+    await add_wallet(app, telegram_id, "a")
+    quote = await client.post(
+        "/api/v1/duels/offers/quote",
+        headers=headers,
+        json={
+            "offer_id": 3010,
+            "chance_bps": 5000,
+            "stake_nano": 1_000_000_000,
+            "commitment_hex": "ac" * 32,
+            "mode": "direct",
+        },
+    )
+    assert quote.status_code == 201, quote.text
+    transaction = quote.json()["transaction"]
+    assert transaction["operation"] == "open_direct_offer"
+    assert len(transaction["invite_id_hex"]) == 64
+    assert transaction["direct_signature_hex"] is None
+    async with app.state.session_factory() as db:
+        invitation = await db.scalar(select(DuelInvitation))
+        offer = await db.scalar(select(DuelOffer).where(DuelOffer.onchain_offer_id == 3010))
+        assert invitation is not None and offer is not None
+        assert invitation.invite_id_hex == transaction["invite_id_hex"]
+        assert offer.invite_id_hex == invitation.invite_id_hex
+
+
+@pytest.mark.asyncio
 async def test_direct_invitation_is_explicitly_accepted_and_cannot_be_stolen(client, app) -> None:
     owner_id, receiver_id, third_id = 700_005, 700_006, 700_007
     owner_headers = await auth_headers(client, owner_id)
@@ -193,6 +226,7 @@ async def test_direct_invitation_is_explicitly_accepted_and_cannot_be_stolen(cli
             opponent_stake_nano=1_000_000_000,
             mode="direct",
         )
+        offer.invite_id_hex = "4d" * 32
         db.add(offer)
         await db.flush()
         db.add(
@@ -200,6 +234,7 @@ async def test_direct_invitation_is_explicitly_accepted_and_cannot_be_stolen(cli
                 code="direct-loop-4001",
                 creator_user_id=owner.id,
                 creator_offer_id=offer.id,
+                invite_id_hex="4d" * 32,
                 expires_at=datetime.now(UTC) + timedelta(minutes=10),
             )
         )
@@ -228,7 +263,48 @@ async def test_direct_invitation_is_explicitly_accepted_and_cannot_be_stolen(cli
         },
     )
     assert quote.status_code == 201, quote.text
-    assert quote.json()["transaction"]["counter_offer_id"] == 4001
+    transaction = quote.json()["transaction"]
+    assert transaction["operation"] == "accept_direct_offer"
+    assert transaction["counter_offer_id"] == 4001
+    assert transaction["direct_counter_offer_id"] == 4001
+    assert verify_direct_accept_permit(
+        get_settings().duel_invite_public_key,
+        transaction["direct_signature_hex"],
+        network=-3,
+        contract_address=transaction["contract_address"],
+        invite_id_hex="4d" * 32,
+        counter_offer_id=4001,
+        invited_address="0:" + "6" * 64,
+        valid_until=transaction["direct_valid_until"],
+    )
+
+    async with app.state.session_factory() as db:
+        creator_offer = await db.scalar(
+            select(DuelOffer).where(DuelOffer.onchain_offer_id == 4001)
+        )
+        receiver_offer = await db.scalar(
+            select(DuelOffer).where(DuelOffer.onchain_offer_id == 4002)
+        )
+        assert creator_offer is not None and receiver_offer is not None
+        creator_offer.reserved_until = datetime.now(UTC) - timedelta(seconds=1)
+        receiver_offer.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        await db.commit()
+    assert (
+        await client.post("/api/v1/invites/direct-loop-4001/accept", headers=receiver_headers)
+    ).status_code == 200
+    retry = await client.post(
+        "/api/v1/duels/offers/quote",
+        headers=receiver_headers,
+        json={
+            "offer_id": 4003,
+            "chance_bps": 2500,
+            "stake_nano": 1_000_000_000,
+            "commitment_hex": "ce" * 32,
+            "challenge_code": "direct-loop-4001",
+        },
+    )
+    assert retry.status_code == 201, retry.text
+    assert retry.json()["transaction"]["operation"] == "accept_direct_offer"
 
 
 @pytest.mark.asyncio

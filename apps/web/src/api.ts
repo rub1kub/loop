@@ -6,6 +6,7 @@ import type {
   BankPosition,
   BankPreview,
   BankQuote,
+  ContractState,
   Duel,
   Invite,
   Offer,
@@ -200,6 +201,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     });
+  },
+
+  async contractState(mode: 'bank' | 'duel'): Promise<ContractState> {
+    return await request(`/onchain/contracts/${mode}`);
   },
 
   async quoteOffer(input: {

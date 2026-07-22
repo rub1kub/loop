@@ -4,6 +4,7 @@ PIP := .venv/bin/pip
 
 .PHONY: help setup dev lint typecheck test test-unit test-integration test-e2e \
 	test-security contracts-build contracts-test contracts-deploy-testnet \
+	contracts-deploy-duel-testnet \
 	contracts-verify contracts-inspect chain-smoke-test screenshots docker-up \
 	docker-down deploy smoke-test
 
@@ -54,8 +55,14 @@ contracts-test: ## Run deterministic contract tests
 
 contracts-deploy-testnet: ## Deploy contracts only with explicit broadcast consent
 	@test "$(ALLOW_TESTNET_DEPLOY)" = "1" || (echo 'Set ALLOW_TESTNET_DEPLOY=1 to broadcast' >&2; exit 2)
-	acton run deploy-bank
-	acton run deploy-duel
+	@test -n "$(LOOP_DUEL_INVITE_PUBLIC_KEY)" || (echo 'LOOP_DUEL_INVITE_PUBLIC_KEY is required' >&2; exit 2)
+	acton run deploy-bank-testnet
+	acton run deploy-duel-testnet
+
+contracts-deploy-duel-testnet: ## Deploy only DUEL v1.1 with an explicit broadcast gate
+	@test "$(ALLOW_TESTNET_DEPLOY)" = "1" || (echo 'Set ALLOW_TESTNET_DEPLOY=1 to broadcast' >&2; exit 2)
+	@test -n "$(LOOP_DUEL_INVITE_PUBLIC_KEY)" || (echo 'LOOP_DUEL_INVITE_PUBLIC_KEY is required' >&2; exit 2)
+	acton run deploy-duel-testnet
 
 contracts-verify: contracts-build ## Match local builds, manifests and finalized testnet state
 	$(PYTHON) scripts/verify-contracts.py

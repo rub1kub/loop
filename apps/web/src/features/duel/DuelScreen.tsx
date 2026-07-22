@@ -17,6 +17,7 @@ import {
   buildActionTransaction,
   buildOpenOfferTransaction,
   commitmentForOffer,
+  assertOpenOfferQuoteContext,
   formatGram,
   newOfferId,
   newSecret,
@@ -126,9 +127,23 @@ export function DuelScreen({
         if (!profile.wallet) throw new Error('Ждём подтверждение владения внешним кошельком');
         let acceptedInvite = invite;
         if (invite) acceptedInvite = await api.acceptInvite(invite.code);
+        const contract = await api.contractState('duel');
+        if (
+          contract.network !== -3 ||
+          contract.status !== 'active' ||
+          !contract.code_hash_matches
+        ) {
+          throw new Error('DUEL contract не прошёл on-chain проверку');
+        }
         const offerId = newOfferId();
         const secret = newSecret();
-        const commitment = commitmentForOffer(offerId, wallet.account.address, secret);
+        const commitment = commitmentForOffer(
+          offerId,
+          wallet.account.address,
+          secret,
+          contract.network,
+          contract.address,
+        );
         const quote = await api.quoteOffer({
           offer_id: offerId,
           chance_bps: chance,
@@ -136,6 +151,22 @@ export function DuelScreen({
           commitment_hex: commitment,
           mode: selectedMode,
           ...(acceptedInvite ? { challenge_code: acceptedInvite.code } : {}),
+        });
+        assertOpenOfferQuoteContext(quote, {
+          operation: acceptedInvite
+            ? 'accept_direct_offer'
+            : selectedMode === 'direct'
+              ? 'open_direct_offer'
+              : 'open_offer',
+          offerId,
+          commitmentHex: commitment,
+          chanceBps: chance,
+          stakeNano: terms.stake,
+          opponentStakeNano: terms.opponentStake,
+          totalPoolNano: terms.totalPool,
+          network: contract.network,
+          contractAddress: contract.address,
+          ...(acceptedInvite ? { counterOfferId: acceptedInvite.counter_offer_id } : {}),
         });
         await storeDuelSecret(offerId, secret.toString(16).padStart(64, '0'));
         setMessage('Подтверди блокировку тестовых GRAM во внешнем кошельке.');
@@ -161,6 +192,8 @@ export function DuelScreen({
       profile.wallet,
       requestedStake,
       terms.stake,
+      terms.opponentStake,
+      terms.totalPool,
       tonConnectUI,
       wallet,
     ],

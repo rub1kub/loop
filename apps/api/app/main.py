@@ -20,11 +20,13 @@ from starlette.responses import JSONResponse
 from .bot import configure_bot, create_dispatcher
 from .config import get_settings
 from .database import Base, create_database
+from .metrics import DUEL_CANARY_REDIS_KEY, refresh_duel_metrics
 from .modules.bank.router import router as bank_router
 from .modules.duel.router import router as duel_router
 from .nonce_store import RedisChallengeStore
 from .routes import router
-from .ton import TonClient, TonProviderError
+from .schemas import DuelCanaryReport
+from .ton import TonClient, TonProviderError, normalize_address
 
 logger = structlog.get_logger()
 
@@ -166,11 +168,55 @@ def create_app() -> FastAPI:
         return {"status": "ready"}
 
     @app.get("/metrics", include_in_schema=False)
-    async def metrics(authorization: str | None = Header(default=None)) -> Response:
+    async def metrics(
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> Response:
         token = settings.metrics_token.get_secret_value()
         if token and authorization != f"Bearer {token}":
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "authentication required")
+        await refresh_duel_metrics(request.app.state.session_factory, request.app.state.redis)
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+    @app.post("/internal/duel-canary", include_in_schema=False)
+    async def report_duel_canary(
+        body: DuelCanaryReport,
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, str | int]:
+        token = settings.metrics_token.get_secret_value()
+        if not token or authorization != f"Bearer {token}":
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "authentication required")
+        try:
+            configured_contract = normalize_address(settings.effective_duel_contract_address)
+            supplied_contract = normalize_address(body.contract_address)
+        except TonProviderError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+        if body.network != settings.ton_network_id or supplied_contract != configured_contract:
+            raise HTTPException(status.HTTP_409_CONFLICT, "canary context does not match DUEL")
+        try:
+            proof = await request.app.state.ton_client.verify_duel_settlement(
+                body.settlement_tx_hash,
+                settings.effective_duel_contract_address,
+                body.duel_id,
+            )
+        except TonProviderError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        timestamp = str(int(proof.confirmed_at.timestamp()))
+        async with request.app.state.redis.pipeline(transaction=True) as pipeline:
+            pipeline.set(DUEL_CANARY_REDIS_KEY, timestamp)
+            pipeline.hset(
+                "loop:duel:canary:last_proof",
+                mapping={
+                    "network": body.network,
+                    "contract": configured_contract,
+                    "duel_id": body.duel_id,
+                    "settlement_tx_hash": proof.transaction_hash,
+                    "confirmed_at": timestamp,
+                },
+            )
+            await pipeline.execute()
+        return {"status": "verified", "duel_id": body.duel_id, "confirmed_at": timestamp}
 
     @app.post(settings.webhook_path, include_in_schema=False)
     async def telegram_webhook(

@@ -59,6 +59,12 @@ def stack_address(item: list[Any]) -> str:
     return address.to_string(is_user_friendly=False).lower()
 
 
+def stack_number(item: list[Any]) -> int:
+    if len(item) != 2 or item[0] != "num":
+        raise ValueError("contractConfig returned a malformed numeric value")
+    return int(str(item[1]), 0)
+
+
 def body_parser(message: dict[str, Any]) -> Any:
     body = (message.get("message_content") or {}).get("body")
     if not isinstance(body, str) or not body:
@@ -346,16 +352,35 @@ async def verify_contract(
     getter = getter_response.json()
     result = getter.get("result") or {}
     stack = result.get("stack") or []
-    if not getter.get("ok") or result.get("exit_code") != 0 or len(stack) < 4:
-        raise ValueError(f"{contract}: contractConfig getter failed")
     configuration = manifest["configuration"]
+    duel_v11 = contract == "DuelEscrow" and configuration.get("version") == "1.1.0"
+    expected_stack_size = 8 if duel_v11 else 7 if contract == "BankQueue" else 5
+    if (
+        not getter.get("ok")
+        or result.get("exit_code") != 0
+        or len(stack) != expected_stack_size
+    ):
+        raise ValueError(f"{contract}: contractConfig getter failed")
     if stack_address(stack[0]) != raw_address(str(configuration["owner"])):
         raise ValueError(f"{contract}: owner mismatch")
     if stack_address(stack[1]) != raw_address(str(configuration["treasury"])):
         raise ValueError(f"{contract}: treasury mismatch")
-    if int(str(stack[2][1]), 0) != int(configuration["fee_bps"]):
+    if stack_number(stack[2]) != int(configuration["fee_bps"]):
         raise ValueError(f"{contract}: fee mismatch")
-    if bool(int(str(stack[3][1]), 0)) != bool(configuration["paused"]):
+    if duel_v11:
+        if stack_number(stack[3]) != int(configuration["network_id"]):
+            raise ValueError(f"{contract}: network domain mismatch")
+        if f"{stack_number(stack[4]):064x}" != str(
+            configuration["invite_signer_public_key"]
+        ).lower():
+            raise ValueError(f"{contract}: invite signer mismatch")
+        if stack_address(stack[5]) != raw_address(address):
+            raise ValueError(f"{contract}: self address mismatch")
+        if bool(stack_number(stack[6])) != bool(configuration["paused"]):
+            raise ValueError(f"{contract}: pause state mismatch")
+        if stack_number(stack[7]) != int(configuration["locked_nano"]):
+            raise ValueError(f"{contract}: locked balance mismatch")
+    elif bool(stack_number(stack[3])) != bool(configuration["paused"]):
         raise ValueError(f"{contract}: pause state mismatch")
 
     result = {

@@ -10,8 +10,9 @@ const MIN_CALL_GAS = 20_000_000
 const MIN_EXPIRY_DELAY = 30
 const MAX_EXPIRY_DELAY = 3_600
 const REVEAL_WINDOW = 300
-const COMMITMENT_DOMAIN = 0x4C4F4F50
-const OUTCOME_DOMAIN = 0x4C4F4F51
+const COMMITMENT_DOMAIN = 0x4C4F4F60
+const OUTCOME_DOMAIN = 0x4C4F4F61
+const DIRECT_ACCEPT_DOMAIN = 0x4C4F4F62
 
 const REASON_BOTH_REVEALED = 1
 const REASON_ONLY_REVEALER = 2
@@ -21,8 +22,8 @@ const REASON_NO_REVEALS = 5
 
 contract DuelEscrow {
     author: "LOOP"
-    version: "1.0.0"
-    description: "Native TON escrow with weighted two-party commit-reveal"
+    version: "1.1.0"
+    description: "Address-bound TON escrow with weighted two-party commit-reveal"
     storage: Storage
     incomingMessages: AllowedMessage
 }
@@ -35,6 +36,8 @@ type AllowedMessage =
     | ExpireOffer
     | ExpireDuel
     | SetPaused
+    | OpenDirectOffer
+    | AcceptDirectOffer
 
 fun validChance(chanceBps: uint16): bool {
     return chanceBps == 2_500 || chanceBps == 5_000 || chanceBps == 7_500;
@@ -44,16 +47,92 @@ fun stakeFor(totalPool: coins, chanceBps: uint16): coins {
     return mulDivFloor(totalPool, chanceBps, BASIS_POINTS);
 }
 
-fun commitmentHash(offerId: uint64, owner: address, secret: uint256): uint256 {
+fun commitmentHash(
+    networkId: int32,
+    offerId: uint64,
+    owner: address,
+    secret: uint256,
+): uint256 {
     return beginCell()
         .storeUint(COMMITMENT_DOMAIN, 32)
+        .storeInt(networkId, 32)
+        .storeAddress(contract.getAddress())
         .storeUint(offerId, 64)
         .storeAddress(owner)
         .storeUint(secret, 256)
         .hash();
 }
 
-fun Storage.matchOpenOffers(mutate self, firstOfferId: uint64, secondOfferId: uint64): uint64 {
+fun directAcceptHash(
+    networkId: int32,
+    inviteId: uint256,
+    counterOfferId: uint64,
+    invitedAddress: address,
+    validUntil: uint32,
+): uint256 {
+    return beginCell()
+        .storeUint(DIRECT_ACCEPT_DOMAIN, 32)
+        .storeInt(networkId, 32)
+        .storeAddress(contract.getAddress())
+        .storeUint(inviteId, 256)
+        .storeUint(counterOfferId, 64)
+        .storeAddress(invitedAddress)
+        .storeUint(validUntil, 32)
+        .hash();
+}
+
+fun Storage.addOpenOffer(
+    mutate self,
+    owner: address,
+    valueCoins: coins,
+    offerId: uint64,
+    commitment: uint256,
+    chanceBps: uint16,
+    totalPool: coins,
+    expiresAt: uint32,
+    direct: DirectOfferData,
+): void {
+    assert (self.feeBps <= 1_000) throw Errors.InvalidFee;
+    assert (offerId != 0) throw Errors.InvalidOfferId;
+    assert (validChance(chanceBps)) throw Errors.InvalidChance;
+    assert (
+        totalPool >= MIN_POOL && totalPool <= MAX_POOL && totalPool % 4 == 0
+    ) throw Errors.InvalidPool;
+    assert (
+        expiresAt >= blockchain.now() + MIN_EXPIRY_DELAY &&
+        expiresAt <= blockchain.now() + MAX_EXPIRY_DELAY
+    ) throw Errors.InvalidExpiry;
+    assert (!self.usedOfferIds.exists(offerId)) throw Errors.OfferAlreadyUsed;
+    assert (!self.activeOffers.exists(owner)) throw Errors.OwnerAlreadyActive;
+
+    val stake = stakeFor(totalPool, chanceBps);
+    assert (valueCoins >= stake + OPEN_GAS_BUFFER) throw Errors.InsufficientValue;
+    self
+        .offers
+        .set(
+            offerId,
+            OfferData {
+                owner,
+                commitment,
+                chanceBps,
+                totalPool,
+                stake,
+                expiresAt,
+                state: OFFER_OPEN,
+                direct: direct.toCell(),
+            }.toCell(),
+        );
+    self.activeOffers.set(owner, offerId);
+    self.usedOfferIds.set(offerId, true);
+    self.locked += stake;
+}
+
+fun Storage.matchOpenOffers(
+    mutate self,
+    firstOfferId: uint64,
+    secondOfferId: uint64,
+    allowDirect: bool,
+): uint64 {
     assert (firstOfferId != secondOfferId) throw Errors.IncompatibleOffers;
 
     var first = self.loadOffer(firstOfferId);
@@ -65,6 +144,16 @@ fun Storage.matchOpenOffers(mutate self, firstOfferId: uint64, secondOfferId: ui
     assert (
         first.expiresAt > blockchain.now() && second.expiresAt > blockchain.now()
     ) throw Errors.InvalidExpiry;
+
+    val firstDirect = first.direct.load();
+    val secondDirect = second.direct.load();
+    val bothAfk = firstDirect.inviteId == 0 && firstDirect.opponent == null &&
+    secondDirect.inviteId == 0 &&
+    secondDirect.opponent == null;
+    val addressBound = firstDirect.opponent != null && secondDirect.opponent != null &&
+    firstDirect.opponent! == second.owner &&
+    secondDirect.opponent! == first.owner;
+    assert (bothAfk || (allowDirect && addressBound)) throw Errors.IncompatibleOffers;
 
     first.state = OFFER_MATCHED;
     second.state = OFFER_MATCHED;
@@ -181,11 +270,17 @@ fun Storage.settleRevealed(mutate self, queryId: uint64, duelId: uint64, duel: D
     val totalPool = offerA.stake + offerB.stake;
     val outcome = beginCell()
         .storeUint(OUTCOME_DOMAIN, 32)
+        .storeInt(self.networkId, 32)
+        .storeAddress(contract.getAddress())
         .storeUint(duelId, 64)
-        .storeUint(duel.offerAId, 64)
-        .storeUint(duel.secretA, 256)
-        .storeUint(duel.offerBId, 64)
-        .storeUint(duel.secretB, 256)
+        .storeRef(
+            beginCell()
+                .storeUint(duel.offerAId, 64)
+                .storeUint(duel.secretA, 256)
+                .storeUint(duel.offerBId, 64)
+                .storeUint(duel.secretB, 256)
+                .endCell(),
+        )
         .hash();
     val winnerOfferId = outcome % totalPool < offerA.stake ? duel.offerAId : duel.offerBId;
     self.settleWinner(
@@ -204,38 +299,90 @@ fun onInternalMessage(in: InMessage) {
         OpenOffer => {
             var storage = Storage.load();
             assert (!storage.paused) throw Errors.Paused;
-            assert (storage.feeBps <= 1_000) throw Errors.InvalidFee;
-            assert (msg.offerId != 0) throw Errors.InvalidOfferId;
-            assert (validChance(msg.chanceBps)) throw Errors.InvalidChance;
-            assert (
-                msg.totalPool >= MIN_POOL && msg.totalPool <= MAX_POOL && msg.totalPool % 4 == 0
-            ) throw Errors.InvalidPool;
-            assert (
-                msg.expiresAt >= blockchain.now() + MIN_EXPIRY_DELAY &&
-                msg.expiresAt <= blockchain.now() + MAX_EXPIRY_DELAY
-            ) throw Errors.InvalidExpiry;
-            assert (!storage.usedOfferIds.exists(msg.offerId)) throw Errors.OfferAlreadyUsed;
-            assert (!storage.activeOffers.exists(in.senderAddress)) throw Errors.OwnerAlreadyActive;
-
-            val stake = stakeFor(msg.totalPool, msg.chanceBps);
-            assert (in.valueCoins >= stake + OPEN_GAS_BUFFER) throw Errors.InsufficientValue;
-            val offer = OfferData {
-                owner: in.senderAddress,
-                commitment: msg.commitment,
-                chanceBps: msg.chanceBps,
-                totalPool: msg.totalPool,
-                stake,
-                expiresAt: msg.expiresAt,
-                state: OFFER_OPEN,
-            };
-            storage.offers.set(msg.offerId, offer.toCell());
-            storage.activeOffers.set(in.senderAddress, msg.offerId);
-            storage.usedOfferIds.set(msg.offerId, true);
-            storage.locked += stake;
+            storage.addOpenOffer(
+                in.senderAddress,
+                in.valueCoins,
+                msg.offerId,
+                msg.commitment,
+                msg.chanceBps,
+                msg.totalPool,
+                msg.expiresAt,
+                DirectOfferData {
+                    inviteId: 0,
+                    opponent: null,
+                },
+            );
 
             if (msg.counterOfferId != 0) {
-                storage.matchOpenOffers(msg.counterOfferId, msg.offerId);
+                storage.matchOpenOffers(msg.counterOfferId, msg.offerId, false);
             }
+            storage.save();
+        }
+        OpenDirectOffer => {
+            var storage = Storage.load();
+            assert (!storage.paused) throw Errors.Paused;
+            assert (msg.inviteId != 0) throw Errors.DirectInviteRequired;
+            storage.addOpenOffer(
+                in.senderAddress,
+                in.valueCoins,
+                msg.offerId,
+                msg.commitment,
+                msg.chanceBps,
+                msg.totalPool,
+                msg.expiresAt,
+                DirectOfferData {
+                    inviteId: msg.inviteId,
+                    opponent: null,
+                },
+            );
+            storage.save();
+        }
+        AcceptDirectOffer => {
+            var storage = Storage.load();
+            assert (!storage.paused) throw Errors.Paused;
+            val acceptance = msg.acceptance.load();
+            assert (
+                acceptance.validUntil >= blockchain.now() && acceptance.validUntil <= msg.expiresAt
+            ) throw Errors.DirectPermitExpired;
+            var counter = storage.loadOffer(acceptance.counterOfferId);
+            assert (counter.state == OFFER_OPEN) throw Errors.OfferNotOpen;
+            assert (counter.owner != in.senderAddress) throw Errors.SameOwner;
+            var counterDirect = counter.direct.load();
+            assert (
+                counterDirect.inviteId != 0 && counterDirect.opponent == null
+            ) throw Errors.DirectInviteRequired;
+            val permitHash = directAcceptHash(
+                storage.networkId,
+                counterDirect.inviteId,
+                acceptance.counterOfferId,
+                in.senderAddress,
+                acceptance.validUntil,
+            );
+            assert (
+                isSignatureValid(
+                    permitHash,
+                    acceptance.signature as slice,
+                    storage.inviteSignerPublicKey,
+                )
+            ) throw Errors.InvalidDirectPermit;
+
+            storage.addOpenOffer(
+                in.senderAddress,
+                in.valueCoins,
+                msg.offerId,
+                msg.commitment,
+                msg.chanceBps,
+                msg.totalPool,
+                msg.expiresAt,
+                DirectOfferData {
+                    inviteId: 0,
+                    opponent: counter.owner,
+                },
+            );
+            counterDirect.opponent = in.senderAddress;
+            counter.direct = counterDirect.toCell();
+            storage.offers.set(acceptance.counterOfferId, counter.toCell());
+            storage.matchOpenOffers(acceptance.counterOfferId, msg.offerId, true);
             storage.save();
         }
         CancelOffer => {
@@ -256,7 +403,7 @@ fun onInternalMessage(in: InMessage) {
             assert (in.valueCoins >= MIN_CALL_GAS) throw Errors.InsufficientValue;
             var storage = Storage.load();
             assert (!storage.paused) throw Errors.Paused;
-            storage.matchOpenOffers(msg.firstOfferId, msg.secondOfferId);
+            storage.matchOpenOffers(msg.firstOfferId, msg.secondOfferId, false);
             storage.save();
         }
         Reveal => {
@@ -270,7 +417,8 @@ fun onInternalMessage(in: InMessage) {
             val offer = storage.loadOffer(msg.offerId);
             assert (offer.owner == in.senderAddress) throw Errors.WrongRevealer;
             assert (
-                commitmentHash(msg.offerId, offer.owner, msg.secret) == offer.commitment
+                commitmentHash(storage.networkId, msg.offerId, offer.owner, msg.secret) ==
+                offer.commitment
             ) throw Errors.InvalidCommitment;
 
             if (msg.offerId == duel.offerAId) {
@@ -368,6 +516,9 @@ get fun contractConfig(): ContractConfigView {
         owner: storage.owner,
         treasury: storage.treasury,
         feeBps: storage.feeBps,
+        networkId: storage.networkId,
+        inviteSignerPublicKey: storage.inviteSignerPublicKey,
+        contractAddress: contract.getAddress(),
         paused: storage.paused,
         locked: storage.locked,
     };
@@ -381,6 +532,11 @@ get fun offerData(offerId: uint64): OfferData {
 get fun duelData(duelId: uint64): DuelData {
     val storage = Storage.load();
     return storage.loadDuel(duelId);
+}
+
+get fun directOfferData(offerId: uint64): DirectOfferData {
+    val storage = Storage.load();
+    return storage.loadOffer(offerId).direct.load();
 }
 
 get fun activeOffer(owner: address): uint64 {

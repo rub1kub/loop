@@ -12,7 +12,7 @@
 
 BankQueue rejects unsupported multipliers, amounts outside limits, duplicate identifiers, concurrent owner positions, malformed messages and underfunded gas. Older FIFO positions always receive priority; only the remainder seeds the newly appended position. Fees, initial funding and payouts are deterministic integer calculations.
 
-DuelEscrow rejects noncanonical pools, incompatible matches, repeated owners, commitment mismatch, early timeout, duplicate reveal/acceptance and dust messages. Pausing does not disable cancel, expiry, reveal or settlement. Outcomes do not depend on backend randomness.
+DuelEscrow rejects noncanonical pools, incompatible matches, repeated owners, commitment mismatch, early timeout, duplicate reveal/acceptance and dust messages. Commitments and outcomes are domain-separated by network and contract address. Direct acceptance requires a short-lived server signature bound to the invited wallet and is matched atomically. Pausing does not disable cancel, expiry, reveal or settlement. Outcomes do not depend on backend randomness.
 
 ## Chain worker
 
@@ -31,6 +31,7 @@ Each projection checks contract address, message direction, sender, value, opcod
 ## Known limits
 
 - The project is testnet-only and has not received an external professional audit.
+- The immutable direct-invite signer cannot be rotated in place; suspected key compromise requires pausing new activity and deploying a new contract after all recovery paths clear.
 - Referral anti-abuse prevents direct self-referral and duplicate qualification but cannot prove two Telegram accounts are unrelated people.
 - PLUSH BRICK is a mainnet Jetton while contracts are testnet. V1 holder fee discounts are disabled rather than trusted to the backend.
 - BANK depends entirely on later deposits; a stalled queue is expected behavior, not a solvency guarantee.

@@ -1,6 +1,9 @@
+import secrets
 from functools import lru_cache
 from typing import Literal
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -40,6 +43,8 @@ class Settings(BaseSettings):
     duel_contract_address: str = ""
     duel_contract_code_hash: str = ""
     duel_fee_bps: int = 250
+    duel_invite_signing_key: SecretStr = SecretStr("")
+    duel_invite_public_key: str = ""
     # Legacy names are read during the one-release migration window.
     ton_contract_address: str = ""
     ton_contract_code_hash: str = ""
@@ -85,6 +90,8 @@ class Settings(BaseSettings):
             "LOOP_BANK_CONTRACT_CODE_HASH": self.bank_contract_code_hash,
             "LOOP_DUEL_CONTRACT_ADDRESS": self.effective_duel_contract_address,
             "LOOP_DUEL_CONTRACT_CODE_HASH": self.effective_duel_contract_code_hash,
+            "LOOP_DUEL_INVITE_SIGNING_KEY": self.duel_invite_signing_key.get_secret_value(),
+            "LOOP_DUEL_INVITE_PUBLIC_KEY": self.duel_invite_public_key,
             "LOOP_METRICS_TOKEN": self.metrics_token.get_secret_value(),
         }
         missing = [name for name, value in required.items() if not value]
@@ -112,6 +119,20 @@ class Settings(BaseSettings):
                 raise ValueError
         except ValueError as exc:
             raise ValueError("TON contract code hashes must be 32-byte hex") from exc
+        try:
+            seed = bytes.fromhex(self.duel_invite_signing_key.get_secret_value())
+            configured_public_key = bytes.fromhex(self.duel_invite_public_key)
+            derived_public_key = (
+                Ed25519PrivateKey.from_private_bytes(seed)
+                .public_key()
+                .public_bytes(Encoding.Raw, PublicFormat.Raw)
+            )
+            if len(seed) != 32 or len(configured_public_key) != 32 or not secrets.compare_digest(
+                derived_public_key, configured_public_key
+            ):
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError("DUEL invite signing key pair is invalid") from exc
         if self.ton_network_id != -3:
             raise ValueError("mainnet is disabled until the documented release gate is complete")
         return self

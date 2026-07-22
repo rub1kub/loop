@@ -1,20 +1,42 @@
 import "@acton/io"
 import "@acton/emulation/network"
 import "@acton/emulation/scripts"
+import "@acton/types/big_array"
+import "@acton/types/transaction"
 import "@wrappers/DuelEscrow.gen"
 
-const SMOKE_COMMITMENT_DOMAIN = 0x4C4F4F50
+const SMOKE_COMMITMENT_DOMAIN = 0x4C4F4F60
 const SMOKE_SECRET: uint256 = 0x6C6F6F702D6475656C2D746573746E65742D736D6F6B652D76312D3030303031
 
 enum SmokeErrors {
     ContractNotIdle = 901
     OfferMismatch = 902
     LockedValueMismatch = 903
+    MissingTransaction = 904
 }
 
-fun smokeCommitment(offerId: uint64, owner: address): uint256 {
+fun transactionAt(trace: SendResultList, account: address): TlbTransaction? {
+    var index = 0;
+    repeat (trace.size()) {
+        val transaction = trace.at(index).tx.load();
+        if (transaction.getAccountAddress() == account) {
+            return transaction;
+        }
+        index += 1;
+    }
+    return null;
+}
+
+fun smokeCommitment(
+    networkId: int32,
+    contractAddress: address,
+    offerId: uint64,
+    owner: address,
+): uint256 {
     return beginCell()
         .storeUint(SMOKE_COMMITMENT_DOMAIN, 32)
+        .storeInt(networkId, 32)
+        .storeAddress(contractAddress)
         .storeUint(offerId, 64)
         .storeAddress(owner)
         .storeUint(SMOKE_SECRET, 256)
@@ -31,14 +53,18 @@ fun main(duelAddress: address, offerId: uint64, expiresAt: uint32) {
         deployer.address,
         offerId,
         offerId,
-        smokeCommitment(offerId, deployer.address),
+        smokeCommitment(before.networkId, before.contractAddress, offerId, deployer.address),
         5_000,
         ton("2"),
         expiresAt,
         0,
         { value: ton("1.05") },
     );
-    println(opened.waitForTrace());
+    val openTrace = opened.waitForTrace();
+    assert (openTrace != null) throw SmokeErrors.MissingTransaction;
+    val openTransaction = transactionAt(openTrace!, duelAddress);
+    assert (openTransaction != null) throw SmokeErrors.MissingTransaction;
+    println(openTrace);
 
     val offer = duel.offerData(offerId);
     assert (
@@ -53,8 +79,14 @@ fun main(duelAddress: address, offerId: uint64, expiresAt: uint32) {
         offerId,
         { value: ton("0.03") },
     );
-    println(cancelled.waitForTrace());
+    val cancelTrace = cancelled.waitForTrace();
+    assert (cancelTrace != null) throw SmokeErrors.MissingTransaction;
+    val cancelTransaction = transactionAt(cancelTrace!, duelAddress);
+    assert (cancelTransaction != null) throw SmokeErrors.MissingTransaction;
+    println(cancelTrace);
     assert (duel.contractConfig().locked == 0) throw SmokeErrors.LockedValueMismatch;
 
+    println("DUEL_SMOKE_OPEN_HASH {:x}", openTransaction!.toCell().hash());
+    println("DUEL_SMOKE_CANCEL_HASH {:x}", cancelTransaction!.toCell().hash());
     println("DUEL smoke passed: offer={} opened, escrowed and refunded", offerId);
 }
