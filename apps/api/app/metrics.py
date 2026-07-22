@@ -10,6 +10,7 @@ from .models import ChainCheckpoint
 from .modules.duel.models import Duel, DuelOffer, DuelState, OfferState
 
 DUEL_CANARY_REDIS_KEY = "loop:duel:canary:last_success"
+DUEL_CANARY_PROOF_REDIS_KEY = "loop:duel:canary:last_proof"
 
 DUEL_OFFERS = Gauge(
     "loop_duel_offers",
@@ -44,6 +45,10 @@ DUEL_CANARY_SUCCESS = Gauge(
 DUEL_CANARY_AGE = Gauge(
     "loop_duel_canary_age_seconds",
     "Age of the last verified two-wallet DUEL canary.",
+)
+DUEL_CANARY_MIN_WALLET_BALANCE = Gauge(
+    "loop_duel_canary_min_wallet_balance_nano",
+    "Lowest reported testnet balance across the two DUEL canary wallets.",
 )
 
 
@@ -89,9 +94,7 @@ async def refresh_duel_metrics(session_factory: Any, redis_client: Any) -> None:
             )
         )
         heartbeat = await db.scalar(
-            select(func.max(ChainCheckpoint.heartbeat_at)).where(
-                ChainCheckpoint.key.like("duel:%")
-            )
+            select(func.max(ChainCheckpoint.heartbeat_at)).where(ChainCheckpoint.key.like("duel:%"))
         )
 
     DUEL_REVEALING.set(int(revealing or 0))
@@ -109,9 +112,13 @@ async def refresh_duel_metrics(session_factory: Any, redis_client: Any) -> None:
         DUEL_WORKER_HEALTHY.set(0)
 
     try:
-        canary_timestamp = await redis_client.get(DUEL_CANARY_REDIS_KEY)
+        async with redis_client.pipeline(transaction=False) as pipeline:
+            pipeline.get(DUEL_CANARY_REDIS_KEY)
+            pipeline.hget(DUEL_CANARY_PROOF_REDIS_KEY, "min_wallet_balance_nano")
+            canary_timestamp, canary_min_balance = await pipeline.execute()
     except RedisError:
         canary_timestamp = None
+        canary_min_balance = None
     try:
         canary_age = max(0.0, time.time() - float(canary_timestamp))
     except (TypeError, ValueError):
@@ -120,3 +127,7 @@ async def refresh_duel_metrics(session_factory: Any, redis_client: Any) -> None:
     else:
         DUEL_CANARY_SUCCESS.set(1)
         DUEL_CANARY_AGE.set(canary_age)
+    try:
+        DUEL_CANARY_MIN_WALLET_BALANCE.set(float(canary_min_balance))
+    except (TypeError, ValueError):
+        DUEL_CANARY_MIN_WALLET_BALANCE.set(0)

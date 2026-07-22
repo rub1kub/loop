@@ -311,3 +311,5 @@ class DuelCanaryReport(BaseModel):
     contract_address: str = Field(min_length=48, max_length=68)
     duel_id: int = Field(ge=1, le=2**64 - 1)
     settlement_tx_hash: str = Field(min_length=43, max_length=96)
+    first_wallet_balance_nano: int = Field(ge=0, le=2**63 - 1)
+    second_wallet_balance_nano: int = Field(ge=0, le=2**63 - 1)

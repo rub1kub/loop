@@ -20,7 +20,11 @@ from starlette.responses import JSONResponse
 from .bot import configure_bot, create_dispatcher
 from .config import get_settings
 from .database import Base, create_database
-from .metrics import DUEL_CANARY_REDIS_KEY, refresh_duel_metrics
+from .metrics import (
+    DUEL_CANARY_PROOF_REDIS_KEY,
+    DUEL_CANARY_REDIS_KEY,
+    refresh_duel_metrics,
+)
 from .modules.bank.router import router as bank_router
 from .modules.duel.router import router as duel_router
 from .nonce_store import RedisChallengeStore
@@ -206,13 +210,17 @@ def create_app() -> FastAPI:
         async with request.app.state.redis.pipeline(transaction=True) as pipeline:
             pipeline.set(DUEL_CANARY_REDIS_KEY, timestamp)
             pipeline.hset(
-                "loop:duel:canary:last_proof",
+                DUEL_CANARY_PROOF_REDIS_KEY,
                 mapping={
                     "network": body.network,
                     "contract": configured_contract,
                     "duel_id": body.duel_id,
                     "settlement_tx_hash": proof.transaction_hash,
                     "confirmed_at": timestamp,
+                    "min_wallet_balance_nano": min(
+                        body.first_wallet_balance_nano,
+                        body.second_wallet_balance_nano,
+                    ),
                 },
             )
             await pipeline.execute()
