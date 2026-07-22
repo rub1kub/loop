@@ -11,6 +11,7 @@ from app.bot import (
     INLINE_PATTERN,
     configure_bot,
     format_gram,
+    main_app_deep_link,
 )
 from app.config import get_settings
 
@@ -25,6 +26,10 @@ def test_inline_challenge_query_is_offer_bound() -> None:
 def test_inline_amount_format_is_human_readable() -> None:
     assert format_gram(2_000_000_000) == "2"
     assert format_gram(1_250_000_000) == "1.25"
+
+
+def test_main_app_deep_link_uses_the_botfather_launch_mode() -> None:
+    assert main_app_deep_link("@getloopbot") == "https://t.me/getloopbot?startapp"
 
 
 def test_bot_profile_describes_independent_bank_and_duel() -> None:

@@ -49,6 +49,10 @@ def format_gram(nano: int) -> str:
     return f"{value:.9f}".rstrip("0").rstrip(".")
 
 
+def main_app_deep_link(bot_username: str) -> str:
+    return f"https://t.me/{bot_username.removeprefix('@')}?startapp"
+
+
 def create_dispatcher(
     settings: Settings, session_factory: async_sessionmaker[AsyncSession]
 ) -> Dispatcher:
@@ -60,7 +64,7 @@ def create_dispatcher(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="ОТКРЫТЬ LOOP", web_app=WebAppInfo(url=settings.public_origin)
+                        text="ОТКРЫТЬ LOOP", url=main_app_deep_link(settings.bot_username)
                     )
                 ]
             ]

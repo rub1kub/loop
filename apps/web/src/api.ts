@@ -18,6 +18,8 @@ import type {
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 let accessToken: string | null = null;
 let reauthentication: Promise<boolean> | null = null;
+const RETRYABLE_STATUSES = new Set([408, 425, 429, 502, 503, 504]);
+const RETRY_DELAYS_MS = [250, 750];
 
 const modeStatsSchema = z.object({ active: z.number(), completed: z.number(), total: z.number() });
 const profileSchema = z.object({
@@ -94,7 +96,28 @@ async function request<T>(path: string, init?: RequestInit, retryUnauthorized = 
   const headers = new Headers(init?.headers);
   headers.set('Content-Type', 'application/json');
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const canRetry = method === 'GET' || path === '/auth/telegram';
+  let response: Response | undefined;
+  let networkError: unknown;
+  const attempts = canRetry ? RETRY_DELAYS_MS.length + 1 : 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+      networkError = undefined;
+      if (!RETRYABLE_STATUSES.has(response.status) || attempt === attempts - 1) break;
+    } catch (error) {
+      response = undefined;
+      networkError = error;
+      if (attempt === attempts - 1) break;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+  }
+  if (!response) {
+    throw new Error('Не удалось загрузить данные. Проверьте соединение и повторите.', {
+      cause: networkError,
+    });
+  }
   if (response.status === 401 && retryUnauthorized && path !== '/auth/telegram') {
     accessToken = null;
     if (await restoreSession()) return request<T>(path, init, false);
