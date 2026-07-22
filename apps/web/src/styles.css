@@ -287,7 +287,8 @@ a:focus-visible {
 }
 
 .keyboard-open .tab-bar,
-.app-shell:has(.sheet-backdrop) .tab-bar {
+.app-shell:has(.sheet-backdrop) .tab-bar,
+.app-shell:has(.bank-flow-screen) .tab-bar {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
@@ -295,7 +296,8 @@ a:focus-visible {
 }
 
 .keyboard-open .screen-stage,
-.app-shell:has(.sheet-backdrop) .screen-stage {
+.app-shell:has(.sheet-backdrop) .screen-stage,
+.app-shell:has(.bank-flow-screen) .screen-stage {
   height: 100%;
 }
 
@@ -391,6 +393,49 @@ a:focus-visible {
 .bank-empty-state p {
   max-width: 290px;
   line-height: 1.45;
+}
+
+.bank-flow-screen {
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
+
+.bank-flow-screen .sheet-title-row {
+  flex: 0 0 auto;
+  margin-bottom: 24px;
+}
+
+.bank-flow-step {
+  width: 100%;
+  max-width: 388px;
+  margin: 0 auto;
+}
+
+.bank-flow-waiting .bank-flow-step {
+  flex: 1;
+  align-content: center;
+}
+
+.keyboard-open .bank-flow-amount {
+  padding-top: calc(var(--safe-top) + 14px);
+}
+
+.keyboard-open .bank-flow-amount .sheet-title-row {
+  margin-bottom: 12px;
+}
+
+.keyboard-open .bank-flow-amount .amount-input {
+  margin: 10px 0 6px;
+}
+
+.keyboard-open .bank-flow-amount .amount-input input {
+  padding: 4px 0 8px;
+  font-size: 56px;
+}
+
+.keyboard-open .bank-flow-amount .wizard-step > .primary-button {
+  margin-top: 10px;
 }
 
 .sheet-backdrop {
