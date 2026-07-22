@@ -26,5 +26,24 @@
     1280266002, 1280266003
   ],
   "getters": ["contractConfig", "offerData", "duelData", "activeOffer"],
+  "verified_smoke": {
+    "offer_id": 2207202602,
+    "owner": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
+    "commitment_hex": "e7a45c4dfdea9732c53a36afe3ebcbe5383b695edd4c0d812bb3c747426901b0",
+    "chance_bps": 5000,
+    "total_pool_nano": 2000000000,
+    "stake_nano": 1000000000,
+    "expires_at": 1784747333,
+    "open_gas_nano": 50000000,
+    "open_transaction": "6AKPrEfQ7LJmWO9J52uEaexf8gZIuf9BckVfCi6HkCI=",
+    "open_transaction_lt": 84858974000003,
+    "open_masterchain_seqno": 73242470,
+    "cancel_gas_nano": 30000000,
+    "cancel_transaction": "r3mY7tiLyZq+klp8ql2Yebp2usSW5oxLg0hYIS51RIk=",
+    "cancel_transaction_lt": 84858985000003,
+    "cancel_masterchain_seqno": 73242481,
+    "refund_nano": 1000000000,
+    "refund_reason": 3
+  },
   "explorer_url": "https://testnet.tonviewer.com/kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a"
 }
