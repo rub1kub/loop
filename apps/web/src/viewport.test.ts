@@ -4,6 +4,7 @@ import type { TelegramWebApp } from './types';
 import { installViewportBehavior } from './viewport';
 
 const initialInnerHeight = window.innerHeight;
+const initialVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
 
 describe('Telegram keyboard viewport behavior', () => {
   afterEach(() => {
@@ -15,6 +16,9 @@ describe('Telegram keyboard viewport behavior', () => {
       configurable: true,
       value: initialInnerHeight,
     });
+    if (initialVisualViewport)
+      Object.defineProperty(window, 'visualViewport', initialVisualViewport);
+    else Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined });
   });
 
   it('hides navigation and freezes the app height while an input owns the keyboard', () => {
@@ -98,6 +102,42 @@ describe('Telegram keyboard viewport behavior', () => {
     expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
       '72px',
     );
+    cleanup();
+  });
+
+  it('counters delayed iOS visual viewport panning and restores the focused screen', () => {
+    vi.useFakeTimers();
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
+    const viewportValues = { height: 700, offsetTop: 0, pageTop: 0 };
+    const viewportTarget = new EventTarget();
+    Object.defineProperties(viewportTarget, {
+      height: { get: () => viewportValues.height },
+      offsetTop: { get: () => viewportValues.offsetTop },
+      pageTop: { get: () => viewportValues.pageTop },
+    });
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: viewportTarget,
+    });
+
+    const screen = document.createElement('section');
+    screen.className = 'screen';
+    const input = document.createElement('input');
+    screen.append(input);
+    document.body.append(screen);
+    const cleanup = installViewportBehavior();
+
+    input.focus();
+    screen.scrollTop = 180;
+    viewportValues.height = 430;
+    viewportTarget.dispatchEvent(new Event('resize'));
+    expect(screen.scrollTop).toBe(0);
+    expect(document.documentElement.style.getPropertyValue('--loop-visual-page-top')).toBe('0px');
+
+    viewportValues.offsetTop = 260;
+    viewportValues.pageTop = 260;
+    vi.advanceTimersByTime(50);
+    expect(document.documentElement.style.getPropertyValue('--loop-visual-page-top')).toBe('260px');
     cleanup();
   });
 });

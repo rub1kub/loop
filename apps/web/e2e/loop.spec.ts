@@ -31,6 +31,13 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
   const nextBeforeKeyboard = await page.getByRole('button', { name: /ДАЛЬШЕ/ }).boundingBox();
   await bankAmount.fill('2');
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
+  await page.locator('html').evaluate((root) => {
+    root.style.setProperty('--loop-visual-page-top', '180px');
+  });
+  await expect(page.locator('.app-shell')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 180)');
+  await page.locator('html').evaluate((root) => {
+    root.style.setProperty('--loop-visual-page-top', '0px');
+  });
   const bankViewport = page.viewportSize()!;
   await page.setViewportSize({ width: bankViewport.width, height: 404 });
   const inputBox = await bankAmount.boundingBox();

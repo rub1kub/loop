@@ -14,6 +14,12 @@ function currentViewport() {
   const viewport = window.visualViewport;
   return {
     height: Math.round(viewport?.height ?? window.innerHeight),
+    pageTop: Math.max(
+      0,
+      Math.round(viewport?.pageTop ?? 0),
+      Math.round((viewport?.offsetTop ?? 0) + window.scrollY),
+      Math.round(window.scrollY),
+    ),
   };
 }
 
@@ -22,8 +28,17 @@ export function installViewportBehavior(): () => void {
   let stableHeight = Math.max(window.innerHeight, currentViewport().height);
   let protectedTopInset = 0;
   let blurTimer: number | undefined;
+  let viewportCorrectionTimer: number | undefined;
+  let focusCorrectionTimer: number | undefined;
   let keyboardSettling = false;
   let subscribedTelegram: TelegramWebApp | undefined;
+
+  const restoreFocusedScreen = () => {
+    const active = document.activeElement;
+    if (!isEditable(active)) return;
+    const screen = active.closest<HTMLElement>('.screen');
+    if (screen && screen.scrollTop !== 0) screen.scrollTop = 0;
+  };
 
   const syncSafeArea = () => {
     const app = window.Telegram?.WebApp;
@@ -61,11 +76,23 @@ export function installViewportBehavior(): () => void {
     }
     root.style.setProperty('--loop-stable-height', `${stableHeight}px`);
     root.style.setProperty('--loop-visual-height', `${viewport.height}px`);
+    root.style.setProperty('--loop-visual-page-top', `${keyboardOpen ? viewport.pageTop : 0}px`);
     root.classList.toggle('keyboard-open', keyboardOpen);
     syncSafeArea();
+    if (keyboardOpen) restoreFocusedScreen();
   };
 
-  const onTelegramViewport = () => sync();
+  const resyncAfterViewportSettles = () => {
+    if (viewportCorrectionTimer !== undefined) window.clearTimeout(viewportCorrectionTimer);
+    viewportCorrectionTimer = window.setTimeout(sync, 50);
+  };
+
+  const onViewportMutation = () => {
+    sync();
+    resyncAfterViewportSettles();
+  };
+
+  const onTelegramViewport = () => onViewportMutation();
 
   const subscribeTelegram = () => {
     const app = window.Telegram?.WebApp;
@@ -79,30 +106,38 @@ export function installViewportBehavior(): () => void {
 
   const onFocusIn = () => {
     if (blurTimer !== undefined) window.clearTimeout(blurTimer);
+    if (focusCorrectionTimer !== undefined) window.clearTimeout(focusCorrectionTimer);
     keyboardSettling = false;
     sync();
+    resyncAfterViewportSettles();
+    focusCorrectionTimer = window.setTimeout(sync, 320);
   };
   const onFocusOut = () => {
     keyboardSettling = true;
+    if (focusCorrectionTimer !== undefined) window.clearTimeout(focusCorrectionTimer);
     blurTimer = window.setTimeout(() => {
       keyboardSettling = false;
+      root.scrollTop = 0;
+      document.body.scrollTop = 0;
       sync();
     }, FOCUS_SETTLE_MS);
   };
 
   subscribeTelegram();
   sync();
-  window.addEventListener('resize', sync);
-  window.visualViewport?.addEventListener('resize', sync);
-  window.visualViewport?.addEventListener('scroll', sync);
+  window.addEventListener('resize', onViewportMutation);
+  window.visualViewport?.addEventListener('resize', onViewportMutation);
+  window.visualViewport?.addEventListener('scroll', onViewportMutation);
   document.addEventListener('focusin', onFocusIn);
   document.addEventListener('focusout', onFocusOut);
 
   return () => {
     if (blurTimer !== undefined) window.clearTimeout(blurTimer);
-    window.removeEventListener('resize', sync);
-    window.visualViewport?.removeEventListener('resize', sync);
-    window.visualViewport?.removeEventListener('scroll', sync);
+    if (viewportCorrectionTimer !== undefined) window.clearTimeout(viewportCorrectionTimer);
+    if (focusCorrectionTimer !== undefined) window.clearTimeout(focusCorrectionTimer);
+    window.removeEventListener('resize', onViewportMutation);
+    window.visualViewport?.removeEventListener('resize', onViewportMutation);
+    window.visualViewport?.removeEventListener('scroll', onViewportMutation);
     document.removeEventListener('focusin', onFocusIn);
     document.removeEventListener('focusout', onFocusOut);
     subscribedTelegram?.offEvent?.('viewportChanged', onTelegramViewport);
@@ -112,6 +147,7 @@ export function installViewportBehavior(): () => void {
     root.classList.remove('keyboard-open');
     root.style.removeProperty('--loop-stable-height');
     root.style.removeProperty('--loop-visual-height');
+    root.style.removeProperty('--loop-visual-page-top');
     root.style.removeProperty('--loop-safe-area-inset-top');
     root.style.removeProperty('--loop-safe-area-inset-right');
     root.style.removeProperty('--loop-safe-area-inset-bottom');
