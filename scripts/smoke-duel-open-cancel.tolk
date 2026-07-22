@@ -2,7 +2,6 @@ import "@acton/io"
 import "@acton/emulation/network"
 import "@acton/emulation/scripts"
 import "@wrappers/DuelEscrow.gen"
-import "@contracts/duel/messages"
 
 const SMOKE_COMMITMENT_DOMAIN = 0x4C4F4F50
 const SMOKE_SECRET: uint256 = 0x6C6F6F702D6475656C2D746573746E65742D736D6F6B652D76312D3030303031
