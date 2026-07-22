@@ -67,7 +67,7 @@ acton script --fork-net testnet scripts/smoke-bank-genesis.tolk <address> <posit
 acton script --net testnet scripts/smoke-bank-genesis.tolk <address> <position-id> 1000000000 12500
 ```
 
-The DUEL canary service refuses to start unless both configured Acton aliases already exist and resolve to distinct addresses. It performs a fork rehearsal before every live run.
+The DUEL canary service refuses to start unless both configured Acton aliases already exist and resolve to distinct addresses. It performs a fork rehearsal before every live run. Hosts pin the project-compatible Acton binary at `/opt/loop/tools/acton`; release activation materializes the matching embedded standard library and writable build cache before the canary namespace can start.
 
 ## Backup and recovery
 
