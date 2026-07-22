@@ -50,13 +50,6 @@ export function initializeTelegram(): boolean {
   app.expand?.();
   app.disableVerticalSwipes?.();
   app.enableClosingConfirmation?.();
-  if (app.isVersionAtLeast?.('8.0') && app.isFullscreen) {
-    try {
-      app.exitFullscreen?.();
-    } catch {
-      // Keep the current mode when a client reports fullscreen APIs but rejects the transition.
-    }
-  }
   app.ready?.();
   // Telegram can restore its chrome theme during ready(); apply LOOP's monochrome chrome once more.
   app.setHeaderColor?.('#000000');

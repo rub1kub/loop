@@ -45,7 +45,7 @@ describe('Telegram launch compatibility', () => {
     expect(telegramInitData()).toBe('sdk-init-data');
   });
 
-  it('leaves Telegram fullscreen so native header controls cannot cover app content', () => {
+  it('preserves the launch mode configured in BotFather', () => {
     const exitFullscreen = vi.fn();
     const requestFullscreen = vi.fn();
     window.Telegram = {
@@ -60,7 +60,7 @@ describe('Telegram launch compatibility', () => {
     };
 
     expect(initializeTelegram()).toBe(true);
-    expect(exitFullscreen).toHaveBeenCalledOnce();
+    expect(exitFullscreen).not.toHaveBeenCalled();
     expect(requestFullscreen).not.toHaveBeenCalled();
   });
 });
