@@ -159,6 +159,118 @@ export function BankScreen({
 
   const progress = position?.progress_bps ?? 0;
 
+  if (wizard) {
+    return (
+      <motion.section
+        className={`screen bank-flow-screen bank-flow-${wizard}`}
+        aria-labelledby="bank-flow-title"
+        initial={{ opacity: 0, x: 12 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+      >
+        <SheetTitle
+          title="Новая позиция"
+          titleId="bank-flow-title"
+          onClose={() => setWizard(null)}
+        />
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={wizard}
+            className="wizard-step bank-flow-step"
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
+            transition={{ duration: 0.16, ease: [0.2, 0.8, 0.2, 1] }}
+          >
+            {wizard === 'amount' && (
+              <>
+                <p className="eyebrow">ШАГ 1 ИЗ 3 · СУММА</p>
+                <label className="amount-input">
+                  <input
+                    inputMode="decimal"
+                    value={amount}
+                    onChange={(event) => setAmount(event.target.value)}
+                    aria-label="Сумма в GRAM"
+                  />
+                  <span>GRAM</span>
+                </label>
+                <p className="form-note">Только тестовые GRAM. Минимум 1 GRAM.</p>
+                <button className="primary-button" onClick={() => setWizard('multiplier')}>
+                  ДАЛЬШЕ
+                  <ArrowRight aria-hidden="true" />
+                </button>
+              </>
+            )}
+            {wizard === 'multiplier' && (
+              <>
+                <p className="eyebrow">ШАГ 2 ИЗ 3 · ЦЕЛЬ</p>
+                <h3>Выбери целевую выплату.</h3>
+                <div className="choice-list">
+                  {multipliers.map((value) => (
+                    <button
+                      key={value}
+                      className={multiplier === value ? 'active' : ''}
+                      onClick={() => {
+                        setMultiplier(value);
+                        haptic('selection');
+                      }}
+                    >
+                      <span>×{value / 10_000}</span>
+                      <strong>{formatGram((principalNano * value) / 10_000, 3)} GRAM</strong>
+                      {multiplier === value && <Check aria-hidden="true" />}
+                    </button>
+                  ))}
+                </div>
+                <button className="primary-button" onClick={() => void showConfirmation()}>
+                  ПРОВЕРИТЬ
+                </button>
+              </>
+            )}
+            {wizard === 'confirm' && preview && (
+              <>
+                <p className="eyebrow">ШАГ 3 ИЗ 3 · ПОДТВЕРЖДЕНИЕ</p>
+                <h3>Проверь условия.</h3>
+                <dl className="detail-list">
+                  <Detail
+                    label="Вносится"
+                    value={`${formatGram(preview.principal_nano, 3)} GRAM`}
+                  />
+                  <Detail
+                    label="Целевая выплата"
+                    value={`${formatGram(preview.target_payout_nano, 3)} GRAM`}
+                  />
+                  <Detail label="Комиссия BANK" value={`${formatGram(preview.fee_nano, 4)} GRAM`} />
+                  <Detail label="Сеть" value="TON testnet" />
+                  <Detail
+                    label="Контракт"
+                    value={`${preview.contract_address.slice(0, 7)}…${preview.contract_address.slice(-5)}`}
+                  />
+                </dl>
+                {message && <p className="form-note is-error">{message}</p>}
+                <button className="primary-button" onClick={() => void confirmPosition()}>
+                  ПОДТВЕРДИТЬ В TON
+                </button>
+              </>
+            )}
+            {wizard === 'waiting' && (
+              <>
+                <div className="waiting-step">
+                  <span className="waiting-ring" />
+                  <h3>Подтверждаем в TON</h3>
+                  <p>Callback кошелька не считается успехом. LOOP ждёт транзакцию в блоке.</p>
+                  {message && <p className="form-note">{message}</p>}
+                </div>
+                <button className="secondary-button" onClick={() => setWizard(null)}>
+                  ЗАКРЫТЬ
+                </button>
+              </>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </motion.section>
+    );
+  }
+
   return (
     <section className="screen bank-screen" aria-labelledby="bank-title">
       <header className="mode-header">
@@ -257,120 +369,25 @@ export function BankScreen({
             </motion.div>
           </motion.div>
         )}
-
-        {wizard && (
-          <motion.div
-            className="sheet-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              className="sheet bank-wizard"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', stiffness: 260, damping: 30 }}
-            >
-              <SheetTitle title="Новая позиция" onClose={() => setWizard(null)} />
-              {wizard === 'amount' && (
-                <div className="wizard-step">
-                  <p className="eyebrow">ШАГ 1 ИЗ 3 · СУММА</p>
-                  <label className="amount-input">
-                    <input
-                      inputMode="decimal"
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                      aria-label="Сумма в GRAM"
-                    />
-                    <span>GRAM</span>
-                  </label>
-                  <p className="form-note">Только тестовые GRAM. Минимум 1 GRAM.</p>
-                  <button className="primary-button" onClick={() => setWizard('multiplier')}>
-                    ДАЛЬШЕ
-                    <ArrowRight aria-hidden="true" />
-                  </button>
-                </div>
-              )}
-              {wizard === 'multiplier' && (
-                <div className="wizard-step">
-                  <p className="eyebrow">ШАГ 2 ИЗ 3 · ЦЕЛЬ</p>
-                  <h3>Выбери целевую выплату.</h3>
-                  <div className="choice-list">
-                    {multipliers.map((value) => (
-                      <button
-                        key={value}
-                        className={multiplier === value ? 'active' : ''}
-                        onClick={() => {
-                          setMultiplier(value);
-                          haptic('selection');
-                        }}
-                      >
-                        <span>×{value / 10_000}</span>
-                        <strong>{formatGram((principalNano * value) / 10_000, 3)} GRAM</strong>
-                        {multiplier === value && <Check aria-hidden="true" />}
-                      </button>
-                    ))}
-                  </div>
-                  <button className="primary-button" onClick={() => void showConfirmation()}>
-                    ПРОВЕРИТЬ
-                  </button>
-                </div>
-              )}
-              {wizard === 'confirm' && preview && (
-                <div className="wizard-step">
-                  <p className="eyebrow">ШАГ 3 ИЗ 3 · ПОДТВЕРЖДЕНИЕ</p>
-                  <h3>Проверь условия.</h3>
-                  <dl className="detail-list">
-                    <Detail
-                      label="Вносится"
-                      value={`${formatGram(preview.principal_nano, 3)} GRAM`}
-                    />
-                    <Detail
-                      label="Целевая выплата"
-                      value={`${formatGram(preview.target_payout_nano, 3)} GRAM`}
-                    />
-                    <Detail
-                      label="Комиссия BANK"
-                      value={`${formatGram(preview.fee_nano, 4)} GRAM`}
-                    />
-                    <Detail label="Сеть" value="TON testnet" />
-                    <Detail
-                      label="Контракт"
-                      value={`${preview.contract_address.slice(0, 7)}…${preview.contract_address.slice(-5)}`}
-                    />
-                  </dl>
-                  {message && <p className="form-note is-error">{message}</p>}
-                  <button className="primary-button" onClick={() => void confirmPosition()}>
-                    ПОДТВЕРДИТЬ В TON
-                  </button>
-                </div>
-              )}
-              {wizard === 'waiting' && (
-                <div className="wizard-step waiting-step">
-                  <span className="waiting-ring" />
-                  <h3>Подтверждаем в TON</h3>
-                  <p>Callback кошелька не считается успехом. LOOP ждёт транзакцию в блоке.</p>
-                  {message && <p className="form-note">{message}</p>}
-                  <button className="secondary-button" onClick={() => setWizard(null)}>
-                    ЗАКРЫТЬ
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
       </AnimatePresence>
     </section>
   );
 }
 
-function SheetTitle({ title, onClose }: { title: string; onClose: () => void }) {
+function SheetTitle({
+  title,
+  titleId,
+  onClose,
+}: {
+  title: string;
+  titleId?: string;
+  onClose: () => void;
+}) {
   return (
     <div className="sheet-title-row">
       <div>
         <p className="eyebrow">LOOP · TESTNET</p>
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
       </div>
       <button className="round-icon-button" onClick={onClose} aria-label="Закрыть">
         <X aria-hidden="true" />
