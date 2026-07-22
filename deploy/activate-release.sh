@@ -72,6 +72,10 @@ trap rollback_release ERR
 
 test -d "$release_dir"
 test -f "$shared_env"
+if [[ ! -s "$release_dir/apps/web/dist/index.html" ]]; then
+  echo "release is missing the built web entrypoint: apps/web/dist/index.html" >&2
+  exit 3
+fi
 chmod 755 "$release_dir"
 ln -sfn "$shared_env" "$release_dir/.env.production"
 
@@ -98,6 +102,7 @@ ln -sfn "$release_dir" "$loop_root/current.next"
 mv -Tf "$loop_root/current.next" "$loop_root/current"
 sudo nginx -t
 sudo systemctl reload nginx
+curl --fail --silent --show-error https://app.tonsuite.org/ >/dev/null
 curl --fail --silent --show-error https://app.tonsuite.org/ready >/dev/null
 rollback_armed=false
 trap - ERR
