@@ -1,6 +1,7 @@
 import type { TelegramWebApp } from './types';
 
 const FOCUS_SETTLE_MS = 360;
+const FULLSCREEN_CONTROLS_TOP_INSET_PX = 72;
 
 function isEditable(element: Element | null): element is HTMLElement {
   return (
@@ -28,7 +29,11 @@ export function installViewportBehavior(): () => void {
     const device = app?.safeAreaInset;
     const content = app?.contentSafeAreaInset;
     const inset = (side: 'top' | 'right' | 'bottom' | 'left') =>
-      Math.max(device?.[side] ?? 0, content?.[side] ?? 0);
+      Math.max(
+        device?.[side] ?? 0,
+        content?.[side] ?? 0,
+        side === 'top' && app?.isFullscreen ? FULLSCREEN_CONTROLS_TOP_INSET_PX : 0,
+      );
 
     root.style.setProperty('--loop-safe-area-inset-top', `${inset('top')}px`);
     root.style.setProperty('--loop-safe-area-inset-right', `${inset('right')}px`);

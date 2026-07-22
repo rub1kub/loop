@@ -68,4 +68,29 @@ describe('Telegram keyboard viewport behavior', () => {
     cleanup();
     expect(offEvent).toHaveBeenCalledWith('contentSafeAreaChanged', expect.any(Function));
   });
+
+  it('keeps fullscreen content below Telegram overlay controls', () => {
+    let onFullscreenChanged: (() => void) | undefined;
+    window.Telegram = {
+      WebApp: {
+        isFullscreen: false,
+        safeAreaInset: { top: 44, right: 0, bottom: 34, left: 0 },
+        contentSafeAreaInset: { top: 56, right: 0, bottom: 0, left: 0 },
+        onEvent: (event: string, callback: (payload?: { isStateStable?: boolean }) => void) => {
+          if (event === 'fullscreenChanged') onFullscreenChanged = () => callback();
+        },
+      } as unknown as TelegramWebApp,
+    };
+
+    const cleanup = installViewportBehavior();
+    expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
+      '56px',
+    );
+    window.Telegram.WebApp.isFullscreen = true;
+    onFullscreenChanged?.();
+    expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
+      '72px',
+    );
+    cleanup();
+  });
 });

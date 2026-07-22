@@ -1,14 +1,18 @@
 import { expect, test } from '@playwright/test';
 
 test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({ page }) => {
+  const emulateFullscreenControls = () =>
+    page.locator('html').evaluate((root) => {
+      root.style.setProperty('--tg-content-safe-area-inset-top', '72px');
+    });
+
   await page.goto('/?screen=bank-empty');
-  await page.locator('html').evaluate((root) => {
-    root.style.setProperty('--tg-content-safe-area-inset-top', '56px');
-  });
+  await emulateFullscreenControls();
   await expect(page.getByRole('heading', { name: 'BANK' })).toBeVisible();
+  await expect(page.locator('.screen-stage')).toHaveCSS('transform', 'none');
   const headerBox = await page.locator('.mode-header').boundingBox();
   expect(headerBox).not.toBeNull();
-  expect(headerBox!.y).toBeGreaterThanOrEqual(80);
+  expect(headerBox!.y).toBeGreaterThanOrEqual(100);
   const shellBox = await page.locator('.app-shell').boundingBox();
   const jarBox = await page.locator('.bank-object img').boundingBox();
   expect(shellBox).not.toBeNull();
@@ -30,7 +34,7 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
   expect(inputBox).not.toBeNull();
   expect(nextBox).not.toBeNull();
   expect(closeBox).not.toBeNull();
-  expect(closeBox!.y).toBeGreaterThanOrEqual(68);
+  expect(closeBox!.y).toBeGreaterThanOrEqual(84);
   expect(inputBox!.y + inputBox!.height).toBeLessThanOrEqual(404);
   expect(nextBox!.y + nextBox!.height).toBeLessThanOrEqual(404);
   await page.setViewportSize(bankViewport);
@@ -46,7 +50,9 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
   await expect(page.getByRole('button', { name: 'ПОДТВЕРДИТЬ В TON' })).toBeVisible();
 
   await page.goto('/?screen=duel-create');
+  await emulateFullscreenControls();
   await expect(page.getByRole('heading', { name: 'DUEL' })).toBeVisible();
+  expect((await page.locator('.mode-header').boundingBox())!.y).toBeGreaterThanOrEqual(100);
   const stableShellHeight = (await page.locator('.app-shell').boundingBox())!.height;
   const stakeInput = page.locator('.stake-input input');
   await stakeInput.fill('1');
@@ -64,7 +70,9 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
   await expect(page.getByText('AFK ПОИСК')).toBeVisible();
 
   await page.goto('/?screen=profile');
+  await emulateFullscreenControls();
   await expect(page.getByRole('heading', { name: 'Дмитрий' })).toBeVisible();
+  expect((await page.locator('.profile-identity').boundingBox())!.y).toBeGreaterThanOrEqual(104);
   await expect(page.getByText('PLUSH BRICK')).toBeVisible();
   const tabBar = page.getByRole('navigation', { name: 'Основная навигация' });
   const tabBox = await tabBar.boundingBox();
