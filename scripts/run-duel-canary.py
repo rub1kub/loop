@@ -17,6 +17,8 @@ TESTNET_NETWORK_ID = -3
 DEFAULT_MIN_BALANCE_NANO = 1_800_000_000
 FIRST_WALLET_ALIAS = "loop-canary-a"
 SECOND_WALLET_ALIAS = "loop-canary-b"
+FUNDING_POLL_ATTEMPTS = 12
+FUNDING_POLL_INTERVAL_SECONDS = 5
 
 
 def run(command: list[str], environment: dict[str, str], *, echo: bool = True) -> str:
@@ -86,17 +88,18 @@ def ensure_testnet_funding(
                 echo=False,
             )
 
-    funded = wallet_snapshot(environment)
-    require_canary_wallets(funded, first_wallet, second_wallet)
-    if any(
-        not isinstance(funded[name].get("balance"), int)
-        or funded[name]["balance"] < minimum_balance_nano
-        for name in (first_wallet, second_wallet)
-    ):
-        raise SystemExit(
-            "testnet canary funding stayed below the configured safety floor"
-        )
-    return funded
+    for attempt in range(FUNDING_POLL_ATTEMPTS):
+        funded = wallet_snapshot(environment)
+        require_canary_wallets(funded, first_wallet, second_wallet)
+        if all(
+            isinstance(funded[name].get("balance"), int)
+            and funded[name]["balance"] >= minimum_balance_nano
+            for name in (first_wallet, second_wallet)
+        ):
+            return funded
+        if attempt + 1 < FUNDING_POLL_ATTEMPTS:
+            time.sleep(FUNDING_POLL_INTERVAL_SECONDS)
+    raise SystemExit("testnet canary funding stayed below the configured safety floor")
 
 
 def main() -> None:

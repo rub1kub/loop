@@ -34,19 +34,26 @@ def wallets(first_balance: int, second_balance: int) -> dict[str, dict[str, Any]
 
 def test_canary_refills_only_wallet_below_floor(monkeypatch: pytest.MonkeyPatch) -> None:
     snapshots: Iterator[dict[str, dict[str, Any]]] = iter(
-        [wallets(900_000_000, 2_000_000_000), wallets(2_900_000_000, 2_000_000_000)]
+        [
+            wallets(900_000_000, 2_000_000_000),
+            wallets(900_000_000, 2_000_000_000),
+            wallets(2_900_000_000, 2_000_000_000),
+        ]
     )
     commands: list[list[str]] = []
+    sleeps: list[int] = []
     monkeypatch.setattr(RUNNER, "wallet_snapshot", lambda _environment: next(snapshots))
     monkeypatch.setattr(
         RUNNER,
         "run",
         lambda command, _environment, **_kwargs: commands.append(command) or "",
     )
+    monkeypatch.setattr(RUNNER.time, "sleep", sleeps.append)
 
     result = RUNNER.ensure_testnet_funding({}, "loop-canary-a", "loop-canary-b", 1_800_000_000)
 
     assert result["loop-canary-a"]["balance"] == 2_900_000_000
+    assert sleeps == [RUNNER.FUNDING_POLL_INTERVAL_SECONDS]
     assert commands == [
         [
             "acton",
@@ -63,11 +70,13 @@ def test_canary_refills_only_wallet_below_floor(monkeypatch: pytest.MonkeyPatch)
 def test_canary_fails_closed_when_airdrop_stays_below_floor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    snapshots: Iterator[dict[str, dict[str, Any]]] = iter(
-        [wallets(900_000_000, 2_000_000_000), wallets(900_000_000, 2_000_000_000)]
+    monkeypatch.setattr(
+        RUNNER,
+        "wallet_snapshot",
+        lambda _environment: wallets(900_000_000, 2_000_000_000),
     )
-    monkeypatch.setattr(RUNNER, "wallet_snapshot", lambda _environment: next(snapshots))
     monkeypatch.setattr(RUNNER, "run", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(RUNNER.time, "sleep", lambda _seconds: None)
 
     with pytest.raises(SystemExit, match="stayed below"):
         RUNNER.ensure_testnet_funding({}, "loop-canary-a", "loop-canary-b", 1_800_000_000)
