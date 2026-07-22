@@ -153,7 +153,7 @@ Full runbook: [deployment](docs/deployment.md).
 - BANK always funds older FIFO positions first; any remainder visibly seeds the new position instead of becoming trapped protocol reserve.
 - DUEL v1.1 has one global 2.5% on-chain fee. PLUSH BRICK ownership is verified, but a holder discount is disabled until a contract version can enforce it on-chain across networks.
 - Financial contracts run on testnet, while the configured PLUSH BRICK Jetton exists on mainnet; the two proofs are explicitly separated.
-- No internal balance, seed phrase, private key or custodial wallet exists in LOOP.
+- LOOP holds no user balance, seed phrase, private key or custodial wallet; two isolated low-value testnet keys are used only by the production DUEL canary.
 
 Read [security](docs/security.md) and report vulnerabilities according to [SECURITY.md](SECURITY.md).
 

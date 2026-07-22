@@ -13,7 +13,7 @@ ExecStart=/usr/bin/python3 scripts/run-duel-canary.py --contract ${LOOP_DUEL_CON
 PrivateTmp=true
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/root/.acton /opt/loop/current/build
+ReadWritePaths=/root/.acton /root/.config/acton /opt/loop/current/build
 
 [Install]
 WantedBy=multi-user.target

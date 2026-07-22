@@ -73,16 +73,17 @@ fun canaryPermit(
 
 fun main(
     duelAddress: address,
-    firstWalletName: string,
-    secondWalletName: string,
     firstOfferId: uint64,
     secondOfferId: uint64,
     expiresAt: uint32,
 ) {
     val signerSeed = env<int>("LOOP_DUEL_CANARY_SIGNING_SEED");
     assert (signerSeed != null) throw CanaryErrors.MissingSigner;
-    val firstWallet = scripts.wallet(firstWalletName);
-    val secondWallet = scripts.wallet(secondWalletName);
+    // Acton 1.0.0 does not preserve CLI `string` arguments as cells in fork
+    // emulation, while literal aliases work in both fork and broadcast modes.
+    // Keep these names aligned with the systemd unit and Python preflight.
+    val firstWallet = scripts.wallet("loop-canary-a");
+    val secondWallet = scripts.wallet("loop-canary-b");
     assert (firstWallet.address != secondWallet.address) throw CanaryErrors.SameWallet;
     assert (firstOfferId < secondOfferId) throw CanaryErrors.WrongContract;
 

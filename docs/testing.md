@@ -43,4 +43,4 @@ acton test tests/duel_contract.test.tolk --mutate --mutate-contract DuelEscrow \
 
 ## E2E boundary
 
-The browser suite verifies interface and message construction without a seed phrase. Contract tests exercise full messages in an emulated TVM. Read-only verification proves deployed artifacts and recorded smoke transactions. The scheduled two-wallet DUEL canary is intentionally outside CI: it requires two pre-existing funded testnet signing wallets and never creates them automatically.
+The browser suite verifies interface and message construction without a seed phrase. Contract tests exercise full messages in an emulated TVM. Read-only verification proves deployed artifacts and recorded smoke transactions. The scheduled two-wallet DUEL canary is intentionally outside CI: it requires two pre-existing dedicated testnet signing wallets, never creates them automatically and only requests faucet funds below its configured safety floor.

@@ -23,6 +23,7 @@ REQUIRED_METRICS = (
     "loop_duel_unbound_direct",
     "loop_duel_canary_success",
     "loop_duel_canary_age_seconds",
+    "loop_duel_canary_min_wallet_balance_nano",
 )
 
 
@@ -40,7 +41,11 @@ def parse_metrics(payload: str) -> dict[str, float]:
 
 
 def evaluate_metrics(
-    metrics: dict[str, float], *, require_canary: bool, canary_max_age: float
+    metrics: dict[str, float],
+    *,
+    require_canary: bool,
+    canary_max_age: float,
+    canary_min_balance: float,
 ) -> dict[str, float | bool | None]:
     missing = [name for name in REQUIRED_METRICS if name not in metrics]
     if missing:
@@ -61,6 +66,11 @@ def evaluate_metrics(
         or metrics["loop_duel_canary_age_seconds"] > canary_max_age
     ):
         failures.append("two-wallet canary is missing, failed or stale")
+    if require_canary and (
+        not math.isfinite(metrics["loop_duel_canary_min_wallet_balance_nano"])
+        or metrics["loop_duel_canary_min_wallet_balance_nano"] < canary_min_balance
+    ):
+        failures.append("one or more canary wallets are below the balance floor")
     if failures:
         raise DuelHealthError("; ".join(failures))
 
@@ -73,6 +83,9 @@ def evaluate_metrics(
         "canary_required": require_canary,
         "canary_success": metrics["loop_duel_canary_success"] == 1,
         "canary_age_seconds": canary_age if math.isfinite(canary_age) else None,
+        "canary_min_wallet_balance_nano": metrics[
+            "loop_duel_canary_min_wallet_balance_nano"
+        ],
     }
 
 
@@ -86,7 +99,9 @@ def fetch_metrics(origin: str, token: str) -> str:
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             if response.status != 200:
-                raise DuelHealthError(f"metrics endpoint returned HTTP {response.status}")
+                raise DuelHealthError(
+                    f"metrics endpoint returned HTTP {response.status}"
+                )
             return response.read().decode("utf-8")
     except (urllib.error.URLError, TimeoutError) as exc:
         raise DuelHealthError(f"metrics endpoint is unavailable: {exc}") from exc
@@ -101,6 +116,13 @@ def main() -> int:
         max_age = float(os.getenv("LOOP_DUEL_CANARY_MAX_AGE_SECONDS", "7200"))
         if not math.isfinite(max_age) or max_age <= 0:
             raise DuelHealthError("LOOP_DUEL_CANARY_MAX_AGE_SECONDS must be positive")
+        min_balance = float(
+            os.getenv("LOOP_DUEL_CANARY_ALERT_BALANCE_NANO", "1000000000")
+        )
+        if not math.isfinite(min_balance) or min_balance < 0:
+            raise DuelHealthError(
+                "LOOP_DUEL_CANARY_ALERT_BALANCE_NANO must be non-negative"
+            )
         payload = fetch_metrics(
             os.getenv("LOOP_DUEL_METRICS_ORIGIN", "http://127.0.0.1:8000"),
             os.getenv("LOOP_METRICS_TOKEN", ""),
@@ -109,6 +131,7 @@ def main() -> int:
             parse_metrics(payload),
             require_canary=env_flag("LOOP_REQUIRE_DUEL_CANARY"),
             canary_max_age=max_age,
+            canary_min_balance=min_balance,
         )
     except (DuelHealthError, ValueError) as exc:
         print(json.dumps({"healthy": False, "error": str(exc)}), file=sys.stderr)

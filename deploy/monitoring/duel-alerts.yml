@@ -43,3 +43,10 @@ groups:
           severity: critical
         annotations:
           summary: The live two-wallet DUEL canary is missing or older than two hours
+      - alert: LoopDuelCanaryWalletLow
+        expr: loop_duel_canary_success == 1 and loop_duel_canary_min_wallet_balance_nano < 1000000000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A DUEL canary wallet has less than 1 testnet GRAM
