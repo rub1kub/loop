@@ -46,6 +46,27 @@ describe('Telegram keyboard viewport behavior', () => {
     cleanup();
   });
 
+  it('does not restore navigation in the middle of a tap after keyboard blur', () => {
+    vi.useFakeTimers();
+    const input = document.createElement('input');
+    const button = document.createElement('button');
+    document.body.append(input, button);
+    const cleanup = installViewportBehavior();
+
+    input.focus();
+    input.blur();
+    button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7 }));
+    button.focus();
+    vi.advanceTimersByTime(360);
+    expect(document.documentElement).toHaveClass('keyboard-open');
+
+    button.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7 }));
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    vi.advanceTimersByTime(80);
+    expect(document.documentElement).not.toHaveClass('keyboard-open');
+    cleanup();
+  });
+
   it('uses Telegram stable height and the largest native safe-area inset', () => {
     const onEvent = vi.fn();
     const offEvent = vi.fn();

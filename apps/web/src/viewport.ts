@@ -1,6 +1,7 @@
 import type { TelegramWebApp } from './types';
 
 const FOCUS_SETTLE_MS = 360;
+const POINTER_SETTLE_MS = 80;
 const FULLSCREEN_CONTROLS_TOP_INSET_PX = 72;
 
 function isEditable(element: Element | null): element is HTMLElement {
@@ -31,6 +32,8 @@ export function installViewportBehavior(): () => void {
   let viewportCorrectionTimer: number | undefined;
   let focusCorrectionTimer: number | undefined;
   let keyboardSettling = false;
+  const activePointers = new Set<number>();
+  const pointerReleaseTimers = new Map<number, number>();
   let subscribedTelegram: TelegramWebApp | undefined;
 
   const restoreFocusedScreen = () => {
@@ -104,7 +107,8 @@ export function installViewportBehavior(): () => void {
     app.onEvent?.('fullscreenChanged', onTelegramViewport);
   };
 
-  const onFocusIn = () => {
+  const onFocusIn = (event: FocusEvent) => {
+    if (!isEditable(event.target instanceof Element ? event.target : null)) return;
     if (blurTimer !== undefined) window.clearTimeout(blurTimer);
     if (focusCorrectionTimer !== undefined) window.clearTimeout(focusCorrectionTimer);
     keyboardSettling = false;
@@ -112,15 +116,45 @@ export function installViewportBehavior(): () => void {
     resyncAfterViewportSettles();
     focusCorrectionTimer = window.setTimeout(sync, 320);
   };
+
+  const finishFocusOut = () => {
+    if (activePointers.size > 0) {
+      blurTimer = window.setTimeout(finishFocusOut, POINTER_SETTLE_MS);
+      return;
+    }
+    keyboardSettling = false;
+    root.scrollTop = 0;
+    document.body.scrollTop = 0;
+    sync();
+  };
+
   const onFocusOut = () => {
     keyboardSettling = true;
     if (focusCorrectionTimer !== undefined) window.clearTimeout(focusCorrectionTimer);
-    blurTimer = window.setTimeout(() => {
-      keyboardSettling = false;
-      root.scrollTop = 0;
-      document.body.scrollTop = 0;
-      sync();
-    }, FOCUS_SETTLE_MS);
+    blurTimer = window.setTimeout(finishFocusOut, FOCUS_SETTLE_MS);
+  };
+
+  const releasePointer = (pointerId: number) => {
+    const timer = pointerReleaseTimers.get(pointerId);
+    if (timer !== undefined) window.clearTimeout(timer);
+    pointerReleaseTimers.delete(pointerId);
+    activePointers.delete(pointerId);
+  };
+  const onPointerDown = (event: PointerEvent) => {
+    releasePointer(event.pointerId);
+    activePointers.add(event.pointerId);
+  };
+  const onPointerUp = (event: PointerEvent) => {
+    // Keep the layout frozen until the synthetic click has been delivered. A due
+    // keyboard timer may otherwise reveal the tab bar between pointerup and click.
+    pointerReleaseTimers.set(
+      event.pointerId,
+      window.setTimeout(() => releasePointer(event.pointerId), POINTER_SETTLE_MS * 2),
+    );
+  };
+  const onPointerCancel = (event: PointerEvent) => releasePointer(event.pointerId);
+  const onClick = () => {
+    for (const pointerId of activePointers) releasePointer(pointerId);
   };
 
   subscribeTelegram();
@@ -130,6 +164,10 @@ export function installViewportBehavior(): () => void {
   window.visualViewport?.addEventListener('scroll', onViewportMutation);
   document.addEventListener('focusin', onFocusIn);
   document.addEventListener('focusout', onFocusOut);
+  document.addEventListener('pointerdown', onPointerDown);
+  document.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('pointercancel', onPointerCancel);
+  document.addEventListener('click', onClick);
 
   return () => {
     if (blurTimer !== undefined) window.clearTimeout(blurTimer);
@@ -140,6 +178,11 @@ export function installViewportBehavior(): () => void {
     window.visualViewport?.removeEventListener('scroll', onViewportMutation);
     document.removeEventListener('focusin', onFocusIn);
     document.removeEventListener('focusout', onFocusOut);
+    document.removeEventListener('pointerdown', onPointerDown);
+    document.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('pointercancel', onPointerCancel);
+    document.removeEventListener('click', onClick);
+    for (const timer of pointerReleaseTimers.values()) window.clearTimeout(timer);
     subscribedTelegram?.offEvent?.('viewportChanged', onTelegramViewport);
     subscribedTelegram?.offEvent?.('safeAreaChanged', onTelegramViewport);
     subscribedTelegram?.offEvent?.('contentSafeAreaChanged', onTelegramViewport);

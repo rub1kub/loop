@@ -10,6 +10,7 @@ import { ProfileScreen } from './components/ProfileScreen';
 import { TabBar } from './components/TabBar';
 import { BankScreen } from './features/bank/BankScreen';
 import { DuelScreen } from './features/duel/DuelScreen';
+import { installInteractionGuards } from './interactionGuards';
 import {
   haptic,
   initializeTelegram,
@@ -34,6 +35,7 @@ export default function App() {
   const refresh = useCallback(() => useLoopStore.getState().refresh(), []);
 
   useEffect(() => {
+    const cleanupInteractionGuards = installInteractionGuards();
     const cleanupViewport = installViewportBehavior();
     const telegramReady = initializeTelegram();
     void loadTelegramSdk().then(() => {
@@ -46,6 +48,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => {
+      cleanupInteractionGuards();
       cleanupViewport();
       window.removeEventListener('keydown', onKey);
     };
