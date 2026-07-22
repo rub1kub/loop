@@ -1,4 +1,4 @@
-const FOCUS_SETTLE_MS = 160;
+const FOCUS_SETTLE_MS = 360;
 
 function isEditable(element: Element | null): element is HTMLElement {
   return (
@@ -19,24 +19,32 @@ export function installViewportBehavior(): () => void {
   const root = document.documentElement;
   let stableHeight = Math.max(window.innerHeight, currentViewport().height);
   let blurTimer: number | undefined;
+  let keyboardSettling = false;
 
   const sync = () => {
     const viewport = currentViewport();
-    const keyboardOpen = isEditable(document.activeElement);
+    const keyboardOpen = isEditable(document.activeElement) || keyboardSettling;
+    const bottomInset = Math.max(0, stableHeight - viewport.height - viewport.offsetTop);
 
     if (!keyboardOpen) stableHeight = viewport.height;
     root.style.setProperty('--loop-stable-height', `${stableHeight}px`);
     root.style.setProperty('--loop-visual-height', `${viewport.height}px`);
     root.style.setProperty('--loop-visual-offset-top', `${viewport.offsetTop}px`);
+    root.style.setProperty('--loop-visual-bottom-inset', `${bottomInset}px`);
     root.classList.toggle('keyboard-open', keyboardOpen);
   };
 
   const onFocusIn = () => {
     if (blurTimer !== undefined) window.clearTimeout(blurTimer);
+    keyboardSettling = false;
     sync();
   };
   const onFocusOut = () => {
-    blurTimer = window.setTimeout(sync, FOCUS_SETTLE_MS);
+    keyboardSettling = true;
+    blurTimer = window.setTimeout(() => {
+      keyboardSettling = false;
+      sync();
+    }, FOCUS_SETTLE_MS);
   };
 
   sync();
@@ -57,5 +65,6 @@ export function installViewportBehavior(): () => void {
     root.style.removeProperty('--loop-stable-height');
     root.style.removeProperty('--loop-visual-height');
     root.style.removeProperty('--loop-visual-offset-top');
+    root.style.removeProperty('--loop-visual-bottom-inset');
   };
 }
