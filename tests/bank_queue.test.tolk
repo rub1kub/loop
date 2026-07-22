@@ -29,7 +29,7 @@ fun openPosition(
     );
 }
 
-get fun `test first position enters an empty FIFO without self funding`() {
+get fun `test first position keeps all distributable value in the user cycle`() {
     val (contract, _, _, first, _) = setupBank(0);
     val result = openPosition(contract, first, POSITION_A, ton("10"), 12_500);
 
@@ -40,30 +40,31 @@ get fun `test first position enters an empty FIFO without self funding`() {
     val position = contract.positionData(POSITION_A);
     expect(position.owner).toEqual(first.address);
     expect(position.targetPayout).toEqual(ton("12.5"));
-    expect(position.fundedAmount).toEqual(0);
-    expect(position.status).toEqual(BANK_POSITION_QUEUED);
+    expect(position.fundedAmount).toEqual(ton("10"));
+    expect(position.status).toEqual(BANK_POSITION_PARTIALLY_FUNDED);
     expect(contract.queueData().openPositions).toEqual(1);
-    expect(contract.contractConfig().protocolReserve).toEqual(ton("10"));
+    expect(contract.contractConfig().lockedFunding).toEqual(ton("10"));
 }
 
 get fun `test later deposit partially funds the FIFO head`() {
     val (contract, _, _, first, second) = setupBank(0);
-    openPosition(contract, first, POSITION_A, ton("10"), 12_500);
+    openPosition(contract, first, POSITION_A, ton("10"), 20_000);
     openPosition(contract, second, POSITION_B, ton("5"), 15_000);
 
     val firstPosition = contract.positionData(POSITION_A);
     val secondPosition = contract.positionData(POSITION_B);
-    expect(firstPosition.fundedAmount).toEqual(ton("5"));
+    expect(firstPosition.fundedAmount).toEqual(ton("15"));
     expect(firstPosition.status).toEqual(BANK_POSITION_PARTIALLY_FUNDED);
     expect(secondPosition.fundedAmount).toEqual(0);
+    expect(secondPosition.status).toEqual(BANK_POSITION_QUEUED);
     expect(secondPosition.targetPayout).toEqual(ton("7.5"));
-    expect(contract.contractConfig().lockedFunding).toEqual(ton("5"));
+    expect(contract.contractConfig().lockedFunding).toEqual(ton("15"));
 }
 
 get fun `test exact funding sends payout and advances the head`() {
     val (contract, _, _, first, second) = setupBank(0);
     openPosition(contract, first, POSITION_A, ton("1"), 12_500);
-    val result = openPosition(contract, second, POSITION_B, ton("1.25"), 15_000);
+    val result = openPosition(contract, second, POSITION_B, ton("1"), 15_000);
 
     expect(result).toHaveSuccessfulTx<BankPayout>({
         from: contract.address,
@@ -73,6 +74,7 @@ get fun `test exact funding sends payout and advances the head`() {
     val completed = contract.positionData(POSITION_A);
     expect(completed.status).toEqual(BANK_POSITION_PAYOUT_SENT);
     expect(completed.fundedAmount).toEqual(completed.targetPayout);
+    expect(contract.positionData(POSITION_B).fundedAmount).toEqual(ton("0.75"));
     expect(contract.queueData().headQueueIndex).toEqual(1);
     expect(contract.queueData().openPositions).toEqual(1);
 }
@@ -81,20 +83,20 @@ get fun `test one deposit cascades across multiple older positions`() {
     val (contract, _, _, first, second) = setupBank(0);
     val third = testing.treasury("bank-third");
     val fourth = testing.treasury("bank-fourth");
-    openPosition(contract, first, POSITION_A, ton("1"), 12_500);
-    openPosition(contract, second, POSITION_B, ton("1"), 12_500);
-    openPosition(contract, third, POSITION_C, ton("1"), 12_500);
+    openPosition(contract, first, POSITION_A, ton("1"), 20_000);
+    openPosition(contract, second, POSITION_B, ton("1"), 20_000);
+    openPosition(contract, third, POSITION_C, ton("1"), 20_000);
 
-    val cascade = openPosition(contract, fourth, POSITION_D, ton("2"), 20_000);
+    val cascade = openPosition(contract, fourth, POSITION_D, ton("3"), 20_000);
     expect(cascade).toHaveSuccessfulTx<BankPayout>({
         from: contract.address,
         to: second.address,
-        value: ton("1.25"),
+        value: ton("2"),
     });
     expect(cascade).toHaveSuccessfulTx<BankPayout>({
         from: contract.address,
         to: third.address,
-        value: ton("1.25"),
+        value: ton("2"),
     });
     expect(contract.positionData(POSITION_B).status).toEqual(BANK_POSITION_PAYOUT_SENT);
     expect(contract.positionData(POSITION_C).status).toEqual(BANK_POSITION_PAYOUT_SENT);
@@ -110,8 +112,31 @@ get fun `test BANK fee is separate and deterministic`() {
         to: feeCollector.address,
         value: ton("0.1"),
     });
-    expect(contract.contractConfig().protocolReserve).toEqual(ton("9.9"));
+    expect(contract.contractConfig().lockedFunding).toEqual(ton("9.9"));
+    expect(contract.positionData(POSITION_A).fundedAmount).toEqual(ton("9.9"));
     expect(contract.positionData(POSITION_A).targetPayout).toEqual(ton("20"));
+}
+
+get fun `test serialized deposits preserve every distributable nano`() {
+    val (contract, _, feeCollector, first, second) = setupBank(100);
+    val third = testing.treasury("bank-third-invariant");
+    openPosition(contract, first, POSITION_A, ton("10"), 20_000);
+    openPosition(contract, second, POSITION_B, ton("10"), 20_000);
+    val result = openPosition(contract, third, POSITION_C, ton("10"), 20_000);
+
+    expect(result).toHaveSuccessfulTx<BankPayout>({
+        from: contract.address,
+        to: first.address,
+        value: ton("20"),
+    });
+    expect(result).toHaveSuccessfulTx<BankProtocolFee>({
+        from: contract.address,
+        to: feeCollector.address,
+        value: ton("0.1"),
+    });
+    expect(contract.positionData(POSITION_B).fundedAmount).toEqual(ton("9.7"));
+    expect(contract.positionData(POSITION_C).fundedAmount).toEqual(0);
+    expect(contract.contractConfig().lockedFunding).toEqual(ton("9.7"));
 }
 
 get fun `test duplicate position id and concurrent owner position are rejected`() {
@@ -171,7 +196,6 @@ fun setupBank(feeBps: uint16): (BankQueue, Treasury, Treasury, Treasury, Treasur
         headQueueIndex: 0,
         nextQueueIndex: 0,
         lockedFunding: 0,
-        protocolReserve: 0,
         positions: ([] as PositionMap),
         queue: ([] as QueueMap),
         activePositions: ([] as ActivePositionMap),

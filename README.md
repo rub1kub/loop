@@ -150,7 +150,7 @@ Full runbook: [deployment](docs/deployment.md).
 ## Security and honest limits
 
 - BANK is intentionally a pyramid simulation. Payouts depend on later deposits and can stop indefinitely.
-- BANK seed remainder becomes protocol reserve; it does not create a hidden position.
+- BANK always funds older FIFO positions first; any remainder visibly seeds the new position instead of becoming trapped protocol reserve.
 - DUEL V1 has one global 2.5% on-chain fee. PLUSH BRICK ownership is verified, but a holder discount is disabled until a contract version can enforce it on-chain across networks.
 - Financial contracts run on testnet, while the configured PLUSH BRICK Jetton exists on mainnet; the two proofs are explicitly separated.
 - No internal balance, seed phrase, private key or custodial wallet exists in LOOP.

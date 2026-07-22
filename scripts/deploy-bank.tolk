@@ -13,7 +13,6 @@ fun main() {
         headQueueIndex: 0,
         nextQueueIndex: 0,
         lockedFunding: 0,
-        protocolReserve: 0,
         positions: [],
         queue: [],
         activePositions: [],
