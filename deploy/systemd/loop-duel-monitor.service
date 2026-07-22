@@ -1,0 +1,20 @@
+[Unit]
+Description=LOOP DUEL production invariant monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=loopdeploy
+WorkingDirectory=/opt/loop/current
+EnvironmentFile=/opt/loop/shared/.env.production
+ExecStart=/usr/bin/python3 scripts/check-duel-health.py
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+TimeoutStartSec=30
+SyslogIdentifier=loop-duel-monitor
+
+[Install]
+WantedBy=multi-user.target

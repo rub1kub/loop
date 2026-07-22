@@ -39,6 +39,16 @@ Readiness checks PostgreSQL, Redis and configured contract attestation. Operatio
 
 DUEL exposes authenticated Prometheus metrics for projection heartbeat, stale funding, overdue reveals, unbound direct matches and the last verified two-wallet canary. `deploy/monitoring/duel-alerts.yml` contains fail-closed rules. The public nginx virtual host always returns `404` for `/metrics`; scrapers use `127.0.0.1:8000` with the metrics bearer token.
 
+Hosts without Prometheus run the same critical checks through `loop-duel-monitor.timer`. The oneshot service reads the protected metrics token, logs a compact JSON result to journald and fails if the worker heartbeat is stale, funding/reveals are overdue or a direct match lacks its bound opponent. Set `LOOP_REQUIRE_DUEL_CANARY=true` only after the two pre-existing canary wallet aliases are installed and the first live run succeeds.
+
+```bash
+sudo install -m 0644 deploy/systemd/loop-duel-monitor.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now loop-duel-monitor.timer
+sudo systemctl start loop-duel-monitor.service
+sudo systemctl status loop-duel-monitor.service --no-pager
+```
+
 ## Contract deployment
 
 Normal application releases never deploy contracts. Explicit testnet broadcasting requires:
