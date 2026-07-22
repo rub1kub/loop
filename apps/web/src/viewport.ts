@@ -20,6 +20,7 @@ function currentViewport() {
 export function installViewportBehavior(): () => void {
   const root = document.documentElement;
   let stableHeight = Math.max(window.innerHeight, currentViewport().height);
+  let protectedTopInset = 0;
   let blurTimer: number | undefined;
   let keyboardSettling = false;
   let subscribedTelegram: TelegramWebApp | undefined;
@@ -35,7 +36,12 @@ export function installViewportBehavior(): () => void {
         side === 'top' && app?.isFullscreen ? FULLSCREEN_CONTROLS_TOP_INSET_PX : 0,
       );
 
-    root.style.setProperty('--loop-safe-area-inset-top', `${inset('top')}px`);
+    // Telegram can briefly report a smaller top inset while iOS opens its keyboard
+    // or changes fullscreen state. A session must never move content back under the
+    // native controls after a larger safe boundary has already been established.
+    protectedTopInset = Math.max(protectedTopInset, inset('top'));
+
+    root.style.setProperty('--loop-safe-area-inset-top', `${protectedTopInset}px`);
     root.style.setProperty('--loop-safe-area-inset-right', `${inset('right')}px`);
     root.style.setProperty('--loop-safe-area-inset-bottom', `${inset('bottom')}px`);
     root.style.setProperty('--loop-safe-area-inset-left', `${inset('left')}px`);

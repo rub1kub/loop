@@ -56,6 +56,7 @@ try {
   });
 
   await capture(page, 'loader', 'loader');
+  await capture(page, 'onboarding', 'onboarding');
   await capture(page, 'onboarding-bank', 'onboarding-bank');
   await capture(page, 'onboarding-duel', 'onboarding-duel');
   await capture(page, 'bank-empty', 'bank-empty');

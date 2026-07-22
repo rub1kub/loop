@@ -91,6 +91,13 @@ describe('Telegram keyboard viewport behavior', () => {
     expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
       '72px',
     );
+    window.Telegram.WebApp.isFullscreen = false;
+    window.Telegram.WebApp.safeAreaInset = { top: 44, right: 0, bottom: 34, left: 0 };
+    window.Telegram.WebApp.contentSafeAreaInset = { top: 56, right: 0, bottom: 0, left: 0 };
+    onFullscreenChanged?.();
+    expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
+      '72px',
+    );
     cleanup();
   });
 });
