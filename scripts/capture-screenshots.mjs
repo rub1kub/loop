@@ -62,7 +62,7 @@ try {
   await capture(page, 'bank-empty', 'bank-empty');
   await capture(page, 'bank-active', 'bank-active');
   await capture(page, 'bank-create-position', 'bank-empty', async (current) => {
-    await current.getByRole('button', { name: 'НАЧАТЬ' }).click();
+    await current.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ', exact: true }).click();
     await current.waitForTimeout(300);
   });
   await capture(page, 'duel-create', 'duel-create');

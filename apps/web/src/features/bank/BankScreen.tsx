@@ -1,6 +1,7 @@
 import { ArrowRight, ArrowSquareOut, Check, X } from '@phosphor-icons/react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
+import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../api';
@@ -12,12 +13,12 @@ type WizardStep = 'amount' | 'multiplier' | 'confirm' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
 
 const statusCopy: Record<BankPosition['current_status'], string> = {
-  pending_confirmation: 'Ждём подтверждение TON',
-  queued: 'В очереди',
-  partially_funded: 'Позиция финансируется',
-  completed: 'Готовим выплату',
+  pending_confirmation: 'Подтверждаем вклад в TON',
+  queued: 'Банка ждёт пополнения',
+  partially_funded: 'Банка наполняется',
+  completed: 'Цель собрана',
   payout_sent: 'Выплата отправлена',
-  failed: 'Позиция не подтверждена',
+  failed: 'Вклад не подтверждён',
 };
 
 export function BankScreen({
@@ -158,6 +159,11 @@ export function BankScreen({
   }
 
   const progress = position?.progress_bps ?? 0;
+  const progressPercent = Math.min(100, Math.max(0, progress / 100));
+  const sandStyle = { '--bank-fill': `${progressPercent}%` } as CSSProperties;
+  const fundingCopy = position
+    ? `Собрано ${formatGram(position.funded_amount_nano, 3)} из ${formatGram(position.target_payout_nano, 3)} GRAM. На 100% контракт отправит выплату.`
+    : '';
 
   if (wizard) {
     return (
@@ -194,7 +200,9 @@ export function BankScreen({
                   />
                   <span>GRAM</span>
                 </label>
-                <p className="form-note">Только тестовые GRAM. Минимум 1 GRAM.</p>
+                <p className="form-note">
+                  Это твой вклад в позицию. Только testnet GRAM, минимум 1 GRAM.
+                </p>
                 <button className="primary-button" onClick={() => setWizard('multiplier')}>
                   ДАЛЬШЕ
                   <ArrowRight aria-hidden="true" />
@@ -204,7 +212,7 @@ export function BankScreen({
             {wizard === 'multiplier' && (
               <>
                 <p className="eyebrow">ШАГ 2 ИЗ 3 · ЦЕЛЬ</p>
-                <h3>Выбери целевую выплату.</h3>
+                <h3>Сколько должна собрать банка?</h3>
                 <div className="choice-list">
                   {multipliers.map((value) => (
                     <button
@@ -221,6 +229,9 @@ export function BankScreen({
                     </button>
                   ))}
                 </div>
+                <p className="form-note">
+                  Чем выше цель, тем дольше позиция может ждать в очереди.
+                </p>
                 <button className="primary-button" onClick={() => void showConfirmation()}>
                   ПРОВЕРИТЬ
                 </button>
@@ -229,7 +240,7 @@ export function BankScreen({
             {wizard === 'confirm' && preview && (
               <>
                 <p className="eyebrow">ШАГ 3 ИЗ 3 · ПОДТВЕРЖДЕНИЕ</p>
-                <h3>Проверь условия.</h3>
+                <h3>Проверь, как будет работать позиция.</h3>
                 <dl className="detail-list">
                   <Detail
                     label="Вносится"
@@ -274,41 +285,56 @@ export function BankScreen({
   return (
     <section className="screen bank-screen" aria-labelledby="bank-title">
       <header className="mode-header">
-        <p className="eyebrow">TESTNET · FIFO</p>
+        <p className="eyebrow">TESTNET · ОЧЕРЕДЬ</p>
         <h1 id="bank-title">BANK</h1>
       </header>
 
       <button
         className={`bank-object ${position ? 'is-active' : 'is-empty'}`}
         onClick={() => (position ? setDetails(true) : setWizard('amount'))}
-        aria-label={position ? 'Открыть детали позиции' : 'Создать позицию BANK'}
+        aria-label={
+          position
+            ? `Открыть позицию BANK, собрано ${Math.round(progressPercent)} процентов`
+            : 'Начать цикл и создать позицию BANK'
+        }
       >
-        <motion.img
-          src={position ? '/assets/living-jar.webp' : '/assets/empty-jar.webp'}
-          alt=""
+        <motion.div
+          className="bank-vessel"
+          aria-hidden="true"
           initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'spring', stiffness: 115, damping: 23 }}
-        />
-        {position && (
-          <span className="bank-progress-fill" style={{ height: `${progress / 100}%` }} />
-        )}
+        >
+          <img className="bank-jar-shell" src="/assets/empty-jar.webp" alt="" />
+          {position && (
+            <span className="bank-sand-chamber">
+              <span className="bank-sand-level" data-testid="bank-sand-level" style={sandStyle}>
+                <img className="bank-sand-material" src="/assets/bank-sand-wave.webp" alt="" />
+              </span>
+            </span>
+          )}
+          {position && <img className="bank-jar-glass" src="/assets/empty-jar.webp" alt="" />}
+        </motion.div>
       </button>
 
       {position ? (
-        <div className="bank-state">
-          <strong>{Math.round(progress / 100)}%</strong>
+        <div className="bank-state bank-active-state">
+          <strong>{Math.round(progressPercent)}%</strong>
           <span>{statusCopy[position.current_status]}</span>
+          <p>{fundingCopy}</p>
           <button className="primary-button" onClick={() => setDetails(true)}>
-            ДЕТАЛИ ПОЗИЦИИ
+            СМОТРЕТЬ ПОЗИЦИЮ
           </button>
         </div>
       ) : (
         <div className="bank-state bank-empty-state">
-          <h2>Очередь начинается здесь.</h2>
-          <p>Следующие депозиты финансируют более ранние позиции.</p>
+          <h2>Твоя очередь. Твоя банка.</h2>
+          <p>
+            Внеси GRAM и создай позицию. Новые участники будут наполнять её; 100% — контракт
+            отправит целевую выплату.
+          </p>
           <button className="primary-button" onClick={() => setWizard('amount')}>
-            НАЧАТЬ
+            НАЧАТЬ ЦИКЛ
           </button>
         </div>
       )}
@@ -331,18 +357,28 @@ export function BankScreen({
               onClick={(event) => event.stopPropagation()}
             >
               <SheetTitle title="Позиция BANK" onClose={() => setDetails(false)} />
-              <div className="big-progress">{Math.round(position.progress_bps / 100)}%</div>
+              <p className="bank-details-intro">
+                Банка показывает, сколько уже собрано до твоей целевой выплаты.
+              </p>
+              <div className="big-progress">{Math.round(progressPercent)}%</div>
               <div className="progress-track">
-                <span style={{ width: `${position.progress_bps / 100}%` }} />
+                <span style={{ width: `${progressPercent}%` }} />
               </div>
               <dl className="detail-list">
-                <Detail label="Внесено" value={`${formatGram(position.principal_nano, 3)} GRAM`} />
+                <Detail
+                  label="Твой вклад"
+                  value={`${formatGram(position.principal_nano, 3)} GRAM`}
+                />
                 <Detail
                   label="Целевая выплата"
                   value={`${formatGram(position.target_payout_nano, 3)} GRAM`}
                 />
                 <Detail
-                  label="Осталось профинансировать"
+                  label="Уже собрано"
+                  value={`${formatGram(position.funded_amount_nano, 3)} GRAM`}
+                />
+                <Detail
+                  label="Осталось собрать"
                   value={`${formatGram(position.remaining_amount_nano, 3)} GRAM`}
                 />
                 <Detail
