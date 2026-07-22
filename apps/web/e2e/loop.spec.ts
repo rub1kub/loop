@@ -20,7 +20,7 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
   expect(
     Math.abs(jarBox!.x + jarBox!.width / 2 - (shellBox!.x + shellBox!.width / 2)),
   ).toBeLessThan(1);
-  await page.getByRole('button', { name: 'НАЧАТЬ' }).click();
+  await page.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ', exact: true }).click();
   await expect(page.locator('.bank-flow-screen')).toHaveCSS('transform', 'none');
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
   const bankAmount = page.getByLabel('Сумма в GRAM');
@@ -62,12 +62,22 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
   await page.getByRole('button', { name: 'Закрыть' }).click();
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'visible');
-  await page.getByRole('button', { name: 'НАЧАТЬ' }).click();
+  await page.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ', exact: true }).click();
   await page.getByRole('button', { name: /ДАЛЬШЕ/ }).click();
   await page.getByRole('button', { name: /×2/ }).click();
   await page.getByRole('button', { name: 'ПРОВЕРИТЬ' }).click();
   await expect(page.getByText('4 GRAM')).toBeVisible();
   await expect(page.getByRole('button', { name: 'ПОДТВЕРДИТЬ В TON' })).toBeVisible();
+
+  await page.goto('/?screen=bank-active');
+  await emulateFullscreenControls();
+  await expect(page.getByRole('button', { name: /собрано 62 процентов/i })).toBeVisible();
+  await expect(page.getByText(/Собрано 1[,.]86 из 3 GRAM/)).toBeVisible();
+  expect(
+    await page
+      .getByTestId('bank-sand-level')
+      .evaluate((element) => element.style.getPropertyValue('--bank-fill')),
+  ).toBe('62%');
 
   await page.goto('/?screen=duel-create');
   await emulateFullscreenControls();

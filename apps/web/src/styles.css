@@ -381,21 +381,86 @@ a:focus-visible {
   cursor: pointer;
 }
 
-.bank-object img {
-  display: block;
+.bank-vessel {
+  position: relative;
   width: min(106%, 455px);
-  max-width: none;
+  aspect-ratio: 900 / 1015;
   justify-self: center;
+}
+
+.bank-jar-shell,
+.bank-jar-glass {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   pointer-events: none;
   user-select: none;
 }
 
-.bank-object.is-empty img {
+.bank-jar-shell {
+  z-index: 0;
+}
+
+.bank-jar-glass {
+  z-index: 2;
+  opacity: 0.72;
+  mix-blend-mode: screen;
+}
+
+.bank-object.is-empty .bank-jar-shell {
   opacity: 0.72;
 }
 
-.bank-progress-fill {
-  display: none;
+.bank-sand-chamber {
+  position: absolute;
+  z-index: 1;
+  top: 18.5%;
+  right: 17.8%;
+  bottom: 7.5%;
+  left: 17.8%;
+  overflow: hidden;
+  border-radius: 0 0 18% 18% / 0 0 8% 8%;
+  pointer-events: none;
+}
+
+.bank-sand-level {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform: translate3d(0, calc(100% - var(--bank-fill, 0%)), 0);
+  transition: transform 28s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.bank-sand-material {
+  position: absolute;
+  top: -7%;
+  left: -22%;
+  display: block;
+  width: 144%;
+  height: 110%;
+  max-width: none;
+  object-fit: cover;
+  object-position: center top;
+  animation: bank-sand-drift 72s ease-in-out infinite alternate;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
+}
+
+@keyframes bank-sand-drift {
+  0% {
+    transform: translate3d(-2.5%, 1px, 0) rotate(-0.08deg);
+  }
+  50% {
+    transform: translate3d(0, -1px, 0) rotate(0.04deg);
+  }
+  100% {
+    transform: translate3d(2.5%, 1px, 0) rotate(0.1deg);
+  }
 }
 
 .bank-state {
@@ -420,6 +485,11 @@ a:focus-visible {
   font-size: 11px;
 }
 
+.bank-active-state > p {
+  max-width: 320px;
+  line-height: 1.45;
+}
+
 .bank-state .primary-button {
   margin-top: 20px;
 }
@@ -432,7 +502,15 @@ a:focus-visible {
 }
 
 .bank-empty-state p {
-  max-width: 290px;
+  max-width: 330px;
+  line-height: 1.45;
+}
+
+.bank-details-intro {
+  max-width: 310px;
+  margin: -4px 0 16px;
+  color: #858585;
+  font-size: 11px;
   line-height: 1.45;
 }
 
