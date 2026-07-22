@@ -281,7 +281,6 @@ export function BankScreen({
                       inputMode="decimal"
                       value={amount}
                       onChange={(event) => setAmount(event.target.value)}
-                      autoFocus
                       aria-label="Сумма в GRAM"
                     />
                     <span>GRAM</span>

@@ -10,6 +10,8 @@ export interface TelegramWebApp {
   platform: string;
   colorScheme: 'light' | 'dark';
   isFullscreen?: boolean;
+  viewportHeight?: number;
+  viewportStableHeight?: number;
   safeAreaInset?: { top: number; bottom: number; left: number; right: number };
   contentSafeAreaInset?: { top: number; bottom: number; left: number; right: number };
   ready?(): void;
@@ -22,6 +24,8 @@ export interface TelegramWebApp {
   setBottomBarColor?(color: string): void;
   disableVerticalSwipes?(): void;
   enableClosingConfirmation?(): void;
+  onEvent?(event: string, callback: (payload?: { isStateStable?: boolean }) => void): void;
+  offEvent?(event: string, callback: (payload?: { isStateStable?: boolean }) => void): void;
   openTelegramLink(url: string): void;
   switchInlineQuery?(query: string, chooseChatTypes?: string[]): void;
   BackButton: {

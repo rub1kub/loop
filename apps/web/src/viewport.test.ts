@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { TelegramWebApp } from './types';
 import { installViewportBehavior } from './viewport';
 
 const initialInnerHeight = window.innerHeight;
@@ -9,6 +10,7 @@ describe('Telegram keyboard viewport behavior', () => {
     vi.useRealTimers();
     document.body.replaceChildren();
     document.documentElement.classList.remove('keyboard-open');
+    delete window.Telegram;
     Object.defineProperty(window, 'innerHeight', {
       configurable: true,
       value: initialInnerHeight,
@@ -30,10 +32,6 @@ describe('Telegram keyboard viewport behavior', () => {
     window.dispatchEvent(new Event('resize'));
     expect(document.documentElement.style.getPropertyValue('--loop-stable-height')).toBe('700px');
     expect(document.documentElement.style.getPropertyValue('--loop-visual-height')).toBe('430px');
-    expect(document.documentElement.style.getPropertyValue('--loop-visual-bottom-inset')).toBe(
-      '270px',
-    );
-
     input.blur();
     window.dispatchEvent(new Event('resize'));
     expect(document.documentElement).toHaveClass('keyboard-open');
@@ -42,5 +40,32 @@ describe('Telegram keyboard viewport behavior', () => {
     expect(document.documentElement).not.toHaveClass('keyboard-open');
     expect(document.documentElement.style.getPropertyValue('--loop-stable-height')).toBe('430px');
     cleanup();
+  });
+
+  it('uses Telegram stable height and the largest native safe-area inset', () => {
+    const onEvent = vi.fn();
+    const offEvent = vi.fn();
+    window.Telegram = {
+      WebApp: {
+        viewportStableHeight: 720,
+        safeAreaInset: { top: 44, right: 0, bottom: 34, left: 0 },
+        contentSafeAreaInset: { top: 56, right: 8, bottom: 0, left: 8 },
+        onEvent,
+        offEvent,
+      } as unknown as TelegramWebApp,
+    };
+
+    const cleanup = installViewportBehavior();
+    expect(document.documentElement.style.getPropertyValue('--loop-stable-height')).toBe('720px');
+    expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
+      '56px',
+    );
+    expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-bottom')).toBe(
+      '34px',
+    );
+    expect(onEvent).toHaveBeenCalledWith('contentSafeAreaChanged', expect.any(Function));
+
+    cleanup();
+    expect(offEvent).toHaveBeenCalledWith('contentSafeAreaChanged', expect.any(Function));
   });
 });

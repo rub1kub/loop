@@ -50,11 +50,11 @@ export function initializeTelegram(): boolean {
   app.expand?.();
   app.disableVerticalSwipes?.();
   app.enableClosingConfirmation?.();
-  if (app.isVersionAtLeast?.('8.0') && !app.isFullscreen) {
+  if (app.isVersionAtLeast?.('8.0') && app.isFullscreen) {
     try {
-      app.requestFullscreen?.();
+      app.exitFullscreen?.();
     } catch {
-      // Older clients may report a version before exposing fullscreen in this launch mode.
+      // Keep the current mode when a client reports fullscreen APIs but rejects the transition.
     }
   }
   app.ready?.();

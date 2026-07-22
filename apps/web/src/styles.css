@@ -4,8 +4,30 @@
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --safe-top: max(env(safe-area-inset-top), var(--tg-content-safe-area-inset-top, 0px));
-  --safe-bottom: max(env(safe-area-inset-bottom), var(--tg-content-safe-area-inset-bottom, 0px));
+  --safe-top: max(
+    env(safe-area-inset-top),
+    var(--tg-safe-area-inset-top, 0px),
+    var(--tg-content-safe-area-inset-top, 0px),
+    var(--loop-safe-area-inset-top, 0px)
+  );
+  --safe-right: max(
+    env(safe-area-inset-right),
+    var(--tg-safe-area-inset-right, 0px),
+    var(--tg-content-safe-area-inset-right, 0px),
+    var(--loop-safe-area-inset-right, 0px)
+  );
+  --safe-bottom: max(
+    env(safe-area-inset-bottom),
+    var(--tg-safe-area-inset-bottom, 0px),
+    var(--tg-content-safe-area-inset-bottom, 0px),
+    var(--loop-safe-area-inset-bottom, 0px)
+  );
+  --safe-left: max(
+    env(safe-area-inset-left),
+    var(--tg-safe-area-inset-left, 0px),
+    var(--tg-content-safe-area-inset-left, 0px),
+    var(--loop-safe-area-inset-left, 0px)
+  );
   --line: #252525;
   --muted: #777;
   --surface: #101010;
@@ -56,7 +78,7 @@ a:focus-visible {
   width: 100%;
   max-width: 430px;
   min-width: 0;
-  height: min(var(--loop-stable-height, 100dvh), 932px);
+  height: min(var(--loop-stable-height, var(--tg-viewport-stable-height, 100dvh)), 932px);
   max-height: 932px;
   background: #000;
 }
@@ -213,7 +235,8 @@ a:focus-visible {
 .screen {
   overflow-x: hidden;
   overflow-y: auto;
-  padding: calc(var(--safe-top) + 30px) 21px 24px;
+  padding: calc(var(--safe-top) + 30px) max(21px, calc(var(--safe-right) + 16px))
+    calc(var(--safe-bottom) + 24px) max(21px, calc(var(--safe-left) + 16px));
   overscroll-behavior-y: contain;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -376,16 +399,18 @@ a:focus-visible {
   inset: 0;
   display: flex;
   align-items: flex-end;
+  padding-top: calc(var(--safe-top) + 8px);
   background: rgb(0 0 0 / 74%);
   backdrop-filter: blur(12px);
 }
 
 .sheet {
   width: min(100%, 430px);
-  max-height: min(86dvh, 800px);
+  max-height: min(calc(100dvh - var(--safe-top) - 8px), 800px);
   margin: 0 auto;
   overflow-y: auto;
-  padding: 20px 21px calc(var(--safe-bottom) + 24px);
+  padding: 20px max(21px, calc(var(--safe-right) + 16px)) calc(var(--safe-bottom) + 24px)
+    max(21px, calc(var(--safe-left) + 16px));
   border: 1px solid #292929;
   border-bottom: 0;
   border-radius: 28px 28px 0 0;
@@ -393,14 +418,8 @@ a:focus-visible {
   scrollbar-width: none;
 }
 
-.keyboard-open .sheet-backdrop {
-  top: var(--loop-visual-offset-top, 0px);
-  bottom: var(--loop-visual-bottom-inset, 0px);
-  height: auto;
-}
-
 .keyboard-open .sheet {
-  max-height: calc(var(--loop-visual-height, 100dvh) - 8px);
+  max-height: calc(var(--loop-visual-height, 100dvh) - var(--safe-top) - 8px);
   padding-bottom: 20px;
 }
 
@@ -420,8 +439,8 @@ a:focus-visible {
 
 .round-icon-button {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid #303030;

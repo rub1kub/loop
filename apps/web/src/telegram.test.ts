@@ -44,4 +44,23 @@ describe('Telegram launch compatibility', () => {
     expect(setBottomBarColor).toHaveBeenCalledWith('#000000');
     expect(telegramInitData()).toBe('sdk-init-data');
   });
+
+  it('leaves Telegram fullscreen so native header controls cannot cover app content', () => {
+    const exitFullscreen = vi.fn();
+    const requestFullscreen = vi.fn();
+    window.Telegram = {
+      WebApp: {
+        initData: 'sdk-init-data',
+        isFullscreen: true,
+        isVersionAtLeast: () => true,
+        exitFullscreen,
+        requestFullscreen,
+        MainButton: { hide: vi.fn() },
+      } as unknown as TelegramWebApp,
+    };
+
+    expect(initializeTelegram()).toBe(true);
+    expect(exitFullscreen).toHaveBeenCalledOnce();
+    expect(requestFullscreen).not.toHaveBeenCalled();
+  });
 });
