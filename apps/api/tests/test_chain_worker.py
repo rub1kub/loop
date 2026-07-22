@@ -261,6 +261,40 @@ async def test_bank_projection_tracks_permissionless_position_and_detaches_stale
 
 
 @pytest.mark.asyncio
+async def test_bank_projection_claims_position_for_verified_wallet(app) -> None:
+    settings = get_settings()
+    owner = "0:" + "2c" * 32
+    async with app.state.session_factory() as db:
+        user = User(telegram_id=1004, first_name="Verified")
+        db.add(user)
+        await db.flush()
+        wallet = Wallet(
+            user_id=user.id,
+            network=settings.ton_network_id,
+            address=owner.upper(),
+            public_key="3c" * 32,
+        )
+        db.add(wallet)
+        await db.commit()
+
+        tx = transaction(
+            settings.bank_contract_address,
+            owner,
+            12,
+            bank_create_body(103, 1_000_000_000, 12_500),
+            1_080_000_000,
+        )
+        assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.APPLIED
+        await db.commit()
+        position = await db.scalar(select(BankPosition).where(BankPosition.position_id == 103))
+        assert position is not None
+        assert position.user_id == user.id
+        assert position.wallet_id == wallet.id
+        assert position.current_status == BankPositionStatus.PARTIALLY_FUNDED.value
+        assert position.funded_amount_nano == 990_000_000
+
+
+@pytest.mark.asyncio
 async def test_empty_contract_topup_is_ignored_instead_of_blocking_projection(app) -> None:
     settings = get_settings()
     async with app.state.session_factory() as db:

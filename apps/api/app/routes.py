@@ -2,7 +2,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from .dependencies import Config, CurrentUser, Db
@@ -365,6 +365,18 @@ async def wallet_verify(
     wallet.active = True
     wallet.verified_at = datetime.now(UTC)
     db.add(wallet)
+    await db.flush()
+    await db.execute(
+        update(BankPosition)
+        .where(
+            BankPosition.user_id.is_(None),
+            BankPosition.wallet_id.is_(None),
+            BankPosition.network == body.network,
+            BankPosition.contract_address == settings.bank_contract_address,
+            func.lower(BankPosition.owner_wallet) == address.lower(),
+        )
+        .values(user_id=user.id, wallet_id=wallet.id)
+    )
     await db.commit()
     return WalletView(
         address=wallet.address,
