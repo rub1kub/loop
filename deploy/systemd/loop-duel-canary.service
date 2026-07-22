@@ -8,6 +8,7 @@ Type=oneshot
 User=root
 WorkingDirectory=/opt/loop/current
 EnvironmentFile=/opt/loop/shared/.env.production
+Environment=HOME=/root
 Environment=PATH=/opt/loop/tools:/root/.acton/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 ExecStart=/usr/bin/python3 scripts/run-duel-canary.py --contract ${LOOP_DUEL_CONTRACT_ADDRESS} --first-wallet loop-canary-a --second-wallet loop-canary-b
 PrivateTmp=true

@@ -90,7 +90,10 @@ chmod 755 "$release_dir"
 install -d -m 0750 "$release_dir/build"
 acton_bin=/opt/loop/tools/acton
 if [[ -x $acton_bin ]]; then
-  "$acton_bin" init --stdlib-only --project-root "$release_dir" >/dev/null
+  (
+    cd "$release_dir"
+    "$acton_bin" init --stdlib-only >/dev/null
+  )
 fi
 ln -sfn "$shared_env" "$release_dir/.env.production"
 

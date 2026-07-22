@@ -83,6 +83,21 @@ def test_canary_report_requires_both_wallet_balances() -> None:
         )
 
 
+@pytest.mark.asyncio
+async def test_canary_report_uses_api_namespace_and_requires_auth(client: Any) -> None:
+    report = {
+        "network": -3,
+        "contract_address": "0:" + "1" * 64,
+        "duel_id": 1,
+        "settlement_tx_hash": "2" * 64,
+        "first_wallet_balance_nano": 2_000_000_000,
+        "second_wallet_balance_nano": 2_000_000_000,
+    }
+
+    assert (await client.post("/api/internal/duel-canary", json=report)).status_code == 401
+    assert (await client.post("/internal/duel-canary", json=report)).status_code == 404
+
+
 def test_duel_health_rejects_low_canary_balance() -> None:
     metrics = {name: 0.0 for name in HEALTH.REQUIRED_METRICS}
     metrics.update(
