@@ -13,8 +13,8 @@ const BANK_MAX_ALLOCATION_STEPS = 81
 
 contract BankQueue {
     author: "LOOP"
-    version: "1.0.0"
-    description: "Testnet-only FIFO payout queue for LOOP BANK"
+    version: "1.1.0"
+    description: "Testnet-only FIFO payout cycle for LOOP BANK"
     storage: BankStorage
     incomingMessages: BankAllowedMessage
 }
@@ -124,7 +124,6 @@ fun onInternalMessage(in: InMessage) {
             val fee = mulDivFloor(msg.principal, storage.feeBps, BANK_BASIS_POINTS);
             val distributable = msg.principal - fee;
             val unallocated = storage.allocateDeposit(msg.queryId, distributable);
-            storage.protocolReserve += unallocated;
 
             val queueIndex = storage.nextQueueIndex;
             val targetPayout = mulDivFloor(
@@ -132,16 +131,20 @@ fun onInternalMessage(in: InMessage) {
                 msg.multiplierBps,
                 BANK_BASIS_POINTS,
             );
+            // Older positions always have priority. If they do not consume the
+            // whole deposit, the remainder becomes the new position's initial
+            // funding instead of leaving the user cycle as protocol reserve.
+            storage.lockedFunding += unallocated;
             val position = BankPositionData {
                 owner: in.senderAddress,
                 principal: msg.principal,
                 multiplierBps: msg.multiplierBps,
                 targetPayout,
-                fundedAmount: 0,
+                fundedAmount: unallocated,
                 queueIndex,
                 createdAt: blockchain.now(),
                 completedAt: 0,
-                status: BANK_POSITION_QUEUED,
+                status: unallocated > 0 ? BANK_POSITION_PARTIALLY_FUNDED : BANK_POSITION_QUEUED,
             };
             storage.positions.set(msg.positionId, position.toCell());
             storage.queue.set(queueIndex, msg.positionId);
@@ -176,7 +179,6 @@ get fun contractConfig(): BankContractConfigView {
         headQueueIndex: storage.headQueueIndex,
         nextQueueIndex: storage.nextQueueIndex,
         lockedFunding: storage.lockedFunding,
-        protocolReserve: storage.protocolReserve,
     };
 }
 

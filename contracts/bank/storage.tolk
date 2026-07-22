@@ -32,7 +32,6 @@ struct BankStorage {
     headQueueIndex: uint64
     nextQueueIndex: uint64
     lockedFunding: coins
-    protocolReserve: coins
     positions: PositionMap
     queue: QueueMap
     activePositions: ActivePositionMap
@@ -47,7 +46,6 @@ struct BankContractConfigView {
     headQueueIndex: uint64
     nextQueueIndex: uint64
     lockedFunding: coins
-    protocolReserve: coins
 }
 
 struct BankQueueView {

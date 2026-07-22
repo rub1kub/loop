@@ -388,7 +388,13 @@ async def apply_bank_transaction(
         )
     )
     position.queue_index = (next_queue if next_queue is not None else -1) + 1
-    position.current_status = BankPositionStatus.QUEUED.value
+    position.funded_amount_nano = available
+    position.remaining_amount_nano = position.target_payout_nano - available
+    position.current_status = (
+        BankPositionStatus.PARTIALLY_FUNDED.value
+        if available > 0
+        else BankPositionStatus.QUEUED.value
+    )
     position.confirmed_at = datetime.fromtimestamp(int(transaction["now"]), UTC)
     position.funding_transaction = tx_hash
     event = BankChainEvent(

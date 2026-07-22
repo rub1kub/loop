@@ -43,6 +43,13 @@ ALLOW_TESTNET_DEPLOY=1 make contracts-deploy-testnet
 
 After any deployment, update the relevant manifest and environment hash, run `make contracts-verify`, then release the application. Mainnet deployment is blocked in settings until external audit, governance, legal and recovery gates are documented.
 
+For a newly deployed, empty BANK contract, emulate the one-time genesis funding smoke against a testnet fork before broadcasting the same arguments. The script fails if the queue is not empty or the resulting funding, fee, target and queue state differ from the contract formula.
+
+```bash
+acton script --fork-net testnet scripts/smoke-bank-genesis.tolk <address> <position-id> 1000000000 12500
+acton script --net testnet scripts/smoke-bank-genesis.tolk <address> <position-id> 1000000000 12500
+```
+
 ## Backup and recovery
 
 `deploy/backup-postgres.sh` creates timestamped compressed database dumps with restricted permissions and returns the validated archive path to the activation script. Failed activation restores that archive before restarting the prior release. A disaster-recovery restore is still an operator action into a clean database, followed by migration validation and deterministic chain replay. Contract funds remain recoverable through permissionless contract timeouts even if LOOP is unavailable.

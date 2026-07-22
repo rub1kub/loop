@@ -4,10 +4,10 @@ Both contracts are built from Tolk sources with Acton and deployed independently
 
 | Contract   | Address                                                                                         | Code hash          |  Fee |
 | ---------- | ----------------------------------------------------------------------------------------------- | ------------------ | ---: |
-| BankQueue  | [`kQCr…KvX81`](https://testnet.tonviewer.com/kQCrJa3LWrkb7iKbz5aZQw8dWl7zo2McsZah8YB2uPQKvX81)  | `F159981F…96FF15B` |   1% |
+| BankQueue  | [`kQC1…Hrmc4l`](https://testnet.tonviewer.com/kQC1zcM8cxIDn3mFR0RV_PS_y2PzNkFttJ8NfAPHTyHrmc4l) | `330930F4…6924A7A` |   1% |
 | DuelEscrow | [`kQBX…5l212a`](https://testnet.tonviewer.com/kQBXddZVMOteEYD87uSOfIAPL3P4UuI0Vf_fUAyGLS5l212a) | `1D8330B7…252B63D` | 2.5% |
 
-Complete addresses, code/data hashes, deployment transaction, logical time, compiler version, parameters, opcodes and getters are committed in `deployments/testnet/bank.json` and `deployments/testnet/duel.json`.
+Complete addresses, code/data hashes, deployment transaction, logical time, compiler version, parameters, opcodes and getters are committed in `deployments/testnet/bank.json` and `deployments/testnet/duel.json`. The BANK manifest additionally records its first finalized funding proof.
 
 ## Verification
 
@@ -24,6 +24,7 @@ make contracts-inspect
 - live code and data hashes equal the manifest;
 - the deployment transaction succeeded at the recorded logical time;
 - the transaction has masterchain finality.
+- the BANK smoke transaction has the recorded sender, value, message body, fee transfer and masterchain block.
 
 `contracts-inspect` decodes live storage using the generated Acton wrappers. The API also exposes read-only contract, wallet, transaction and Jetton diagnostics to authenticated users.
 

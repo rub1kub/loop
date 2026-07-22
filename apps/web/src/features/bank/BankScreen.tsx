@@ -111,6 +111,7 @@ export function BankScreen({
     locked.current = true;
     try {
       if (isMockTelegram()) {
+        const initialFunding = preview.principal_nano - preview.fee_nano;
         const created: BankPosition = {
           id: `bank-${Date.now()}`,
           position_id: newOfferId(),
@@ -118,11 +119,11 @@ export function BankScreen({
           principal_nano: preview.principal_nano,
           multiplier_bps: multiplier,
           target_payout_nano: preview.target_payout_nano,
-          funded_amount_nano: 0,
-          remaining_amount_nano: preview.target_payout_nano,
-          progress_bps: 0,
+          funded_amount_nano: initialFunding,
+          remaining_amount_nano: preview.target_payout_nano - initialFunding,
+          progress_bps: Math.floor((initialFunding * 10_000) / preview.target_payout_nano),
           queue_index: 18,
-          current_status: 'queued',
+          current_status: 'partially_funded',
           funding_transaction: 'demo-bank-transaction',
           payout_transaction: null,
           proof_url: null,

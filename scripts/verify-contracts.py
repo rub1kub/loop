@@ -19,6 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_DIR = ROOT / "deployments" / "testnet"
 BUILD_DIR = ROOT / "build"
 TONCENTER = "https://testnet.toncenter.com"
+BANK_CREATE_POSITION = 0x4C424E01
+BANK_PROTOCOL_FEE = 0x4C424E12
 
 
 def normalize_hash(value: str) -> str:
@@ -52,6 +54,105 @@ def stack_address(item: list[Any]) -> str:
     if address is None:
         raise ValueError("contractConfig returned an empty address")
     return address.to_string(is_user_friendly=False).lower()
+
+
+def body_parser(message: dict[str, Any]) -> Any:
+    body = (message.get("message_content") or {}).get("body")
+    if not isinstance(body, str) or not body:
+        raise ValueError("transaction message body is missing")
+    cells = Cell.one_from_boc(base64.b64decode(body))
+    cell = cells[0] if isinstance(cells, list) else cells
+    return cell.begin_parse()
+
+
+def successful_transaction(transaction: dict[str, Any]) -> bool:
+    description = transaction.get("description") or {}
+    compute = description.get("compute_ph") or {}
+    action = description.get("action") or {}
+    return bool(
+        not transaction.get("emulated")
+        and not description.get("aborted")
+        and compute.get("success") is True
+        and action.get("success") is not False
+    )
+
+
+async def verify_bank_smoke(
+    client: httpx.AsyncClient, manifest: dict[str, Any]
+) -> dict[str, Any] | None:
+    smoke = manifest.get("verified_smoke")
+    if not isinstance(smoke, dict):
+        return None
+    response = await provider_get(
+        client,
+        "/api/v3/transactions",
+        {"hash": smoke["transaction"], "limit": 2},
+    )
+    transactions = response.json().get("transactions", [])
+    if len(transactions) != 1:
+        raise ValueError("BankQueue: smoke transaction is missing or ambiguous")
+    transaction = transactions[0]
+    if not successful_transaction(transaction):
+        raise ValueError("BankQueue: smoke transaction was not successful")
+    if raw_address(str(transaction.get("account", ""))) != raw_address(manifest["address"]):
+        raise ValueError("BankQueue: smoke transaction account mismatch")
+    if int(transaction.get("lt", 0)) != int(smoke["transaction_lt"]):
+        raise ValueError("BankQueue: smoke transaction logical time mismatch")
+    if int(transaction.get("mc_block_seqno", 0)) != int(smoke["masterchain_seqno"]):
+        raise ValueError("BankQueue: smoke transaction finality mismatch")
+
+    incoming = transaction.get("in_msg") or {}
+    if raw_address(str(incoming.get("source", ""))) != raw_address(
+        manifest["configuration"]["owner"]
+    ):
+        raise ValueError("BankQueue: smoke transaction sender mismatch")
+    if int(incoming.get("value", 0)) != int(smoke["principal_nano"]) + int(
+        smoke["gas_nano"]
+    ):
+        raise ValueError("BankQueue: smoke transaction value mismatch")
+    parser = body_parser(incoming)
+    decoded = {
+        "opcode": parser.read_uint(32),
+        "query_id": parser.read_uint(64),
+        "position_id": parser.read_uint(64),
+        "principal_nano": parser.read_coins(),
+        "multiplier_bps": parser.read_uint(16),
+    }
+    if decoded != {
+        "opcode": BANK_CREATE_POSITION,
+        "query_id": int(smoke["position_id"]),
+        "position_id": int(smoke["position_id"]),
+        "principal_nano": int(smoke["principal_nano"]),
+        "multiplier_bps": int(smoke["multiplier_bps"]),
+    }:
+        raise ValueError("BankQueue: smoke transaction body mismatch")
+
+    fees = [
+        message
+        for message in transaction.get("out_msgs", [])
+        if str(message.get("opcode", "")).lower() == f"0x{BANK_PROTOCOL_FEE:08x}"
+    ]
+    if len(fees) != 1:
+        raise ValueError("BankQueue: smoke fee message is missing or ambiguous")
+    fee = fees[0]
+    if raw_address(str(fee.get("destination", ""))) != raw_address(
+        manifest["configuration"]["treasury"]
+    ) or int(fee.get("value", 0)) != int(smoke["fee_nano"]):
+        raise ValueError("BankQueue: smoke fee message mismatch")
+    fee_parser = body_parser(fee)
+    if (
+        fee_parser.read_uint(32) != BANK_PROTOCOL_FEE
+        or fee_parser.read_uint(64) != int(smoke["position_id"])
+        or fee_parser.read_uint(64) != int(smoke["position_id"])
+    ):
+        raise ValueError("BankQueue: smoke fee body mismatch")
+    return {
+        "transaction": str(smoke["transaction"]),
+        "transaction_lt": int(smoke["transaction_lt"]),
+        "masterchain_seqno": int(smoke["masterchain_seqno"]),
+        "position_id": int(smoke["position_id"]),
+        "verified": True,
+    }
 
 
 async def verify_contract(
@@ -133,7 +234,7 @@ async def verify_contract(
     if bool(int(str(stack[3][1]), 0)) != bool(configuration["paused"]):
         raise ValueError(f"{contract}: pause state mismatch")
 
-    return {
+    result = {
         "contract": contract,
         "address": address,
         "active": True,
@@ -147,6 +248,9 @@ async def verify_contract(
         "masterchain_seqno": int(transaction["mc_block_seqno"]),
         "verified": True,
     }
+    if contract == "BankQueue":
+        result["smoke"] = await verify_bank_smoke(client, manifest)
+    return result
 
 
 async def provider_get(

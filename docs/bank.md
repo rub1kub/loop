@@ -18,12 +18,12 @@ Supported multipliers are 12,500, 15,000 and 20,000. Published limits are 1–10
 On every valid deposit the contract:
 
 1. deducts the deterministic BANK fee;
-2. creates the new position at the queue tail;
-3. applies available principal to the oldest unfinished earlier position;
-4. sends an automatic payout when that target is fully funded;
-5. continues through older positions while value remains.
+2. applies available principal to the oldest unfinished earlier position;
+3. sends an automatic payout when that target is fully funded;
+4. continues through older positions while value remains;
+5. creates the new position at the queue tail and uses any remainder as its initial funding.
 
-The first position cannot finance itself. Any unallocated seed remainder is tracked as protocol reserve, not as a user position. DUEL value and events never enter this algorithm.
+Older positions always have priority. No distributable value leaves the user cycle as an unspendable protocol reserve: after the older queue is funded, the remainder visibly starts the new jar. Later deposits close its outstanding target in FIFO order. DUEL value and events never enter this algorithm.
 
 ## States
 

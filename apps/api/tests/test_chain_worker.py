@@ -203,6 +203,9 @@ async def test_bank_projection_is_fifo_proof_bound_and_idempotent(app) -> None:
         await db.refresh(newer)
         assert older.current_status == BankPositionStatus.PAYOUT_SENT.value
         assert newer.queue_index == 1
+        assert newer.current_status == BankPositionStatus.PARTIALLY_FUNDED.value
+        assert newer.funded_amount_nano == 980_000_000
+        assert newer.remaining_amount_nano == 2_020_000_000
         assert await db.scalar(select(func.count()).select_from(BankChainEvent)) == 1
         assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.IGNORED
 
@@ -252,7 +255,9 @@ async def test_bank_projection_tracks_permissionless_position_and_detaches_stale
         assert position.user_id is None
         assert position.wallet_id is None
         assert position.owner_wallet == "0:" + "ff" * 32
-        assert position.current_status == BankPositionStatus.QUEUED.value
+        assert position.current_status == BankPositionStatus.PARTIALLY_FUNDED.value
+        assert position.funded_amount_nano == 990_000_000
+        assert position.remaining_amount_nano == 260_000_000
 
 
 @pytest.mark.asyncio
