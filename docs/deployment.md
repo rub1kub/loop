@@ -4,25 +4,29 @@ The published environment uses Docker Compose behind Apache and nginx at `app.to
 
 ## Required configuration
 
-Copy `.env.example` to the protected production environment and replace secrets. Production validation requires HTTPS, strong session/webhook/metrics secrets, bot identity, both contract addresses and both 32-byte code hashes. Secret files are never committed.
+Copy `.env.example` to the protected production environment and replace secrets. Production validation requires HTTPS, strong session/webhook/metrics secrets, bot identity, both contract addresses and both 32-byte code hashes. DUEL additionally requires a 32-byte Ed25519 signing seed and its derived public key; this application key is not a TON wallet. Secret files are never committed.
 
 ## Release
 
 1. All static, unit, browser and contract checks pass.
 2. `scripts/verify-contracts.py` matches local builds, manifests and finalized testnet state.
 3. The immutable Git commit is uploaded to `/opt/loop/releases/<sha>`.
-4. PostgreSQL backup completes before migration.
-5. API image and web assets build; database and Redis become healthy.
-6. Alembic upgrades to head.
-7. API startup attests BankQueue and DuelEscrow code hashes.
-8. API and worker health pass before nginx reload and public smoke.
+4. Writers stop and a staged `.env.production.next` is activated atomically with rollback protection.
+5. A DUEL address change requires `locked=0` on the previous contract and no active DUEL projection.
+6. PostgreSQL backup completes before migration.
+7. API image and web assets build; database and Redis become healthy.
+8. Alembic upgrades to head and repeats the idle-projection guard.
+9. API startup attests BankQueue and DuelEscrow code hashes.
+10. API and worker health pass before nginx reload and public smoke.
 
 ```bash
 make deploy RELEASE=<40-character-git-sha>
 make smoke-test
 ```
 
-The BANK/DUEL split migration archives old cycle-era tables under `legacy_*`; it does not reinterpret their records as financial state. The activation script stops writers before backup and automatically restores both the pre-migration database and previous immutable release if migration, health, nginx or public smoke validation fails.
+The BANK/DUEL split migration archives old cycle-era tables under `legacy_*`; it does not reinterpret their records as financial state. The activation script stops writers before preflight and backup, then automatically restores the protected environment, pre-migration database and previous immutable release if migration, health, nginx or public smoke validation fails.
+
+To stage a contract switch, create `/opt/loop/shared/.env.production.next` from the current protected environment, update only the intended values and set mode `600`. The activation script consumes it only after writers stop.
 
 ## Health checks
 
@@ -33,12 +37,15 @@ curl --fail https://app.tonsuite.org/ready
 
 Readiness checks PostgreSQL, Redis and configured contract attestation. Operations additionally inspect worker heartbeat, current Alembic revision, webhook URL/status, container health and hashed frontend asset delivery.
 
+DUEL exposes authenticated Prometheus metrics for projection heartbeat, stale funding, overdue reveals, unbound direct matches and the last verified two-wallet canary. `deploy/monitoring/duel-alerts.yml` contains fail-closed rules. The public nginx virtual host always returns `404` for `/metrics`; scrapers use `127.0.0.1:8000` with the metrics bearer token.
+
 ## Contract deployment
 
 Normal application releases never deploy contracts. Explicit testnet broadcasting requires:
 
 ```bash
-ALLOW_TESTNET_DEPLOY=1 make contracts-deploy-testnet
+ALLOW_TESTNET_DEPLOY=1 LOOP_DUEL_INVITE_PUBLIC_KEY=<64-hex-public-key> \
+  make contracts-deploy-duel-testnet
 ```
 
 After any deployment, update the relevant manifest and environment hash, run `make contracts-verify`, then release the application. Mainnet deployment is blocked in settings until external audit, governance, legal and recovery gates are documented.
@@ -49,6 +56,8 @@ For a newly deployed, empty BANK contract, emulate the one-time genesis funding 
 acton script --fork-net testnet scripts/smoke-bank-genesis.tolk <address> <position-id> 1000000000 12500
 acton script --net testnet scripts/smoke-bank-genesis.tolk <address> <position-id> 1000000000 12500
 ```
+
+The DUEL canary service refuses to start unless both configured Acton aliases already exist and resolve to distinct addresses. It performs a fork rehearsal before every live run.
 
 ## Backup and recovery
 

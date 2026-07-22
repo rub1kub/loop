@@ -24,6 +24,7 @@ There is no universal cycle entity. Shared packages contain only identity, verif
 1. Telegram sends signed `initData`; the API verifies HMAC, age and replay nonce.
 2. The user proves control of an external testnet wallet through TON proof.
 3. The API validates terms and returns a deterministic contract message. It does not mark funding complete.
+   For direct DUEL, it signs a short-lived address-bound acceptance permit; it never signs an AFK match.
 4. TON Connect asks the external wallet to sign and broadcast.
 5. The worker reads the contract account, verifies message identity, values, opcode, exit status and masterchain inclusion.
 6. A database transaction applies the idempotent BANK or DUEL projection.
@@ -41,3 +42,5 @@ Redis provides rate limits and short-lived distributed locks. It is never author
 - Projection exception: roll back to a savepoint and retry safely.
 - Worker restart: resume from per-contract checkpoints; duplicate events are ignored.
 - Wallet callback without a block: remain pending.
+- Contract migration with locked funds or active DUEL projection: fail before Alembic runs.
+- Abandoned direct funding: release the expired reservation and let the same bound wallet retry.
