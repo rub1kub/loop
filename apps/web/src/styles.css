@@ -259,6 +259,10 @@ a:focus-visible {
   overflow: hidden;
 }
 
+.keyboard-open .app-shell {
+  transform: translate3d(0, var(--loop-visual-page-top, 0px), 0);
+}
+
 .screen-stage {
   height: calc(100% - var(--safe-bottom) - 70px);
   min-width: 0;
