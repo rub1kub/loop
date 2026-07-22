@@ -63,4 +63,23 @@ describe('Telegram launch compatibility', () => {
     expect(exitFullscreen).not.toHaveBeenCalled();
     expect(requestFullscreen).not.toHaveBeenCalled();
   });
+
+  it('requests fullscreen for entry points that ignore the BotFather launch mode', () => {
+    const exitFullscreen = vi.fn();
+    const requestFullscreen = vi.fn();
+    window.Telegram = {
+      WebApp: {
+        initData: 'sdk-init-data',
+        isFullscreen: false,
+        isVersionAtLeast: () => true,
+        exitFullscreen,
+        requestFullscreen,
+        MainButton: { hide: vi.fn() },
+      } as unknown as TelegramWebApp,
+    };
+
+    expect(initializeTelegram()).toBe(true);
+    expect(requestFullscreen).toHaveBeenCalledOnce();
+    expect(exitFullscreen).not.toHaveBeenCalled();
+  });
 });

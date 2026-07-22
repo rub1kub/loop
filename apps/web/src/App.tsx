@@ -35,12 +35,12 @@ export default function App() {
 
   useEffect(() => {
     const cleanupViewport = installViewportBehavior();
-    initializeTelegram();
+    const telegramReady = initializeTelegram();
     void loadTelegramSdk().then(() => {
-      initializeTelegram();
+      if (!telegramReady) initializeTelegram();
       window.dispatchEvent(new Event('resize'));
+      return bootstrap();
     });
-    void bootstrap();
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === 'f') toggleFullscreen();
     };

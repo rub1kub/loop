@@ -61,4 +61,17 @@ describe('API session recovery', () => {
       'Bearer fresh-session',
     );
   });
+
+  it('retries safe reads after a transient iOS WebView network failure', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError('Load failed'))
+      .mockResolvedValueOnce(new Response(JSON.stringify(profile), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api');
+    await expect(api.me()).resolves.toEqual(profile);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
