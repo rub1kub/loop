@@ -21,6 +21,9 @@ BUILD_DIR = ROOT / "build"
 TONCENTER = "https://testnet.toncenter.com"
 BANK_CREATE_POSITION = 0x4C424E01
 BANK_PROTOCOL_FEE = 0x4C424E12
+DUEL_OPEN_OFFER = 0x4C4F4F01
+DUEL_CANCEL_OFFER = 0x4C4F4F02
+DUEL_OFFER_REFUND = 0x4C4F4F12
 
 
 def normalize_hash(value: str) -> str:
@@ -155,6 +158,127 @@ async def verify_bank_smoke(
     }
 
 
+async def duel_smoke_transaction(
+    client: httpx.AsyncClient,
+    manifest: dict[str, Any],
+    transaction_hash: str,
+    transaction_lt: int,
+    masterchain_seqno: int,
+) -> dict[str, Any]:
+    response = await provider_get(
+        client,
+        "/api/v3/transactions",
+        {"hash": transaction_hash, "limit": 2},
+    )
+    transactions = response.json().get("transactions", [])
+    if len(transactions) != 1:
+        raise ValueError("DuelEscrow: smoke transaction is missing or ambiguous")
+    transaction = transactions[0]
+    if not successful_transaction(transaction):
+        raise ValueError("DuelEscrow: smoke transaction was not successful")
+    if raw_address(str(transaction.get("account", ""))) != raw_address(manifest["address"]):
+        raise ValueError("DuelEscrow: smoke transaction account mismatch")
+    if int(transaction.get("lt", 0)) != transaction_lt:
+        raise ValueError("DuelEscrow: smoke transaction logical time mismatch")
+    if int(transaction.get("mc_block_seqno", 0)) != masterchain_seqno:
+        raise ValueError("DuelEscrow: smoke transaction finality mismatch")
+    return transaction
+
+
+async def verify_duel_smoke(
+    client: httpx.AsyncClient, manifest: dict[str, Any]
+) -> dict[str, Any] | None:
+    smoke = manifest.get("verified_smoke")
+    if not isinstance(smoke, dict):
+        return None
+    open_transaction = await duel_smoke_transaction(
+        client,
+        manifest,
+        str(smoke["open_transaction"]),
+        int(smoke["open_transaction_lt"]),
+        int(smoke["open_masterchain_seqno"]),
+    )
+    cancel_transaction = await duel_smoke_transaction(
+        client,
+        manifest,
+        str(smoke["cancel_transaction"]),
+        int(smoke["cancel_transaction_lt"]),
+        int(smoke["cancel_masterchain_seqno"]),
+    )
+
+    owner = raw_address(str(smoke["owner"]))
+    open_message = open_transaction.get("in_msg") or {}
+    if raw_address(str(open_message.get("source", ""))) != owner:
+        raise ValueError("DuelEscrow: smoke open sender mismatch")
+    if int(open_message.get("value", 0)) != int(smoke["stake_nano"]) + int(
+        smoke["open_gas_nano"]
+    ):
+        raise ValueError("DuelEscrow: smoke open value mismatch")
+    parser = body_parser(open_message)
+    decoded_open = {
+        "opcode": parser.read_uint(32),
+        "query_id": parser.read_uint(64),
+        "offer_id": parser.read_uint(64),
+        "commitment": f"{parser.read_uint(256):064x}",
+        "chance_bps": parser.read_uint(16),
+        "total_pool_nano": parser.read_coins(),
+        "expires_at": parser.read_uint(32),
+        "counter_offer_id": parser.read_uint(64),
+    }
+    if decoded_open != {
+        "opcode": DUEL_OPEN_OFFER,
+        "query_id": int(smoke["offer_id"]),
+        "offer_id": int(smoke["offer_id"]),
+        "commitment": str(smoke["commitment_hex"]).lower(),
+        "chance_bps": int(smoke["chance_bps"]),
+        "total_pool_nano": int(smoke["total_pool_nano"]),
+        "expires_at": int(smoke["expires_at"]),
+        "counter_offer_id": 0,
+    }:
+        raise ValueError("DuelEscrow: smoke open body mismatch")
+
+    cancel_message = cancel_transaction.get("in_msg") or {}
+    if raw_address(str(cancel_message.get("source", ""))) != owner:
+        raise ValueError("DuelEscrow: smoke cancel sender mismatch")
+    if int(cancel_message.get("value", 0)) != int(smoke["cancel_gas_nano"]):
+        raise ValueError("DuelEscrow: smoke cancel value mismatch")
+    cancel_parser = body_parser(cancel_message)
+    if (
+        cancel_parser.read_uint(32) != DUEL_CANCEL_OFFER
+        or cancel_parser.read_uint(64) != int(smoke["offer_id"])
+        or cancel_parser.read_uint(64) != int(smoke["offer_id"])
+    ):
+        raise ValueError("DuelEscrow: smoke cancel body mismatch")
+
+    refunds = [
+        message
+        for message in cancel_transaction.get("out_msgs", [])
+        if str(message.get("opcode", "")).lower() == f"0x{DUEL_OFFER_REFUND:08x}"
+    ]
+    if len(refunds) != 1:
+        raise ValueError("DuelEscrow: smoke refund is missing or ambiguous")
+    refund = refunds[0]
+    if raw_address(str(refund.get("destination", ""))) != owner or int(
+        refund.get("value", 0)
+    ) != int(smoke["refund_nano"]):
+        raise ValueError("DuelEscrow: smoke refund destination or value mismatch")
+    refund_parser = body_parser(refund)
+    if (
+        refund_parser.read_uint(32) != DUEL_OFFER_REFUND
+        or refund_parser.read_uint(64) != int(smoke["offer_id"])
+        or refund_parser.read_uint(64) != int(smoke["offer_id"])
+        or refund_parser.read_uint(8) != int(smoke["refund_reason"])
+    ):
+        raise ValueError("DuelEscrow: smoke refund body mismatch")
+    return {
+        "offer_id": int(smoke["offer_id"]),
+        "open_transaction": str(smoke["open_transaction"]),
+        "cancel_transaction": str(smoke["cancel_transaction"]),
+        "refund_nano": int(smoke["refund_nano"]),
+        "verified": True,
+    }
+
+
 async def verify_contract(
     client: httpx.AsyncClient, manifest_path: Path
 ) -> dict[str, Any]:
@@ -250,6 +374,8 @@ async def verify_contract(
     }
     if contract == "BankQueue":
         result["smoke"] = await verify_bank_smoke(client, manifest)
+    elif contract == "DuelEscrow":
+        result["smoke"] = await verify_duel_smoke(client, manifest)
     return result
 
 

@@ -910,6 +910,68 @@ get fun `test malformed opcode and dust admin call fail closed`() {
     expect(contract.contractConfig().paused).toEqual(false);
 }
 
+get fun `test 64 consecutive duels settle without locked value or active offer leaks`() {
+    val (contract, _, _, playerA, playerB) = setupTest();
+    val expiresAt: uint32 = testing.getNow() + 900;
+    var round: uint64 = 0;
+
+    while (round < 64) {
+        val offerAId: uint64 = 10_000 + round * 2;
+        val offerBId: uint64 = offerAId + 1;
+        val secretA: uint256 = SECRET_A + round;
+        val secretB: uint256 = SECRET_B + round;
+
+        expect(
+            contract.sendOpenOffer(
+                playerA.address,
+                offerAId,
+                offerAId,
+                testCommitment(offerAId, playerA.address, secretA),
+                5_000,
+                ton("2"),
+                expiresAt,
+                0,
+                { value: ton("1.05") },
+            ),
+        ).toHaveSuccessfulTx<OpenOffer>();
+        expect(
+            contract.sendOpenOffer(
+                playerB.address,
+                offerBId,
+                offerBId,
+                testCommitment(offerBId, playerB.address, secretB),
+                5_000,
+                ton("2"),
+                expiresAt,
+                offerAId,
+                { value: ton("1.05") },
+            ),
+        ).toHaveSuccessfulTx<OpenOffer>();
+        expect(
+            contract.sendReveal(
+                playerA.address,
+                offerAId,
+                offerBId,
+                offerAId,
+                secretA,
+                { value: ton("0.03") },
+            ),
+        ).toHaveSuccessfulTx<Reveal>();
+        expect(
+            contract.sendReveal(
+                playerB.address,
+                offerBId,
+                offerBId,
+                offerBId,
+                secretB,
+                { value: ton("0.03") },
+            ),
+        ).toHaveAllSuccessfulTxs();
+        expect(contract.contractConfig().locked).toEqual(0);
+        round += 1;
+    }
+}
+
 fun setupTest(): (DuelEscrow, Treasury, Treasury, Treasury, Treasury) {
     testing.setNow(1_800_000_000);
     val owner = testing.treasury("owner");
