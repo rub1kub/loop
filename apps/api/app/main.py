@@ -182,7 +182,7 @@ def create_app() -> FastAPI:
         await refresh_duel_metrics(request.app.state.session_factory, request.app.state.redis)
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-    @app.post("/internal/duel-canary", include_in_schema=False)
+    @app.post("/api/internal/duel-canary", include_in_schema=False)
     async def report_duel_canary(
         body: DuelCanaryReport,
         request: Request,

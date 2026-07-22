@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from typing import Any
 
@@ -198,7 +199,7 @@ def main() -> None:
         }
     ).encode()
     request = urllib.request.Request(
-        f"{args.origin.rstrip('/')}/internal/duel-canary",
+        f"{args.origin.rstrip('/')}/api/internal/duel-canary",
         data=payload,
         headers={
             "Authorization": f"Bearer {metrics_token}",
@@ -206,9 +207,16 @@ def main() -> None:
         },
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        if response.status != 200:
-            raise SystemExit(f"canary proof endpoint returned HTTP {response.status}")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            if response.status != 200:
+                raise SystemExit(
+                    f"canary proof endpoint returned HTTP {response.status}"
+                )
+    except urllib.error.HTTPError as exc:
+        raise SystemExit(f"canary proof endpoint returned HTTP {exc.code}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise SystemExit("canary proof endpoint is unavailable") from exc
     print(f"DUEL_CANARY_REPORTED duel_id={proof.group('duel_id')}")
 
 
