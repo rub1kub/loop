@@ -2,7 +2,13 @@ import { expect, test } from '@playwright/test';
 
 test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({ page }) => {
   await page.goto('/?screen=bank-empty');
+  await page.locator('html').evaluate((root) => {
+    root.style.setProperty('--tg-content-safe-area-inset-top', '56px');
+  });
   await expect(page.getByRole('heading', { name: 'BANK' })).toBeVisible();
+  const headerBox = await page.locator('.mode-header').boundingBox();
+  expect(headerBox).not.toBeNull();
+  expect(headerBox!.y).toBeGreaterThanOrEqual(80);
   const shellBox = await page.locator('.app-shell').boundingBox();
   const jarBox = await page.locator('.bank-object img').boundingBox();
   expect(shellBox).not.toBeNull();
@@ -11,9 +17,21 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
     Math.abs(jarBox!.x + jarBox!.width / 2 - (shellBox!.x + shellBox!.width / 2)),
   ).toBeLessThan(1);
   await page.getByRole('button', { name: 'НАЧАТЬ' }).click();
+  await expect(page.locator('.bank-wizard')).toHaveCSS('transform', 'none');
+  await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
   const bankAmount = page.getByLabel('Сумма в GRAM');
   await bankAmount.fill('2');
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
+  const bankViewport = page.viewportSize()!;
+  await page.setViewportSize({ width: bankViewport.width, height: 500 });
+  const sheetBox = await page.locator('.bank-wizard').boundingBox();
+  const closeBox = await page.getByRole('button', { name: 'Закрыть' }).boundingBox();
+  expect(sheetBox).not.toBeNull();
+  expect(closeBox).not.toBeNull();
+  expect(sheetBox!.y).toBeGreaterThanOrEqual(64);
+  expect(sheetBox!.y + sheetBox!.height).toBeLessThanOrEqual(501);
+  expect(closeBox!.y).toBeGreaterThanOrEqual(80);
+  await page.setViewportSize(bankViewport);
   await bankAmount.blur();
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
   await page.getByRole('button', { name: 'Закрыть' }).click();
