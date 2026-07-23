@@ -68,8 +68,8 @@ contracts-verify: contracts-build ## Match local builds, manifests and finalized
 	$(PYTHON) scripts/verify-contracts.py
 
 contracts-inspect: ## Decode live contract state using Acton getters
-	acton rpc info $$(jq -r .address deployments/testnet/bank.json) BankQueue
-	acton rpc info $$(jq -r .address deployments/testnet/duel.json) DuelEscrow
+	acton rpc info $$(jq -r .address deployments/testnet/bank.json)
+	acton rpc info $$(jq -r .address deployments/testnet/duel.json)
 
 chain-smoke-test: contracts-verify contracts-inspect ## Run read-only testnet checks
 

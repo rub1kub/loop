@@ -353,8 +353,8 @@ async def verify_contract(
     result = getter.get("result") or {}
     stack = result.get("stack") or []
     configuration = manifest["configuration"]
-    duel_v11 = contract == "DuelEscrow" and configuration.get("version") == "1.1.0"
-    expected_stack_size = 8 if duel_v11 else 7 if contract == "BankQueue" else 5
+    duel_address_bound = contract == "DuelEscrow" and "network_id" in configuration
+    expected_stack_size = 8 if duel_address_bound else 7 if contract == "BankQueue" else 5
     if (
         not getter.get("ok")
         or result.get("exit_code") != 0
@@ -367,7 +367,7 @@ async def verify_contract(
         raise ValueError(f"{contract}: treasury mismatch")
     if stack_number(stack[2]) != int(configuration["fee_bps"]):
         raise ValueError(f"{contract}: fee mismatch")
-    if duel_v11:
+    if duel_address_bound:
         if stack_number(stack[3]) != int(configuration["network_id"]):
             raise ValueError(f"{contract}: network domain mismatch")
         if f"{stack_number(stack[4]):064x}" != str(
@@ -380,8 +380,38 @@ async def verify_contract(
             raise ValueError(f"{contract}: pause state mismatch")
         if stack_number(stack[7]) != int(configuration["locked_nano"]):
             raise ValueError(f"{contract}: locked balance mismatch")
-    elif bool(stack_number(stack[3])) != bool(configuration["paused"]):
-        raise ValueError(f"{contract}: pause state mismatch")
+    else:
+        if bool(stack_number(stack[3])) != bool(configuration["paused"]):
+            raise ValueError(f"{contract}: pause state mismatch")
+        if contract == "BankQueue" and "locked_nano" in configuration:
+            if stack_number(stack[6]) != int(configuration["locked_nano"]):
+                raise ValueError(f"{contract}: locked balance mismatch")
+
+    if configuration.get("version") == "1.2.0":
+        admin_response = await provider_post(
+            client,
+            "/api/v2/runGetMethod",
+            {"address": address, "method": "adminState", "stack": []},
+        )
+        admin_getter = admin_response.json()
+        admin_result = admin_getter.get("result") or {}
+        admin_stack = admin_result.get("stack") or []
+        if (
+            not admin_getter.get("ok")
+            or admin_result.get("exit_code") != 0
+            or len(admin_stack) != 5
+        ):
+            raise ValueError(f"{contract}: adminState getter failed")
+        locked = int(configuration.get("locked_nano", 0))
+        if (
+            stack_address(admin_stack[0]) != raw_address(str(configuration["owner"]))
+            or stack_address(admin_stack[1])
+            != raw_address(str(configuration["treasury"]))
+            or stack_number(admin_stack[2]) != int(configuration["fee_bps"])
+            or bool(stack_number(admin_stack[3])) != bool(configuration["paused"])
+            or stack_number(admin_stack[4]) != locked
+        ):
+            raise ValueError(f"{contract}: adminState mismatch")
 
     result = {
         "contract": contract,

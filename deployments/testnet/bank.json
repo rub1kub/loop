@@ -1,40 +1,46 @@
 {
   "contract": "BankQueue",
-  "address": "kQC1zcM8cxIDn3mFR0RV_PS_y2PzNkFttJ8NfAPHTyHrmc4l",
+  "address": "kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y",
   "network": "testnet",
   "workchain": 0,
-  "deployed_at": "2026-07-22T16:17:08Z",
-  "deploy_transaction": "g3Wv1edxNlcofttw3XB3ioiTGSopREEijwP+Wzo/Q30=",
-  "deploy_transaction_lt": 84835222000007,
-  "code_hash": "330930F451D6283DC150F18D6D5723DFC14BD0F91E0FAA62251A139086924A7A",
+  "deployed_at": "2026-07-23T19:15:00Z",
+  "deploy_transaction": "SKYiGXMbjcX7CPa0OXRtmHTvCl+BdIEX5n/5pKzs7OQ=",
+  "deploy_transaction_lt": 85079708000003,
+  "code_hash": "9BF8EF5B9E75DF597E1EE4F4FE0DE2816D6B38899F4408E6A72857E0BD4A57C2",
   "data_hash": "A966BC751B755486007DFD03A98D621CA023951AC4F6B36CBAFD41EC512BBD45",
-  "source_commit": "095e687bc07597355058784b50e9242ada0835ab",
+  "source_commit": "15391da0b46db01da049674719badd2da24d16f0",
   "compiler_version": "Tolk 1.4.0",
   "acton_version": "1.0.0",
   "configuration": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "owner": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
     "treasury": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
     "fee_bps": 100,
     "paused": false,
+    "locked_nano": 0,
+    "min_retained_reserve_nano": 200000000,
     "min_principal_nano": 1000000000,
     "max_principal_nano": 100000000000,
     "multipliers_bps": [12500, 15000, 20000]
   },
-  "supported_opcodes": [1279413761, 1279413762, 1279413777, 1279413778],
-  "getters": ["contractConfig", "queueData", "positionData", "activePosition"],
-  "verified_smoke": {
-    "transaction": "HZLO2FrVFjj1o1R4hgxvzbbJYpt6T0j3DRH3Xk77m2U=",
-    "transaction_lt": 84835743000003,
-    "masterchain_seqno": 73220071,
-    "position_id": 2207202601,
-    "principal_nano": 1000000000,
-    "multiplier_bps": 12500,
-    "gas_nano": 80000000,
-    "fee_nano": 10000000,
-    "funded_nano": 990000000,
-    "target_payout_nano": 1250000000,
-    "status": "partially_funded"
+  "supported_opcodes": [
+    1279413761,
+    1279413762,
+    1279413763,
+    1279413764,
+    1279413765,
+    1279413766,
+    1279413767,
+    1279413777,
+    1279413778,
+    1279413779
+  ],
+  "getters": ["contractConfig", "queueData", "positionData", "activePosition", "adminState"],
+  "previous_contract": {
+    "address": "kQC1zcM8cxIDn3mFR0RV_PS_y2PzNkFttJ8NfAPHTyHrmc4l",
+    "paused": true,
+    "locked_nano": 990000000,
+    "owner_only_position": 2207202601
   },
-  "explorer_url": "https://testnet.tonviewer.com/kQC1zcM8cxIDn3mFR0RV_PS_y2PzNkFttJ8NfAPHTyHrmc4l"
+  "explorer_url": "https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y"
 }
