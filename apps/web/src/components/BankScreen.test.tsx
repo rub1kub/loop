@@ -65,8 +65,9 @@ describe('BankScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Твоя очередь. Твоя банка.' })).toBeVisible();
-    expect(screen.getByText(/достигает 100%, контракт сразу отправляет/)).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Очередь выплат. Твоя банка.' })).toBeVisible();
+    expect(screen.getByText(/Следующие вклады сначала наполняют ранние банки/)).toBeVisible();
+    expect(screen.getByText(/Досрочной отмены и возврата нет/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ' })).toBeVisible();
     expect(screen.queryByTestId('bank-sand-level')).not.toBeInTheDocument();
   });
@@ -87,7 +88,9 @@ describe('BankScreen', () => {
     expect(screen.getByTestId('bank-sand-level').style.getPropertyValue('--bank-fill')).toBe('37%');
 
     fireEvent.click(screen.getByRole('button', { name: /собрано 37 процентов/i }));
-    expect(screen.getByText(/сколько уже собрано до твоей целевой выплаты/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/сколько следующие вклады уже собрали до твоей целевой выплаты/i),
+    ).toBeInTheDocument();
     expect(screen.getByText('Уже собрано')).toBeInTheDocument();
     expect(screen.getByText('Осталось собрать')).toBeInTheDocument();
     expect(screen.getAllByText('#2').length).toBeGreaterThan(0);

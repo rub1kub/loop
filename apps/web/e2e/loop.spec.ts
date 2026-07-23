@@ -25,6 +25,7 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await page.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ', exact: true }).click();
   await expect(page.locator('.bank-flow-screen')).toHaveCSS('transform', 'none');
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
+  await expect.poll(() => page.locator('.app-shell').evaluate((shell) => shell.scrollTop)).toBe(0);
   const bankAmount = page.getByLabel('Сумма в GRAM');
   const titleBeforeKeyboard = await page
     .getByRole('heading', { name: 'Новая позиция' })
@@ -68,9 +69,15 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'visible');
   await page.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ', exact: true }).click();
   await page.getByRole('button', { name: /ДАЛЬШЕ/ }).click();
+  await expect.poll(() => page.locator('.app-shell').evaluate((shell) => shell.scrollTop)).toBe(0);
   await page.getByRole('button', { name: /×2/ }).click();
   await page.getByRole('button', { name: 'ПРОВЕРИТЬ' }).click();
+  await expect.poll(() => page.locator('.app-shell').evaluate((shell) => shell.scrollTop)).toBe(0);
+  expect(
+    (await page.getByRole('heading', { name: 'Новая позиция' }).boundingBox())!.y,
+  ).toBeGreaterThanOrEqual(100);
   await expect(page.getByText('4 GRAM')).toBeVisible();
+  await expect(page.getByText(/позицию нельзя отменить или вернуть досрочно/i)).toBeVisible();
   await expect(page.getByRole('button', { name: 'ПОДТВЕРДИТЬ В TON' })).toBeVisible();
 
   await page.goto('/?screen=bank-active');
@@ -99,16 +106,35 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await expect(page.getByText('50/50', { exact: true })).toBeVisible();
   await expect(page.getByText('РАВНЫЕ УСЛОВИЯ')).toBeVisible();
   await expect(page.locator('.duel-terms')).toContainText(/1 GRAM/);
-  await expect(page.locator('.duel-terms')).toContainText(/2 GRAM/);
+  await expect(page.locator('.duel-terms')).toContainText(/1[,.]95 GRAM/);
+  await expect(page.getByText(/открой результат за 5 минут/i)).toBeVisible();
+  expect(
+    await page
+      .locator('.duel-deadline-rule')
+      .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+  ).toBeGreaterThanOrEqual(11);
+  await page.getByText('РАСЧЁТ И ПРАВИЛА').click();
+  await expect(page.getByText('Общий пул')).toBeVisible();
+  await expect(page.getByText('2 GRAM')).toBeVisible();
   await page.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }).click();
   await expect(page.getByText('AFK ПОИСК')).toBeVisible();
+  await expect(page.getByText('ДО ИСТЕЧЕНИЯ')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ОСТАНОВИТЬ ПОИСК' })).toBeVisible();
 
   await page.goto('/?screen=rating');
   await emulateFullscreenControls();
   await expect(page.getByRole('heading', { name: 'RATING' })).toBeVisible();
   await expect(page.getByText('ТВОЙ LOOP SCORE')).toBeVisible();
   await expect(page.getByText('685').first()).toBeVisible();
+  await expect(page.getByText('315')).toBeVisible();
+  await expect(page.getByText('ДО LOOP')).toBeVisible();
+  await expect(page.getByText(/Главный вклад:/)).toBeVisible();
   await expect(page.getByText('Репутация участия, а не баланс.', { exact: false })).toBeVisible();
+  expect(
+    await page
+      .locator('.rating-explainer')
+      .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+  ).toBeGreaterThanOrEqual(11);
   await page.getByRole('button', { name: /МОЙ КРУГ/ }).click();
   await expect(page.locator('.rating-list')).toContainText('Alex');
 
@@ -116,6 +142,16 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await emulateFullscreenControls();
   await expect(page.getByRole('heading', { name: 'Дмитрий' })).toBeVisible();
   expect((await page.locator('.profile-identity').boundingBox())!.y).toBeGreaterThanOrEqual(104);
+  await expect(page.getByText('LOOP SCORE')).toBeVisible();
+  await expect(page.getByText('КОШЕЛЁК И ON-CHAIN PROOFS')).toBeVisible();
+  expect(
+    await page
+      .locator('.profile-row small')
+      .first()
+      .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+  ).toBeGreaterThanOrEqual(11);
+  await expect(page.getByText('PLUSH BRICK')).not.toBeVisible();
+  await page.getByText('КОШЕЛЁК И ON-CHAIN PROOFS').click();
   await expect(page.getByText('PLUSH BRICK')).toBeVisible();
   const tabBar = page.getByRole('navigation', { name: 'Основная навигация' });
   const tabBox = await tabBar.boundingBox();

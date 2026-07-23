@@ -36,7 +36,23 @@ export function installViewportBehavior(): () => void {
   const pointerReleaseTimers = new Map<number, number>();
   let subscribedTelegram: TelegramWebApp | undefined;
 
+  const restoreFixedViewport = () => {
+    root.scrollTop = 0;
+    document.body.scrollTop = 0;
+    const shell = document.querySelector<HTMLElement>('.app-shell');
+    const stage = document.querySelector<HTMLElement>('.screen-stage');
+    if (shell) {
+      shell.scrollTop = 0;
+      shell.scrollLeft = 0;
+    }
+    if (stage) {
+      stage.scrollTop = 0;
+      stage.scrollLeft = 0;
+    }
+  };
+
   const restoreFocusedScreen = () => {
+    restoreFixedViewport();
     const active = document.activeElement;
     if (!isEditable(active)) return;
     const screen = active.closest<HTMLElement>('.screen');
@@ -66,6 +82,7 @@ export function installViewportBehavior(): () => void {
   };
 
   const sync = () => {
+    restoreFixedViewport();
     subscribeTelegram();
     const viewport = currentViewport();
     const keyboardOpen = isEditable(document.activeElement) || keyboardSettling;
@@ -123,8 +140,7 @@ export function installViewportBehavior(): () => void {
       return;
     }
     keyboardSettling = false;
-    root.scrollTop = 0;
-    document.body.scrollTop = 0;
+    restoreFixedViewport();
     sync();
   };
 
@@ -155,6 +171,18 @@ export function installViewportBehavior(): () => void {
   const onPointerCancel = (event: PointerEvent) => releasePointer(event.pointerId);
   const onClick = () => {
     for (const pointerId of activePointers) releasePointer(pointerId);
+    restoreFixedViewport();
+  };
+  const onScroll = (event: Event) => {
+    const target = event.target;
+    if (
+      target === document ||
+      target === root ||
+      target === document.body ||
+      (target instanceof Element && target.matches('.app-shell, .screen-stage'))
+    ) {
+      restoreFixedViewport();
+    }
   };
 
   subscribeTelegram();
@@ -168,6 +196,7 @@ export function installViewportBehavior(): () => void {
   document.addEventListener('pointerup', onPointerUp);
   document.addEventListener('pointercancel', onPointerCancel);
   document.addEventListener('click', onClick);
+  document.addEventListener('scroll', onScroll, true);
 
   return () => {
     if (blurTimer !== undefined) window.clearTimeout(blurTimer);
@@ -182,6 +211,7 @@ export function installViewportBehavior(): () => void {
     document.removeEventListener('pointerup', onPointerUp);
     document.removeEventListener('pointercancel', onPointerCancel);
     document.removeEventListener('click', onClick);
+    document.removeEventListener('scroll', onScroll, true);
     for (const timer of pointerReleaseTimers.values()) window.clearTimeout(timer);
     subscribedTelegram?.offEvent?.('viewportChanged', onTelegramViewport);
     subscribedTelegram?.offEvent?.('safeAreaChanged', onTelegramViewport);

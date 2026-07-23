@@ -35,6 +35,13 @@ function canonicalTerms(requestedStake: number, chanceBps: number) {
   return { stake, opponentStake, totalPool: 4 * poolUnit };
 }
 
+function timeLeft(until: number | null, now: number): string {
+  if (!until) return '—';
+  const seconds = Math.max(0, Math.ceil((until - now) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
 export function DuelScreen({
   profile,
   offers,
@@ -55,12 +62,9 @@ export function DuelScreen({
   const [mode, setMode] = useState<'afk' | 'direct'>(invite ? 'direct' : 'afk');
   const [busy, setBusy] = useState(false);
   const [mockSearching, setMockSearching] = useState(false);
-  const [message, setMessage] = useState(
-    invite
-      ? `${invite.creator_name} бросил тебе вызов.`
-      : 'Укажи сумму. Соперник войдёт на равных условиях 50/50.',
-  );
-  const [now, setNow] = useState(0);
+  const [mockExpiresAt, setMockExpiresAt] = useState<number | null>(null);
+  const [message, setMessage] = useState(invite ? `${invite.creator_name} бросил тебе вызов.` : '');
+  const [now, setNow] = useState(() => Date.now());
   const locked = useRef(false);
 
   useEffect(() => {
@@ -111,11 +115,8 @@ export function DuelScreen({
         if (requestedStake < 250_000_000) throw new Error('Минимальная ставка — 0,25 GRAM');
         if (isMockTelegram()) {
           setMockSearching(true);
-          setMessage(
-            selectedMode === 'afk'
-              ? 'Поиск идёт. Mini App можно закрыть.'
-              : 'Вызов создан. Отправь его через Telegram.',
-          );
+          setMockExpiresAt(Date.now() + 15 * 60_000);
+          setMessage(selectedMode === 'afk' ? '' : 'Вызов создан. Отправь его через Telegram.');
           haptic('success');
           return;
         }
@@ -267,12 +268,20 @@ export function DuelScreen({
           ? 'ВЕРНУТЬ СТАВКУ'
           : 'ОСТАНОВИТЬ ПОИСК'
         : null
-    : null;
+    : mockSearching
+      ? 'ОСТАНОВИТЬ ПОИСК'
+      : null;
+  const activeDeadline =
+    status === 'matched' && activeDuel
+      ? Date.parse(activeDuel.reveal_deadline)
+      : activeOffer
+        ? Date.parse(activeOffer.expires_at)
+        : mockExpiresAt;
 
   return (
     <section className="screen duel-screen" aria-labelledby="duel-title">
       <header className="mode-header">
-        <p className="eyebrow">TESTNET · COMMIT–REVEAL</p>
+        <p className="eyebrow">TESTNET · ВЫЗОВ 1 НА 1</p>
         <h1 id="duel-title">DUEL</h1>
       </header>
 
@@ -318,22 +327,36 @@ export function DuelScreen({
               <div className="duel-equal-rule">
                 <strong>50/50</strong>
                 <span>РАВНЫЕ УСЛОВИЯ</span>
-                <p>Одинаковая ставка. Результат раскрывает контракт.</p>
+                <p>Одинаковая ставка. Победителя определяет контракт.</p>
               </div>
             </>
           )}
 
-          <dl className="duel-terms">
+          <dl className="duel-terms duel-primary-terms">
             <Term label="Твоя ставка" value={`${formatGram(terms.stake, 3)} GRAM`} />
             <Term label="Ставка соперника" value={`${formatGram(terms.opponentStake, 3)} GRAM`} />
-            <Term label="Общий пул" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
-            <Term
-              label={`Комиссия DUEL · ${profile.plush_brick.duel_fee_bps / 100}%`}
-              value={`${formatGram(feeNano, 4)} GRAM`}
-            />
             <Term label="Выплата победителю" value={`${formatGram(payoutNano, 3)} GRAM`} />
-            <Term label="Разница при победе" value={`${formatGram(profitNano, 3)} GRAM`} />
           </dl>
+          <p className="duel-deadline-rule">
+            <ShieldCheck aria-hidden="true" />
+            После матча открой результат за 5 минут. Если соперник откроет, а ты нет — он получит
+            выплату.
+          </p>
+          <details className="technical-details duel-breakdown">
+            <summary>РАСЧЁТ И ПРАВИЛА</summary>
+            <dl className="detail-list">
+              <Term label="Общий пул" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
+              <Term
+                label={`Комиссия DUEL · ${profile.plush_brick.duel_fee_bps / 100}%`}
+                value={`${formatGram(feeNano, 4)} GRAM`}
+              />
+              <Term label="Чистый результат победы" value={`+${formatGram(profitNano, 3)} GRAM`} />
+            </dl>
+            <p>
+              Если никто не откроет результат, контракт вернёт обе ставки. Открытый поиск можно
+              остановить и вернуть свою ставку on-chain.
+            </p>
+          </details>
         </div>
       )}
 
@@ -348,16 +371,24 @@ export function DuelScreen({
           </p>
           <strong>
             {status === 'matched'
-              ? 'Открой результат до таймаута.'
-              : 'Поиск продолжается on-chain.'}
+              ? 'Соперник найден. Открой результат.'
+              : 'Ищем равную ставку. Можно закрыть Mini App.'}
           </strong>
-          {activeOffer && (
-            <div className="duel-live-numbers">
-              <span>
-                {activeOffer.chance_bps / 100}/{(10_000 - activeOffer.chance_bps) / 100}
-              </span>
-              <span>{formatGram(activeOffer.stake_nano, 3)} GRAM</span>
-            </div>
+          <div className="duel-live-numbers">
+            <span>
+              <b>{formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM</b>
+              <small>ТВОЯ СТАВКА</small>
+            </span>
+            <span>
+              <b>{timeLeft(activeDeadline, now)}</b>
+              <small>{status === 'matched' ? 'НА РАСКРЫТИЕ' : 'ДО ИСТЕЧЕНИЯ'}</small>
+            </span>
+          </div>
+          {status === 'searching' && (
+            <p className="duel-live-help">
+              Поиск можно остановить в любой момент: контракт вернёт ставку после отдельного
+              подтверждения в TON.
+            </p>
           )}
         </div>
       )}
@@ -376,15 +407,17 @@ export function DuelScreen({
       )}
 
       <AnimatePresence mode="wait">
-        <motion.p
-          key={message}
-          className="duel-message"
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-        >
-          <ShieldCheck aria-hidden="true" /> {message}
-        </motion.p>
+        {message && (
+          <motion.p
+            key={message}
+            className="duel-message"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            <ShieldCheck aria-hidden="true" /> {message}
+          </motion.p>
+        )}
       </AnimatePresence>
 
       <div className="duel-actions">
@@ -418,7 +451,16 @@ export function DuelScreen({
           <button
             className="secondary-button"
             disabled={busy}
-            onClick={() => void runActiveAction()}
+            onClick={() => {
+              if (mockSearching && !activeOffer) {
+                setMockSearching(false);
+                setMockExpiresAt(null);
+                setMessage('Поиск остановлен. Тестовая ставка возвращена.');
+                haptic('success');
+                return;
+              }
+              void runActiveAction();
+            }}
           >
             {activeActionLabel}
           </button>

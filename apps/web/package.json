@@ -9,7 +9,8 @@
     "lint": "eslint src vite.config.ts",
     "test": "vitest run --coverage.enabled=false",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "playwright test --project=mobile-chromium",
+    "e2e:webkit": "playwright test --project=mobile-webkit"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

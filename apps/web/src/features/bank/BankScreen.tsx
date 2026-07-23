@@ -234,7 +234,8 @@ export function BankScreen({
                   ))}
                 </div>
                 <p className="form-note">
-                  Чем выше цель, тем дольше позиция может ждать в очереди.
+                  Очередь FIFO: более ранние позиции наполняются первыми. Чем выше цель, тем дольше
+                  может быть ожидание.
                 </p>
                 <button className="primary-button" onClick={() => void showConfirmation()}>
                   ПРОВЕРИТЬ
@@ -247,7 +248,11 @@ export function BankScreen({
                 <h3>Проверь, как будет работать позиция.</h3>
                 <dl className="detail-list">
                   <Detail
-                    label="Вносится"
+                    label="К оплате в TON Connect"
+                    value={`${formatGram(preview.transaction_amount_nano, 3)} GRAM`}
+                  />
+                  <Detail
+                    label="Вклад в BANK"
                     value={`${formatGram(preview.principal_nano, 3)} GRAM`}
                   />
                   <Detail
@@ -255,12 +260,32 @@ export function BankScreen({
                     value={`${formatGram(preview.target_payout_nano, 3)} GRAM`}
                   />
                   <Detail label="Комиссия BANK" value={`${formatGram(preview.fee_nano, 4)} GRAM`} />
-                  <Detail label="Сеть" value="TON testnet" />
                   <Detail
-                    label="Контракт"
-                    value={`${preview.contract_address.slice(0, 7)}…${preview.contract_address.slice(-5)}`}
+                    label="Запас на on-chain обработку"
+                    value={`${formatGram(preview.gas_nano, 3)} GRAM`}
                   />
                 </dl>
+                <div className="contract-truth">
+                  <strong>Что произойдёт</strong>
+                  <p>
+                    Комиссия удержится из вклада. Остаток сначала наполнит ранние позиции и, если
+                    останется, начнёт наполнять твою.
+                  </p>
+                  <p>
+                    Срок не фиксирован. После подтверждения в TON позицию нельзя отменить или
+                    вернуть досрочно.
+                  </p>
+                </div>
+                <details className="technical-details">
+                  <summary>ТЕХНИЧЕСКИЕ ДАННЫЕ</summary>
+                  <dl className="detail-list">
+                    <Detail label="Сеть" value="TON testnet" />
+                    <Detail
+                      label="Контракт"
+                      value={`${preview.contract_address.slice(0, 7)}…${preview.contract_address.slice(-5)}`}
+                    />
+                  </dl>
+                </details>
                 {message && <p className="form-note is-error">{message}</p>}
                 <button className="primary-button" onClick={() => void confirmPosition()}>
                   ПОДТВЕРДИТЬ В TON
@@ -339,11 +364,12 @@ export function BankScreen({
         </div>
       ) : (
         <div className="bank-state bank-empty-state">
-          <h2>Твоя очередь. Твоя банка.</h2>
+          <h2>Очередь выплат. Твоя банка.</h2>
           <p>
-            Каждый новый вклад сначала наполняет самые ранние банки. Когда твоя достигает 100%,
-            контракт сразу отправляет целевую выплату.
+            Вносишь GRAM и выбираешь цель. Следующие вклады сначала наполняют ранние банки. На 100%
+            контракт отправляет выплату.
           </p>
+          <p className="bank-risk">Срок не фиксирован. Досрочной отмены и возврата нет.</p>
           <div className="bank-cycle-metrics is-empty">
             <CycleMetric value={pulse?.active_bank ?? '—'} label="БАНОК В ЦИКЛЕ" />
             <CycleMetric value={pulse?.active_participants ?? '—'} label="УЧАСТНИКОВ СЕЙЧАС" />
@@ -373,7 +399,7 @@ export function BankScreen({
             >
               <SheetTitle title="Позиция BANK" onClose={() => setDetails(false)} />
               <p className="bank-details-intro">
-                Банка показывает, сколько уже собрано до твоей целевой выплаты.
+                Банка показывает, сколько следующие вклады уже собрали до твоей целевой выплаты.
               </p>
               <div className="big-progress">{Math.round(progressPercent)}%</div>
               <div className="progress-track">
@@ -406,6 +432,13 @@ export function BankScreen({
                 />
                 <Detail label="Статус" value={statusCopy[position.current_status]} />
               </dl>
+              <div className="contract-truth compact">
+                <strong>Правило очереди</strong>
+                <p>
+                  Ранние позиции получают пополнение первыми. Срок зависит от новых вкладов;
+                  досрочной отмены этой позиции нет.
+                </p>
+              </div>
               {position.proof_url && (
                 <a
                   className="secondary-button"

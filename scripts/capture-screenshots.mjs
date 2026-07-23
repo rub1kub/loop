@@ -63,6 +63,10 @@ try {
   await capture(page, 'bank-active', 'bank-active');
   await capture(page, 'bank-create-position', 'bank-empty', async (current) => {
     await current.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ', exact: true }).click();
+    await current.getByLabel('Сумма в GRAM').fill('2');
+    await current.getByRole('button', { name: /ДАЛЬШЕ/ }).click();
+    await current.getByRole('button', { name: /×1.5/ }).click();
+    await current.getByRole('button', { name: 'ПРОВЕРИТЬ' }).click();
     await current.waitForTimeout(300);
   });
   await capture(page, 'duel-create', 'duel-create');

@@ -62,6 +62,9 @@ describe('DuelScreen', () => {
 
     expect(screen.getByText('50/50')).toBeInTheDocument();
     expect(screen.getByText('РАВНЫЕ УСЛОВИЯ')).toBeInTheDocument();
+    expect(screen.getByText(/открой результат за 5 минут/i)).toBeInTheDocument();
+    expect(screen.getByText('Выплата победителю')).toBeInTheDocument();
+    expect(screen.getByText('РАСЧЁТ И ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
     expect(screen.queryByRole('button', { name: /25%/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /75%/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/позиция BANK/i)).not.toBeInTheDocument();

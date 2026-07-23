@@ -161,4 +161,22 @@ describe('Telegram keyboard viewport behavior', () => {
     expect(document.documentElement.style.getPropertyValue('--loop-visual-page-top')).toBe('260px');
     cleanup();
   });
+
+  it('keeps fixed app containers at scroll origin during browser focus correction', () => {
+    const shell = document.createElement('main');
+    shell.className = 'app-shell';
+    const stage = document.createElement('div');
+    stage.className = 'screen-stage';
+    shell.append(stage);
+    document.body.append(shell);
+    const cleanup = installViewportBehavior();
+
+    shell.scrollTop = 70;
+    stage.scrollTop = 24;
+    shell.dispatchEvent(new Event('scroll'));
+
+    expect(shell.scrollTop).toBe(0);
+    expect(stage.scrollTop).toBe(0);
+    cleanup();
+  });
 });

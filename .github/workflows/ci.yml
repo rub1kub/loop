@@ -31,8 +31,9 @@ jobs:
       - run: npm run test:web
       - run: npm run build:web
       - run: npm run format:check
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
       - run: npm --workspace @loop/web run e2e
+      - run: npm --workspace @loop/web run e2e:webkit
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: web-dist

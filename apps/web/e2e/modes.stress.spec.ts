@@ -44,6 +44,14 @@ for (const mode of modes) {
     await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
     await input.blur();
 
+    for (let transition = 0; transition < 20; transition += 1) {
+      const tab = transition % 2 === 0 ? 'BANK' : 'DUEL';
+      await page.getByRole('button', { name: tab, exact: true }).click();
+      await expect
+        .poll(() => page.locator('.app-shell').evaluate((shell) => shell.scrollTop))
+        .toBe(0);
+    }
+
     const interactionsBlocked = await page.locator('body').evaluate((body) => {
       const select = new Event('selectstart', { bubbles: true, cancelable: true });
       const context = new Event('contextmenu', { bubbles: true, cancelable: true });
@@ -57,6 +65,8 @@ for (const mode of modes) {
     await expect(findOpponent).toBeVisible();
     await findOpponent.click();
     await expect(page.getByText('AFK ПОИСК')).toBeVisible();
-    await expect(page.getByText('Поиск продолжается on-chain.')).toBeVisible();
+    await expect(page.getByText('Ищем равную ставку. Можно закрыть Mini App.')).toBeVisible();
+    await expect(page.getByText('ДО ИСТЕЧЕНИЯ')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ОСТАНОВИТЬ ПОИСК' })).toBeVisible();
   });
 }

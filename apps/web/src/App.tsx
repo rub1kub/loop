@@ -173,6 +173,7 @@ export default function App() {
     profile: (
       <ProfileScreen
         profile={state.profile}
+        rating={state.rating}
         bankHistory={state.bankHistory}
         duels={state.duels}
         onReplay={() => state.replayOnboarding()}

@@ -41,4 +41,4 @@ reader-facing rank from unfinished earlier positions. DUEL financial events rema
 
 ## Risk
 
-There is no underlying return. A target can remain partially funded forever when later deposits stop. This is why the public build is testnet-only and presents the mechanism plainly.
+There is no underlying return. A target can remain partially funded forever when later deposits stop. An on-chain BANK position has no cancellation or early-refund message; once confirmed, it remains in FIFO order until its target is funded. This is why the public build is testnet-only and presents the mechanism plainly before TON Connect confirmation.

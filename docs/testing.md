@@ -7,7 +7,7 @@
 | Acton      | BANK initial funding, FIFO allocation, partial/exact/cascading settlement, value conservation, fees, replay and races; DUEL matching, address binding, domain separation, commit–reveal, timeouts, refunds and permissions |
 | pytest     | Telegram auth, API validation, independent models, invites, matchmaking races, chain indexing, idempotency, referral controls and TON provider proofs                                                                      |
 | Vitest     | parsing, API schemas, TON message building, haptics, loader, fixed 50/50 DUEL and BANK queue copy                                                                                                                          |
-| Playwright | production UI across phone/desktop viewports, BANK wizard, 50/50 DUEL, RATING, profile, keyboard stability and tab-bar safe area                                                                                           |
+| Playwright | production UI in Android Chromium and iOS WebKit across 320/390/430 px phone and desktop viewports, BANK wizard, 50/50 DUEL, RATING, profile, repeated keyboard/navigation transitions and tab-bar safe area               |
 | Alembic    | clean install and migration graph consistency                                                                                                                                                                              |
 
 ## Commands
