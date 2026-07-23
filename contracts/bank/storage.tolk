@@ -54,6 +54,14 @@ struct BankQueueView {
     openPositions: uint64
 }
 
+struct BankAdminStateView {
+    owner: address
+    treasury: address
+    feeBps: uint16
+    paused: bool
+    lockedFunding: coins
+}
+
 fun BankStorage.load(): BankStorage {
     return BankStorage.fromCell(contract.getData());
 }

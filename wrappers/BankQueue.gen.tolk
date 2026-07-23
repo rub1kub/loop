@@ -80,6 +80,86 @@ fun BankQueue.sendSetBankPaused(
     return net.send(from, genericMsg);
 }
 
+fun BankQueue.sendBankFundReserve(
+    self,
+    from: address,
+    queryId: uint64,
+    amount: coins,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: BankFundReserve { queryId, amount },
+    });
+    return net.send(from, genericMsg);
+}
+
+fun BankQueue.sendBankWithdrawSurplus(
+    self,
+    from: address,
+    queryId: uint64,
+    amount: coins,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: BankWithdrawSurplus { queryId, amount },
+    });
+    return net.send(from, genericMsg);
+}
+
+fun BankQueue.sendBankSetFee(
+    self,
+    from: address,
+    queryId: uint64,
+    feeBps: uint16,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: BankSetFee { queryId, feeBps },
+    });
+    return net.send(from, genericMsg);
+}
+
+fun BankQueue.sendBankSetTreasury(
+    self,
+    from: address,
+    queryId: uint64,
+    treasury: address,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: BankSetTreasury { queryId, treasury },
+    });
+    return net.send(from, genericMsg);
+}
+
+fun BankQueue.sendBankSetOwner(
+    self,
+    from: address,
+    queryId: uint64,
+    owner: address,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: BankSetOwner { queryId, owner },
+    });
+    return net.send(from, genericMsg);
+}
+
 /// Send message to the contract with a custom body cell
 fun BankQueue.sendAny(self, from: address, body: cell, config: SendParams = {}): SendResultList {
     val genericMsg = createMessage({
@@ -105,4 +185,8 @@ fun BankQueue.positionData(self, positionId: uint64): BankPositionData {
 
 fun BankQueue.activePosition(self, owner: address): uint64 {
     return net.runGetMethod(self.address, "activePosition", [owner]);
+}
+
+fun BankQueue.adminState(self): BankAdminStateView {
+    return net.runGetMethod(self.address, "adminState");
 }

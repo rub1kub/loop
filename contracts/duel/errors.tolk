@@ -22,5 +22,11 @@ enum Errors {
     DirectInviteRequired = 120
     InvalidDirectPermit = 121
     DirectPermitExpired = 122
+    InvalidAdminAmount = 123
+    InsufficientSurplus = 124
+    MustBePaused = 125
+    InvalidTreasury = 126
+    InvalidOwner = 127
+    ActiveValueLocked = 129
     InvalidMessage = 0xFFFF
 }

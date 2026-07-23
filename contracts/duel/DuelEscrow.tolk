@@ -7,6 +7,8 @@ const MIN_POOL = 1_000_000_000
 const MAX_POOL = 100_000_000_000
 const OPEN_GAS_BUFFER = 50_000_000
 const MIN_CALL_GAS = 20_000_000
+const WITHDRAW_GAS_BUFFER = 50_000_000
+const MIN_CONTRACT_RESERVE = 200_000_000
 const MIN_EXPIRY_DELAY = 30
 const MAX_EXPIRY_DELAY = 3_600
 const REVEAL_WINDOW = 300
@@ -22,7 +24,7 @@ const REASON_NO_REVEALS = 5
 
 contract DuelEscrow {
     author: "LOOP"
-    version: "1.1.0"
+    version: "1.2.0"
     description: "Address-bound TON escrow with weighted two-party commit-reveal"
     storage: Storage
     incomingMessages: AllowedMessage
@@ -38,6 +40,11 @@ type AllowedMessage =
     | SetPaused
     | OpenDirectOffer
     | AcceptDirectOffer
+    | DuelFundReserve
+    | DuelWithdrawSurplus
+    | DuelSetFee
+    | DuelSetTreasury
+    | DuelSetOwner
 
 fun validChance(chanceBps: uint16): bool {
     return chanceBps == 2_500 || chanceBps == 5_000 || chanceBps == 7_500;
@@ -234,6 +241,29 @@ fun sendFee(queryId: uint64, duelId: uint64, to: address, amount: coins) {
         });
         feeMessage.send(SEND_MODE_PAY_FEES_SEPARATELY);
     }
+}
+
+fun Storage.withdrawableBalance(self, balance: coins): coins {
+    val protectedBalance = self.locked + MIN_CONTRACT_RESERVE;
+    return balance > protectedBalance ? balance - protectedBalance : 0;
+}
+
+fun Storage.requireOwner(self, sender: address) {
+    assert (self.owner == sender) throw Errors.NotOwner;
+}
+
+fun sendDuelAdminWithdrawal(
+    queryId: uint64,
+    treasury: address,
+    amount: coins,
+) {
+    val withdrawal = createMessage({
+        bounce: BounceMode.NoBounce,
+        dest: treasury,
+        value: amount,
+        body: DuelAdminWithdrawal { queryId, amount },
+    });
+    withdrawal.send(SEND_MODE_PAY_FEES_SEPARATELY);
 }
 
 fun Storage.settleWinner(
@@ -498,8 +528,66 @@ fun onInternalMessage(in: InMessage) {
         SetPaused => {
             assert (in.valueCoins >= MIN_CALL_GAS) throw Errors.InsufficientValue;
             var storage = Storage.load();
-            assert (storage.owner == in.senderAddress) throw Errors.NotOwner;
+            storage.requireOwner(in.senderAddress);
             storage.paused = msg.paused;
+            storage.save();
+        }
+        DuelFundReserve => {
+            val storage = Storage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (msg.amount > 0) throw Errors.InvalidAdminAmount;
+            assert (
+                in.valueCoins >= msg.amount + MIN_CALL_GAS
+            ) throw Errors.InsufficientValue;
+        }
+        DuelWithdrawSurplus => {
+            assert (in.valueCoins >= WITHDRAW_GAS_BUFFER) throw Errors.InsufficientValue;
+            val originalBalance = contract.getOriginalBalance();
+            assert (originalBalance >= in.valueCoins) throw Errors.InsufficientValue;
+            val storage = Storage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (storage.paused) throw Errors.MustBePaused;
+            assert (msg.amount > 0) throw Errors.InvalidAdminAmount;
+            val balanceBeforeCall = originalBalance - in.valueCoins;
+            assert (
+                msg.amount <= storage.withdrawableBalance(balanceBeforeCall)
+            ) throw Errors.InsufficientSurplus;
+            reserveToncoinsOnBalance(
+                storage.locked + MIN_CONTRACT_RESERVE,
+                RESERVE_MODE_EXACT_AMOUNT,
+            );
+            sendDuelAdminWithdrawal(msg.queryId, storage.treasury, msg.amount);
+        }
+        DuelSetFee => {
+            assert (in.valueCoins >= MIN_CALL_GAS) throw Errors.InsufficientValue;
+            var storage = Storage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (storage.paused) throw Errors.MustBePaused;
+            assert (storage.locked == 0) throw Errors.ActiveValueLocked;
+            assert (msg.feeBps <= 1_000) throw Errors.InvalidFee;
+            storage.feeBps = msg.feeBps;
+            storage.save();
+        }
+        DuelSetTreasury => {
+            assert (in.valueCoins >= MIN_CALL_GAS) throw Errors.InsufficientValue;
+            var storage = Storage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (storage.paused) throw Errors.MustBePaused;
+            assert (
+                msg.treasury != contract.getAddress()
+            ) throw Errors.InvalidTreasury;
+            storage.treasury = msg.treasury;
+            storage.save();
+        }
+        DuelSetOwner => {
+            assert (in.valueCoins >= MIN_CALL_GAS) throw Errors.InsufficientValue;
+            var storage = Storage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (storage.paused) throw Errors.MustBePaused;
+            assert (
+                msg.owner != storage.owner && msg.owner != contract.getAddress()
+            ) throw Errors.InvalidOwner;
+            storage.owner = msg.owner;
             storage.save();
         }
         else => {
@@ -542,4 +630,15 @@ get fun directOfferData(offerId: uint64): DirectOfferData {
 get fun activeOffer(owner: address): uint64 {
     val storage = Storage.load();
     return storage.activeOffers.mustGet(owner, Errors.OfferMissing);
+}
+
+get fun adminState(): DuelAdminStateView {
+    val storage = Storage.load();
+    return {
+        owner: storage.owner,
+        treasury: storage.treasury,
+        feeBps: storage.feeBps,
+        paused: storage.paused,
+        locked: storage.locked,
+    };
 }

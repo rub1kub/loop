@@ -72,6 +72,31 @@ struct (0x4C4F4F09) AcceptDirectOffer {
     acceptance: Cell<DirectAcceptance>
 }
 
+struct (0x4C4F4F0A) DuelFundReserve {
+    queryId: uint64
+    amount: coins
+}
+
+struct (0x4C4F4F0B) DuelWithdrawSurplus {
+    queryId: uint64
+    amount: coins
+}
+
+struct (0x4C4F4F0C) DuelSetFee {
+    queryId: uint64
+    feeBps: uint16
+}
+
+struct (0x4C4F4F0D) DuelSetTreasury {
+    queryId: uint64
+    treasury: address
+}
+
+struct (0x4C4F4F0E) DuelSetOwner {
+    queryId: uint64
+    owner: address
+}
+
 /// Attached to every terminal winner transfer so indexers can project the result.
 struct (0x4C4F4F11) DuelPayout {
     queryId: uint64
@@ -91,4 +116,9 @@ struct (0x4C4F4F12) OfferRefund {
 struct (0x4C4F4F13) ProtocolFee {
     queryId: uint64
     duelId: uint64
+}
+
+struct (0x4C4F4F14) DuelAdminWithdrawal {
+    queryId: uint64
+    amount: coins
 }

@@ -18,7 +18,7 @@ fun main() {
         activePositions: [],
         usedPositionIds: [],
     });
-    val result = bank.deploy(deployer.address, { value: ton("0.2") });
+    val result = bank.deploy(deployer.address, { value: ton("0.5") });
     println(result.waitForTrace());
     println("LOOP BankQueue deployed to {}", bank.address);
 }

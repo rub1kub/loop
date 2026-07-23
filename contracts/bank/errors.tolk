@@ -9,5 +9,10 @@ enum BankErrors {
     InvalidFee = 207
     InsufficientValue = 208
     AllocationLimit = 209
+    InvalidAdminAmount = 210
+    InsufficientSurplus = 211
+    MustBePaused = 212
+    InvalidTreasury = 213
+    InvalidOwner = 214
     InvalidMessage = 0xFFFF
 }

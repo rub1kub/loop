@@ -229,6 +229,86 @@ fun DuelEscrow.sendAcceptDirectOffer(
     return net.send(from, genericMsg);
 }
 
+fun DuelEscrow.sendDuelFundReserve(
+    self,
+    from: address,
+    queryId: uint64,
+    amount: coins,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: DuelFundReserve { queryId, amount },
+    });
+    return net.send(from, genericMsg);
+}
+
+fun DuelEscrow.sendDuelWithdrawSurplus(
+    self,
+    from: address,
+    queryId: uint64,
+    amount: coins,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: DuelWithdrawSurplus { queryId, amount },
+    });
+    return net.send(from, genericMsg);
+}
+
+fun DuelEscrow.sendDuelSetFee(
+    self,
+    from: address,
+    queryId: uint64,
+    feeBps: uint16,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: DuelSetFee { queryId, feeBps },
+    });
+    return net.send(from, genericMsg);
+}
+
+fun DuelEscrow.sendDuelSetTreasury(
+    self,
+    from: address,
+    queryId: uint64,
+    treasury: address,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: DuelSetTreasury { queryId, treasury },
+    });
+    return net.send(from, genericMsg);
+}
+
+fun DuelEscrow.sendDuelSetOwner(
+    self,
+    from: address,
+    queryId: uint64,
+    owner: address,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: DuelSetOwner { queryId, owner },
+    });
+    return net.send(from, genericMsg);
+}
+
 /// Send message to the contract with a custom body cell
 fun DuelEscrow.sendAny(self, from: address, body: cell, config: SendParams = {}): SendResultList {
     val genericMsg = createMessage({
@@ -258,4 +338,8 @@ fun DuelEscrow.directOfferData(self, offerId: uint64): DirectOfferData {
 
 fun DuelEscrow.activeOffer(self, owner: address): uint64 {
     return net.runGetMethod(self.address, "activeOffer", [owner]);
+}
+
+fun DuelEscrow.adminState(self): DuelAdminStateView {
+    return net.runGetMethod(self.address, "adminState");
 }

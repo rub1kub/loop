@@ -1,7 +1,7 @@
 [package]
 name = "loop"
-description = "LOOP testnet BANK and DUEL contracts"
-version = "0.1.0"
+description = "LOOP BANK and DUEL contracts"
+version = "0.2.0"
 license = "MIT"
 
 [toolchain]
@@ -28,6 +28,7 @@ deploy-bank-emulation = "acton script scripts/deploy-bank.tolk"
 deploy-bank-testnet = "acton script scripts/deploy-bank.tolk --net testnet"
 deploy-duel-emulation = "acton script scripts/deploy-duel.tolk -3 1"
 deploy-duel-testnet = "acton script --net testnet scripts/deploy-duel.tolk -3 0x${LOOP_DUEL_INVITE_PUBLIC_KEY}"
+pause-legacy-testnet = "acton script --net testnet scripts/pause-legacy-contracts.tolk"
 
 [import-mappings]
 acton = ".acton"

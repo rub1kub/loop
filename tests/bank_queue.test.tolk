@@ -183,6 +183,148 @@ get fun `test invalid multiplier and underfunded messages cannot mutate queue`()
     expect(contract.queueData().openPositions).toEqual(0);
 }
 
+get fun `test owner can fund reserve and withdraw only free balance while paused`() {
+    val (contract, owner, treasury, _, _) = setupBank(100);
+    expect(
+        contract.sendBankFundReserve(
+            owner.address,
+            2_001,
+            ton("1"),
+            { value: ton("1.02") },
+        ),
+    ).toHaveSuccessfulTx<BankFundReserve>();
+
+    val whileRunning = contract.sendBankWithdrawSurplus(
+        owner.address,
+        2_002,
+        ton("0.5"),
+        { value: ton("0.05") },
+    );
+    expect(whileRunning).toHaveFailedTx({ exitCode: BankErrors.MustBePaused });
+
+    expect(
+        contract.sendSetBankPaused(
+            owner.address,
+            2_003,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+    val withdrawal = contract.sendBankWithdrawSurplus(
+        owner.address,
+        2_004,
+        ton("0.5"),
+        { value: ton("0.05") },
+    );
+    expect(withdrawal).toHaveSuccessfulTx<BankAdminWithdrawal>({
+        from: contract.address,
+        to: treasury.address,
+        value: ton("0.5"),
+    });
+}
+
+get fun `test BANK surplus withdrawal cannot touch position funding`() {
+    val (contract, owner, _, first, _) = setupBank(0);
+    openPosition(contract, first, POSITION_A, ton("1"), 20_000);
+    expect(
+        contract.sendSetBankPaused(
+            owner.address,
+            2_101,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+    expect(contract.adminState().lockedFunding).toEqual(ton("1"));
+    val excessive = contract.sendBankWithdrawSurplus(
+        owner.address,
+        2_102,
+        ton("10"),
+        { value: ton("0.05") },
+    );
+    expect(excessive).toHaveFailedTx({ exitCode: BankErrors.InsufficientSurplus });
+    expect(contract.contractConfig().lockedFunding).toEqual(ton("1"));
+}
+
+get fun `test BANK configuration changes require the paused owner`() {
+    val (contract, owner, _, first, second) = setupBank(100);
+    expect(
+        contract.sendBankSetFee(
+            owner.address,
+            2_201,
+            200,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.MustBePaused });
+    expect(
+        contract.sendSetBankPaused(
+            owner.address,
+            2_202,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+    expect(
+        contract.sendBankSetFee(
+            first.address,
+            2_203,
+            200,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.NotOwner });
+    expect(
+        contract.sendBankSetFee(
+            owner.address,
+            2_204,
+            1_001,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InvalidFee });
+    expect(
+        contract.sendBankSetTreasury(
+            owner.address,
+            2_205,
+            second.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<BankSetTreasury>();
+    expect(
+        contract.sendBankSetFee(
+            owner.address,
+            2_206,
+            200,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<BankSetFee>();
+    expect(
+        contract.sendBankSetOwner(
+            owner.address,
+            2_207,
+            first.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<BankSetOwner>();
+    val admin = contract.adminState();
+    expect(admin.owner).toEqual(first.address);
+    expect(admin.treasury).toEqual(second.address);
+    expect(admin.feeBps).toEqual(200);
+    expect(
+        contract.sendSetBankPaused(
+            owner.address,
+            2_208,
+            false,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.NotOwner });
+    expect(
+        contract.sendSetBankPaused(
+            first.address,
+            2_209,
+            false,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+}
+
 fun setupBank(feeBps: uint16): (BankQueue, Treasury, Treasury, Treasury, Treasury) {
     val owner = testing.treasury("bank-owner");
     val feeCollector = testing.treasury("bank-fee");

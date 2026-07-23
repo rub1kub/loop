@@ -64,6 +64,14 @@ struct ContractConfigView {
     locked: coins
 }
 
+struct DuelAdminStateView {
+    owner: address
+    treasury: address
+    feeBps: uint16
+    paused: bool
+    locked: coins
+}
+
 fun Storage.load(): Storage {
     return Storage.fromCell(contract.getData());
 }

@@ -1482,6 +1482,169 @@ get fun `test commitment cannot cross contract addresses`() {
     ).toHaveFailedTx({ exitCode: Errors.InvalidCommitment });
 }
 
+get fun `test DUEL owner can fund reserve and withdraw only free balance while paused`() {
+    val (contract, owner, feeCollector, _, _) = setupTest();
+    expect(
+        contract.sendDuelFundReserve(
+            owner.address,
+            1_901,
+            ton("1"),
+            { value: ton("1.02") },
+        ),
+    ).toHaveSuccessfulTx<DuelFundReserve>();
+    expect(
+        contract.sendDuelWithdrawSurplus(
+            owner.address,
+            1_902,
+            ton("0.5"),
+            { value: ton("0.05") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.MustBePaused });
+    expect(
+        contract.sendSetPaused(
+            owner.address,
+            1_903,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetPaused>();
+    val withdrawal = contract.sendDuelWithdrawSurplus(
+        owner.address,
+        1_904,
+        ton("0.5"),
+        { value: ton("0.05") },
+    );
+    expect(withdrawal).toHaveSuccessfulTx<DuelAdminWithdrawal>({
+        from: contract.address,
+        to: feeCollector.address,
+        value: ton("0.5"),
+    });
+}
+
+get fun `test DUEL admin changes cannot alter active locked stakes`() {
+    val (contract, owner, _, playerA, _) = setupTest();
+    val offerId: uint64 = 1_911;
+    expect(
+        contract.sendOpenOffer(
+            playerA.address,
+            offerId,
+            offerId,
+            testCommitment(contract, offerId, playerA.address, SECRET_A),
+            5_000,
+            ton("2"),
+            testing.getNow() + 900,
+            0,
+            { value: ton("1.05") },
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        contract.sendSetPaused(
+            owner.address,
+            1_912,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetPaused>();
+    expect(
+        contract.sendDuelSetFee(
+            owner.address,
+            1_913,
+            300,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.ActiveValueLocked });
+    expect(contract.adminState().locked).toEqual(ton("1"));
+    expect(
+        contract.sendDuelWithdrawSurplus(
+            owner.address,
+            1_914,
+            ton("10"),
+            { value: ton("0.05") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InsufficientSurplus });
+    expect(contract.contractConfig().locked).toEqual(ton("1"));
+}
+
+get fun `test DUEL configuration changes require the paused owner`() {
+    val (contract, owner, _, playerA, playerB) = setupTest();
+    expect(
+        contract.sendDuelSetFee(
+            owner.address,
+            1_921,
+            300,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.MustBePaused });
+    expect(
+        contract.sendSetPaused(
+            owner.address,
+            1_922,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetPaused>();
+    expect(
+        contract.sendDuelSetFee(
+            playerA.address,
+            1_923,
+            300,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.NotOwner });
+    expect(
+        contract.sendDuelSetFee(
+            owner.address,
+            1_924,
+            1_001,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InvalidFee });
+    expect(
+        contract.sendDuelSetTreasury(
+            owner.address,
+            1_925,
+            playerB.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<DuelSetTreasury>();
+    expect(
+        contract.sendDuelSetFee(
+            owner.address,
+            1_926,
+            300,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<DuelSetFee>();
+    expect(
+        contract.sendDuelSetOwner(
+            owner.address,
+            1_927,
+            playerA.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<DuelSetOwner>();
+    val admin = contract.adminState();
+    expect(admin.owner).toEqual(playerA.address);
+    expect(admin.treasury).toEqual(playerB.address);
+    expect(admin.feeBps).toEqual(300);
+    expect(
+        contract.sendSetPaused(
+            owner.address,
+            1_928,
+            false,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.NotOwner });
+    expect(
+        contract.sendSetPaused(
+            playerA.address,
+            1_929,
+            false,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetPaused>();
+}
+
 get fun `test 64 consecutive duels settle without locked value or active offer leaks`() {
     val (contract, _, _, playerA, playerB) = setupTest();
     val expiresAt: uint32 = testing.getNow() + 900;

@@ -7,19 +7,28 @@ const BANK_MIN_PRINCIPAL = 1_000_000_000
 const BANK_MAX_PRINCIPAL = 100_000_000_000
 const BANK_OPEN_GAS_BUFFER = 80_000_000
 const BANK_MIN_ADMIN_GAS = 20_000_000
+const BANK_WITHDRAW_GAS_BUFFER = 50_000_000
+const BANK_MIN_RESERVE = 200_000_000
 // At most 80 minimum-size targets can be closed by one maximum-size deposit,
 // plus one partially funded position. Keep the loop explicitly bounded for gas safety.
 const BANK_MAX_ALLOCATION_STEPS = 81
 
 contract BankQueue {
     author: "LOOP"
-    version: "1.1.0"
-    description: "Testnet-only FIFO payout cycle for LOOP BANK"
+    version: "1.2.0"
+    description: "FIFO payout cycle for LOOP BANK"
     storage: BankStorage
     incomingMessages: BankAllowedMessage
 }
 
-type BankAllowedMessage = CreatePosition | SetBankPaused
+type BankAllowedMessage =
+    | CreatePosition
+    | SetBankPaused
+    | BankFundReserve
+    | BankWithdrawSurplus
+    | BankSetFee
+    | BankSetTreasury
+    | BankSetOwner
 
 fun validMultiplier(multiplierBps: uint16): bool {
     return multiplierBps == 12_500 || multiplierBps == 15_000 || multiplierBps == 20_000;
@@ -54,6 +63,29 @@ fun sendBankFee(queryId: uint64, positionId: uint64, treasury: address, fee: coi
         });
         feeMessage.send(SEND_MODE_PAY_FEES_SEPARATELY);
     }
+}
+
+fun BankStorage.withdrawableBalance(self, balance: coins): coins {
+    val protectedBalance = self.lockedFunding + BANK_MIN_RESERVE;
+    return balance > protectedBalance ? balance - protectedBalance : 0;
+}
+
+fun BankStorage.requireOwner(self, sender: address) {
+    assert (self.owner == sender) throw BankErrors.NotOwner;
+}
+
+fun sendBankAdminWithdrawal(
+    queryId: uint64,
+    treasury: address,
+    amount: coins,
+) {
+    val withdrawal = createMessage({
+        bounce: BounceMode.NoBounce,
+        dest: treasury,
+        value: amount,
+        body: BankAdminWithdrawal { queryId, amount },
+    });
+    withdrawal.send(SEND_MODE_PAY_FEES_SEPARATELY);
 }
 
 fun BankStorage.allocateDeposit(mutate self, queryId: uint64, available: coins): coins {
@@ -157,8 +189,67 @@ fun onInternalMessage(in: InMessage) {
         SetBankPaused => {
             assert (in.valueCoins >= BANK_MIN_ADMIN_GAS) throw BankErrors.InsufficientValue;
             var storage = BankStorage.load();
-            assert (storage.owner == in.senderAddress) throw BankErrors.NotOwner;
+            storage.requireOwner(in.senderAddress);
             storage.paused = msg.paused;
+            storage.save();
+        }
+        BankFundReserve => {
+            val storage = BankStorage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (msg.amount > 0) throw BankErrors.InvalidAdminAmount;
+            assert (
+                in.valueCoins >= msg.amount + BANK_MIN_ADMIN_GAS
+            ) throw BankErrors.InsufficientValue;
+        }
+        BankWithdrawSurplus => {
+            assert (
+                in.valueCoins >= BANK_WITHDRAW_GAS_BUFFER
+            ) throw BankErrors.InsufficientValue;
+            val originalBalance = contract.getOriginalBalance();
+            assert (originalBalance >= in.valueCoins) throw BankErrors.InsufficientValue;
+            val storage = BankStorage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (storage.paused) throw BankErrors.MustBePaused;
+            assert (msg.amount > 0) throw BankErrors.InvalidAdminAmount;
+            val balanceBeforeCall = originalBalance - in.valueCoins;
+            assert (
+                msg.amount <= storage.withdrawableBalance(balanceBeforeCall)
+            ) throw BankErrors.InsufficientSurplus;
+            reserveToncoinsOnBalance(
+                storage.lockedFunding + BANK_MIN_RESERVE,
+                RESERVE_MODE_EXACT_AMOUNT,
+            );
+            sendBankAdminWithdrawal(msg.queryId, storage.treasury, msg.amount);
+        }
+        BankSetFee => {
+            assert (in.valueCoins >= BANK_MIN_ADMIN_GAS) throw BankErrors.InsufficientValue;
+            var storage = BankStorage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (storage.paused) throw BankErrors.MustBePaused;
+            assert (msg.feeBps <= 1_000) throw BankErrors.InvalidFee;
+            storage.feeBps = msg.feeBps;
+            storage.save();
+        }
+        BankSetTreasury => {
+            assert (in.valueCoins >= BANK_MIN_ADMIN_GAS) throw BankErrors.InsufficientValue;
+            var storage = BankStorage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (storage.paused) throw BankErrors.MustBePaused;
+            assert (
+                msg.treasury != contract.getAddress()
+            ) throw BankErrors.InvalidTreasury;
+            storage.treasury = msg.treasury;
+            storage.save();
+        }
+        BankSetOwner => {
+            assert (in.valueCoins >= BANK_MIN_ADMIN_GAS) throw BankErrors.InsufficientValue;
+            var storage = BankStorage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (storage.paused) throw BankErrors.MustBePaused;
+            assert (
+                msg.owner != storage.owner && msg.owner != contract.getAddress()
+            ) throw BankErrors.InvalidOwner;
+            storage.owner = msg.owner;
             storage.save();
         }
         else => {
@@ -199,4 +290,15 @@ get fun positionData(positionId: uint64): BankPositionData {
 get fun activePosition(owner: address): uint64 {
     val storage = BankStorage.load();
     return storage.activePositions.mustGet(owner, BankErrors.PositionMissing);
+}
+
+get fun adminState(): BankAdminStateView {
+    val storage = BankStorage.load();
+    return {
+        owner: storage.owner,
+        treasury: storage.treasury,
+        feeBps: storage.feeBps,
+        paused: storage.paused,
+        lockedFunding: storage.lockedFunding,
+    };
 }

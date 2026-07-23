@@ -25,7 +25,7 @@ fun main(networkId: int32, inviteSignerPublicKey: uint256) {
         activeOffers: [],
         usedOfferIds: [],
     });
-    val result = escrow.deploy(deployer.address, { value: ton("0.2") });
+    val result = escrow.deploy(deployer.address, { value: ton("0.5") });
     println(result.waitForTrace());
     println("LOOP DuelEscrow deployed to {}", escrow.address);
 }
