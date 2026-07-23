@@ -3,7 +3,9 @@ import { expect, test } from '@playwright/test';
 const owner = `0:${'22'.repeat(32)}`;
 const contractAddress = `0:${'11'.repeat(32)}`;
 
-test('browser control is a desktop site independent from Telegram Mini App', async ({ page }) => {
+test('browser control is a desktop site independent from Telegram Mini App', async ({
+  page,
+}, testInfo) => {
   await page.route('**/api/v1/control/session', async (route) => {
     await route.fulfill({ json: { wallet: owner } });
   });
@@ -94,10 +96,16 @@ test('browser control is a desktop site independent from Telegram Mini App', asy
   await page.goto('/control');
 
   await expect(page).toHaveTitle('LOOP — Панель управления');
-  await expect(page.getByRole('heading', { name: 'Состояние LOOP' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'LOOP работает частично' })).toBeVisible();
   await expect(page.getByText('142')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'BANK' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'DUEL' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Пополнить резерв/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Вывести доступное/ })).toBeVisible();
+  await expect(page.locator('.service-money').getByText('Участникам', { exact: true })).toHaveCount(
+    2,
+  );
+  await expect(
+    page.locator('.service-money').getByText('Можно вывести', { exact: true }),
+  ).toHaveCount(2);
   await expect(page.locator('.tab-bar')).toHaveCount(0);
   await expect(page.locator('.app-shell')).toHaveCount(0);
   await expect(page.locator('meta[name="viewport"]')).not.toHaveAttribute(
@@ -106,18 +114,49 @@ test('browser control is a desktop site independent from Telegram Mini App', asy
   );
 
   const shell = await page.locator('.control-shell').boundingBox();
-  const rail = await page.locator('.control-rail').boundingBox();
+  const header = await page.locator('.control-header').boundingBox();
   expect(shell).not.toBeNull();
-  expect(rail).not.toBeNull();
-  expect(rail!.width).toBeGreaterThan(200);
+  expect(header).not.toBeNull();
+  expect(header!.height).toBeLessThan(90);
   expect(shell!.width).toBe(1440);
 
-  await page.getByText('РЕЗЕРВ И НАСТРОЙКИ').first().click();
-  await expect(page.getByText('Вывести свободный резерв, GRAM').first()).toBeVisible();
-  await expect(page.getByText(/Средства участников недоступны/).first()).toBeVisible();
+  await page.getByRole('button', { name: /Пополнить резерв/ }).click();
+  await expect(page.getByRole('heading', { name: 'Пополнить резерв' })).toBeVisible();
+  await expect(page.getByText('Кошелёк покажет точную сумму перед подтверждением.')).toBeVisible();
+  await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
 
-  await page.screenshot({
-    path: '../../output/playwright/control-desktop.png',
-    fullPage: true,
-  });
+  await page.getByRole('button', { name: /Расширенное управление/ }).click();
+  const bankControls = page.locator('#contract-bank');
+  await expect(bankControls.getByRole('heading', { name: 'BANK' })).toBeVisible();
+  await bankControls.getByText('ОПЕРАЦИИ И ПРАВИЛА').click();
+  await expect(bankControls.getByText('Вывести доступное, GRAM')).toBeVisible();
+  await expect(bankControls.getByText('Комиссия, %')).toBeVisible();
+  await expect(bankControls.getByText(/Зарезервированные участникам средства/)).toBeVisible();
+  await expect(page.getByText('базисные пункты')).toHaveCount(0);
+
+  if (testInfo.project.name === 'desktop-chromium') {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: '../../output/playwright/control-desktop.png',
+      fullPage: true,
+    });
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'LOOP работает частично' })).toBeVisible();
+  await page.getByRole('button', { name: /Вывести доступное/ }).click();
+  await expect(page.getByRole('heading', { name: 'Вывести доступное' })).toBeVisible();
+  await expect(page.getByText('Сначала поставь BANK на паузу')).toBeVisible();
+  const sheet = await page.locator('.quick-sheet').boundingBox();
+  const viewportHeight = await page.evaluate(() => window.innerHeight);
+  expect(sheet).not.toBeNull();
+  expect(sheet!.width).toBe(390);
+  expect(sheet!.y + sheet!.height).toBeLessThanOrEqual(viewportHeight + 1);
+  if (testInfo.project.name === 'mobile-webkit') {
+    await page.screenshot({
+      path: '../../output/playwright/control-mobile.png',
+      fullPage: false,
+    });
+  }
 });

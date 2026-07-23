@@ -1,10 +1,15 @@
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import {
   ArrowClockwise,
+  ArrowRight,
   ArrowSquareOut,
   Bank,
+  CaretDown,
   CheckCircle,
   CircleNotch,
+  Coins,
+  DownloadSimple,
+  GearSix,
   LockKey,
   Pause,
   Play,
@@ -12,6 +17,7 @@ import {
   SignOut,
   Users,
   Warning,
+  X,
 } from '@phosphor-icons/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -43,6 +49,70 @@ function nanoFromInput(value: string): number | null {
   return Number.isSafeInteger(amount) && amount > 0 ? amount : null;
 }
 
+function feeBpsFromPercent(value: string): number | null {
+  const normalized = value.trim().replace(',', '.');
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const fee = Math.round(Number(normalized) * 100);
+  return Number.isInteger(fee) && fee >= 0 && fee <= 1000 ? fee : null;
+}
+
+function contractStatus(contract: ContractControl): {
+  label: string;
+  tone: 'normal' | 'paused' | 'danger';
+} {
+  if (contract.error) return { label: 'Нет связи', tone: 'danger' };
+  if (!contract.code_hash_matches) return { label: 'Нужна проверка', tone: 'danger' };
+  if (contract.paused) return { label: 'На паузе', tone: 'paused' };
+  return { label: 'Работает', tone: 'normal' };
+}
+
+function systemStatus(overview: ControlOverview): {
+  eyebrow: string;
+  title: string;
+  description: string;
+  tone: 'normal' | 'paused' | 'danger';
+} {
+  const hasContractProblem = overview.contracts.some(
+    (contract) => contract.error || !contract.code_hash_matches,
+  );
+  if (!overview.metrics.worker_healthy || hasContractProblem) {
+    return {
+      eyebrow: 'НУЖНО ВНИМАНИЕ',
+      title: 'Проверь LOOP',
+      description:
+        'Один из важных процессов не отвечает. Новые действия лучше временно остановить.',
+      tone: 'danger',
+    };
+  }
+  if (overview.application.maintenance_enabled) {
+    return {
+      eyebrow: 'НОВЫЕ ДЕЙСТВИЯ ОСТАНОВЛЕНЫ',
+      title: 'LOOP на паузе',
+      description: 'Открытые циклы и дуэли продолжают завершаться. Новые пока не создаются.',
+      tone: 'paused',
+    };
+  }
+  const hasLimits =
+    !overview.application.bank_enabled ||
+    !overview.application.duel_enabled ||
+    overview.contracts.some((contract) => contract.paused);
+  if (hasLimits) {
+    return {
+      eyebrow: 'ЕСТЬ ОГРАНИЧЕНИЯ',
+      title: 'LOOP работает частично',
+      description:
+        'Часть функций остановлена. Ниже видно, что доступно пользователям прямо сейчас.',
+      tone: 'paused',
+    };
+  }
+  return {
+    eyebrow: 'ВСЁ В ПОРЯДКЕ',
+    title: 'LOOP работает',
+    description: 'Пользователи могут открывать циклы и дуэли. Выплаты и проверка сети работают.',
+    tone: 'normal',
+  };
+}
+
 function actionLabel(action: string): string {
   const labels: Record<string, string> = {
     'bank.pause': 'BANK: изменение паузы',
@@ -65,17 +135,18 @@ function actionLabel(action: string): string {
 type ContractCardProps = {
   contract: ContractControl;
   busy: boolean;
-  onAction: (input: ControlActionInput) => Promise<void>;
+  onAction: (input: ControlActionInput) => Promise<boolean>;
 };
 
 function ContractCard({ contract, busy, onAction }: ContractCardProps) {
   const [reserveAmount, setReserveAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [feeBps, setFeeBps] = useState(String(contract.fee_bps));
+  const [feePercent, setFeePercent] = useState(String(contract.fee_bps / 100));
   const [treasury, setTreasury] = useState(contract.treasury);
   const [owner, setOwner] = useState('');
   const enabled = !busy && !contract.error && contract.owner_matches_session;
   const canConfigure = enabled && contract.extended_controls && contract.paused;
+  const status = contractStatus(contract);
 
   const amountAction = async (action: 'fund_reserve' | 'withdraw_surplus', value: string) => {
     const amount = nanoFromInput(value);
@@ -83,36 +154,28 @@ function ContractCard({ contract, busy, onAction }: ContractCardProps) {
       window.alert('Укажи корректную сумму GRAM');
       return;
     }
-    if (action === 'withdraw_surplus' && !window.confirm(`Вывести ${gram(amount)} GRAM в казну?`))
-      return;
-    await onAction({ mode: contract.mode, action, amount_nano: amount });
+    if (action === 'withdraw_surplus') {
+      if (amount > contract.withdrawable_nano) {
+        window.alert(`Можно вывести не больше ${gram(contract.withdrawable_nano)} GRAM`);
+        return;
+      }
+      if (!window.confirm(`Вывести ${gram(amount)} GRAM в казну?`)) return;
+    }
+    const accepted = await onAction({ mode: contract.mode, action, amount_nano: amount });
+    if (!accepted) return;
     if (action === 'fund_reserve') setReserveAmount('');
     else setWithdrawAmount('');
   };
 
   return (
-    <article className="control-contract">
+    <article className="control-contract" id={`contract-${contract.mode}`}>
       <header className="contract-head">
         <div>
-          <span className="eyebrow">КОНТРАКТ</span>
+          <span className="eyebrow">РАСШИРЕННОЕ УПРАВЛЕНИЕ</span>
           <h2>{contract.mode.toUpperCase()}</h2>
         </div>
-        <span
-          className={`status-pill ${
-            contract.error || !contract.code_hash_matches
-              ? 'danger'
-              : contract.paused
-                ? 'paused'
-                : ''
-          }`}
-        >
-          {contract.error
-            ? 'НЕТ СВЯЗИ'
-            : !contract.code_hash_matches
-              ? 'КОД НЕ СОВПАЛ'
-              : contract.paused
-                ? 'ПАУЗА'
-                : 'РАБОТАЕТ'}
+        <span className={`status-pill ${status.tone}`}>
+          {status.label.toLocaleUpperCase('ru-RU')}
         </span>
       </header>
 
@@ -125,15 +188,15 @@ function ContractCard({ contract, busy, onAction }: ContractCardProps) {
         <>
           <div className="contract-metrics">
             <div>
-              <span>Баланс</span>
+              <span>Всего</span>
               <strong>{gram(contract.balance_nano)} GRAM</strong>
             </div>
             <div>
-              <span>Заблокировано</span>
+              <span>Зарезервировано участникам</span>
               <strong>{gram(contract.locked_nano)} GRAM</strong>
             </div>
             <div>
-              <span>Можно вывести</span>
+              <span>Доступно владельцу</span>
               <strong>{gram(contract.withdrawable_nano)} GRAM</strong>
             </div>
             <div>
@@ -142,33 +205,16 @@ function ContractCard({ contract, busy, onAction }: ContractCardProps) {
             </div>
           </div>
 
-          <dl className="contract-facts">
-            <div>
-              <dt>Владелец</dt>
-              <dd title={contract.owner}>{shortAddress(contract.owner)}</dd>
-            </div>
-            <div>
-              <dt>Казна</dt>
-              <dd title={contract.treasury}>{shortAddress(contract.treasury)}</dd>
-            </div>
-            <div>
-              <dt>Адрес</dt>
-              <dd title={contract.address}>{shortAddress(contract.address)}</dd>
-            </div>
-          </dl>
-
           {!contract.owner_matches_session && (
             <div className="inline-warning">
               <LockKey size={20} />
-              <span>Подключённый кошелёк не является владельцем этого контракта.</span>
+              <span>Подключённый кошелёк не является владельцем этого раздела.</span>
             </div>
           )}
           {!contract.extended_controls && (
             <div className="inline-warning">
               <Warning size={20} />
-              <span>
-                Доступна только пауза. Для остальных команд нужна текущая версия контракта.
-              </span>
+              <span>Доступна только пауза. Остальные команды здесь не поддерживаются.</span>
             </div>
           )}
 
@@ -194,7 +240,7 @@ function ContractCard({ contract, busy, onAction }: ContractCardProps) {
           </div>
 
           <details className="contract-settings">
-            <summary>РЕЗЕРВ И НАСТРОЙКИ</summary>
+            <summary>ОПЕРАЦИИ И ПРАВИЛА</summary>
             <div className="settings-grid">
               <label>
                 <span>Пополнить резерв, GRAM</span>
@@ -215,7 +261,7 @@ function ContractCard({ contract, busy, onAction }: ContractCardProps) {
               </label>
 
               <label>
-                <span>Вывести свободный резерв, GRAM</span>
+                <span>Вывести доступное, GRAM</span>
                 <div className="field-action">
                   <input
                     inputMode="decimal"
@@ -230,23 +276,26 @@ function ContractCard({ contract, busy, onAction }: ContractCardProps) {
                     ВЫВЕСТИ
                   </button>
                 </div>
-                <small>Только в казну. Средства участников недоступны для вывода.</small>
+                <small>
+                  Перевод идёт только в казну. Зарезервированные участникам средства не
+                  затрагиваются.
+                </small>
               </label>
 
               <label>
-                <span>Комиссия, базисные пункты</span>
+                <span>Комиссия, %</span>
                 <div className="field-action">
                   <input
-                    inputMode="numeric"
-                    value={feeBps}
-                    onChange={(event) => setFeeBps(event.target.value)}
+                    inputMode="decimal"
+                    value={feePercent}
+                    onChange={(event) => setFeePercent(event.target.value)}
                   />
                   <button
                     disabled={!canConfigure}
                     onClick={() => {
-                      const fee = Number(feeBps);
-                      if (!Number.isInteger(fee) || fee < 0 || fee > 1000) {
-                        window.alert('Комиссия должна быть от 0 до 1000');
+                      const fee = feeBpsFromPercent(feePercent);
+                      if (fee === null) {
+                        window.alert('Комиссия должна быть от 0 до 10%');
                         return;
                       }
                       void onAction({ mode: contract.mode, action: 'set_fee', fee_bps: fee });
@@ -255,10 +304,11 @@ function ContractCard({ contract, busy, onAction }: ContractCardProps) {
                     СОХРАНИТЬ
                   </button>
                 </div>
+                <small>Изменение доступно только на паузе.</small>
               </label>
 
               <label>
-                <span>Адрес казны</span>
+                <span>Кошелёк для поступлений</span>
                 <div className="field-action">
                   <input value={treasury} onChange={(event) => setTreasury(event.target.value)} />
                   <button
@@ -274,12 +324,31 @@ function ContractCard({ contract, busy, onAction }: ContractCardProps) {
                     СМЕНИТЬ
                   </button>
                 </div>
+                <small>Изменение доступно только на паузе.</small>
               </label>
             </div>
 
+            <details className="technical-details">
+              <summary>ТЕХНИЧЕСКИЕ ДАННЫЕ</summary>
+              <dl className="contract-facts">
+                <div>
+                  <dt>Владелец</dt>
+                  <dd title={contract.owner}>{shortAddress(contract.owner)}</dd>
+                </div>
+                <div>
+                  <dt>Казна</dt>
+                  <dd title={contract.treasury}>{shortAddress(contract.treasury)}</dd>
+                </div>
+                <div>
+                  <dt>Адрес</dt>
+                  <dd title={contract.address}>{shortAddress(contract.address)}</dd>
+                </div>
+              </dl>
+            </details>
+
             <details className="danger-zone">
               <summary>ПЕРЕДАТЬ УПРАВЛЕНИЕ</summary>
-              <p>После подтверждения текущий кошелёк потеряет доступ к контракту.</p>
+              <p>После подтверждения текущий кошелёк потеряет доступ к этому разделу.</p>
               <div className="field-action">
                 <input
                   value={owner}
@@ -305,6 +374,234 @@ function ContractCard({ contract, busy, onAction }: ContractCardProps) {
           </details>
         </>
       )}
+    </article>
+  );
+}
+
+type QuickAction = 'fund' | 'withdraw';
+
+function QuickActionSheet({
+  action,
+  contracts,
+  busy,
+  onClose,
+  onAction,
+  onOpenAdvanced,
+}: {
+  action: QuickAction;
+  contracts: ContractControl[];
+  busy: boolean;
+  onClose: () => void;
+  onAction: (input: ControlActionInput) => Promise<boolean>;
+  onOpenAdvanced: (mode: ContractControl['mode']) => void;
+}) {
+  const [mode, setMode] = useState<ContractControl['mode']>(
+    contracts.some((contract) => contract.mode === 'bank') ? 'bank' : 'duel',
+  );
+  const [amountText, setAmountText] = useState('');
+  const [pauseRequested, setPauseRequested] = useState(false);
+  const contract = contracts.find((item) => item.mode === mode) ?? contracts[0];
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [onClose]);
+
+  if (!contract) return null;
+  const amount = nanoFromInput(amountText);
+  const enabled =
+    !busy && !contract.error && contract.owner_matches_session && contract.extended_controls;
+  const tooMuch = action === 'withdraw' && amount !== null && amount > contract.withdrawable_nano;
+  const needsPause = action === 'withdraw' && !contract.paused;
+  const waitingForPause = needsPause && pauseRequested;
+
+  const submit = async () => {
+    if (!amount || tooMuch) return;
+    const accepted = await onAction({
+      mode: contract.mode,
+      action: action === 'fund' ? 'fund_reserve' : 'withdraw_surplus',
+      amount_nano: amount,
+    });
+    if (accepted) onClose();
+  };
+
+  return (
+    <dialog className="quick-dialog" open aria-labelledby="quick-action-title">
+      <button className="dialog-backdrop" aria-label="Закрыть окно" onClick={onClose} />
+      <section className="quick-sheet">
+        <header>
+          <div>
+            <span className="eyebrow">{action === 'fund' ? 'ПОПОЛНЕНИЕ' : 'ВЫВОД'}</span>
+            <h2 id="quick-action-title">
+              {action === 'fund' ? 'Пополнить резерв' : 'Вывести доступное'}
+            </h2>
+          </div>
+          <button className="dialog-close" aria-label="Закрыть" onClick={onClose}>
+            <X size={21} />
+          </button>
+        </header>
+
+        <div className="mode-picker" aria-label="Выбери раздел">
+          {contracts.map((item) => (
+            <button
+              key={item.mode}
+              className={item.mode === contract.mode ? 'selected' : ''}
+              aria-pressed={item.mode === contract.mode}
+              onClick={() => {
+                setMode(item.mode);
+                setAmountText('');
+                setPauseRequested(false);
+              }}
+            >
+              {item.mode.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        <div className="quick-balance">
+          <span>
+            {action === 'fund' ? 'Сейчас в резерве' : 'Можно вывести без средств участников'}
+          </span>
+          <strong>
+            {gram(action === 'fund' ? contract.balance_nano : contract.withdrawable_nano)} GRAM
+          </strong>
+        </div>
+
+        {!busy &&
+          (contract.error || !contract.owner_matches_session || !contract.extended_controls) && (
+            <div className="inline-warning">
+              <Warning size={19} />
+              <span>Эта операция сейчас недоступна. Проверь раздел в полном управлении.</span>
+            </div>
+          )}
+
+        {needsPause ? (
+          <div className="guided-step">
+            <span>ШАГ 1 ИЗ 2</span>
+            <h3>
+              {waitingForPause
+                ? `Подтверждаем паузу ${contract.mode.toUpperCase()}`
+                : `Сначала поставь ${contract.mode.toUpperCase()} на паузу`}
+            </h3>
+            <p>
+              {waitingForPause
+                ? 'Как только сеть подтвердит действие, здесь появится ввод суммы.'
+                : 'Так сумма не изменится во время вывода. Открытые выплаты останутся защищены.'}
+            </p>
+            <button
+              className="button light"
+              disabled={!enabled || waitingForPause}
+              onClick={() => {
+                void onAction({
+                  mode: contract.mode,
+                  action: 'pause',
+                  paused: true,
+                }).then((accepted) => {
+                  if (accepted) setPauseRequested(true);
+                });
+              }}
+            >
+              {waitingForPause ? (
+                <CircleNotch className="spin" size={18} />
+              ) : (
+                <Pause size={18} weight="fill" />
+              )}
+              {waitingForPause ? 'ЖДЁМ ПОДТВЕРЖДЕНИЕ…' : 'ПОСТАВИТЬ НА ПАУЗУ'}
+            </button>
+            <button className="text-button" onClick={() => onOpenAdvanced(contract.mode)}>
+              Открыть полное управление <ArrowRight size={15} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <label className="quick-amount">
+              <span>Сумма, GRAM</span>
+              <input
+                autoFocus
+                inputMode="decimal"
+                value={amountText}
+                onChange={(event) => setAmountText(event.target.value)}
+                placeholder="0"
+              />
+            </label>
+            {tooMuch && (
+              <p className="field-error">
+                Доступно не больше {gram(contract.withdrawable_nano)} GRAM.
+              </p>
+            )}
+            <p className="quick-note">
+              {action === 'withdraw' && contract.withdrawable_nano === 0
+                ? 'Сейчас свободного остатка нет.'
+                : action === 'fund'
+                  ? 'Кошелёк покажет точную сумму перед подтверждением.'
+                  : 'Средства поступят в казну. Деньги участников вывести нельзя.'}
+            </p>
+            <button
+              className="button light quick-submit"
+              disabled={
+                !enabled ||
+                !amount ||
+                tooMuch ||
+                (contract.withdrawable_nano === 0 && action === 'withdraw')
+              }
+              onClick={() => void submit()}
+            >
+              {action === 'fund' ? <Coins size={19} /> : <DownloadSimple size={19} />}
+              {busy ? 'ПОДОЖДИ…' : 'ПОДТВЕРДИТЬ В КОШЕЛЬКЕ'}
+            </button>
+          </>
+        )}
+      </section>
+    </dialog>
+  );
+}
+
+function ServiceSummary({
+  contract,
+  onManage,
+}: {
+  contract: ContractControl;
+  onManage: (mode: ContractControl['mode']) => void;
+}) {
+  const status = contractStatus(contract);
+  return (
+    <article className="service-row">
+      <div className="service-identity">
+        <span className="service-symbol">{contract.mode === 'bank' ? '◇' : '∞'}</span>
+        <div>
+          <h3>{contract.mode.toUpperCase()}</h3>
+          <span className={`service-status ${status.tone}`}>{status.label}</span>
+        </div>
+      </div>
+      {contract.error ? (
+        <p className="service-error">{contract.error}</p>
+      ) : (
+        <dl className="service-money">
+          <div>
+            <dt>Всего</dt>
+            <dd>{gram(contract.balance_nano)} GRAM</dd>
+          </div>
+          <div>
+            <dt>Участникам</dt>
+            <dd>{gram(contract.locked_nano)} GRAM</dd>
+          </div>
+          <div>
+            <dt>Можно вывести</dt>
+            <dd>{gram(contract.withdrawable_nano)} GRAM</dd>
+          </div>
+        </dl>
+      )}
+      <button className="manage-button" onClick={() => onManage(contract.mode)}>
+        Настроить <ArrowRight size={16} />
+      </button>
     </article>
   );
 }
@@ -348,8 +645,11 @@ export default function ControlApp() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [quickAction, setQuickAction] = useState<QuickAction | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const proofRequest = useRef<Promise<void> | null>(null);
   const verifiedProof = useRef<string | null>(null);
+  const refreshTimers = useRef<number[]>([]);
 
   const prepareProof = useCallback(() => {
     if (proofRequest.current) return proofRequest.current;
@@ -374,6 +674,13 @@ export default function ControlApp() {
     setOverview(result);
     setAuthenticatedWallet(result.wallet);
   }, []);
+
+  useEffect(
+    () => () => {
+      refreshTimers.current.forEach((timer) => window.clearTimeout(timer));
+    },
+    [],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -462,9 +769,14 @@ export default function ControlApp() {
         ],
       });
       setMessage('Команда подписана. Ждём подтверждение сети.');
-      window.setTimeout(() => void refresh().catch(() => undefined), 4_000);
+      refreshTimers.current.forEach((timer) => window.clearTimeout(timer));
+      refreshTimers.current = [4_000, 12_000, 30_000].map((delay) =>
+        window.setTimeout(() => void refresh().catch(() => undefined), delay),
+      );
+      return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Команда не выполнена');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -485,12 +797,24 @@ export default function ControlApp() {
   };
 
   const logout = async () => {
+    refreshTimers.current.forEach((timer) => window.clearTimeout(timer));
+    refreshTimers.current = [];
     await controlApi.logout().catch(() => undefined);
     await tonConnectUI.disconnect().catch(() => undefined);
     setAuthenticatedWallet(null);
     setOverview(null);
     proofRequest.current = null;
     await prepareProof().catch(() => undefined);
+  };
+
+  const openAdvanced = (mode?: ContractControl['mode']) => {
+    setQuickAction(null);
+    setAdvancedOpen(true);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(mode ? `contract-${mode}` : 'advanced')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   if (loading) {
@@ -507,57 +831,65 @@ export default function ControlApp() {
       <main className="control-login">
         <section>
           <div className="control-mark">∞</div>
-          <span className="eyebrow">LOOP · ПАНЕЛЬ УПРАВЛЕНИЯ</span>
-          <h1>Контроль без Telegram.</h1>
-          <p>
-            Открой кошелёк владельца и подпиши одноразовое подтверждение. Средства не переводятся.
-          </p>
+          <span className="eyebrow">LOOP · ДЛЯ ВЛАДЕЛЬЦА</span>
+          <h1>Управление LOOP</h1>
+          <p>Подключи кошелёк владельца. Подпись подтвердит вход — деньги никуда не переводятся.</p>
           <button
             className="button light login-button"
             disabled={busy}
             onClick={() => void connect()}
           >
             <ShieldCheck size={21} weight="fill" />
-            {busy ? 'ПРОВЕРЯЕМ…' : 'ВОЙТИ ЧЕРЕЗ TON CONNECT'}
+            {busy ? 'ПРОВЕРЯЕМ…' : 'ПОДКЛЮЧИТЬ КОШЕЛЁК'}
           </button>
           {error && <div className="login-error">{error}</div>}
-          <small className="login-note">
-            Сессия хранится в защищённой cookie и действует один час.
-          </small>
+          <small className="login-note">Доступ автоматически закроется через один час.</small>
         </section>
       </main>
     );
   }
 
+  const currentStatus = systemStatus(overview);
+
   return (
     <main className="control-shell">
-      <aside className="control-rail">
-        <div>
+      <header className="control-header">
+        <div className="control-brand">
           <div className="rail-brand">∞</div>
-          <span>LOOP</span>
-        </div>
-        <nav aria-label="Разделы">
-          <a href="#overview">Обзор</a>
-          <a href="#application">Приложение</a>
-          <a href="#contracts">Контракты</a>
-          <a href="#history">История</a>
-        </nav>
-        <button className="rail-logout" onClick={() => void logout()}>
-          <SignOut size={18} />
-          Выйти
-        </button>
-      </aside>
-
-      <div className="control-content">
-        <header className="control-topbar">
           <div>
-            <span className="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ</span>
-            <h1>Состояние LOOP</h1>
+            <strong>LOOP</strong>
+            <span>Управление</span>
           </div>
+        </div>
+        <div className="header-actions">
+          <a className="header-app-link" href="/" target="_blank" rel="noreferrer">
+            Открыть LOOP <ArrowSquareOut size={15} />
+          </a>
           <div className="owner-chip" title={authenticatedWallet}>
             <span className="live-dot" />
             {shortAddress(authenticatedWallet)}
           </div>
+          <button className="header-logout" aria-label="Выйти" onClick={() => void logout()}>
+            <SignOut size={19} />
+            <span>Выйти</span>
+          </button>
+        </div>
+      </header>
+
+      <div className="control-content">
+        <header className="control-topbar">
+          <div>
+            <span className={`system-label ${currentStatus.tone}`}>
+              <span />
+              {currentStatus.eyebrow}
+            </span>
+            <h1>{currentStatus.title}</h1>
+            <p>{currentStatus.description}</p>
+          </div>
+          <button className="icon-button" disabled={busy} onClick={() => void refresh()}>
+            <ArrowClockwise size={20} className={busy ? 'spin' : ''} />
+            Обновить
+          </button>
         </header>
 
         {(error || message) && (
@@ -573,105 +905,194 @@ export default function ControlApp() {
           </button>
         )}
 
-        <section id="overview" className="overview-section">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">СЕЙЧАС</span>
-              <h2>Главные показатели</h2>
-            </div>
-            <button className="icon-button" disabled={busy} onClick={() => void refresh()}>
-              <ArrowClockwise size={20} className={busy ? 'spin' : ''} />
-              Обновить
+        <section id="overview" className="command-section">
+          <div className="command-actions">
+            <button
+              className="command-action"
+              disabled={busy}
+              onClick={() =>
+                void updateApplication({
+                  maintenance_enabled: !overview.application.maintenance_enabled,
+                })
+              }
+            >
+              <span className="command-icon">
+                {overview.application.maintenance_enabled ? (
+                  <Play size={22} weight="fill" />
+                ) : (
+                  <Pause size={22} weight="fill" />
+                )}
+              </span>
+              <span>
+                <strong>
+                  {overview.application.maintenance_enabled
+                    ? 'Возобновить работу'
+                    : 'Остановить новые действия'}
+                </strong>
+                <small>
+                  {overview.application.maintenance_enabled
+                    ? 'Снова разрешить новые циклы и дуэли'
+                    : 'Открытые операции продолжат завершаться'}
+                </small>
+              </span>
+              <ArrowRight size={18} />
+            </button>
+            <button
+              className="command-action primary"
+              disabled={busy}
+              onClick={() => setQuickAction('fund')}
+            >
+              <span className="command-icon">
+                <Coins size={23} />
+              </span>
+              <span>
+                <strong>Пополнить резерв</strong>
+                <small>Добавить GRAM для выплат и работы LOOP</small>
+              </span>
+              <ArrowRight size={18} />
+            </button>
+            <button
+              className="command-action"
+              disabled={busy}
+              onClick={() => setQuickAction('withdraw')}
+            >
+              <span className="command-icon">
+                <DownloadSimple size={22} />
+              </span>
+              <span>
+                <strong>Вывести доступное</strong>
+                <small>Только остаток, который не принадлежит участникам</small>
+              </span>
+              <ArrowRight size={18} />
             </button>
           </div>
-          <div className="metric-grid">
-            <article>
-              <Users size={22} />
+          <div className="metric-strip">
+            <div>
+              <Users size={20} />
+              <span>Участников</span>
               <strong>{overview.metrics.users}</strong>
-              <span>участников</span>
-            </article>
-            <article>
-              <Bank size={22} />
+            </div>
+            <div>
+              <Bank size={20} />
+              <span>Живых циклов</span>
               <strong>{overview.metrics.active_bank_positions}</strong>
-              <span>активных циклов</span>
-            </article>
-            <article>
+            </div>
+            <div>
               <span className="metric-symbol">∞</span>
+              <span>Активных дуэлей</span>
               <strong>{overview.metrics.active_duels}</strong>
-              <span>активных дуэлей</span>
-            </article>
-            <article>
-              <ShieldCheck size={22} />
-              <strong>{overview.metrics.worker_healthy ? 'Да' : 'Нет'}</strong>
-              <span>синхронизация работает</span>
-            </article>
+            </div>
           </div>
         </section>
 
-        <section id="application" className="application-section">
+        <section className="services-section">
           <div className="section-heading">
             <div>
-              <span className="eyebrow">ПРИЛОЖЕНИЕ</span>
-              <h2>Приём новых действий</h2>
+              <span className="eyebrow">ДВА РАЗДЕЛА</span>
+              <h2>BANK и DUEL</h2>
+              <p>Сразу видно, сколько находится в работе и сколько можно вывести.</p>
             </div>
           </div>
-          <div className="switch-panel">
-            <AppSwitch
-              label="Общая пауза"
-              description="Остановить создание новых циклов и дуэлей"
-              checked={overview.application.maintenance_enabled}
-              disabled={busy}
-              onChange={(value) => void updateApplication({ maintenance_enabled: value })}
-            />
-            <AppSwitch
-              label="Новые циклы BANK"
-              description="Разрешить пользователям открывать новые позиции"
-              checked={overview.application.bank_enabled}
-              disabled={busy || overview.application.maintenance_enabled}
-              onChange={(value) => void updateApplication({ bank_enabled: value })}
-            />
-            <AppSwitch
-              label="Новые DUEL"
-              description="Разрешить поиск и принятие новых вызовов"
-              checked={overview.application.duel_enabled}
-              disabled={busy || overview.application.maintenance_enabled}
-              onChange={(value) => void updateApplication({ duel_enabled: value })}
-            />
-          </div>
-          <p className="safety-note">
-            Пауза приложения не мешает завершить уже открытые операции и получить выплату.
-          </p>
-        </section>
-
-        <section id="contracts" className="contracts-section">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">СЕТЬ</span>
-              <h2>Контракты</h2>
-            </div>
-          </div>
-          <div className="contracts-grid">
+          <div className="service-list">
             {overview.contracts.map((contract) => (
-              <ContractCard
-                key={contract.mode}
-                contract={contract}
-                busy={busy}
-                onAction={runAction}
-              />
+              <ServiceSummary key={contract.mode} contract={contract} onManage={openAdvanced} />
             ))}
           </div>
         </section>
 
-        <section id="history" className="history-section">
-          <div className="section-heading">
+        <section id="advanced" className={`advanced-section ${advancedOpen ? 'open' : ''}`}>
+          <button
+            className="advanced-toggle"
+            aria-expanded={advancedOpen}
+            aria-controls="advanced-content"
+            onClick={() => setAdvancedOpen((value) => !value)}
+          >
+            <span className="advanced-icon">
+              <GearSix size={23} />
+            </span>
             <div>
-              <span className="eyebrow">ЖУРНАЛ</span>
-              <h2>Последние действия</h2>
+              <strong>Расширенное управление</strong>
+              <small>Отдельные паузы, комиссии, адреса и передача доступа</small>
             </div>
-          </div>
+            <CaretDown size={20} className="advanced-caret" />
+          </button>
+
+          {advancedOpen && (
+            <div id="advanced-content" className="advanced-content">
+              <section id="application" className="application-section">
+                <div className="section-heading">
+                  <div>
+                    <span className="eyebrow">ДОСТУПНОСТЬ</span>
+                    <h2>Что могут делать пользователи</h2>
+                  </div>
+                </div>
+                <div className="switch-panel">
+                  <AppSwitch
+                    label="Режим обслуживания"
+                    description="Не принимать новые циклы и дуэли"
+                    checked={overview.application.maintenance_enabled}
+                    disabled={busy}
+                    onChange={(value) => void updateApplication({ maintenance_enabled: value })}
+                  />
+                  <AppSwitch
+                    label="Разрешить новые циклы"
+                    description="Пользователи смогут начинать новые циклы BANK"
+                    checked={overview.application.bank_enabled}
+                    disabled={busy || overview.application.maintenance_enabled}
+                    onChange={(value) => void updateApplication({ bank_enabled: value })}
+                  />
+                  <AppSwitch
+                    label="Разрешить новые дуэли"
+                    description="Пользователи смогут искать и принимать вызовы"
+                    checked={overview.application.duel_enabled}
+                    disabled={busy || overview.application.maintenance_enabled}
+                    onChange={(value) => void updateApplication({ duel_enabled: value })}
+                  />
+                </div>
+                <p className="safety-note">
+                  Режим обслуживания не мешает завершить уже открытые операции и получить выплату.
+                </p>
+              </section>
+
+              <section id="contracts" className="contracts-section">
+                <div className="section-heading">
+                  <div>
+                    <span className="eyebrow">ДЕНЬГИ И ПРАВИЛА</span>
+                    <h2>Управление BANK и DUEL</h2>
+                    <p>Изменение комиссии, адресов и вывод доступны только после паузы.</p>
+                  </div>
+                </div>
+                <div className="contracts-grid">
+                  {overview.contracts.map((contract) => (
+                    <ContractCard
+                      key={contract.mode}
+                      contract={contract}
+                      busy={busy}
+                      onAction={runAction}
+                    />
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
+        </section>
+
+        <details id="history" className="history-section history-disclosure">
+          <summary>
+            <div>
+              <span className="eyebrow">ИСТОРИЯ</span>
+              <strong>Последние действия</strong>
+              <small>
+                {overview.audit.length === 0
+                  ? 'Пока пусто'
+                  : `${overview.audit.length} ${overview.audit.length === 1 ? 'запись' : 'записей'}`}
+              </small>
+            </div>
+            <CaretDown size={20} />
+          </summary>
           <div className="history-list">
             {overview.audit.length === 0 ? (
-              <p className="empty-history">Административных действий пока нет.</p>
+              <p className="empty-history">Действий пока нет.</p>
             ) : (
               overview.audit.map((event) => (
                 <article key={event.id}>
@@ -680,12 +1101,12 @@ export default function ControlApp() {
                     <strong>{actionLabel(event.action)}</strong>
                     <small>{new Date(event.created_at).toLocaleString('ru-RU')}</small>
                   </div>
-                  <span>{event.status === 'confirmed' ? 'ПОДТВЕРЖДЕНО' : 'ПОДГОТОВЛЕНО'}</span>
+                  <span>{event.status === 'confirmed' ? 'ПОДТВЕРЖДЕНО' : 'ОЖИДАЕТ'}</span>
                 </article>
               ))
             )}
           </div>
-        </section>
+        </details>
 
         <footer className="control-footer">
           <span>LOOP · ПАНЕЛЬ ВЛАДЕЛЬЦА</span>
@@ -694,6 +1115,17 @@ export default function ControlApp() {
           </a>
         </footer>
       </div>
+
+      {quickAction && (
+        <QuickActionSheet
+          action={quickAction}
+          contracts={overview.contracts}
+          busy={busy}
+          onClose={() => setQuickAction(null)}
+          onAction={runAction}
+          onOpenAdvanced={openAdvanced}
+        />
+      )}
     </main>
   );
 }
