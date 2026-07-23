@@ -11,7 +11,9 @@ from hypothesis import strategies as st
 from app.config import get_settings
 from app.security import (
     AuthenticationError,
+    decode_control_session,
     decode_session,
+    issue_control_session,
     issue_session,
     validate_telegram_init_data,
 )
@@ -73,3 +75,14 @@ def test_session_is_signed_and_expires() -> None:
         decode_session(token + "x", get_settings(), now)
     with pytest.raises(AuthenticationError):
         decode_session(token, get_settings(), expires + timedelta(seconds=1))
+
+
+def test_control_session_has_separate_audience_and_expiry() -> None:
+    now = datetime.now(UTC).replace(microsecond=0)
+    address = "0:" + "22" * 32
+    token, expires = issue_control_session(address, get_settings(), now)
+    assert decode_control_session(token, get_settings(), now)["sub"] == address.upper()
+    with pytest.raises(AuthenticationError):
+        decode_session(token, get_settings(), now)
+    with pytest.raises(AuthenticationError):
+        decode_control_session(token, get_settings(), expires + timedelta(seconds=1))

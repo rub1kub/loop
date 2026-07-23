@@ -125,6 +125,48 @@ class ChainCheckpoint(Base):
     )
 
 
+class ApplicationControl(Base):
+    __tablename__ = "application_control"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    maintenance_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    bank_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    duel_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    updated_by_wallet: Mapped[str | None] = mapped_column(String(68))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class ContractControl(Base):
+    __tablename__ = "contract_control"
+    key: Mapped[str] = mapped_column(String(160), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    network: Mapped[int] = mapped_column(Integer, nullable=False)
+    address: Mapped[str] = mapped_column(String(68), nullable=False)
+    owner: Mapped[str] = mapped_column(String(68), nullable=False)
+    treasury: Mapped[str] = mapped_column(String(68), nullable=False)
+    fee_bps: Mapped[int] = mapped_column(Integer, nullable=False)
+    paused: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    locked_nano: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    last_tx_hash: Mapped[str | None] = mapped_column(String(96))
+    last_lt: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class AdminAuditEvent(Base):
+    __tablename__ = "admin_audit_events"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    wallet: Mapped[str] = mapped_column(String(68), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    target: Mapped[str] = mapped_column(String(160), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="prepared", nullable=False)
+    tx_hash: Mapped[str | None] = mapped_column(String(96))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 # Register bounded-context tables in the shared SQLAlchemy metadata.
 from .modules.bank import models as _bank_models  # noqa: E402,F401
 from .modules.duel import models as _duel_models  # noqa: E402,F401

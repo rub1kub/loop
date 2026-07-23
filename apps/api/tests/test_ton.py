@@ -3,6 +3,7 @@ import base64
 import httpx
 import pytest
 from tonsdk.boc import Cell  # type: ignore[import-untyped]
+from tonsdk.utils import Address  # type: ignore[import-untyped]
 
 from app.config import get_settings
 from app.ton import (
@@ -23,6 +24,12 @@ def message_body(*values: tuple[int, int]) -> dict[str, dict[str, str]]:
     for value, bits in values:
         cell.bits.write_uint(value, bits)
     return {"message_content": {"body": base64.b64encode(cell.to_boc(False)).decode()}}
+
+
+def address_stack(address: str) -> list[object]:
+    cell = Cell()
+    cell.bits.write_address(Address(address))
+    return ["cell", {"bytes": base64.b64encode(cell.to_boc(False)).decode()}]
 
 
 def test_direct_permit_is_bound_to_network_contract_offer_and_invited_wallet() -> None:
@@ -121,6 +128,76 @@ async def test_contract_transaction_and_jetton_proofs_are_fail_closed() -> None:
 
         with pytest.raises(TonProviderError, match="account mismatch"):
             await client.verify_transaction(tx_hash, "0:" + "aa" * 32)
+
+
+@pytest.mark.asyncio
+async def test_contract_admin_state_parses_extended_and_legacy_getters() -> None:
+    owner = "0:" + "22" * 32
+    treasury = "0:" + "33" * 32
+
+    def extended_handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/runGetMethod")
+        return httpx.Response(
+            200,
+            json={
+                "ok": True,
+                "result": {
+                    "exit_code": 0,
+                    "stack": [
+                        address_stack(owner),
+                        address_stack(treasury),
+                        ["num", "0xfa"],
+                        ["num", "-0x1"],
+                        ["num", "0x3b9aca00"],
+                    ],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(extended_handler)) as http:
+        state = await TonClient(http, get_settings()).get_contract_admin_state(
+            "duel", "0:" + "11" * 32
+        )
+        assert state.owner == owner
+        assert state.treasury == treasury
+        assert state.fee_bps == 250
+        assert state.paused is True
+        assert state.locked_nano == 1_000_000_000
+        assert state.extended_controls is True
+
+    calls = 0
+
+    def legacy_handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(200, json={"ok": False, "result": {"exit_code": 11}})
+        return httpx.Response(
+            200,
+            json={
+                "ok": True,
+                "result": {
+                    "exit_code": 0,
+                    "stack": [
+                        address_stack(owner),
+                        address_stack(treasury),
+                        ["num", "0x64"],
+                        ["num", "0x0"],
+                        ["num", "0x0"],
+                        ["num", "0x1"],
+                        ["num", "0x75bcd15"],
+                    ],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(legacy_handler)) as http:
+        state = await TonClient(http, get_settings()).get_contract_admin_state(
+            "bank", "0:" + "12" * 32
+        )
+        assert state.fee_bps == 100
+        assert state.locked_nano == 123_456_789
+        assert state.extended_controls is False
 
 
 @pytest.mark.asyncio

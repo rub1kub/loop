@@ -28,6 +28,8 @@ class Settings(BaseSettings):
 
     session_secret: SecretStr = SecretStr("development-only-change-me")
     session_ttl_seconds: int = 21_600
+    control_admin_wallet: str = ""
+    control_session_ttl_seconds: int = 3_600
     public_origin: str = "http://localhost:5173"
     cors_origins: str = "http://localhost:5173"
 
@@ -93,6 +95,7 @@ class Settings(BaseSettings):
             "LOOP_DUEL_INVITE_SIGNING_KEY": self.duel_invite_signing_key.get_secret_value(),
             "LOOP_DUEL_INVITE_PUBLIC_KEY": self.duel_invite_public_key,
             "LOOP_METRICS_TOKEN": self.metrics_token.get_secret_value(),
+            "LOOP_CONTROL_ADMIN_WALLET": self.control_admin_wallet,
         }
         missing = [name for name, value in required.items() if not value]
         if missing:

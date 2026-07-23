@@ -4,7 +4,12 @@ The published environment uses Docker Compose behind Apache and nginx at `app.to
 
 ## Required configuration
 
-Copy `.env.example` to the protected production environment and replace secrets. Production validation requires HTTPS, strong session/webhook/metrics secrets, bot identity, both contract addresses and both 32-byte code hashes. DUEL additionally requires a 32-byte Ed25519 signing seed and its derived public key; this application key is not a TON wallet. Secret files are never committed.
+Copy `.env.example` to the protected production environment and replace secrets. Production
+validation requires HTTPS, strong session/webhook/metrics secrets, bot identity, both contract
+addresses and both 32-byte code hashes. `LOOP_CONTROL_ADMIN_WALLET` must equal the on-chain owner
+that may enter the browser site at `/control`. DUEL additionally requires a 32-byte Ed25519 signing
+seed and its derived public key; this application key is not a TON wallet. Secret files are never
+committed.
 
 ## Release
 
@@ -18,6 +23,8 @@ Copy `.env.example` to the protected production environment and replace secrets.
 8. Alembic upgrades to head and repeats the idle-projection guard.
 9. API startup attests BankQueue and DuelEscrow code hashes.
 10. API and worker health pass before nginx reload and public smoke.
+11. `/control` loads as a regular browser route, rejects an unauthenticated overview request and
+    requests a one-time owner TON proof without Telegram initialization.
 
 ```bash
 make deploy RELEASE=<40-character-git-sha>

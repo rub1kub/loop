@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
+from .control_state import effective_contract_fee, ensure_mode_enabled
 from .dependencies import Config, CurrentUser, Db
 from .models import (
     AuthExchange,
@@ -173,6 +174,8 @@ async def get_me(user: CurrentUser, db: Db, request: Request, settings: Config) 
         .select_from(BankPosition)
         .where(
             BankPosition.user_id == user.id,
+            BankPosition.network == settings.ton_network_id,
+            BankPosition.contract_address == settings.bank_contract_address,
             BankPosition.current_status.in_(
                 [
                     BankPositionStatus.PENDING_CONFIRMATION.value,
@@ -223,6 +226,13 @@ async def get_me(user: CurrentUser, db: Db, request: Request, settings: Config) 
         except TonProviderError:
             pass
     holder = plush_verified and plush_balance >= settings.holder_min_balance_nano
+    duel_fee_bps = await effective_contract_fee(
+        db,
+        mode="duel",
+        network=settings.ton_network_id,
+        address=settings.effective_duel_contract_address,
+        fallback=settings.duel_fee_bps,
+    )
     return ProfileView(
         user=user_view(user),
         wallet=(
@@ -250,7 +260,7 @@ async def get_me(user: CurrentUser, db: Db, request: Request, settings: Config) 
             holder=holder,
             # DuelEscrow V1 only exposes one global on-chain fee. Reporting a
             # holder discount here would make the quote disagree with settlement.
-            duel_fee_bps=settings.duel_fee_bps,
+            duel_fee_bps=duel_fee_bps,
             fee_discount_active=False,
         ),
     )
@@ -331,6 +341,8 @@ async def wallet_verify(
         bank_active = await db.scalar(
             select(BankPosition.id).where(
                 BankPosition.wallet_id == current.id,
+                BankPosition.network == settings.ton_network_id,
+                BankPosition.contract_address == settings.bank_contract_address,
                 BankPosition.current_status.in_(
                     [
                         BankPositionStatus.PENDING_CONFIRMATION.value,
@@ -606,6 +618,7 @@ async def preview_invite(code: str, user: CurrentUser, db: Db) -> InviteView:
 
 @router.post("/invites/{code}/accept", response_model=InviteView)
 async def accept_invite(code: str, user: CurrentUser, db: Db, settings: Config) -> InviteView:
+    await ensure_mode_enabled(db, "duel")
     invitation = await db.scalar(
         select(DuelInvitation).where(DuelInvitation.code == code).with_for_update()
     )

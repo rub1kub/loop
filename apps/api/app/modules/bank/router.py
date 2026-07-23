@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func, select, update
 
+from ...control_state import effective_contract_fee, ensure_mode_enabled
 from ...dependencies import Config, CurrentUser, Db
 from ...models import Wallet
 from ...schemas import (
@@ -88,6 +89,7 @@ async def preview_position(
     db: Db,
     settings: Config,
 ) -> BankPositionPreviewResponse:
+    await ensure_mode_enabled(db, "bank")
     if settings.ton_network_id != -3:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
@@ -101,7 +103,14 @@ async def preview_position(
     ):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "principal is outside limits")
     await active_wallet(db, user.id, settings.ton_network_id)
-    fee = body.principal_nano * settings.bank_fee_bps // 10_000
+    fee_bps = await effective_contract_fee(
+        db,
+        mode="bank",
+        network=settings.ton_network_id,
+        address=settings.bank_contract_address,
+        fallback=settings.bank_fee_bps,
+    )
+    fee = body.principal_nano * fee_bps // 10_000
     return BankPositionPreviewResponse(
         principal_nano=body.principal_nano,
         multiplier_bps=body.multiplier_bps,
@@ -125,6 +134,7 @@ async def quote_position(
     db: Db,
     settings: Config,
 ) -> BankPositionQuoteResponse:
+    await ensure_mode_enabled(db, "bank")
     if settings.ton_network_id != -3:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
@@ -142,6 +152,8 @@ async def quote_position(
         update(BankPosition)
         .where(
             BankPosition.wallet_id == wallet.id,
+            BankPosition.network == settings.ton_network_id,
+            BankPosition.contract_address == settings.bank_contract_address,
             BankPosition.current_status == BankPositionStatus.PENDING_CONFIRMATION.value,
             BankPosition.created_at < datetime.now(UTC) - timedelta(minutes=15),
         )
@@ -153,6 +165,8 @@ async def quote_position(
     active = await db.scalar(
         select(BankPosition.id).where(
             BankPosition.wallet_id == wallet.id,
+            BankPosition.network == settings.ton_network_id,
+            BankPosition.contract_address == settings.bank_contract_address,
             BankPosition.current_status.in_(
                 [
                     BankPositionStatus.PENDING_CONFIRMATION.value,
@@ -176,7 +190,14 @@ async def quote_position(
         raise HTTPException(status.HTTP_409_CONFLICT, "position id already exists")
 
     target = body.principal_nano * body.multiplier_bps // 10_000
-    fee = body.principal_nano * settings.bank_fee_bps // 10_000
+    fee_bps = await effective_contract_fee(
+        db,
+        mode="bank",
+        network=settings.ton_network_id,
+        address=settings.bank_contract_address,
+        fallback=settings.bank_fee_bps,
+    )
+    fee = body.principal_nano * fee_bps // 10_000
     position = BankPosition(
         position_id=body.position_id,
         query_id=body.position_id,
@@ -221,6 +242,7 @@ async def current_position(
         .where(
             BankPosition.user_id == user.id,
             BankPosition.network == settings.ton_network_id,
+            BankPosition.contract_address == settings.bank_contract_address,
             BankPosition.current_status.in_(
                 [
                     BankPositionStatus.PENDING_CONFIRMATION.value,
@@ -247,6 +269,7 @@ async def list_positions(
             .where(
                 BankPosition.user_id == user.id,
                 BankPosition.network == settings.ton_network_id,
+                BankPosition.contract_address == settings.bank_contract_address,
             )
             .order_by(BankPosition.created_at.desc())
             .limit(50)

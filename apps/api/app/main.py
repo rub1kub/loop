@@ -19,6 +19,7 @@ from starlette.responses import JSONResponse
 
 from .bot import configure_bot, create_dispatcher
 from .config import get_settings
+from .control_routes import router as control_router
 from .database import Base, create_database
 from .metrics import (
     DUEL_CANARY_PROOF_REDIS_KEY,
@@ -107,11 +108,12 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
         max_age=600,
     )
     app.include_router(router)
+    app.include_router(control_router)
     app.include_router(bank_router, prefix="/api/v1")
     app.include_router(duel_router, prefix="/api/v1")
 

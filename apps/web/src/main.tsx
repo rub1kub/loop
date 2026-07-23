@@ -1,6 +1,12 @@
 import { Buffer } from 'buffer';
-import './styles.css';
 
 globalThis.Buffer = Buffer;
 
-void import('./bootstrap');
+const isControlSite =
+  window.location.pathname === '/control' || window.location.pathname.startsWith('/control/');
+
+if (isControlSite) {
+  void import('./control/bootstrap');
+} else {
+  void import('./styles.css').then(() => import('./bootstrap'));
+}

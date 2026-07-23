@@ -24,6 +24,12 @@ RATING is a read-only social projection over finalized `BankPayout`, `DuelSettle
 state or mutable score table: every response recomputes the public monthly formula from
 idempotent proof-backed records.
 
+The browser control site is a separate React entry point at `/control`. It does not initialize
+Telegram, request Mini App expansion or reuse Telegram bearer sessions. The owner authenticates
+with a one-time TON proof and receives an `HttpOnly`, `Secure`, `SameSite=Strict` cookie scoped to
+the control API. Application intake state, synchronized contract configuration and the audit trail
+are durable PostgreSQL records.
+
 ## Request path
 
 1. Telegram sends signed `initData`; the API verifies HMAC, age and replay nonce.
@@ -33,6 +39,10 @@ idempotent proof-backed records.
 4. TON Connect asks the external wallet to sign and broadcast.
 5. The worker reads the contract account, verifies message identity, values, opcode, exit status and masterchain inclusion.
 6. A database transaction applies the idempotent BANK or DUEL projection.
+
+Administrative contract messages follow the same rule: the API only prepares a bounded payload,
+the owner wallet signs it, the contract enforces permissions and reserve invariants, and the worker
+records the finalized change. The browser is never an authority for contract state.
 
 ## Data and concurrency
 

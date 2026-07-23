@@ -35,6 +35,16 @@ class ContractState:
 
 
 @dataclass(frozen=True)
+class ContractAdminState:
+    owner: str
+    treasury: str
+    fee_bps: int
+    paused: bool
+    locked_nano: int
+    extended_controls: bool
+
+
+@dataclass(frozen=True)
 class TransactionProof:
     transaction_hash: str
     account: str
@@ -189,6 +199,62 @@ class TonClient:
     async def get_contract_code_hash(self, address: str) -> str:
         return (await self.get_contract_state(address)).code_hash
 
+    async def _run_get_method(self, address: str, method: str) -> list[Any]:
+        response = await self.http.post(
+            f"{self.base_url}/api/v2/runGetMethod",
+            headers=self.headers,
+            json={"address": address, "method": method, "stack": []},
+        )
+        if response.status_code != 200:
+            raise TonProviderError("TON provider rejected contract getter")
+        body: Any = response.json()
+        result = body.get("result") if isinstance(body, dict) else None
+        stack = result.get("stack") if isinstance(result, dict) else None
+        exit_code = result.get("exit_code") if isinstance(result, dict) else None
+        if (
+            not isinstance(body, dict)
+            or body.get("ok") is not True
+            or exit_code not in {None, 0, 1}
+            or not isinstance(stack, list)
+        ):
+            raise TonProviderError(f"contract getter {method} is unavailable")
+        return stack
+
+    async def get_contract_admin_state(
+        self,
+        mode: str,
+        address: str,
+    ) -> ContractAdminState:
+        if mode not in {"bank", "duel"}:
+            raise TonProviderError("unknown contract mode")
+        extended = True
+        try:
+            stack = await self._run_get_method(address, "adminState")
+            owner_index, treasury_index, fee_index, paused_index, locked_index = range(5)
+        except TonProviderError:
+            extended = False
+            stack = await self._run_get_method(address, "contractConfig")
+            owner_index, treasury_index, fee_index = 0, 1, 2
+            paused_index, locked_index = ((3, 6) if mode == "bank" else (6, 7))
+        try:
+            owner = _stack_address(stack[owner_index])
+            treasury = _stack_address(stack[treasury_index])
+            fee_bps = _stack_number(stack[fee_index])
+            paused = _stack_number(stack[paused_index]) != 0
+            locked_nano = _stack_number(stack[locked_index])
+        except (IndexError, TypeError, ValueError) as exc:
+            raise TonProviderError("malformed contract admin state") from exc
+        if not 0 <= fee_bps <= 10_000 or locked_nano < 0:
+            raise TonProviderError("contract admin state is outside valid bounds")
+        return ContractAdminState(
+            owner=owner,
+            treasury=treasury,
+            fee_bps=fee_bps,
+            paused=paused,
+            locked_nano=locked_nano,
+            extended_controls=extended,
+        )
+
     async def _verified_transaction(
         self, transaction_hash: str, account: str
     ) -> tuple[TransactionProof, dict[str, Any]]:
@@ -301,6 +367,42 @@ def normalize_address(value: str) -> str:
         return str(Address(value).to_string(is_user_friendly=False)).lower()
     except Exception as exc:
         raise TonProviderError("malformed TON address") from exc
+
+
+def _stack_number(item: Any) -> int:
+    if (
+        not isinstance(item, list)
+        or len(item) != 2
+        or item[0] != "num"
+        or not isinstance(item[1], str)
+    ):
+        raise TonProviderError("TON getter number is malformed")
+    return int(item[1], 0)
+
+
+def _stack_address(item: Any) -> str:
+    if not isinstance(item, list) or len(item) != 2 or item[0] not in {"cell", "slice"}:
+        raise TonProviderError("TON getter address is malformed")
+    payload = item[1]
+    encoded: str | None = None
+    if isinstance(payload, str):
+        encoded = payload
+    elif isinstance(payload, dict):
+        encoded = payload.get("bytes")
+        if not isinstance(encoded, str):
+            data = payload.get("object", {}).get("data", {})
+            encoded = data.get("b64") if isinstance(data, dict) else None
+    if not encoded:
+        raise TonProviderError("TON getter address cell is missing")
+    try:
+        cells = Cell.one_from_boc(base64.b64decode(encoded))
+        cell = cells[0] if isinstance(cells, list) else cells
+        address = cell.begin_parse().read_msg_addr()
+        if address is None:
+            raise ValueError
+        return normalize_address(address.to_string(is_user_friendly=False))
+    except Exception as exc:
+        raise TonProviderError("TON getter address cell is malformed") from exc
 
 
 def message_body_parser(message: dict[str, Any]) -> Any:

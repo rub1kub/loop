@@ -9,8 +9,11 @@ os.environ.update(
     LOOP_SESSION_SECRET="test-session-secret-with-enough-entropy",
     LOOP_PUBLIC_ORIGIN="https://loop.test",
     LOOP_CORS_ORIGINS="https://loop.test",
+    LOOP_CONTROL_ADMIN_WALLET="0:" + "22" * 32,
     LOOP_BANK_CONTRACT_ADDRESS="0:" + "12" * 32,
+    LOOP_BANK_CONTRACT_CODE_HASH="AA" * 32,
     LOOP_TON_CONTRACT_ADDRESS="0:" + "11" * 32,
+    LOOP_TON_CONTRACT_CODE_HASH="BB" * 32,
     LOOP_DUEL_INVITE_SIGNING_KEY=(
         "0102030405060708090a0b0c0d0e0f00112233445566778899aabbccddeeff00"
     ),

@@ -21,3 +21,5 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - DUEL v1.1 migration preflight, two-wallet live canary and Prometheus alert rules.
 - Monthly LOOP Score, seasonal levels, global/friend rankings and live participation pulse.
 - Reader-facing BANK queue rank derived from unfinished proof-backed positions.
+- Separate browser owner site with TON proof login, live contract state, application intake controls and an administrative audit trail.
+- Owner-only contract reserve funding, protected surplus withdrawal, fee/treasury changes and ownership transfer with locked-value invariants.

@@ -145,6 +145,55 @@ def decode_session(token: str, settings: Settings, now: datetime | None = None) 
     return payload
 
 
+def issue_control_session(
+    wallet_address: str,
+    settings: Settings,
+    issued_at: datetime | None = None,
+) -> tuple[str, datetime]:
+    issued = (issued_at or datetime.now(UTC)).replace(microsecond=0)
+    expires = issued + timedelta(seconds=settings.control_session_ttl_seconds)
+    payload = {
+        "aud": "loop-control",
+        "exp": int(expires.timestamp()),
+        "iat": int(issued.timestamp()),
+        "sub": canonical_raw_address(wallet_address),
+    }
+    encoded = _b64url_encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode())
+    signature = hmac.new(
+        settings.session_secret.get_secret_value().encode(), encoded.encode(), hashlib.sha256
+    ).digest()
+    return f"{encoded}.{_b64url_encode(signature)}", expires
+
+
+def decode_control_session(
+    token: str,
+    settings: Settings,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    try:
+        encoded, supplied_signature = token.split(".", 1)
+        expected = hmac.new(
+            settings.session_secret.get_secret_value().encode(), encoded.encode(), hashlib.sha256
+        ).digest()
+        if not hmac.compare_digest(expected, _b64url_decode(supplied_signature)):
+            raise AuthenticationError("invalid control session")
+        decoded = json.loads(_b64url_decode(encoded))
+        if not isinstance(decoded, dict):
+            raise AuthenticationError("invalid control session claims")
+        payload = cast(dict[str, Any], decoded)
+    except (ValueError, TypeError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise AuthenticationError("invalid control session") from exc
+    current_ts = int((now or datetime.now(UTC)).timestamp())
+    if payload.get("aud") != "loop-control" or not isinstance(payload.get("sub"), str):
+        raise AuthenticationError("invalid control session claims")
+    if not isinstance(payload.get("exp"), int) or payload["exp"] <= current_ts:
+        raise AuthenticationError("expired control session")
+    if not isinstance(payload.get("iat"), int) or payload["iat"] > current_ts + 30:
+        raise AuthenticationError("invalid control session time")
+    payload["sub"] = canonical_raw_address(payload["sub"])
+    return payload
+
+
 def canonical_raw_address(address: str) -> str:
     try:
         workchain_text, hash_text = address.split(":", 1)

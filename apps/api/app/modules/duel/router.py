@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import aliased
 
+from ...control_state import effective_contract_fee, ensure_mode_enabled
 from ...dependencies import Config, CurrentUser, Db
 from ...models import Wallet
 from ...schemas import (
@@ -83,6 +84,7 @@ async def create_offer_quote(
     db: Db,
     settings: Config,
 ) -> OfferQuoteResponse:
+    await ensure_mode_enabled(db, "duel")
     if settings.ton_network_id != -3:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
@@ -197,7 +199,13 @@ async def create_offer_quote(
     if duplicate:
         raise HTTPException(status.HTTP_409_CONFLICT, "offer id already exists")
     expires = now + timedelta(seconds=settings.offer_ttl_seconds)
-    fee_bps = settings.duel_fee_bps
+    fee_bps = await effective_contract_fee(
+        db,
+        mode="duel",
+        network=settings.ton_network_id,
+        address=contract_address,
+        fallback=settings.duel_fee_bps,
+    )
     payout = payout_after_fee(total_pool, fee_bps)
     if body.mode == "direct" and invitation is None:
         creator_invite_id = secrets.token_hex(32)

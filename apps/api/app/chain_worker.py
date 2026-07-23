@@ -4,7 +4,7 @@ import enum
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import structlog
@@ -13,8 +13,16 @@ from sqlalchemy.exc import IntegrityError
 from tonsdk.boc import Cell  # type: ignore[import-untyped]
 
 from .config import get_settings
+from .control_state import contract_control_key
 from .database import create_database
-from .models import ChainCheckpoint, ReferralAttribution, ReferralReward, Wallet
+from .models import (
+    AdminAuditEvent,
+    ChainCheckpoint,
+    ContractControl,
+    ReferralAttribution,
+    ReferralReward,
+    Wallet,
+)
 from .modules.bank.models import BankChainEvent, BankPayout, BankPosition, BankPositionStatus
 from .modules.duel.models import (
     ChallengeState,
@@ -41,13 +49,45 @@ DUEL_EXPIRE_OFFER = 0x4C4F4F05
 DUEL_EXPIRE_DUEL = 0x4C4F4F06
 DUEL_OPEN_DIRECT_OFFER = 0x4C4F4F08
 DUEL_ACCEPT_DIRECT_OFFER = 0x4C4F4F09
+DUEL_FUND_RESERVE = 0x4C4F4F0A
+DUEL_WITHDRAW_SURPLUS = 0x4C4F4F0B
+DUEL_SET_FEE = 0x4C4F4F0C
+DUEL_SET_TREASURY = 0x4C4F4F0D
+DUEL_SET_OWNER = 0x4C4F4F0E
 DUEL_PAYOUT = 0x4C4F4F11
 DUEL_REFUND = 0x4C4F4F12
 DUEL_PROTOCOL_FEE = 0x4C4F4F13
+DUEL_ADMIN_WITHDRAWAL = 0x4C4F4F14
 
 BANK_CREATE_POSITION = 0x4C424E01
+BANK_SET_PAUSED = 0x4C424E02
+BANK_FUND_RESERVE = 0x4C424E03
+BANK_WITHDRAW_SURPLUS = 0x4C424E04
+BANK_SET_FEE = 0x4C424E05
+BANK_SET_TREASURY = 0x4C424E06
+BANK_SET_OWNER = 0x4C424E07
 BANK_PAYOUT = 0x4C424E11
 BANK_PROTOCOL_FEE = 0x4C424E12
+BANK_ADMIN_WITHDRAWAL = 0x4C424E13
+
+DUEL_SET_PAUSED = 0x4C4F4F07
+
+BANK_ADMIN_OPCODES = {
+    BANK_SET_PAUSED,
+    BANK_FUND_RESERVE,
+    BANK_WITHDRAW_SURPLUS,
+    BANK_SET_FEE,
+    BANK_SET_TREASURY,
+    BANK_SET_OWNER,
+}
+DUEL_ADMIN_OPCODES = {
+    DUEL_SET_PAUSED,
+    DUEL_FUND_RESERVE,
+    DUEL_WITHDRAW_SURPLUS,
+    DUEL_SET_FEE,
+    DUEL_SET_TREASURY,
+    DUEL_SET_OWNER,
+}
 
 HEARTBEAT_FILE = Path("/tmp/loop-worker-heartbeat")  # noqa: S108
 
@@ -96,7 +136,7 @@ def message_value(message: dict[str, Any]) -> int | None:
         return None
 
 
-def decode_body(body_b64: str) -> dict[str, int]:
+def decode_body(body_b64: str) -> dict[str, Any]:
     cells = Cell.one_from_boc(base64.b64decode(body_b64))
     cell = cells[0] if isinstance(cells, list) else cells
     parser = cell.begin_parse()
@@ -161,7 +201,88 @@ def decode_body(body_b64: str) -> dict[str, int]:
         )
     elif opcode == BANK_PROTOCOL_FEE:
         result["position_id"] = parser.read_uint(64)
+    elif opcode in {BANK_SET_PAUSED, DUEL_SET_PAUSED}:
+        result["paused"] = parser.read_uint(1)
+    elif opcode in {
+        BANK_FUND_RESERVE,
+        BANK_WITHDRAW_SURPLUS,
+        DUEL_FUND_RESERVE,
+        DUEL_WITHDRAW_SURPLUS,
+        BANK_ADMIN_WITHDRAWAL,
+        DUEL_ADMIN_WITHDRAWAL,
+    }:
+        result["amount_nano"] = parser.read_coins()
+    elif opcode in {BANK_SET_FEE, DUEL_SET_FEE}:
+        result["fee_bps"] = parser.read_uint(16)
+    elif opcode in {BANK_SET_TREASURY, DUEL_SET_TREASURY}:
+        treasury = parser.read_msg_addr()
+        result["treasury"] = normalize_address(
+            treasury.to_string(is_user_friendly=False)
+        )
+    elif opcode in {BANK_SET_OWNER, DUEL_SET_OWNER}:
+        owner = parser.read_msg_addr()
+        result["owner"] = normalize_address(owner.to_string(is_user_friendly=False))
     return result
+
+
+async def contract_control(
+    db: Any,
+    settings: Any,
+    mode: str,
+) -> ContractControl:
+    address = (
+        settings.bank_contract_address
+        if mode == "bank"
+        else settings.effective_duel_contract_address
+    )
+    key = contract_control_key(mode, settings.ton_network_id, address)
+    state = cast(ContractControl | None, await db.get(ContractControl, key))
+    if state is not None:
+        return state
+    owner = normalize_address(settings.control_admin_wallet)
+    state = ContractControl(
+        key=key,
+        mode=mode,
+        network=settings.ton_network_id,
+        address=normalize_address(address),
+        owner=owner,
+        treasury=owner,
+        fee_bps=settings.bank_fee_bps if mode == "bank" else settings.duel_fee_bps,
+    )
+    db.add(state)
+    await db.flush()
+    return state
+
+
+async def apply_admin_control(
+    db: Any,
+    state: ContractControl,
+    transaction: dict[str, Any],
+    decoded: dict[str, Any],
+) -> None:
+    opcode = decoded["opcode"]
+    if opcode in {BANK_SET_PAUSED, DUEL_SET_PAUSED}:
+        state.paused = bool(decoded["paused"])
+    elif opcode in {BANK_SET_FEE, DUEL_SET_FEE}:
+        state.fee_bps = decoded["fee_bps"]
+    elif opcode in {BANK_SET_TREASURY, DUEL_SET_TREASURY}:
+        state.treasury = decoded["treasury"]
+    elif opcode in {BANK_SET_OWNER, DUEL_SET_OWNER}:
+        state.owner = decoded["owner"]
+    identity = transaction_identity(transaction)
+    if identity is None:
+        return
+    state.last_lt, state.last_tx_hash = identity
+    db.add(
+        AdminAuditEvent(
+            wallet=state.owner,
+            action=f"chain.{state.mode}.{opcode:08x}",
+            target=state.address,
+            payload_json=json.dumps(decoded, separators=(",", ":"), sort_keys=True),
+            status="confirmed",
+            tx_hash=state.last_tx_hash,
+        )
+    )
 
 
 def decode_outgoing(transaction: dict[str, Any]) -> list[dict[str, Any]]:
@@ -257,7 +378,7 @@ async def apply_bank_transaction(
     db: Any,
     settings: Any,
     transaction: dict[str, Any],
-    decoded: dict[str, int],
+    decoded: dict[str, Any],
     outgoing: list[dict[str, Any]],
 ) -> ProjectionResult:
     identity = transaction_identity(transaction)
@@ -276,6 +397,24 @@ async def apply_bank_transaction(
     if existing:
         return ProjectionResult.IGNORED
     opcode = decoded["opcode"]
+    control = await contract_control(db, settings, "bank")
+    if opcode in BANK_ADMIN_OPCODES:
+        await apply_admin_control(db, control, transaction, decoded)
+        db.add(
+            BankChainEvent(
+                network=settings.ton_network_id,
+                account=settings.bank_contract_address,
+                lt=lt,
+                tx_hash=tx_hash,
+                event_index=0,
+                opcode=opcode,
+                payload_json=json.dumps(
+                    {"in": decoded, "out": outgoing}, separators=(",", ":")
+                ),
+                applied=True,
+            )
+        )
+        return ProjectionResult.APPLIED
     if opcode != BANK_CREATE_POSITION:
         return ProjectionResult.IGNORED
     incoming = transaction.get("in_msg") or {}
@@ -342,7 +481,7 @@ async def apply_bank_transaction(
         position.remaining_amount_nano = target
         position.failure_reason = "local intent superseded by permissionless on-chain position"
 
-    fee = position.principal_nano * settings.bank_fee_bps // 10_000
+    fee = position.principal_nano * control.fee_bps // 10_000
     available = position.principal_nano - fee
     older = (
         await db.scalars(
@@ -476,7 +615,7 @@ async def apply_duel_transaction(
     db: Any,
     settings: Any,
     transaction: dict[str, Any],
-    decoded: dict[str, int],
+    decoded: dict[str, Any],
     outgoing: list[dict[str, Any]],
 ) -> ProjectionResult:
     identity = transaction_identity(transaction)
@@ -496,6 +635,9 @@ async def apply_duel_transaction(
     if existing:
         return ProjectionResult.IGNORED
     opcode = decoded["opcode"]
+    control = await contract_control(db, settings, "duel")
+    if opcode in DUEL_ADMIN_OPCODES:
+        await apply_admin_control(db, control, transaction, decoded)
     incoming = transaction.get("in_msg") or {}
     source = message_address(incoming, "source", "src", "source_address")
     value = message_value(incoming)
@@ -520,7 +662,7 @@ async def apply_duel_transaction(
             return ProjectionResult.IGNORED
         if offer is None:
             payout = decoded["total_pool_nano"] - (
-                decoded["total_pool_nano"] * settings.duel_fee_bps // 10_000
+                decoded["total_pool_nano"] * control.fee_bps // 10_000
             )
             offer = MatchmakingOffer(
                 onchain_offer_id=decoded["offer_id"],
@@ -534,7 +676,7 @@ async def apply_duel_transaction(
                 total_pool_nano=decoded["total_pool_nano"],
                 stake_nano=stake,
                 opponent_stake_nano=decoded["total_pool_nano"] - stake,
-                fee_bps=settings.duel_fee_bps,
+                fee_bps=control.fee_bps,
                 payout_nano=payout,
                 commitment_hex=f"{decoded['commitment']:064x}",
                 invite_id_hex=(
@@ -563,7 +705,7 @@ async def apply_duel_transaction(
             or decoded["expires_at"] != int(offer.expires_at.timestamp())
         ):
             payout = decoded["total_pool_nano"] - (
-                decoded["total_pool_nano"] * settings.duel_fee_bps // 10_000
+                decoded["total_pool_nano"] * control.fee_bps // 10_000
             )
             offer.user_id = None
             offer.wallet_id = None
@@ -573,7 +715,7 @@ async def apply_duel_transaction(
             offer.total_pool_nano = decoded["total_pool_nano"]
             offer.stake_nano = stake
             offer.opponent_stake_nano = decoded["total_pool_nano"] - stake
-            offer.fee_bps = settings.duel_fee_bps
+            offer.fee_bps = control.fee_bps
             offer.payout_nano = payout
             offer.commitment_hex = f"{decoded['commitment']:064x}"
             offer.invite_id_hex = (
