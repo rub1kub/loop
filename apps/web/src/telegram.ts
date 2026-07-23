@@ -3,6 +3,8 @@ import type { TelegramWebApp } from './types';
 const mockTelegram = import.meta.env.VITE_MOCK_TELEGRAM === 'true';
 const telegramSdkUrl = 'https://telegram.org/js/telegram-web-app.js?63';
 const immersiveTelegramPlatforms = new Set(['android', 'android_x', 'ios']);
+const telegramChromeColor = '#000000';
+const presentationGuardsInstalled = new WeakSet<TelegramWebApp>();
 let telegramSdkPromise: Promise<void> | null = null;
 
 export function telegram(): TelegramWebApp | undefined {
@@ -44,33 +46,56 @@ export function prefersTelegramFullscreen(platform: string | undefined): boolean
   return immersiveTelegramPlatforms.has(platform?.trim().toLowerCase() ?? '');
 }
 
+function applyTelegramChrome(app: TelegramWebApp): void {
+  app.setHeaderColor?.(telegramChromeColor);
+  app.setBackgroundColor?.(telegramChromeColor);
+  app.setBottomBarColor?.(telegramChromeColor);
+}
+
+function applyTelegramLaunchMode(app: TelegramWebApp): void {
+  const mobile = prefersTelegramFullscreen(app.platform);
+  try {
+    if (app.isVersionAtLeast?.('8.0') && !mobile && app.isFullscreen) {
+      app.exitFullscreen?.();
+    }
+    app.expand?.();
+    if (app.isVersionAtLeast?.('8.0') && mobile && !app.isFullscreen) {
+      app.requestFullscreen?.();
+    }
+  } catch {
+    // Partial desktop bridges must still retain Telegram's regular expanded mode.
+    app.expand?.();
+  }
+}
+
+function installTelegramPresentationGuards(app: TelegramWebApp): void {
+  if (presentationGuardsInstalled.has(app)) return;
+  presentationGuardsInstalled.add(app);
+
+  const keepChromeBlack = () => applyTelegramChrome(app);
+  const keepDesktopFullsize = () => {
+    applyTelegramChrome(app);
+    if (!prefersTelegramFullscreen(app.platform) && !app.isFullscreen) app.expand?.();
+  };
+
+  app.onEvent?.('themeChanged', keepChromeBlack);
+  app.onEvent?.('activated', keepChromeBlack);
+  app.onEvent?.('fullscreenChanged', keepDesktopFullsize);
+}
+
 export function initializeTelegram(): boolean {
   if (isMockTelegram()) return true;
   const app = telegram();
   if (!app) return false;
-  app.setHeaderColor?.('#000000');
-  app.setBackgroundColor?.('#000000');
-  app.setBottomBarColor?.('#000000');
+  applyTelegramChrome(app);
   app.MainButton?.hide();
-  app.expand?.();
   app.disableVerticalSwipes?.();
   app.enableClosingConfirmation?.();
   app.ready?.();
-  if (app.isVersionAtLeast?.('8.0')) {
-    try {
-      if (prefersTelegramFullscreen(app.platform)) {
-        if (!app.isFullscreen) app.requestFullscreen?.();
-      } else if (app.isFullscreen) {
-        app.exitFullscreen?.();
-      }
-    } catch {
-      // Older or partially implemented clients keep the regular expanded mode.
-    }
-  }
+  installTelegramPresentationGuards(app);
+  applyTelegramLaunchMode(app);
   // Telegram can restore its chrome theme during ready(); apply LOOP's monochrome chrome once more.
-  app.setHeaderColor?.('#000000');
-  app.setBackgroundColor?.('#000000');
-  app.setBottomBarColor?.('#000000');
+  applyTelegramChrome(app);
   return true;
 }
 

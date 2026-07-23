@@ -12,7 +12,9 @@ The application reads Telegram's signed launch payload immediately and loads the
 - HapticFeedback for primary actions, success, warning, and error;
 - fullscreen on native iOS/Android only; Desktop, macOS, Web and unknown clients stay in
   Telegram's regular expanded window;
-- theme parameters while retaining LOOP's monochrome product palette.
+- theme parameters while retaining LOOP's monochrome product palette; the header, page
+  background and bottom bar are restored to `#000000` after theme, activation and fullscreen
+  events.
 
 Only the raw signed `initData` string is sent to `/api/v1/auth/telegram`. It comes from `Telegram.WebApp.initData` when the bridge is ready, or from Telegram's original `tgWebAppData` launch parameter as a desktop fallback. The API validates the Bot API HMAC construction, duplicate keys, age, and future skew before issuing a bounded session. `initDataUnsafe` and `tgWebAppStartParam` are display hints until the server verifies the signed payload. Raw authentication data is not persisted in browser storage.
 
@@ -58,8 +60,8 @@ The application configures the public bot name, description, short description, 
 
 BotFather's Main App launch mode should remain **Fullsize**, not **Fullscreen**. LOOP promotes
 native iOS/Android sessions to fullscreen after initialization and explicitly exits fullscreen on
-desktop-class clients. This avoids a full-monitor desktop experience without sacrificing the
-immersive mobile layout.
+desktop-class clients, then calls `expand()` again after Telegram confirms the transition. This
+avoids a full-monitor desktop experience without sacrificing the immersive mobile layout.
 
 BotFather-only presentation settings cannot be changed through Bot API:
 
