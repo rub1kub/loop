@@ -1002,12 +1002,26 @@ details[open] > summary .disclosure-indicator svg {
   margin-top: 24px;
 }
 
-.stake-input > span {
+.stake-input-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 7px;
+}
+
+.stake-input-heading > span:first-child {
   color: #707070;
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.18em;
+}
+
+.stake-edit-cue {
+  color: #aaaab0;
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+  transition: color 150ms ease;
 }
 
 .stake-input > div {
@@ -1015,8 +1029,24 @@ details[open] > summary .disclosure-indicator svg {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   padding: 10px 14px;
+  border: 1px solid #444;
   border-radius: 16px;
   background: #0d0d0d;
+  cursor: text;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease;
+}
+
+.stake-input > div:focus-within {
+  border-color: #f4f4f4;
+  background: #121212;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 10%);
+}
+
+.stake-input:focus-within .stake-edit-cue {
+  color: #fff;
 }
 
 .stake-input input {

@@ -97,8 +97,16 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await expect(page.getByRole('heading', { name: 'DUEL' })).toBeVisible();
   expect((await page.locator('.mode-header').boundingBox())!.y).toBeGreaterThanOrEqual(100);
   const stableShellHeight = (await page.locator('.app-shell').boundingBox())!.height;
-  const stakeInput = page.locator('.stake-input input');
+  const stakeInput = page.getByLabel('Ставка в GRAM');
+  await expect(page.getByText('ИЗМЕНИТЬ')).toBeVisible();
+  await expect(page.getByText('Соперник должен внести')).toBeVisible();
+  await expect(page.locator('.stake-input > div')).toHaveCSS('border-top-width', '1px');
+  await expect(page.locator('.stake-input > div')).toHaveCSS('border-radius', '16px');
   await stakeInput.fill('1');
+  await expect(page.locator('.stake-input > div')).toHaveCSS(
+    'border-top-color',
+    'rgb(244, 244, 244)',
+  );
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
   const initialViewport = page.viewportSize()!;
   await page.setViewportSize({ width: 390, height: 520 });
@@ -109,7 +117,6 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await expect(page.getByText('РАВНЫЕ УСЛОВИЯ')).toBeVisible();
   await expect(page.locator('.duel-terms')).toContainText(/1 GRAM/);
   await expect(page.locator('.duel-terms')).toContainText(/1[,.]95 GRAM/);
-  await expect(page.locator('.stake-input > div')).toHaveCSS('border-bottom-width', '0px');
   await expect(page.locator('.duel-primary-terms > div').first()).toHaveCSS(
     'border-bottom-width',
     '0px',

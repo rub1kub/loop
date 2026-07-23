@@ -315,12 +315,16 @@ export function DuelScreen({
           ) : (
             <>
               <label className="stake-input">
-                <span>ТВОЯ СТАВКА</span>
+                <span className="stake-input-heading">
+                  <span>ТВОЯ СТАВКА</span>
+                  <span className="stake-edit-cue">ИЗМЕНИТЬ</span>
+                </span>
                 <div>
                   <input
                     inputMode="decimal"
                     value={stake}
                     onChange={(event) => setStake(event.target.value)}
+                    aria-label="Ставка в GRAM"
                   />
                   <b>GRAM</b>
                 </div>
@@ -334,7 +338,10 @@ export function DuelScreen({
 
           <dl className="duel-terms duel-primary-terms">
             <Term label="Твоя ставка" value={`${formatGram(terms.stake, 3)} GRAM`} />
-            <Term label="Ставка соперника" value={`${formatGram(terms.opponentStake, 3)} GRAM`} />
+            <Term
+              label={invite ? 'Ставка создателя' : 'Соперник должен внести'}
+              value={`${formatGram(terms.opponentStake, 3)} GRAM`}
+            />
             <Term label="Выплата победителю" value={`${formatGram(payoutNano, 3)} GRAM`} />
           </dl>
           <p className="duel-deadline-rule">
