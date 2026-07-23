@@ -30,6 +30,7 @@ Each projection checks contract address, message direction, sender, value, opcod
 - a separate one-hour owner session in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie scoped to `/api/v1/control`;
 - one-time TON proof challenges bound to the production origin, configured owner wallet and network;
 - durable application intake switches and an append-only administrative action log;
+- disabled TON Connect telemetry and a release-pinned allowlist of canonical wallet bridges;
 - rate limiting and bounded request schemas;
 - SQL row locks and partial unique constraints for races;
 - redacted structured logs and no secret material in API responses;

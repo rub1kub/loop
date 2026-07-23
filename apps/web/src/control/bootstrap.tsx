@@ -17,7 +17,7 @@ document
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <TonConnectUIProvider manifestUrl={manifestUrl}>
+    <TonConnectUIProvider manifestUrl={manifestUrl} analytics={{ mode: 'off' }}>
       <ControlApp />
     </TonConnectUIProvider>
   </StrictMode>,
