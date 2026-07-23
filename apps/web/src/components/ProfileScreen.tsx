@@ -18,6 +18,7 @@ import { api } from '../api';
 import { haptic, isMockTelegram, telegram } from '../telegram';
 import { formatGram } from '../ton';
 import type { BankPosition, Duel, Profile, Rating, Referral } from '../types';
+import { DisclosureIndicator } from './DisclosureIndicator';
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 7)}…${address.slice(-5)}`;
@@ -38,14 +39,12 @@ export function ProfileScreen({
   bankHistory,
   duels,
   onReplay,
-  onSetOnboarding,
 }: {
   profile: Profile;
   rating: Rating | null;
   bankHistory: BankPosition[];
   duels: Duel[];
   onReplay: () => void;
-  onSetOnboarding: (enabled: boolean) => Promise<void>;
 }) {
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
@@ -143,7 +142,7 @@ export function ProfileScreen({
             <ShieldCheck aria-hidden="true" />
             КОШЕЛЁК И ON-CHAIN PROOFS
           </span>
-          <small>{profile.wallet ? 'ПОДТВЕРЖДЁН' : 'НЕ ПОДКЛЮЧЁН'}</small>
+          <DisclosureIndicator />
         </summary>
         <div className="profile-proof-content">
           <div className="section-label">
@@ -236,16 +235,6 @@ export function ProfileScreen({
                   <X aria-hidden="true" />
                 </button>
               </div>
-              <label className="settings-toggle">
-                <span>
-                  <InfinityIcon /> Показывать onboarding
-                </span>
-                <input
-                  type="checkbox"
-                  checked={profile.user.onboarding_enabled}
-                  onChange={(event) => void onSetOnboarding(event.target.checked)}
-                />
-              </label>
               <button
                 className="settings-row"
                 onClick={() => {
@@ -254,7 +243,7 @@ export function ProfileScreen({
                 }}
               >
                 <span>
-                  <InfinityIcon /> Повторить onboarding
+                  <InfinityIcon /> Повторить обучение
                 </span>
                 <ArrowRight />
               </button>

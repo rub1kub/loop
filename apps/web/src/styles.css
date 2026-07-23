@@ -796,7 +796,7 @@ a:focus-visible {
   display: flex;
   min-height: 52px;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   cursor: pointer;
   list-style: none;
 }
@@ -812,6 +812,51 @@ a:focus-visible {
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.12em;
+}
+
+.disclosure-indicator {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0 9px;
+  border: 1px solid #343434;
+  border-radius: 999px;
+  color: #b8b8bd;
+  font-size: 8px;
+  font-weight: 760;
+  letter-spacing: 0.11em;
+  line-height: 1;
+}
+
+.disclosure-indicator svg {
+  width: 12px;
+  height: 12px;
+  transition: transform 180ms ease;
+}
+
+.disclosure-close-label {
+  display: none;
+}
+
+details[open] > summary .disclosure-open-label {
+  display: none;
+}
+
+details[open] > summary .disclosure-close-label {
+  display: inline;
+}
+
+details[open] > summary .disclosure-indicator svg {
+  transform: rotate(180deg);
+}
+
+.technical-details summary:active .disclosure-indicator,
+.profile-proof-details summary:active .disclosure-indicator,
+.rating-details summary:active .disclosure-indicator {
+  border-color: #666;
+  background: #171717;
 }
 
 .technical-details .detail-list {
@@ -969,12 +1014,14 @@ a:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  border-bottom: 1px solid #444;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: #0d0d0d;
 }
 
 .stake-input input {
   width: 100%;
-  padding: 2px 0 7px;
+  padding: 0;
   border: 0;
   outline: 0;
   background: transparent;
@@ -991,14 +1038,11 @@ a:focus-visible {
 }
 
 .duel-equal-rule {
-  display: grid;
-  grid-template-columns: auto 1fr;
+  display: flex;
   align-items: baseline;
-  column-gap: 10px;
+  gap: 10px;
   margin-top: 13px;
-  padding: 12px 0;
-  border-top: 1px solid #292929;
-  border-bottom: 1px solid #292929;
+  padding: 0 2px;
 }
 
 .duel-equal-rule strong {
@@ -1014,18 +1058,11 @@ a:focus-visible {
   letter-spacing: 0.15em;
 }
 
-.duel-equal-rule p {
-  grid-column: 1 / -1;
-  margin: 5px 0 0;
-  color: #8a8a8e;
-  font-size: 11px;
-}
-
 .duel-terms {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 15px 0 0;
-  border-top: 1px solid #292929;
+  gap: 8px;
 }
 
 .duel-terms div {
@@ -1033,8 +1070,7 @@ a:focus-visible {
   min-height: 48px;
   align-content: center;
   gap: 3px;
-  border-top: 0;
-  border-bottom: 1px solid #292929;
+  border: 0;
 }
 
 .duel-terms div:nth-child(odd) {
@@ -1043,7 +1079,7 @@ a:focus-visible {
 
 .duel-terms div:nth-child(even) {
   padding-left: 12px;
-  border-left: 1px solid #292929;
+  border-left: 0;
 }
 
 .duel-terms dd {
@@ -1052,6 +1088,10 @@ a:focus-visible {
 
 .duel-primary-terms {
   grid-template-columns: 1fr;
+  gap: 7px;
+  padding: 13px 15px;
+  border-radius: 16px;
+  background: #0d0d0d;
 }
 
 .duel-primary-terms div,
@@ -1063,8 +1103,7 @@ a:focus-visible {
   justify-content: space-between;
   gap: 16px;
   padding: 0;
-  border-right: 0;
-  border-left: 0;
+  border: 0;
 }
 
 .duel-primary-terms dd {
@@ -1092,6 +1131,13 @@ a:focus-visible {
   color: #8a8a8e;
   font-size: 11px;
   line-height: 1.45;
+}
+
+.duel-breakdown {
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  background: #0d0d0d;
 }
 
 .invite-banner {
@@ -1444,9 +1490,15 @@ a:focus-visible {
 
 .profile-proof-details summary small,
 .rating-details summary small {
+  margin-left: auto;
   color: #77777c;
   font-size: 9px;
   letter-spacing: 0.09em;
+}
+
+.profile-proof-details summary small + .disclosure-indicator,
+.rating-details summary small + .disclosure-indicator {
+  margin-left: 0;
 }
 
 .profile-proof-content {

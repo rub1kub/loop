@@ -11,6 +11,7 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await page.goto('/?screen=bank-empty');
   await emulateFullscreenControls();
   await expect(page.getByRole('heading', { name: 'BANK' })).toBeVisible();
+  await expect(page.getByText(/Вносишь GRAM и выбираешь цель/)).toHaveCount(0);
   await expect(page.locator('.screen-stage')).toHaveCSS('transform', 'none');
   const headerBox = await page.locator('.mode-header').boundingBox();
   expect(headerBox).not.toBeNull();
@@ -78,6 +79,7 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   ).toBeGreaterThanOrEqual(100);
   await expect(page.getByText('4 GRAM')).toBeVisible();
   await expect(page.getByText(/позицию нельзя отменить или вернуть досрочно/i)).toBeVisible();
+  await expect(page.locator('.technical-details .disclosure-open-label')).toBeVisible();
   await expect(page.getByRole('button', { name: 'ПОДТВЕРДИТЬ В TON' })).toBeVisible();
 
   await page.goto('/?screen=bank-active');
@@ -107,13 +109,20 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await expect(page.getByText('РАВНЫЕ УСЛОВИЯ')).toBeVisible();
   await expect(page.locator('.duel-terms')).toContainText(/1 GRAM/);
   await expect(page.locator('.duel-terms')).toContainText(/1[,.]95 GRAM/);
+  await expect(page.locator('.stake-input > div')).toHaveCSS('border-bottom-width', '0px');
+  await expect(page.locator('.duel-primary-terms > div').first()).toHaveCSS(
+    'border-bottom-width',
+    '0px',
+  );
   await expect(page.getByText(/открой результат за 5 минут/i)).toBeVisible();
   expect(
     await page
       .locator('.duel-deadline-rule')
       .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
   ).toBeGreaterThanOrEqual(11);
+  await expect(page.locator('.duel-breakdown .disclosure-open-label')).toBeVisible();
   await page.getByText('РАСЧЁТ И ПРАВИЛА').click();
+  await expect(page.locator('.duel-breakdown .disclosure-close-label')).toBeVisible();
   await expect(page.getByText('Общий пул')).toBeVisible();
   await expect(page.getByText('2 GRAM')).toBeVisible();
   await page.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }).click();
@@ -130,6 +139,7 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await expect(page.getByText('ДО LOOP')).toBeVisible();
   await expect(page.getByText(/Главный вклад:/)).toBeVisible();
   await expect(page.getByText('Репутация участия, а не баланс.', { exact: false })).toBeVisible();
+  await expect(page.locator('.rating-details .disclosure-open-label')).toHaveCount(2);
   expect(
     await page
       .locator('.rating-explainer')
@@ -144,6 +154,7 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   expect((await page.locator('.profile-identity').boundingBox())!.y).toBeGreaterThanOrEqual(104);
   await expect(page.getByText('LOOP SCORE')).toBeVisible();
   await expect(page.getByText('КОШЕЛЁК И ON-CHAIN PROOFS')).toBeVisible();
+  await expect(page.locator('.profile-proof-details .disclosure-open-label')).toBeVisible();
   expect(
     await page
       .locator('.profile-row small')
@@ -152,6 +163,7 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   ).toBeGreaterThanOrEqual(11);
   await expect(page.getByText('PLUSH BRICK')).not.toBeVisible();
   await page.getByText('КОШЕЛЁК И ON-CHAIN PROOFS').click();
+  await expect(page.locator('.profile-proof-details .disclosure-close-label')).toBeVisible();
   await expect(page.getByText('PLUSH BRICK')).toBeVisible();
   const tabBar = page.getByRole('navigation', { name: 'Основная навигация' });
   const tabBox = await tabBar.boundingBox();

@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../api';
+import { DisclosureIndicator } from '../../components/DisclosureIndicator';
 import { haptic, isMockTelegram, readDuelSecret, storeDuelSecret, telegram } from '../../telegram';
 import {
   buildActionTransaction,
@@ -327,7 +328,6 @@ export function DuelScreen({
               <div className="duel-equal-rule">
                 <strong>50/50</strong>
                 <span>РАВНЫЕ УСЛОВИЯ</span>
-                <p>Одинаковая ставка. Победителя определяет контракт.</p>
               </div>
             </>
           )}
@@ -343,7 +343,10 @@ export function DuelScreen({
             выплату.
           </p>
           <details className="technical-details duel-breakdown">
-            <summary>РАСЧЁТ И ПРАВИЛА</summary>
+            <summary>
+              <span>РАСЧЁТ И ПРАВИЛА</span>
+              <DisclosureIndicator />
+            </summary>
             <dl className="detail-list">
               <Term label="Общий пул" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
               <Term

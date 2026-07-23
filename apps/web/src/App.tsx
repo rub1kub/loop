@@ -177,7 +177,6 @@ export default function App() {
         bankHistory={state.bankHistory}
         duels={state.duels}
         onReplay={() => state.replayOnboarding()}
-        onSetOnboarding={(enabled) => state.setOnboardingEnabled(enabled)}
       />
     ),
   }[state.activeTab];

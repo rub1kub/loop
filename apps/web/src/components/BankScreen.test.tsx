@@ -54,7 +54,7 @@ const position: BankPosition = {
 describe('BankScreen', () => {
   afterEach(cleanup);
 
-  it('explains an empty BANK before asking for a deposit', () => {
+  it('keeps the empty BANK focused after the one-time onboarding', () => {
     render(
       <BankScreen
         profile={profile}
@@ -65,9 +65,9 @@ describe('BankScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Очередь выплат. Твоя банка.' })).toBeVisible();
-    expect(screen.getByText(/Следующие вклады сначала наполняют ранние банки/)).toBeVisible();
-    expect(screen.getByText(/Досрочной отмены и возврата нет/)).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Твоя очередь начинается здесь.' })).toBeVisible();
+    expect(screen.queryByText(/Следующие вклады сначала наполняют ранние банки/)).toBeNull();
+    expect(screen.queryByText(/Досрочной отмены и возврата нет/)).toBeNull();
     expect(screen.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ' })).toBeVisible();
     expect(screen.queryByTestId('bank-sand-level')).not.toBeInTheDocument();
   });

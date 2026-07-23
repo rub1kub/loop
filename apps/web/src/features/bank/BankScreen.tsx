@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../api';
+import { DisclosureIndicator } from '../../components/DisclosureIndicator';
 import { haptic, isMockTelegram, setBackAction } from '../../telegram';
 import { buildBankPositionTransaction, formatGram, newOfferId, parseGram } from '../../ton';
 import type { BankPosition, BankPreview, Profile, RatingPulse } from '../../types';
@@ -277,7 +278,10 @@ export function BankScreen({
                   </p>
                 </div>
                 <details className="technical-details">
-                  <summary>ТЕХНИЧЕСКИЕ ДАННЫЕ</summary>
+                  <summary>
+                    <span>ТЕХНИЧЕСКИЕ ДАННЫЕ</span>
+                    <DisclosureIndicator />
+                  </summary>
                   <dl className="detail-list">
                     <Detail label="Сеть" value="TON testnet" />
                     <Detail
@@ -364,12 +368,7 @@ export function BankScreen({
         </div>
       ) : (
         <div className="bank-state bank-empty-state">
-          <h2>Очередь выплат. Твоя банка.</h2>
-          <p>
-            Вносишь GRAM и выбираешь цель. Следующие вклады сначала наполняют ранние банки. На 100%
-            контракт отправляет выплату.
-          </p>
-          <p className="bank-risk">Срок не фиксирован. Досрочной отмены и возврата нет.</p>
+          <h2>Твоя очередь начинается здесь.</h2>
           <div className="bank-cycle-metrics is-empty">
             <CycleMetric value={pulse?.active_bank ?? '—'} label="БАНОК В ЦИКЛЕ" />
             <CycleMetric value={pulse?.active_participants ?? '—'} label="УЧАСТНИКОВ СЕЙЧАС" />

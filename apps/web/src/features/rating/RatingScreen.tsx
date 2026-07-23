@@ -2,6 +2,7 @@ import { CheckCircle, ShieldCheck, UsersThree } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
 
+import { DisclosureIndicator } from '../../components/DisclosureIndicator';
 import type { Rating, RatingEntry } from '../../types';
 
 type RatingList = 'all' | 'circle';
@@ -122,7 +123,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
             <ShieldCheck aria-hidden="true" />
             МОЯ СТАТИСТИКА И ФОРМУЛА
           </span>
-          <small>{rating.me.proofs} PROOFS</small>
+          <DisclosureIndicator />
         </summary>
         <div className="rating-proof-line" aria-label="Надёжность рейтинга">
           <div>
@@ -156,7 +157,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
             <UsersThree aria-hidden="true" />
             СИСТЕМА СЕЙЧАС
           </span>
-          <small>LIVE</small>
+          <DisclosureIndicator />
         </summary>
         <div className="rating-pulse">
           <Metric value={rating.pulse.active_participants} label="УЧАСТНИКОВ" />
