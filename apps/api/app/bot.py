@@ -186,7 +186,7 @@ async def configure_bot(bot: Bot, settings: Settings) -> None:
     if (
         not isinstance(menu, MenuButtonWebApp)
         or menu.text != BOT_MENU_TEXT
-        or menu.web_app.url != settings.public_origin
+        or menu.web_app.url.rstrip("/") != settings.public_origin.rstrip("/")
     ):
         await apply_bot_setting(
             lambda: bot.set_chat_menu_button(

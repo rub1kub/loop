@@ -74,7 +74,7 @@ async def test_bot_configuration_only_mutates_drifted_metadata() -> None:
         async def get_chat_menu_button(self):
             return MenuButtonWebApp(
                 text=BOT_MENU_TEXT,
-                web_app=WebAppInfo(url=settings.public_origin),
+                web_app=WebAppInfo(url=f"{settings.public_origin}/"),
             )
 
     bot = FakeBot()
