@@ -2,6 +2,7 @@ import type { TelegramWebApp } from './types';
 
 const mockTelegram = import.meta.env.VITE_MOCK_TELEGRAM === 'true';
 const telegramSdkUrl = 'https://telegram.org/js/telegram-web-app.js?63';
+const immersiveTelegramPlatforms = new Set(['android', 'android_x', 'ios']);
 let telegramSdkPromise: Promise<void> | null = null;
 
 export function telegram(): TelegramWebApp | undefined {
@@ -39,6 +40,10 @@ export function loadTelegramSdk(): Promise<void> {
   return telegramSdkPromise;
 }
 
+export function prefersTelegramFullscreen(platform: string | undefined): boolean {
+  return immersiveTelegramPlatforms.has(platform?.trim().toLowerCase() ?? '');
+}
+
 export function initializeTelegram(): boolean {
   if (isMockTelegram()) return true;
   const app = telegram();
@@ -51,9 +56,13 @@ export function initializeTelegram(): boolean {
   app.disableVerticalSwipes?.();
   app.enableClosingConfirmation?.();
   app.ready?.();
-  if (app.isVersionAtLeast?.('8.0') && !app.isFullscreen) {
+  if (app.isVersionAtLeast?.('8.0')) {
     try {
-      app.requestFullscreen?.();
+      if (prefersTelegramFullscreen(app.platform)) {
+        if (!app.isFullscreen) app.requestFullscreen?.();
+      } else if (app.isFullscreen) {
+        app.exitFullscreen?.();
+      }
     } catch {
       // Older or partially implemented clients keep the regular expanded mode.
     }
@@ -135,6 +144,10 @@ export async function removeDuelSecret(offerId: number): Promise<void> {
 export function toggleFullscreen(): void {
   const app = telegram();
   if (app?.isVersionAtLeast?.('8.0')) {
+    if (!prefersTelegramFullscreen(app.platform)) {
+      if (app.isFullscreen) app.exitFullscreen?.();
+      return;
+    }
     if (app.isFullscreen) app.exitFullscreen?.();
     else app.requestFullscreen?.();
     return;

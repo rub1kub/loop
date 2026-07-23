@@ -45,12 +45,13 @@ describe('Telegram launch compatibility', () => {
     expect(telegramInitData()).toBe('sdk-init-data');
   });
 
-  it('preserves the launch mode configured in BotFather', () => {
+  it('preserves fullscreen when a mobile client already launched in that mode', () => {
     const exitFullscreen = vi.fn();
     const requestFullscreen = vi.fn();
     window.Telegram = {
       WebApp: {
         initData: 'sdk-init-data',
+        platform: 'ios',
         isFullscreen: true,
         isVersionAtLeast: () => true,
         exitFullscreen,
@@ -70,6 +71,7 @@ describe('Telegram launch compatibility', () => {
     window.Telegram = {
       WebApp: {
         initData: 'sdk-init-data',
+        platform: 'android',
         isFullscreen: false,
         isVersionAtLeast: () => true,
         exitFullscreen,
@@ -81,5 +83,48 @@ describe('Telegram launch compatibility', () => {
     expect(initializeTelegram()).toBe(true);
     expect(requestFullscreen).toHaveBeenCalledOnce();
     expect(exitFullscreen).not.toHaveBeenCalled();
+  });
+
+  it.each(['tdesktop', 'macos', 'web', 'weba', 'webk', 'unknown'])(
+    'exits fullscreen on non-mobile Telegram platform %s',
+    (platform) => {
+      const exitFullscreen = vi.fn();
+      const requestFullscreen = vi.fn();
+      window.Telegram = {
+        WebApp: {
+          initData: 'sdk-init-data',
+          platform,
+          isFullscreen: true,
+          isVersionAtLeast: () => true,
+          exitFullscreen,
+          requestFullscreen,
+          MainButton: { hide: vi.fn() },
+        } as unknown as TelegramWebApp,
+      };
+
+      expect(initializeTelegram()).toBe(true);
+      expect(exitFullscreen).toHaveBeenCalledOnce();
+      expect(requestFullscreen).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not request fullscreen for a regular desktop launch', () => {
+    const exitFullscreen = vi.fn();
+    const requestFullscreen = vi.fn();
+    window.Telegram = {
+      WebApp: {
+        initData: 'sdk-init-data',
+        platform: 'tdesktop',
+        isFullscreen: false,
+        isVersionAtLeast: () => true,
+        exitFullscreen,
+        requestFullscreen,
+        MainButton: { hide: vi.fn() },
+      } as unknown as TelegramWebApp,
+    };
+
+    expect(initializeTelegram()).toBe(true);
+    expect(exitFullscreen).not.toHaveBeenCalled();
+    expect(requestFullscreen).not.toHaveBeenCalled();
   });
 });
