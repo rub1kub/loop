@@ -33,27 +33,27 @@ MISSED_REVEAL_POINTS = -40
 RATING_FORMULA = [
     RatingFormulaItem(
         code="bank_payout",
-        label="Выплата BANK с on-chain proof",
+        label="Подтверждённая выплата BANK",
         points=BANK_PAYOUT_POINTS,
     ),
     RatingFormulaItem(
         code="duel_settlement",
-        label="Завершённый DUEL с on-chain proof",
+        label="Подтверждённый результат DUEL",
         points=DUEL_SETTLEMENT_POINTS,
     ),
     RatingFormulaItem(
         code="timely_reveal",
-        label="Раскрытие результата без таймаута",
+        label="Результат открыт вовремя",
         points=TIMELY_REVEAL_POINTS,
     ),
     RatingFormulaItem(
         code="qualified_referral",
-        label="Друг с подтверждённым on-chain действием",
+        label="Друг с подтверждённым действием в TON",
         points=QUALIFIED_REFERRAL_POINTS,
     ),
     RatingFormulaItem(
         code="missed_reveal",
-        label="Пропущенное раскрытие DUEL",
+        label="Результат DUEL не открыт вовремя",
         points=MISSED_REVEAL_POINTS,
     ),
 ]

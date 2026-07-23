@@ -167,15 +167,15 @@ const demoRating: Rating = {
     proofs_24h: 46,
   },
   formula: [
-    { code: 'bank_payout', label: 'Выплата BANK с on-chain proof', points: 100 },
-    { code: 'duel_settlement', label: 'Завершённый DUEL с on-chain proof', points: 60 },
-    { code: 'timely_reveal', label: 'Раскрытие результата без таймаута', points: 20 },
+    { code: 'bank_payout', label: 'Подтверждённая выплата BANK', points: 100 },
+    { code: 'duel_settlement', label: 'Подтверждённый результат DUEL', points: 60 },
+    { code: 'timely_reveal', label: 'Результат открыт вовремя', points: 20 },
     {
       code: 'qualified_referral',
-      label: 'Друг с подтверждённым on-chain действием',
+      label: 'Друг с подтверждённым действием в TON',
       points: 25,
     },
-    { code: 'missed_reveal', label: 'Пропущенное раскрытие DUEL', points: -40 },
+    { code: 'missed_reveal', label: 'Результат DUEL не открыт вовремя', points: -40 },
   ],
 };
 

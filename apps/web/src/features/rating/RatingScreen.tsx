@@ -13,10 +13,17 @@ const levelThresholds = [
   { level: 'LOOP', score: 1_000 },
 ] as const;
 
+const levelLabels: Record<RatingEntry['level'], string> = {
+  SIGNAL: 'СИГНАЛ',
+  PULSE: 'ПУЛЬС',
+  ORBIT: 'ОРБИТА',
+  LOOP: 'LOOP',
+};
+
 const driverLabels: Record<string, string> = {
   bank_payout: 'выплаты BANK',
   duel_settlement: 'завершённые DUEL',
-  timely_reveal: 'результаты без таймаута',
+  timely_reveal: 'результаты без просрочек',
   qualified_referral: 'подтверждённые друзья',
 };
 
@@ -27,13 +34,13 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
     return (
       <section className="screen rating-screen" aria-labelledby="rating-title">
         <header className="mode-header">
-          <p className="eyebrow">ON-CHAIN REPUTATION</p>
-          <h1 id="rating-title">RATING</h1>
+          <p className="eyebrow">ПОДТВЕРЖДЁННАЯ РЕПУТАЦИЯ</p>
+          <h1 id="rating-title">РЕЙТИНГ</h1>
         </header>
         <div className="rating-unavailable">
           <span className="waiting-ring" aria-hidden="true" />
           <strong>Собираем подтверждённые действия.</strong>
-          <p>Рейтинг появится, когда индексатор синхронизируется с TON.</p>
+          <p>Рейтинг появится, когда LOOP сверит данные с TON.</p>
         </div>
       </section>
     );
@@ -56,15 +63,15 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
   return (
     <section className="screen rating-screen" aria-labelledby="rating-title">
       <header className="mode-header">
-        <p className="eyebrow">SEASON · {rating.season_name}</p>
-        <h1 id="rating-title">RATING</h1>
+        <p className="eyebrow">СЕЗОН · {rating.season_name}</p>
+        <h1 id="rating-title">РЕЙТИНГ</h1>
       </header>
 
       <div className="rating-score">
-        <p className="eyebrow">ТВОЙ LOOP SCORE</p>
+        <p className="eyebrow">ТВОЙ СЧЁТ LOOP</p>
         <strong>{rating.me.score}</strong>
         <div className="rating-badges">
-          <span>{rating.me.level}</span>
+          <span>{levelLabels[rating.me.level]}</span>
         </div>
         <div className="rating-focus">
           <span>
@@ -72,14 +79,14 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
             <small>МЕСТО В СЕЗОНЕ</small>
           </span>
           <span>
-            <b>{nextLevel ? nextLevel.score - rating.me.score : 'MAX'}</b>
-            <small>{nextLevel ? `ДО ${nextLevel.level}` : 'УРОВЕНЬ LOOP'}</small>
+            <b>{nextLevel ? nextLevel.score - rating.me.score : 'ПРЕДЕЛ'}</b>
+            <small>{nextLevel ? `ДО ${levelLabels[nextLevel.level]}` : 'УРОВЕНЬ LOOP'}</small>
           </span>
         </div>
         <p className="rating-driver">
           {mainDriver
             ? `Главный вклад: ${driverLabels[mainDriver.code] ?? mainDriver.label} · +${mainDriver.contribution}`
-            : 'Первое подтверждённое действие запустит твой Score.'}
+            : 'Первое подтверждённое действие запустит твой счёт.'}
         </p>
         <p className="rating-explainer">
           Репутация участия, а не баланс. Суммы, прибыль и поражения на место не влияют.
@@ -111,7 +118,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
             <div className="rating-circle-empty">
               <UsersThree aria-hidden="true" />
               <strong>Круг ещё не замкнулся.</strong>
-              <p>Здесь появятся друзья, которые совершили подтверждённое on-chain действие.</p>
+              <p>Здесь появятся друзья, которые совершили подтверждённое действие в TON.</p>
             </div>
           )}
         </motion.div>
@@ -128,14 +135,14 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
         <div className="rating-proof-line" aria-label="Надёжность рейтинга">
           <div>
             <strong>{rating.me.proofs}</strong>
-            <span>ON-CHAIN PROOFS</span>
+            <span>ПОДТВЕРЖДЕНИЙ В TON</span>
           </div>
           <div>
             <strong>{Math.round(rating.me.reliability_bps / 100)}%</strong>
-            <span>БЕЗ ТАЙМАУТА</span>
+            <span>БЕЗ ПРОСРОЧЕК</span>
           </div>
         </div>
-        <p>Считаются только события, которые LOOP уже сверил с финализированным блоком TON.</p>
+        <p>Считаются только действия, которые LOOP уже подтвердил в TON.</p>
         <dl>
           {rating.formula.map((item) => (
             <div key={item.code}>
@@ -163,7 +170,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
           <Metric value={rating.pulse.active_participants} label="УЧАСТНИКОВ" />
           <Metric value={rating.pulse.active_bank} label="В BANK" />
           <Metric value={rating.pulse.active_duels} label="В DUEL" />
-          <Metric value={rating.pulse.proofs_24h} label="PROOFS · 24Ч" />
+          <Metric value={rating.pulse.proofs_24h} label="ПОДТВЕРЖДЕНИЙ · 24Ч" />
         </div>
       </details>
     </section>
@@ -193,7 +200,7 @@ function RatingRow({ entry }: { entry: RatingEntry }) {
       <div>
         <strong>{entry.is_me ? 'ТЫ' : entry.first_name}</strong>
         <small>
-          {entry.level} · {entry.proofs} PROOFS
+          {levelLabels[entry.level]} · {entry.proofs} ПОДТВЕРЖДЕНИЙ
         </small>
       </div>
       <b>{entry.score}</b>

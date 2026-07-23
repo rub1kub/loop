@@ -84,7 +84,9 @@ async def create_offer_quote(
     settings: Config,
 ) -> OfferQuoteResponse:
     if settings.ton_network_id != -3:
-        raise HTTPException(status.HTTP_409_CONFLICT, "LOOP DUEL works only in TON testnet")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
+        )
     contract_address = settings.effective_duel_contract_address
     if not contract_address:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "DUEL contract is not configured")
@@ -104,7 +106,7 @@ async def create_offer_quote(
         )
     )
     if wallet is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "verified testnet wallet required")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Подтверди поддерживаемый кошелёк TON")
     now = datetime.now(UTC)
     await db.execute(
         update(DuelOffer)

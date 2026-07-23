@@ -67,7 +67,9 @@ export default function App() {
       })
       .catch((error: unknown) => {
         proofConfigured.current = false;
-        setError(error instanceof Error ? error.message : 'Не удалось создать TON proof');
+        setError(
+          error instanceof Error ? error.message : 'Не удалось создать подтверждение TON Connect',
+        );
       });
   }, [setError, state.loading, state.profile, tonConnectUI]);
 
@@ -85,7 +87,7 @@ export default function App() {
       })
       .then(() => refresh())
       .catch((error: unknown) => {
-        setError(error instanceof Error ? error.message : 'TON proof отклонён');
+        setError(error instanceof Error ? error.message : 'Подтверждение TON Connect отклонено');
         void tonConnectUI.disconnect();
       });
   }, [refresh, setError, state.profile?.wallet?.address, tonConnectUI, wallet]);

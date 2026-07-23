@@ -125,7 +125,8 @@ export function DuelScreen({
           await tonConnectUI.openModal();
           return;
         }
-        if (wallet.account.chain !== '-3') throw new Error('LOOP работает только в TON testnet');
+        if (wallet.account.chain !== '-3')
+          throw new Error('Выбранная сеть кошелька пока не поддерживается');
         if (!profile.wallet) throw new Error('Ждём подтверждение владения внешним кошельком');
         let acceptedInvite = invite;
         if (invite) acceptedInvite = await api.acceptInvite(invite.code);
@@ -135,7 +136,7 @@ export function DuelScreen({
           contract.status !== 'active' ||
           !contract.code_hash_matches
         ) {
-          throw new Error('DUEL contract не прошёл on-chain проверку');
+          throw new Error('Контракт DUEL не прошёл проверку в TON');
         }
         const offerId = newOfferId();
         const secret = newSecret();
@@ -175,7 +176,7 @@ export function DuelScreen({
         await tonConnectUI.sendTransaction(
           buildOpenOfferTransaction(quote, wallet.account.address, wallet.account.chain),
         );
-        setMessage('Ждём on-chain подтверждение. Callback кошелька ещё не результат.');
+        setMessage('Ждём подтверждение в TON. Ответ кошелька ещё не означает результат.');
         await onRefresh();
         haptic('success');
       } catch (error) {
@@ -244,13 +245,13 @@ export function DuelScreen({
 
   function inviteToTelegram() {
     if (!activeOffer || activeOffer.state !== 'open') {
-      setMessage('Сначала дождись on-chain подтверждения вызова.');
+      setMessage('Сначала дождись подтверждения вызова в TON.');
       haptic('warning');
       return;
     }
     const app = telegram();
     if (!app?.switchInlineQuery) {
-      setMessage('Telegram inline доступен внутри Mini App.');
+      setMessage('Приглашение в Telegram доступно только внутри приложения.');
       return;
     }
     app.switchInlineQuery(`duel ${activeOffer.onchain_offer_id}`, ['users', 'groups']);
@@ -282,7 +283,7 @@ export function DuelScreen({
   return (
     <section className="screen duel-screen" aria-labelledby="duel-title">
       <header className="mode-header">
-        <p className="eyebrow">TESTNET · ВЫЗОВ 1 НА 1</p>
+        <p className="eyebrow">ВЫЗОВ 1 НА 1</p>
         <h1 id="duel-title">DUEL</h1>
       </header>
 
@@ -364,7 +365,7 @@ export function DuelScreen({
             </dl>
             <p>
               Если никто не откроет результат, контракт вернёт обе ставки. Открытый поиск можно
-              остановить и вернуть свою ставку on-chain.
+              остановить и вернуть свою ставку через контракт.
             </p>
           </details>
         </div>
@@ -377,12 +378,12 @@ export function DuelScreen({
               ? 'СОПЕРНИК НАЙДЕН'
               : mode === 'direct'
                 ? 'ПРЯМОЙ ВЫЗОВ'
-                : 'AFK ПОИСК'}
+                : 'ПОИСК В ФОНЕ'}
           </p>
           <strong>
             {status === 'matched'
               ? 'Соперник найден. Открой результат.'
-              : 'Ищем равную ставку. Можно закрыть Mini App.'}
+              : 'Ищем равную ставку. Можно закрыть приложение.'}
           </strong>
           <div className="duel-live-numbers">
             <span>
@@ -410,7 +411,7 @@ export function DuelScreen({
           <strong>{formatGram(latestDuel.payout_nano, 3)} GRAM</strong>
           {latestDuel.settlement_proof_url && (
             <a href={latestDuel.settlement_proof_url} target="_blank" rel="noreferrer">
-              Проверить settlement <ArrowSquareOut aria-hidden="true" />
+              Проверить результат в TON <ArrowSquareOut aria-hidden="true" />
             </a>
           )}
         </div>

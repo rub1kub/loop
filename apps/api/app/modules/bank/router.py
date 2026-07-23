@@ -77,7 +77,7 @@ async def active_wallet(db: Db, user_id: str, network: int) -> Wallet:
         )
     )
     if wallet is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "verified testnet wallet required")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Подтверди поддерживаемый кошелёк TON")
     return wallet
 
 
@@ -89,7 +89,9 @@ async def preview_position(
     settings: Config,
 ) -> BankPositionPreviewResponse:
     if settings.ton_network_id != -3:
-        raise HTTPException(status.HTTP_409_CONFLICT, "LOOP BANK works only in TON testnet")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
+        )
     if not settings.bank_contract_address:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "BANK contract is not configured")
     if (
@@ -124,7 +126,9 @@ async def quote_position(
     settings: Config,
 ) -> BankPositionQuoteResponse:
     if settings.ton_network_id != -3:
-        raise HTTPException(status.HTTP_409_CONFLICT, "LOOP BANK works only in TON testnet")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
+        )
     if not settings.bank_contract_address:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "BANK contract is not configured")
     if (

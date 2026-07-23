@@ -295,7 +295,9 @@ async def wallet_verify(
     settings: Config,
 ) -> WalletView:
     if body.network != settings.ton_network_id or body.network != -3:
-        raise HTTPException(status.HTTP_409_CONFLICT, "only TON testnet wallets are supported")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
+        )
     challenge = await request.app.state.challenge_store.consume(body.proof.payload)
     if not challenge or challenge.get("user_id") != user.id:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wallet challenge is invalid or used")
@@ -470,7 +472,7 @@ async def onchain_jetton(
     settings: Config,
 ) -> JettonBalanceView:
     if jetton_master != settings.plush_brick_master:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Jetton master is not supported")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Этот токен не поддерживается")
     wallet = await db.scalar(
         select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True))
     )
@@ -633,7 +635,7 @@ async def accept_invite(code: str, user: CurrentUser, db: Db, settings: Config) 
         )
     )
     if wallet is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "verified testnet wallet required")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Подтверди поддерживаемый кошелёк TON")
     if invitation.accepted_wallet_address not in {None, wallet.address}:
         raise HTTPException(status.HTTP_409_CONFLICT, "invite is bound to another wallet")
     if offer is None or offer.owner_wallet == wallet.address:

@@ -5,8 +5,8 @@ import type { Tab } from '../types';
 const tabs = [
   { id: 'bank', label: 'BANK', Icon: Diamond },
   { id: 'duel', label: 'DUEL', Icon: InfinityIcon },
-  { id: 'rating', label: 'RATING', Icon: ChartBar },
-  { id: 'profile', label: 'PROFILE', Icon: UserCircle },
+  { id: 'rating', label: 'РЕЙТИНГ', Icon: ChartBar },
+  { id: 'profile', label: 'ПРОФИЛЬ', Icon: UserCircle },
 ] satisfies { id: Tab; label: string; Icon: typeof Diamond }[];
 
 export function TabBar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {

@@ -32,10 +32,10 @@ from .modules.duel.models import (
 INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
 BOT_NAME = "LOOP"
 BOT_DESCRIPTION = (
-    "LOOP — два независимых режима в TON testnet. BANK — FIFO-очередь позиций. "
-    "DUEL — равные PvP-вызовы 50/50."
+    "LOOP — два независимых режима в TON. BANK — очередь позиций по порядку. "
+    "DUEL — равные вызовы между игроками 50/50."
 )
-BOT_SHORT_DESCRIPTION = "BANK FIFO и PvP DUEL на тестовых GRAM в TON testnet."
+BOT_SHORT_DESCRIPTION = "BANK и равные вызовы DUEL на GRAM."
 BOT_MENU_TEXT = "Открыть LOOP"
 
 
@@ -68,9 +68,7 @@ def create_dispatcher(
                 ]
             ]
         )
-        await message.answer(
-            "LOOP\nBANK и DUEL работают только в TON testnet.", reply_markup=keyboard
-        )
+        await message.answer("LOOP\nBANK и DUEL открыты.", reply_markup=keyboard)
 
     @router.inline_query()
     async def inline_duel(query: InlineQuery) -> None:

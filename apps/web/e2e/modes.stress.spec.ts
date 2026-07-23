@@ -64,8 +64,8 @@ for (const mode of modes) {
     const findOpponent = page.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА', exact: true });
     await expect(findOpponent).toBeVisible();
     await findOpponent.click();
-    await expect(page.getByText('AFK ПОИСК')).toBeVisible();
-    await expect(page.getByText('Ищем равную ставку. Можно закрыть Mini App.')).toBeVisible();
+    await expect(page.getByText('ПОИСК В ФОНЕ')).toBeVisible();
+    await expect(page.getByText('Ищем равную ставку. Можно закрыть приложение.')).toBeVisible();
     await expect(page.getByText('ДО ИСТЕЧЕНИЯ')).toBeVisible();
     await expect(page.getByRole('button', { name: 'ОСТАНОВИТЬ ПОИСК' })).toBeVisible();
   });

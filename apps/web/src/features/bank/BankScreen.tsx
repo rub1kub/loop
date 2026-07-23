@@ -87,7 +87,7 @@ export function BankScreen({
       return;
     }
     if (wallet.account.chain !== '-3') {
-      setMessage('LOOP работает только в TON testnet');
+      setMessage('Выбранная сеть кошелька пока не поддерживается');
       haptic('error');
       return;
     }
@@ -140,7 +140,7 @@ export function BankScreen({
         return;
       }
       if (!wallet || wallet.account.chain !== '-3') {
-        throw new Error('Подключите внешний кошелёк TON testnet');
+        throw new Error('Подключите поддерживаемый внешний кошелёк TON');
       }
       const quote = await api.quoteBankPosition({
         position_id: newOfferId(),
@@ -205,9 +205,7 @@ export function BankScreen({
                   />
                   <span>GRAM</span>
                 </label>
-                <p className="form-note">
-                  Это твой вклад в позицию. Только testnet GRAM, минимум 1 GRAM.
-                </p>
+                <p className="form-note">Это твой вклад в позицию. Минимум 1 GRAM.</p>
                 <button className="primary-button" onClick={() => setWizard('multiplier')}>
                   ДАЛЬШЕ
                   <ArrowRight aria-hidden="true" />
@@ -235,8 +233,8 @@ export function BankScreen({
                   ))}
                 </div>
                 <p className="form-note">
-                  Очередь FIFO: более ранние позиции наполняются первыми. Чем выше цель, тем дольше
-                  может быть ожидание.
+                  Очередь работает по порядку: более ранние позиции наполняются первыми. Чем выше
+                  цель, тем дольше может быть ожидание.
                 </p>
                 <button className="primary-button" onClick={() => void showConfirmation()}>
                   ПРОВЕРИТЬ
@@ -262,7 +260,7 @@ export function BankScreen({
                   />
                   <Detail label="Комиссия BANK" value={`${formatGram(preview.fee_nano, 4)} GRAM`} />
                   <Detail
-                    label="Запас на on-chain обработку"
+                    label="Запас на обработку в TON"
                     value={`${formatGram(preview.gas_nano, 3)} GRAM`}
                   />
                 </dl>
@@ -283,7 +281,6 @@ export function BankScreen({
                     <DisclosureIndicator />
                   </summary>
                   <dl className="detail-list">
-                    <Detail label="Сеть" value="TON testnet" />
                     <Detail
                       label="Контракт"
                       value={`${preview.contract_address.slice(0, 7)}…${preview.contract_address.slice(-5)}`}
@@ -301,7 +298,7 @@ export function BankScreen({
                 <div className="waiting-step">
                   <span className="waiting-ring" />
                   <h3>Подтверждаем в TON</h3>
-                  <p>Callback кошелька не считается успехом. LOOP ждёт транзакцию в блоке.</p>
+                  <p>Ответ кошелька ещё не означает успех. LOOP ждёт транзакцию в блоке.</p>
                   {message && <p className="form-note">{message}</p>}
                 </div>
                 <button className="secondary-button" onClick={() => setWizard(null)}>
@@ -318,7 +315,7 @@ export function BankScreen({
   return (
     <section className="screen bank-screen" aria-labelledby="bank-title">
       <header className="mode-header">
-        <p className="eyebrow">TESTNET · ОЧЕРЕДЬ</p>
+        <p className="eyebrow">ОЧЕРЕДЬ ВЫПЛАТ</p>
         <h1 id="bank-title">BANK</h1>
       </header>
 
@@ -429,7 +426,7 @@ export function BankScreen({
                       : `#${position.queue_position}`
                   }
                 />
-                <Detail label="Статус" value={statusCopy[position.current_status]} />
+                <Detail label="Состояние" value={statusCopy[position.current_status]} />
               </dl>
               <div className="contract-truth compact">
                 <strong>Правило очереди</strong>
@@ -469,7 +466,7 @@ function SheetTitle({
   return (
     <div className="sheet-title-row">
       <div>
-        <p className="eyebrow">LOOP · TESTNET</p>
+        <p className="eyebrow">LOOP</p>
         <h2 id={titleId}>{title}</h2>
       </div>
       <button className="round-icon-button" onClick={onClose} aria-label="Закрыть">

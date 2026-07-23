@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', async ({
+test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Telegram tab bar', async ({
   page,
 }) => {
   const emulateFullscreenControls = () =>
@@ -133,14 +133,14 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await expect(page.getByText('Общий пул')).toBeVisible();
   await expect(page.getByText('2 GRAM')).toBeVisible();
   await page.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }).click();
-  await expect(page.getByText('AFK ПОИСК')).toBeVisible();
+  await expect(page.getByText('ПОИСК В ФОНЕ')).toBeVisible();
   await expect(page.getByText('ДО ИСТЕЧЕНИЯ')).toBeVisible();
   await expect(page.getByRole('button', { name: 'ОСТАНОВИТЬ ПОИСК' })).toBeVisible();
 
   await page.goto('/?screen=rating');
   await emulateFullscreenControls();
-  await expect(page.getByRole('heading', { name: 'RATING' })).toBeVisible();
-  await expect(page.getByText('ТВОЙ LOOP SCORE')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'РЕЙТИНГ' })).toBeVisible();
+  await expect(page.getByText('ТВОЙ СЧЁТ LOOP')).toBeVisible();
   await expect(page.getByText('685').first()).toBeVisible();
   await expect(page.getByText('315')).toBeVisible();
   await expect(page.getByText('ДО LOOP')).toBeVisible();
@@ -159,8 +159,8 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   await emulateFullscreenControls();
   await expect(page.getByRole('heading', { name: 'Дмитрий' })).toBeVisible();
   expect((await page.locator('.profile-identity').boundingBox())!.y).toBeGreaterThanOrEqual(104);
-  await expect(page.getByText('LOOP SCORE')).toBeVisible();
-  await expect(page.getByText('КОШЕЛЁК И ON-CHAIN PROOFS')).toBeVisible();
+  await expect(page.getByText('СЧЁТ LOOP')).toBeVisible();
+  await expect(page.getByText('КОШЕЛЁК И ПОДТВЕРЖДЕНИЯ')).toBeVisible();
   await expect(page.locator('.profile-proof-details .disclosure-open-label')).toBeVisible();
   expect(
     await page
@@ -169,7 +169,7 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
       .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
   ).toBeGreaterThanOrEqual(11);
   await expect(page.getByText('PLUSH BRICK')).not.toBeVisible();
-  await page.getByText('КОШЕЛЁК И ON-CHAIN PROOFS').click();
+  await page.getByText('КОШЕЛЁК И ПОДТВЕРЖДЕНИЯ').click();
   await expect(page.locator('.profile-proof-details .disclosure-close-label')).toBeVisible();
   await expect(page.getByText('PLUSH BRICK')).toBeVisible();
   const tabBar = page.getByRole('navigation', { name: 'Основная навигация' });
@@ -178,4 +178,7 @@ test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', 
   expect(tabBox).not.toBeNull();
   expect(profileBox).not.toBeNull();
   expect(profileBox!.y + profileBox!.height).toBeLessThanOrEqual(tabBox!.y + 1);
+  await expect(page.locator('body')).not.toContainText(
+    /ON-CHAIN|PROOFS?|TESTNET|AFK|MINI APP|SETTLEMENT|HOLDER|JETTON|POINTS|LOOP SCORE|RATING|PROFILE|SEASON/i,
+  );
 });

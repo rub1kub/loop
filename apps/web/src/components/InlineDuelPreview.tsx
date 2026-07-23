@@ -15,7 +15,7 @@ export function InlineDuelPreview() {
         </span>
         <div>
           <strong>LOOP</strong>
-          <small>bot</small>
+          <small>бот</small>
         </div>
         <ChatCircleDots aria-hidden="true" />
       </header>
@@ -36,7 +36,7 @@ export function InlineDuelPreview() {
           </dl>
           <p className="inline-proof">
             <ShieldCheck aria-hidden="true" />
-            Общий пул: 2 GRAM · TON testnet
+            Общий пул: 2 GRAM
           </p>
           <button>ПРИНЯТЬ</button>
         </article>

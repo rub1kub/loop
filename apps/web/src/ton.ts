@@ -26,7 +26,7 @@ export function newSecret(): bigint {
 }
 
 function requireTestnet(network: string): asserts network is '-3' {
-  if (network !== '-3') throw new Error('LOOP работает только в TON testnet');
+  if (network !== '-3') throw new Error('Выбранная сеть кошелька пока не поддерживается');
 }
 
 export function buildBankPositionTransaction(
@@ -143,11 +143,11 @@ export function buildOpenOfferTransaction(
     .storeCoins(BigInt(tx.total_pool_nano))
     .storeUint(tx.expires_at, 32);
   if (tx.operation === 'open_direct_offer') {
-    if (!tx.invite_id_hex) throw new Error('Идентификатор direct-вызова отсутствует');
+    if (!tx.invite_id_hex) throw new Error('Идентификатор прямого вызова отсутствует');
     body.storeUint(BigInt(`0x${tx.invite_id_hex}`), 256);
   } else if (tx.operation === 'accept_direct_offer') {
     if (!tx.direct_signature_hex || tx.direct_signature_hex.length !== 128) {
-      throw new Error('Подпись direct-вызова недоступна');
+      throw new Error('Подпись прямого вызова недоступна');
     }
     body.storeRef(
       beginCell()

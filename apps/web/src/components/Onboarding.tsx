@@ -5,7 +5,7 @@ import { haptic, setBackAction } from '../telegram';
 
 const stories = [
   {
-    signal: 'LOOP · TON TESTNET',
+    signal: 'LOOP · НАЧАЛО',
     title: 'Войди в живой\nцикл.',
     detail: 'BANK — очередь выплат. DUEL — честный вызов 1 на 1. Кошелёк остаётся внешним.',
   },
@@ -16,10 +16,10 @@ const stories = [
       'Следующие вклады сначала наполняют ранние банки. На 100% контракт платит. Срок не фиксирован; досрочной отмены нет.',
   },
   {
-    signal: '02 · DUEL + SCORE',
+    signal: '02 · DUEL + СЧЁТ',
     title: 'Равные условия.\nПубличный след.',
     detail:
-      'Оба вносят одинаковую ставку 50/50. Контракт определяет результат, а завершённые on-chain действия повышают LOOP Score.',
+      'Оба вносят одинаковую ставку 50/50. Контракт определяет результат, а подтверждённые действия в TON повышают твой счёт LOOP.',
   },
 ];
 
@@ -43,7 +43,7 @@ export function Onboarding({
 
   return (
     <main className="onboarding">
-      <span className="onboarding-brand">LOOP · TESTNET</span>
+      <span className="onboarding-brand">LOOP</span>
       <button className="story-stage" onClick={next} aria-label="Продолжить историю LOOP">
         <AnimatePresence mode="wait">
           <motion.div

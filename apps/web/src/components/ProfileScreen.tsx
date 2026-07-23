@@ -67,7 +67,7 @@ export function ProfileScreen({
   async function shareReferral() {
     if (!referral) return;
     haptic('light');
-    const url = `https://t.me/share/url?url=${encodeURIComponent(referral.url)}&text=${encodeURIComponent('Попробуй BANK и DUEL в LOOP testnet.')}`;
+    const url = `https://t.me/share/url?url=${encodeURIComponent(referral.url)}&text=${encodeURIComponent('Попробуй BANK и DUEL в LOOP.')}`;
     if (telegram()) telegram()?.openTelegramLink(url);
     else await navigator.clipboard.writeText(referral.url);
   }
@@ -86,9 +86,11 @@ export function ProfileScreen({
           </div>
         )}
         <div>
-          <p className="eyebrow">PROFILE</p>
+          <p className="eyebrow">ПРОФИЛЬ</p>
           <h1 id="profile-title">{profile.user.first_name}</h1>
-          <span>{profile.user.username ? `@${profile.user.username}` : 'Telegram user'}</span>
+          <span>
+            {profile.user.username ? `@${profile.user.username}` : 'Пользователь Telegram'}
+          </span>
         </div>
         <button
           className="round-icon-button"
@@ -102,8 +104,8 @@ export function ProfileScreen({
       <div className="profile-summary" aria-label="Главная статистика LOOP">
         <article>
           <strong>{rating?.me.score ?? '—'}</strong>
-          <span>LOOP SCORE</span>
-          <small>{rating ? `#${rating.me.rank} в сезоне` : 'синхронизация'}</small>
+          <span>СЧЁТ LOOP</span>
+          <small>{rating ? `#${rating.me.rank} в сезоне` : 'обновляем данные'}</small>
         </article>
         <article>
           <strong>{profile.bank.completed}</strong>
@@ -119,7 +121,7 @@ export function ProfileScreen({
 
       <div className="section-label">
         <span>ТВОЙ КРУГ</span>
-        <small>{referral?.reward_points ?? 0} POINTS</small>
+        <small>{referral?.reward_points ?? 0} ОЧКОВ</small>
       </div>
       <button className="profile-row" onClick={() => void shareReferral()} disabled={!referral}>
         <span className="row-icon">
@@ -140,7 +142,7 @@ export function ProfileScreen({
         <summary>
           <span>
             <ShieldCheck aria-hidden="true" />
-            КОШЕЛЁК И ON-CHAIN PROOFS
+            КОШЕЛЁК И ПОДТВЕРЖДЕНИЯ
           </span>
           <DisclosureIndicator />
         </summary>
@@ -169,7 +171,7 @@ export function ProfileScreen({
               <InfinityIcon />
             </span>
             <div>
-              <b>{profile.plush_brick.holder ? 'Holder подтверждён' : 'Jetton не найден'}</b>
+              <b>{profile.plush_brick.holder ? 'Владение подтверждено' : 'Токен не найден'}</b>
               <small>
                 {profile.plush_brick.verified
                   ? `Комиссия DUEL ${profile.plush_brick.duel_fee_bps / 100}%${profile.plush_brick.fee_discount_active ? ' со скидкой' : ''}`
@@ -180,7 +182,7 @@ export function ProfileScreen({
           </div>
 
           <div className="section-label">
-            <span>ПОСЛЕДНИЕ PROOFS</span>
+            <span>ПОСЛЕДНИЕ ПОДТВЕРЖДЕНИЯ</span>
           </div>
           <div className="proof-history">
             <ProofRow
@@ -196,7 +198,7 @@ export function ProfileScreen({
               mode="DUEL"
               title={
                 recentDuel
-                  ? `${formatGram(recentDuel.payout_nano, 3)} GRAM · settlement`
+                  ? `${formatGram(recentDuel.payout_nano, 3)} GRAM · результат`
                   : 'Операций пока нет'
               }
               url={recentDuel?.settlement_proof_url ?? null}
@@ -224,7 +226,7 @@ export function ProfileScreen({
             >
               <div className="sheet-title-row">
                 <div>
-                  <p className="eyebrow">LOOP · TESTNET</p>
+                  <p className="eyebrow">LOOP</p>
                   <h2>Настройки</h2>
                 </div>
                 <button
