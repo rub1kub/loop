@@ -19,6 +19,11 @@
 
 There is no universal cycle entity. Shared packages contain only identity, verified wallet ownership, referral attribution, provider access and delivery infrastructure.
 
+RATING is a read-only social projection over finalized `BankPayout`, `DuelSettlement` and
+`DuelReveal` rows plus qualified referral edges. It introduces no contract storage, financial
+state or mutable score table: every response recomputes the public monthly formula from
+idempotent proof-backed records.
+
 ## Request path
 
 1. Telegram sends signed `initData`; the API verifies HMAC, age and replay nonce.

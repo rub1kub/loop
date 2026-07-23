@@ -10,6 +10,7 @@ import { ProfileScreen } from './components/ProfileScreen';
 import { TabBar } from './components/TabBar';
 import { BankScreen } from './features/bank/BankScreen';
 import { DuelScreen } from './features/duel/DuelScreen';
+import { RatingScreen } from './features/rating/RatingScreen';
 import { installInteractionGuards } from './interactionGuards';
 import {
   haptic,
@@ -33,6 +34,7 @@ export default function App() {
     [],
   );
   const refresh = useCallback(() => useLoopStore.getState().refresh(), []);
+  const refreshRating = useCallback(() => useLoopStore.getState().refreshRating(), []);
 
   useEffect(() => {
     const cleanupInteractionGuards = installInteractionGuards();
@@ -107,6 +109,13 @@ export default function App() {
   }, [refresh, setError, state.bankPosition, state.offers]);
 
   useEffect(() => {
+    if (state.activeTab !== 'rating' || isMockTelegram()) return;
+    void refreshRating();
+    const timer = window.setInterval(() => void refreshRating(), 20_000);
+    return () => window.clearInterval(timer);
+  }, [refreshRating, state.activeTab]);
+
+  useEffect(() => {
     for (const duel of state.duels) {
       if (['settled', 'refunded', 'expired'].includes(duel.state)) {
         void removeDuelSecret(duel.offer_id).catch(() => undefined);
@@ -146,6 +155,7 @@ export default function App() {
       <BankScreen
         profile={state.profile}
         position={state.bankPosition}
+        pulse={state.rating?.pulse ?? null}
         onRefresh={() => state.refresh()}
         onMockCreated={(position) => state.setMockBankPosition(position)}
       />
@@ -159,6 +169,7 @@ export default function App() {
         onRefresh={() => state.refresh()}
       />
     ),
+    rating: <RatingScreen rating={state.rating} />,
     profile: (
       <ProfileScreen
         profile={state.profile}

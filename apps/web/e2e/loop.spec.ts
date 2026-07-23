@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({ page }) => {
+test('BANK, DUEL, RATING and PROFILE remain usable above the Telegram tab bar', async ({
+  page,
+}) => {
   const emulateFullscreenControls = () =>
     page.locator('html').evaluate((root) => {
       root.style.setProperty('--tg-content-safe-area-inset-top', '72px');
@@ -31,10 +33,12 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
   const nextBeforeKeyboard = await page.getByRole('button', { name: /ДАЛЬШЕ/ }).boundingBox();
   await bankAmount.fill('2');
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
-  await page.locator('html').evaluate((root) => {
-    root.style.setProperty('--loop-visual-page-top', '180px');
+  const compensatedTransform = await page.locator('.app-shell').evaluate((shell) => {
+    document.documentElement.classList.add('keyboard-open');
+    document.documentElement.style.setProperty('--loop-visual-page-top', '180px');
+    return getComputedStyle(shell).transform;
   });
-  await expect(page.locator('.app-shell')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 180)');
+  expect(compensatedTransform).toBe('matrix(1, 0, 0, 1, 0, 180)');
   await page.locator('html').evaluate((root) => {
     root.style.setProperty('--loop-visual-page-top', '0px');
   });
@@ -92,12 +96,21 @@ test('BANK, DUEL and PROFILE remain usable above the Telegram tab bar', async ({
   expect((await page.locator('.app-shell').boundingBox())!.height).toBe(stableShellHeight);
   await stakeInput.blur();
   await page.setViewportSize(initialViewport);
-  await page.getByRole('button', { name: /75%/ }).click();
-  await expect(page.getByRole('button', { name: /75%/ })).toHaveClass(/active/);
-  await expect(page.locator('.duel-terms')).toContainText(/0[,.]333 GRAM/);
-  await expect(page.locator('.duel-terms')).toContainText(/1[,.]333 GRAM/);
+  await expect(page.getByText('50/50', { exact: true })).toBeVisible();
+  await expect(page.getByText('РАВНЫЕ УСЛОВИЯ')).toBeVisible();
+  await expect(page.locator('.duel-terms')).toContainText(/1 GRAM/);
+  await expect(page.locator('.duel-terms')).toContainText(/2 GRAM/);
   await page.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }).click();
   await expect(page.getByText('AFK ПОИСК')).toBeVisible();
+
+  await page.goto('/?screen=rating');
+  await emulateFullscreenControls();
+  await expect(page.getByRole('heading', { name: 'RATING' })).toBeVisible();
+  await expect(page.getByText('ТВОЙ LOOP SCORE')).toBeVisible();
+  await expect(page.getByText('685').first()).toBeVisible();
+  await expect(page.getByText('Репутация участия, а не баланс.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: /МОЙ КРУГ/ }).click();
+  await expect(page.locator('.rating-list')).toContainText('Alex');
 
   await page.goto('/?screen=profile');
   await emulateFullscreenControls();

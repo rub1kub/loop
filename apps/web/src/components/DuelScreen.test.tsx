@@ -55,14 +55,15 @@ describe('DuelScreen', () => {
     expect(screen.getByRole('button', { name: 'ГОТОВИМ…' })).toBeDisabled();
   });
 
-  it('offers 25, 50 and 75 percent without BANK state', () => {
+  it('presents one equal 50/50 rule without probability controls', () => {
     render(
       <DuelScreen profile={profile} offers={[]} duels={[]} invite={null} onRefresh={vi.fn()} />,
     );
 
-    expect(screen.getByRole('button', { name: /25%/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /50%/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /75%/ })).toBeInTheDocument();
+    expect(screen.getByText('50/50')).toBeInTheDocument();
+    expect(screen.getByText('РАВНЫЕ УСЛОВИЯ')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /25%/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /75%/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/позиция BANK/i)).not.toBeInTheDocument();
   });
 });

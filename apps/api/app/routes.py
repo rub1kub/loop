@@ -21,6 +21,7 @@ from .modules.duel.models import (
     MatchmakingOffer,
     OfferState,
 )
+from .rating import build_rating
 from .schemas import (
     AuthResponse,
     ContractStateView,
@@ -29,6 +30,7 @@ from .schemas import (
     ModeStatsView,
     PlushBrickView,
     ProfileView,
+    RatingView,
     ReferralRewardView,
     ReferralView,
     SettingsUpdate,
@@ -554,6 +556,11 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
             for reward in rewards
         ],
     )
+
+
+@router.get("/rating", response_model=RatingView)
+async def rating(user: CurrentUser, db: Db) -> RatingView:
+    return await build_rating(db, user)
 
 
 async def invitation_view(invitation: DuelInvitation, db: Db) -> InviteView:

@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
 import { haptic, isMockTelegram, setBackAction } from '../../telegram';
 import { buildBankPositionTransaction, formatGram, newOfferId, parseGram } from '../../ton';
-import type { BankPosition, BankPreview, Profile } from '../../types';
+import type { BankPosition, BankPreview, Profile, RatingPulse } from '../../types';
 
 type WizardStep = 'amount' | 'multiplier' | 'confirm' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
@@ -24,11 +24,13 @@ const statusCopy: Record<BankPosition['current_status'], string> = {
 export function BankScreen({
   profile,
   position,
+  pulse,
   onRefresh,
   onMockCreated,
 }: {
   profile: Profile;
   position: BankPosition | null;
+  pulse: RatingPulse | null;
   onRefresh: () => Promise<void>;
   onMockCreated: (position: BankPosition) => void;
 }) {
@@ -123,6 +125,7 @@ export function BankScreen({
           remaining_amount_nano: preview.target_payout_nano - initialFunding,
           progress_bps: Math.floor((initialFunding * 10_000) / preview.target_payout_nano),
           queue_index: 18,
+          queue_position: 19,
           current_status: 'partially_funded',
           funding_transaction: 'demo-bank-transaction',
           payout_transaction: null,
@@ -323,6 +326,13 @@ export function BankScreen({
           <strong>{Math.round(progressPercent)}%</strong>
           <span>{statusCopy[position.current_status]}</span>
           <p>{fundingCopy}</p>
+          <div className="bank-cycle-metrics">
+            <CycleMetric
+              value={position.queue_position ? `#${position.queue_position}` : '—'}
+              label="ТВОЁ МЕСТО"
+            />
+            <CycleMetric value={pulse?.active_bank ?? '—'} label="БАНОК В ЦИКЛЕ" />
+          </div>
           <button className="primary-button" onClick={() => setDetails(true)}>
             СМОТРЕТЬ ПОЗИЦИЮ
           </button>
@@ -331,9 +341,13 @@ export function BankScreen({
         <div className="bank-state bank-empty-state">
           <h2>Твоя очередь. Твоя банка.</h2>
           <p>
-            Внеси GRAM и создай позицию. Новые участники будут наполнять её; 100% — контракт
-            отправит целевую выплату.
+            Каждый новый вклад сначала наполняет самые ранние банки. Когда твоя достигает 100%,
+            контракт сразу отправляет целевую выплату.
           </p>
+          <div className="bank-cycle-metrics is-empty">
+            <CycleMetric value={pulse?.active_bank ?? '—'} label="БАНОК В ЦИКЛЕ" />
+            <CycleMetric value={pulse?.active_participants ?? '—'} label="УЧАСТНИКОВ СЕЙЧАС" />
+          </div>
           <button className="primary-button" onClick={() => setWizard('amount')}>
             НАЧАТЬ ЦИКЛ
           </button>
@@ -385,9 +399,9 @@ export function BankScreen({
                 <Detail
                   label="Место в очереди"
                   value={
-                    position.queue_index === null
+                    position.queue_position === null
                       ? 'Подтверждается'
-                      : `#${position.queue_index + 1}`
+                      : `#${position.queue_position}`
                   }
                 />
                 <Detail label="Статус" value={statusCopy[position.current_status]} />
@@ -439,5 +453,14 @@ function Detail({ label, value }: { label: string; value: string }) {
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
+  );
+}
+
+function CycleMetric({ value, label }: { value: string | number; label: string }) {
+  return (
+    <span>
+      <b>{value}</b>
+      <small>{label}</small>
+    </span>
   );
 }

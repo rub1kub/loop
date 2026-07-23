@@ -28,13 +28,17 @@ LOOP DUEL
 Твоя ставка:
 1 GRAM
 
-Твой шанс:
-25%
+Условия:
+50/50
 
 [ПРИНЯТЬ]
 ```
 
-The button opens the Mini App with an opaque, expiring challenge code. After Telegram authentication, the API resolves the creator, offer, stake, pool, 25/50/75 chance, state and expiry. A direct offer names that exact counter-offer and never enters generic AFK matchmaking.
+The button opens the Mini App with an opaque, expiring challenge code. After Telegram
+authentication, the API resolves the creator, equal stake, pool, 50/50 terms, state and expiry.
+A direct offer names that exact counter-offer and never enters generic AFK matchmaking.
+Already funded legacy invitations remain readable and recoverable with their original canonical
+terms.
 
 Inline messages cannot override an amount, wallet, contract, probability, expiry or offer state. Deleted, expired, self-funded, incompatible or already-consumed challenges are rejected server-side.
 

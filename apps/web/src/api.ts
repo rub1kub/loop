@@ -12,6 +12,7 @@ import type {
   Offer,
   OfferQuote,
   Profile,
+  Rating,
   Referral,
   Wallet,
 } from './types';
@@ -58,6 +59,7 @@ const bankPositionSchema = z.object({
   remaining_amount_nano: z.number(),
   progress_bps: z.number(),
   queue_index: z.number().nullable(),
+  queue_position: z.number().nullable(),
   current_status: z.enum([
     'pending_confirmation',
     'queued',
@@ -71,6 +73,47 @@ const bankPositionSchema = z.object({
   proof_url: z.string().nullable(),
   created_at: z.string(),
   completed_at: z.string().nullable(),
+});
+
+const ratingEntrySchema = z.object({
+  rank: z.number(),
+  user_id: z.string(),
+  first_name: z.string(),
+  username: z.string().nullable(),
+  photo_url: z.string().nullable(),
+  score: z.number(),
+  level: z.enum(['SIGNAL', 'PULSE', 'ORBIT', 'LOOP']),
+  bank_payouts: z.number(),
+  duel_settlements: z.number(),
+  timely_reveals: z.number(),
+  missed_reveals: z.number(),
+  qualified_referrals: z.number(),
+  proofs: z.number(),
+  reliability_bps: z.number(),
+  is_me: z.boolean(),
+});
+
+const ratingSchema = z.object({
+  season_id: z.string(),
+  season_name: z.string(),
+  starts_at: z.string(),
+  ends_at: z.string(),
+  me: ratingEntrySchema,
+  leaderboard: z.array(ratingEntrySchema),
+  circle: z.array(ratingEntrySchema),
+  pulse: z.object({
+    active_participants: z.number(),
+    active_bank: z.number(),
+    active_duels: z.number(),
+    proofs_24h: z.number(),
+  }),
+  formula: z.array(
+    z.object({
+      code: z.string(),
+      label: z.string(),
+      points: z.number(),
+    }),
+  ),
 });
 
 async function restoreSession(): Promise<boolean> {
@@ -253,6 +296,10 @@ export const api = {
 
   async referrals(): Promise<Referral> {
     return await request('/referrals');
+  },
+
+  async rating(): Promise<Rating> {
+    return ratingSchema.parse(await request<unknown>('/rating'));
   },
 
   async invite(code: string): Promise<Invite> {

@@ -146,6 +146,7 @@ class BankPositionView(BaseModel):
     remaining_amount_nano: int
     progress_bps: int
     queue_index: int | None
+    queue_position: int | None
     current_status: str
     funding_transaction: str | None
     payout_transaction: str | None
@@ -291,6 +292,49 @@ class ReferralView(BaseModel):
     qualified: int
     reward_points: int
     history: list[ReferralRewardView]
+
+
+class RatingFormulaItem(BaseModel):
+    code: str
+    label: str
+    points: int
+
+
+class RatingEntryView(BaseModel):
+    rank: int
+    user_id: str
+    first_name: str
+    username: str | None
+    photo_url: str | None
+    score: int
+    level: str
+    bank_payouts: int
+    duel_settlements: int
+    timely_reveals: int
+    missed_reveals: int
+    qualified_referrals: int
+    proofs: int
+    reliability_bps: int
+    is_me: bool
+
+
+class RatingPulseView(BaseModel):
+    active_participants: int
+    active_bank: int
+    active_duels: int
+    proofs_24h: int
+
+
+class RatingView(BaseModel):
+    season_id: str
+    season_name: str
+    starts_at: datetime
+    ends_at: datetime
+    me: RatingEntryView
+    leaderboard: list[RatingEntryView]
+    circle: list[RatingEntryView]
+    pulse: RatingPulseView
+    formula: list[RatingFormulaItem]
 
 
 class InviteView(BaseModel):

@@ -30,13 +30,13 @@ export function InlineDuelPreview() {
               <dd>1 GRAM</dd>
             </div>
             <div>
-              <dt>ТВОЙ ШАНС</dt>
-              <dd>25%</dd>
+              <dt>УСЛОВИЯ</dt>
+              <dd>50/50</dd>
             </div>
           </dl>
           <p className="inline-proof">
             <ShieldCheck aria-hidden="true" />
-            При победе: +2.9 GRAM · TON testnet
+            Общий пул: 2 GRAM · TON testnet
           </p>
           <button>ПРИНЯТЬ</button>
         </article>

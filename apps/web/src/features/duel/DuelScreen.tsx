@@ -25,7 +25,7 @@ import {
 } from '../../ton';
 import type { Duel, Invite, Offer, Profile } from '../../types';
 
-const chances = [2500, 5000, 7500] as const;
+const DEFAULT_CHANCE_BPS = 5000;
 
 function canonicalTerms(requestedStake: number, chanceBps: number) {
   const quarterUnits = chanceBps / 2500;
@@ -51,14 +51,14 @@ export function DuelScreen({
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
   const [stake, setStake] = useState(() => (invite ? formatGram(invite.stake_nano, 3) : '1'));
-  const [chance, setChance] = useState<(typeof chances)[number]>(invite?.chance_bps ?? 5000);
+  const chance = invite?.chance_bps ?? DEFAULT_CHANCE_BPS;
   const [mode, setMode] = useState<'afk' | 'direct'>(invite ? 'direct' : 'afk');
   const [busy, setBusy] = useState(false);
   const [mockSearching, setMockSearching] = useState(false);
   const [message, setMessage] = useState(
     invite
       ? `${invite.creator_name} бросил тебе вызов.`
-      : 'Выбери условия. Всё остальное сделает контракт.',
+      : 'Укажи сумму. Соперник войдёт на равных условиях 50/50.',
   );
   const [now, setNow] = useState(0);
   const locked = useRef(false);
@@ -296,7 +296,10 @@ export function DuelScreen({
         <div className="duel-form">
           {invite ? (
             <div className="invite-banner">
-              <p className="eyebrow">ВЫЗОВ ОТ {invite.creator_name.toUpperCase()}</p>
+              <p className="eyebrow">
+                ВЫЗОВ ОТ {invite.creator_name.toUpperCase()} · {chance / 100}/
+                {(10_000 - chance) / 100}
+              </p>
               <strong>Условия проверяются заново перед принятием.</strong>
             </div>
           ) : (
@@ -312,20 +315,10 @@ export function DuelScreen({
                   <b>GRAM</b>
                 </div>
               </label>
-              <div className="chance-picker" aria-label="Шанс победы">
-                {chances.map((value) => (
-                  <button
-                    key={value}
-                    className={chance === value ? 'active' : ''}
-                    onClick={() => {
-                      setChance(value);
-                      haptic('selection');
-                    }}
-                  >
-                    <strong>{value / 100}%</strong>
-                    <span>ШАНС</span>
-                  </button>
-                ))}
+              <div className="duel-equal-rule">
+                <strong>50/50</strong>
+                <span>РАВНЫЕ УСЛОВИЯ</span>
+                <p>Одинаковая ставка. Результат раскрывает контракт.</p>
               </div>
             </>
           )}
@@ -339,7 +332,7 @@ export function DuelScreen({
               value={`${formatGram(feeNano, 4)} GRAM`}
             />
             <Term label="Выплата победителю" value={`${formatGram(payoutNano, 3)} GRAM`} />
-            <Term label="Твоя чистая прибыль" value={`${formatGram(profitNano, 3)} GRAM`} />
+            <Term label="Разница при победе" value={`${formatGram(profitNano, 3)} GRAM`} />
           </dl>
         </div>
       )}
@@ -360,7 +353,9 @@ export function DuelScreen({
           </strong>
           {activeOffer && (
             <div className="duel-live-numbers">
-              <span>{activeOffer.chance_bps / 100}% шанс</span>
+              <span>
+                {activeOffer.chance_bps / 100}/{(10_000 - activeOffer.chance_bps) / 100}
+              </span>
               <span>{formatGram(activeOffer.stake_nano, 3)} GRAM</span>
             </div>
           )}

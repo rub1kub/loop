@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { api } from './api';
 import { isMockTelegram, telegramInitData, telegramStartParam } from './telegram';
-import type { BankPosition, Duel, Invite, Offer, Profile, Tab } from './types';
+import type { BankPosition, Duel, Invite, Offer, Profile, Rating, Tab } from './types';
 
 const mockParameters = new URLSearchParams(window.location.search);
 const mockScreen = mockParameters.get('screen');
@@ -45,6 +45,7 @@ const demoBank: BankPosition = {
   remaining_amount_nano: 1_140_000_000,
   progress_bps: 6200,
   queue_index: 14,
+  queue_position: 4,
   current_status: 'partially_funded',
   funding_transaction: 'demo-bank-funding',
   payout_transaction: null,
@@ -56,13 +57,13 @@ const demoBank: BankPosition = {
 const demoOffer: Offer = {
   id: 'duel-offer-demo',
   onchain_offer_id: 5107,
-  chance_bps: 2500,
-  total_pool_nano: 4_000_000_000,
+  chance_bps: 5000,
+  total_pool_nano: 2_000_000_000,
   stake_nano: 1_000_000_000,
-  opponent_stake_nano: 3_000_000_000,
+  opponent_stake_nano: 1_000_000_000,
   fee_bps: 250,
-  payout_nano: 3_900_000_000,
-  net_profit_nano: 2_900_000_000,
+  payout_nano: 1_950_000_000,
+  net_profit_nano: 950_000_000,
   mode: 'afk',
   direct_opponent_wallet: null,
   state: mockScreen === 'duel-result' ? 'settled' : 'open',
@@ -77,11 +78,11 @@ const demoDuel: Duel = {
   state: 'settled',
   offer_id: demoOffer.onchain_offer_id,
   own_revealed: true,
-  chance_bps: 2500,
+  chance_bps: 5000,
   stake_nano: 1_000_000_000,
-  opponent_stake_nano: 3_000_000_000,
-  total_pool_nano: 4_000_000_000,
-  payout_nano: 3_900_000_000,
+  opponent_stake_nano: 1_000_000_000,
+  total_pool_nano: 2_000_000_000,
+  payout_nano: 1_950_000_000,
   reveal_deadline: new Date(now - 60_000).toISOString(),
   winner_wallet: demoProfile.wallet!.address,
   settled_tx_hash: 'demo-duel-settlement',
@@ -93,20 +94,99 @@ const demoInvite: Invite = {
   creator_name: 'Миша',
   creator_username: 'misha',
   stake_nano: 1_000_000_000,
-  total_pool_nano: 4_000_000_000,
-  chance_bps: 2500,
-  payout_nano: 3_900_000_000,
-  net_profit_nano: 2_900_000_000,
+  total_pool_nano: 2_000_000_000,
+  chance_bps: 5000,
+  payout_nano: 1_950_000_000,
+  net_profit_nano: 950_000_000,
   counter_offer_id: 7001,
   expires_at: new Date(now + 10 * 60_000).toISOString(),
+};
+
+const demoMe = {
+  rank: 7,
+  user_id: demoProfile.user.id,
+  first_name: demoProfile.user.first_name,
+  username: demoProfile.user.username,
+  photo_url: null,
+  score: 685,
+  level: 'ORBIT' as const,
+  bank_payouts: 3,
+  duel_settlements: 5,
+  timely_reveals: 4,
+  missed_reveals: 1,
+  qualified_referrals: 2,
+  proofs: 8,
+  reliability_bps: 8000,
+  is_me: true,
+};
+
+const demoLeaders: Rating['leaderboard'] = [
+  {
+    ...demoMe,
+    rank: 1,
+    user_id: 'leader-1',
+    first_name: 'MIRA',
+    username: 'miraloop',
+    score: 1240,
+    level: 'LOOP',
+    is_me: false,
+  },
+  {
+    ...demoMe,
+    rank: 2,
+    user_id: 'leader-2',
+    first_name: 'Alex',
+    username: 'alex_ton',
+    score: 960,
+    is_me: false,
+  },
+  {
+    ...demoMe,
+    rank: 3,
+    user_id: 'leader-3',
+    first_name: 'Nikita',
+    username: null,
+    score: 840,
+    is_me: false,
+  },
+  demoMe,
+];
+
+const demoRating: Rating = {
+  season_id: '2026-07',
+  season_name: 'ИЮЛЬ · 2026',
+  starts_at: '2026-07-01T00:00:00.000Z',
+  ends_at: '2026-08-01T00:00:00.000Z',
+  me: demoMe,
+  leaderboard: demoLeaders,
+  circle: [demoLeaders[1], demoMe],
+  pulse: {
+    active_participants: 38,
+    active_bank: 21,
+    active_duels: 17,
+    proofs_24h: 46,
+  },
+  formula: [
+    { code: 'bank_payout', label: 'Выплата BANK с on-chain proof', points: 100 },
+    { code: 'duel_settlement', label: 'Завершённый DUEL с on-chain proof', points: 60 },
+    { code: 'timely_reveal', label: 'Раскрытие результата без таймаута', points: 20 },
+    {
+      code: 'qualified_referral',
+      label: 'Друг с подтверждённым on-chain действием',
+      points: 25,
+    },
+    { code: 'missed_reveal', label: 'Пропущенное раскрытие DUEL', points: -40 },
+  ],
 };
 
 const initialTab: Tab =
   mockScreen?.startsWith('duel') || mockScreen === 'inline'
     ? 'duel'
-    : mockScreen === 'profile' || mockScreen === 'settings'
-      ? 'profile'
-      : 'bank';
+    : mockScreen === 'rating'
+      ? 'rating'
+      : mockScreen === 'profile' || mockScreen === 'settings'
+        ? 'profile'
+        : 'bank';
 
 interface LoopState {
   loading: boolean;
@@ -117,11 +197,13 @@ interface LoopState {
   offers: Offer[];
   duels: Duel[];
   invite: Invite | null;
+  rating: Rating | null;
   error: string | null;
   showOnboarding: boolean;
   onboardingPage: number;
   bootstrap(): Promise<void>;
   refresh(): Promise<void>;
+  refreshRating(): Promise<void>;
   setTab(tab: Tab): void;
   setError(error: string | null): void;
   finishOnboarding(): Promise<void>;
@@ -139,6 +221,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   offers: [],
   duels: [],
   invite: null,
+  rating: null,
   error: null,
   showOnboarding: false,
   onboardingPage: mockScreen === 'onboarding-bank' ? 1 : mockScreen === 'onboarding-duel' ? 2 : 0,
@@ -159,6 +242,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
             mockScreen === 'duel-matchmaking' || mockScreen === 'duel-result' ? [demoOffer] : [],
           duels: mockScreen === 'duel-result' ? [demoDuel] : [],
           invite: mockScreen === 'duel-invite' ? demoInvite : null,
+          rating: demoRating,
           loading: false,
           showOnboarding:
             mockScreen === 'onboarding' ||
@@ -170,11 +254,12 @@ export const useLoopStore = create<LoopState>((set, get) => ({
       const initData = telegramInitData();
       if (!initData) throw new Error('Откройте LOOP внутри Telegram');
       const profile = (await api.authenticate(initData)).profile;
-      const [bankPosition, bankHistory, offers, duels] = await Promise.all([
+      const [bankPosition, bankHistory, offers, duels, rating] = await Promise.all([
         api.currentBankPosition(),
         api.bankPositions(),
         api.offers(),
         api.duels(),
+        api.rating().catch(() => null),
       ]);
       let invite: Invite | null = null;
       const startParam = telegramStartParam();
@@ -186,6 +271,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         offers,
         duels,
         invite,
+        rating,
         loading: false,
         activeTab: invite ? 'duel' : 'bank',
         showOnboarding: profile.user.onboarding_enabled && !profile.user.onboarding_seen,
@@ -208,6 +294,15 @@ export const useLoopStore = create<LoopState>((set, get) => ({
       api.duels(),
     ]);
     set({ profile, bankPosition, bankHistory, offers, duels });
+  },
+
+  async refreshRating() {
+    if (isMockTelegram()) return;
+    try {
+      set({ rating: await api.rating() });
+    } catch {
+      set({ error: 'Рейтинг временно не обновился. Основные режимы продолжают работать.' });
+    }
   },
 
   setTab(activeTab) {

@@ -155,8 +155,8 @@ async def test_afk_matchmaking_selects_only_complementary_open_offer(client, app
                 first_user,
                 first_wallet,
                 3001,
-                chance_bps=7500,
-                stake_nano=3_000_000_000,
+                chance_bps=5000,
+                stake_nano=1_000_000_000,
                 opponent_stake_nano=1_000_000_000,
             )
         )
@@ -166,13 +166,33 @@ async def test_afk_matchmaking_selects_only_complementary_open_offer(client, app
         headers=second_headers,
         json={
             "offer_id": 3002,
-            "chance_bps": 2500,
+            "chance_bps": 5000,
             "stake_nano": 1_000_000_000,
             "commitment_hex": "ef" * 32,
         },
     )
     assert quote.status_code == 201, quote.text
     assert quote.json()["transaction"]["counter_offer_id"] == 3001
+
+
+@pytest.mark.asyncio
+async def test_new_asymmetric_duel_offer_is_rejected(client, app) -> None:
+    telegram_id = 700_011
+    headers = await auth_headers(client, telegram_id)
+    await add_wallet(app, telegram_id, "b")
+    quote = await client.post(
+        "/api/v1/duels/offers/quote",
+        headers=headers,
+        json={
+            "offer_id": 3011,
+            "chance_bps": 2500,
+            "stake_nano": 1_000_000_000,
+            "commitment_hex": "ad" * 32,
+            "mode": "afk",
+        },
+    )
+    assert quote.status_code == 422
+    assert "50/50" in quote.text
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-export type Tab = 'bank' | 'duel' | 'profile';
+export type Tab = 'bank' | 'duel' | 'rating' | 'profile';
 
 export interface TelegramWebApp {
   initData: string;
@@ -107,6 +107,7 @@ export interface BankPosition {
   remaining_amount_nano: number;
   progress_bps: number;
   queue_index: number | null;
+  queue_position: number | null;
   current_status: BankStatus;
   funding_transaction: string | null;
   payout_transaction: string | null;
@@ -239,6 +240,49 @@ export interface Referral {
     payout_tx_hash: string | null;
     created_at: string;
   }[];
+}
+
+export interface RatingFormulaItem {
+  code: string;
+  label: string;
+  points: number;
+}
+
+export interface RatingEntry {
+  rank: number;
+  user_id: string;
+  first_name: string;
+  username: string | null;
+  photo_url: string | null;
+  score: number;
+  level: 'SIGNAL' | 'PULSE' | 'ORBIT' | 'LOOP';
+  bank_payouts: number;
+  duel_settlements: number;
+  timely_reveals: number;
+  missed_reveals: number;
+  qualified_referrals: number;
+  proofs: number;
+  reliability_bps: number;
+  is_me: boolean;
+}
+
+export interface RatingPulse {
+  active_participants: number;
+  active_bank: number;
+  active_duels: number;
+  proofs_24h: number;
+}
+
+export interface Rating {
+  season_id: string;
+  season_name: string;
+  starts_at: string;
+  ends_at: string;
+  me: RatingEntry;
+  leaderboard: RatingEntry[];
+  circle: RatingEntry[];
+  pulse: RatingPulse;
+  formula: RatingFormulaItem[];
 }
 
 export interface Invite {

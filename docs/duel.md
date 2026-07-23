@@ -2,21 +2,22 @@
 
 DUEL is an escrow-based PvP mode independent of BANK.
 
-## Canonical terms
+## Product terms
 
-The creator chooses a stake and chance: 25%, 50% or 75%. Amounts are rounded to a shared quarter-unit so the two contributions form exactly one pool. Examples:
+Every new LOOP challenge is equal 50/50: both players contribute the same stake and the
+contract settles one shared pool. There is no probability picker in the Mini App or public API.
 
-| Chance | Player share | Opponent share |
-| ------ | -----------: | -------------: |
-| 25%    |       1 unit |        3 units |
-| 50%    |      2 units |        2 units |
-| 75%    |      3 units |         1 unit |
+The deployed DuelEscrow v1.1 bytecode also understands canonical 25/75 and 75/25 terms.
+That support remains for deterministic recovery of already funded legacy offers and invitations;
+it is not exposed for creating a new AFK or direct challenge.
 
 Winner payout is `pool - floor(pool × fee / 10,000)`. DuelEscrow v1.1 enforces one global 2.5% fee.
 
 ## Matchmaking
 
-AFK offers remain open after the Mini App closes. The API reserves the oldest compatible complementary offer under a database lock. A reservation has a deadline and returns to the queue if the second funding transaction never finalizes.
+AFK offers remain open after the Mini App closes. The API reserves the oldest equal 50/50
+offer with the same pool under a database lock. A reservation has a deadline and returns to the
+queue if the second funding transaction never finalizes.
 
 Direct invitations have a Telegram-safe code and an independent 256-bit on-chain invite ID. Acceptance requires a short-lived Ed25519 permit signed by LOOP and bound to the testnet global ID, DuelEscrow address, creator offer, invite ID and verified invited wallet. The contract atomically verifies the permit, binds both opponents and matches the offers; another wallet cannot steal or replay it.
 

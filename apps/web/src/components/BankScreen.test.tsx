@@ -42,6 +42,7 @@ const position: BankPosition = {
   remaining_amount_nano: 1_890_000_000,
   progress_bps: 3700,
   queue_index: 4,
+  queue_position: 2,
   current_status: 'partially_funded',
   funding_transaction: 'test-transaction',
   payout_transaction: null,
@@ -55,11 +56,17 @@ describe('BankScreen', () => {
 
   it('explains an empty BANK before asking for a deposit', () => {
     render(
-      <BankScreen profile={profile} position={null} onRefresh={vi.fn()} onMockCreated={vi.fn()} />,
+      <BankScreen
+        profile={profile}
+        position={null}
+        pulse={null}
+        onRefresh={vi.fn()}
+        onMockCreated={vi.fn()}
+      />,
     );
 
     expect(screen.getByRole('heading', { name: 'Твоя очередь. Твоя банка.' })).toBeVisible();
-    expect(screen.getByText(/100% — контракт отправит целевую выплату/)).toBeVisible();
+    expect(screen.getByText(/достигает 100%, контракт сразу отправляет/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ' })).toBeVisible();
     expect(screen.queryByTestId('bank-sand-level')).not.toBeInTheDocument();
   });
@@ -69,6 +76,7 @@ describe('BankScreen', () => {
       <BankScreen
         profile={profile}
         position={position}
+        pulse={{ active_participants: 8, active_bank: 5, active_duels: 3, proofs_24h: 4 }}
         onRefresh={vi.fn()}
         onMockCreated={vi.fn()}
       />,
@@ -82,5 +90,6 @@ describe('BankScreen', () => {
     expect(screen.getByText(/сколько уже собрано до твоей целевой выплаты/i)).toBeInTheDocument();
     expect(screen.getByText('Уже собрано')).toBeInTheDocument();
     expect(screen.getByText('Осталось собрать')).toBeInTheDocument();
+    expect(screen.getAllByText('#2').length).toBeGreaterThan(0);
   });
 });

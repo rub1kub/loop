@@ -1,10 +1,11 @@
-import { Diamond, Infinity as InfinityIcon, UserCircle } from '@phosphor-icons/react';
+import { ChartBar, Diamond, Infinity as InfinityIcon, UserCircle } from '@phosphor-icons/react';
 
 import type { Tab } from '../types';
 
 const tabs = [
   { id: 'bank', label: 'BANK', Icon: Diamond },
   { id: 'duel', label: 'DUEL', Icon: InfinityIcon },
+  { id: 'rating', label: 'RATING', Icon: ChartBar },
   { id: 'profile', label: 'PROFILE', Icon: UserCircle },
 ] satisfies { id: Tab; label: string; Icon: typeof Diamond }[];
 

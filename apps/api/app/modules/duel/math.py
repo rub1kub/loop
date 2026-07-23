@@ -4,8 +4,8 @@ ALLOWED_CHANCES = {2_500, 5_000, 7_500}
 def canonical_duel_terms(requested_stake_nano: int, chance_bps: int) -> tuple[int, int, int]:
     """Return exact stake, opponent stake and pool using quarter units.
 
-    The user amount is rounded upward by at most two nanoGRAM so the contract can
-    express exact 25/50/75 odds with integer arithmetic and a pool divisible by four.
+    The user amount is rounded upward by at most two nanoGRAM. New product flows
+    use 50/50; quarter units remain here for deterministic legacy-offer recovery.
     """
 
     if chance_bps not in ALLOWED_CHANCES:

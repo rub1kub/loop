@@ -69,6 +69,7 @@ try {
   await capture(page, 'duel-matchmaking', 'duel-matchmaking');
   await capture(page, 'duel-invite', 'duel-invite');
   await capture(page, 'duel-result', 'duel-result');
+  await capture(page, 'rating', 'rating');
   await capture(page, 'profile', 'profile');
   await capture(page, 'settings', 'settings');
   await capture(page, 'telegram-inline-duel', 'inline');

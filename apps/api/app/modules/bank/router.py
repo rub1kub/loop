@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from ...dependencies import Config, CurrentUser, Db
 from ...models import Wallet
@@ -19,12 +19,34 @@ from .models import BankPosition, BankPositionStatus
 router = APIRouter(prefix="/bank", tags=["BANK"])
 
 
-def position_view(position: BankPosition) -> BankPositionView:
+ACTIVE_POSITION_STATES = [
+    BankPositionStatus.PENDING_CONFIRMATION.value,
+    BankPositionStatus.QUEUED.value,
+    BankPositionStatus.PARTIALLY_FUNDED.value,
+    BankPositionStatus.COMPLETED.value,
+]
+
+
+async def position_view(db: Db, position: BankPosition) -> BankPositionView:
     progress = min(
         position.funded_amount_nano * 10_000 // max(position.target_payout_nano, 1),
         10_000,
     )
     proof_hash = position.payout_transaction or position.funding_transaction
+    queue_position: int | None = None
+    if position.queue_index is not None and position.current_status in ACTIVE_POSITION_STATES:
+        ahead = await db.scalar(
+            select(func.count())
+            .select_from(BankPosition)
+            .where(
+                BankPosition.network == position.network,
+                BankPosition.contract_address == position.contract_address,
+                BankPosition.current_status.in_(ACTIVE_POSITION_STATES),
+                BankPosition.queue_index.is_not(None),
+                BankPosition.queue_index < position.queue_index,
+            )
+        )
+        queue_position = int(ahead or 0) + 1
     return BankPositionView(
         id=position.id,
         position_id=position.position_id,
@@ -36,6 +58,7 @@ def position_view(position: BankPosition) -> BankPositionView:
         remaining_amount_nano=position.remaining_amount_nano,
         progress_bps=progress,
         queue_index=position.queue_index,
+        queue_position=queue_position,
         current_status=position.current_status,
         funding_transaction=position.funding_transaction,
         payout_transaction=position.payout_transaction,
@@ -167,7 +190,7 @@ async def quote_position(
     await db.commit()
     await db.refresh(position)
     return BankPositionQuoteResponse(
-        position=position_view(position),
+        position=await position_view(db, position),
         transaction=BankContractCall(
             operation="create_bank_position",
             query_id=position.query_id,
@@ -205,7 +228,7 @@ async def current_position(
         )
         .order_by(BankPosition.created_at.desc())
     )
-    return position_view(position) if position else None
+    return await position_view(db, position) if position else None
 
 
 @router.get("/positions", response_model=list[BankPositionView])
@@ -225,4 +248,4 @@ async def list_positions(
             .limit(50)
         )
     ).all()
-    return [position_view(position) for position in positions]
+    return [await position_view(db, position) for position in positions]

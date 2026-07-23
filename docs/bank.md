@@ -33,7 +33,11 @@ Older positions always have priority. No distributable value leaves the user cyc
 
 ## UI
 
-The jar is the primary object. An empty jar starts a three-step position wizard. An active jar shows only BANK progress, remaining funding, queue position, status and a testnet explorer proof. DUEL statistics and events are absent.
+The jar is the primary object. An empty jar explains the FIFO cycle before starting a three-step
+position wizard. An active jar shows BANK progress, the current rank among unfinished
+positions, live active-position count, remaining funding, status and a testnet explorer proof.
+The absolute on-chain queue index is retained for audit, while the API calculates the
+reader-facing rank from unfinished earlier positions. DUEL financial events remain absent.
 
 ## Risk
 

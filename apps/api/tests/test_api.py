@@ -60,6 +60,32 @@ async def test_auth_profile_has_separate_bank_and_duel_domains(client) -> None:
 
 
 @pytest.mark.asyncio
+async def test_rating_starts_transparently_without_money_metrics(client) -> None:
+    headers = await authenticate(client)
+    response = await client.get("/api/v1/rating", headers=headers)
+    assert response.status_code == 200, response.text
+    rating = response.json()
+    assert rating["me"]["score"] == 0
+    assert rating["me"]["rank"] == 1
+    assert rating["me"]["proofs"] == 0
+    assert rating["pulse"] == {
+        "active_participants": 0,
+        "active_bank": 0,
+        "active_duels": 0,
+        "proofs_24h": 0,
+    }
+    assert {item["code"] for item in rating["formula"]} == {
+        "bank_payout",
+        "duel_settlement",
+        "timely_reveal",
+        "qualified_referral",
+        "missed_reveal",
+    }
+    assert "stake" not in json.dumps(rating)
+    assert "profit" not in json.dumps(rating)
+
+
+@pytest.mark.asyncio
 async def test_bank_quote_is_testnet_only_and_requires_verified_wallet(client, app) -> None:
     headers = await authenticate(client)
     payload = {
@@ -82,7 +108,7 @@ async def test_bank_quote_is_testnet_only_and_requires_verified_wallet(client, a
 
 
 @pytest.mark.asyncio
-async def test_duel_quote_uses_requested_stake_and_complementary_terms(client, app) -> None:
+async def test_duel_quote_uses_equal_terms_for_new_offers(client, app) -> None:
     headers = await authenticate(client)
     await add_wallet(app, 777000111)
     quote = await client.post(
@@ -90,7 +116,7 @@ async def test_duel_quote_uses_requested_stake_and_complementary_terms(client, a
         headers=headers,
         json={
             "offer_id": 12345,
-            "chance_bps": 2500,
+            "chance_bps": 5000,
             "stake_nano": 1_000_000_001,
             "commitment_hex": "ab" * 32,
             "mode": "afk",
@@ -98,10 +124,10 @@ async def test_duel_quote_uses_requested_stake_and_complementary_terms(client, a
     )
     assert quote.status_code == 201, quote.text
     result = quote.json()
-    assert result["offer"]["stake_nano"] == 1_000_000_001
-    assert result["offer"]["opponent_stake_nano"] == 3_000_000_003
-    assert result["offer"]["total_pool_nano"] == 4_000_000_004
-    assert result["transaction"]["amount_nano"] == "1050000001"
+    assert result["offer"]["stake_nano"] == 1_000_000_002
+    assert result["offer"]["opponent_stake_nano"] == 1_000_000_002
+    assert result["offer"]["total_pool_nano"] == 2_000_000_004
+    assert result["transaction"]["amount_nano"] == "1050000002"
 
 
 @pytest.mark.asyncio

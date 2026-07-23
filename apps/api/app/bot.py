@@ -33,7 +33,7 @@ INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
 BOT_NAME = "LOOP"
 BOT_DESCRIPTION = (
     "LOOP — два независимых режима в TON testnet. BANK — FIFO-очередь позиций. "
-    "DUEL — PvP-вызовы с шансами 25%, 50% или 75%."
+    "DUEL — равные PvP-вызовы 50/50."
 )
 BOT_SHORT_DESCRIPTION = "BANK FIFO и PvP DUEL на тестовых GRAM в TON testnet."
 BOT_MENU_TEXT = "Открыть LOOP"
@@ -116,18 +116,19 @@ def create_dispatcher(
             await db.commit()
         amount = format_gram(offer.opponent_stake_nano)
         receiver_chance = 10_000 - offer.chance_bps
+        display_terms = f"{receiver_chance // 100}/{offer.chance_bps // 100}"
         profit = format_gram(offer.payout_nano - offer.opponent_stake_nano)
         deep_link = f"https://t.me/{settings.bot_username}?startapp=duel_{challenge.code}"
         article = InlineQueryResultArticle(
             id=challenge.code,
             title="LOOP DUEL",
-            description=f"Внести {amount} GRAM · шанс {receiver_chance // 100}%",
+            description=f"Внести {amount} GRAM · условия {display_terms}",
             input_message_content=InputTextMessageContent(
                 message_text=(
                     f"LOOP DUEL\n\n{creator.first_name} бросает тебе вызов.\n\n"
                     f"Твоя ставка: {amount} GRAM\n"
-                    f"Твой шанс: {receiver_chance // 100}%\n"
-                    f"Чистая прибыль при победе: {profit} GRAM\n\n"
+                    f"Условия: {display_terms}\n"
+                    f"Разница при победе: {profit} GRAM\n\n"
                     "Прими вызов и подтверди участие в LOOP."
                 )
             ),

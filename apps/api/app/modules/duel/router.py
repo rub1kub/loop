@@ -88,6 +88,11 @@ async def create_offer_quote(
     contract_address = settings.effective_duel_contract_address
     if not contract_address:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "DUEL contract is not configured")
+    if body.chance_bps != 5_000 and not body.challenge_code:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "new DUEL offers must use equal 50/50 terms",
+        )
     stake, opponent_stake, total_pool = canonical_duel_terms(body.stake_nano, body.chance_bps)
     if not settings.min_pool_nano <= total_pool <= settings.max_pool_nano:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "pool is outside limits")
