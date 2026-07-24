@@ -34,4 +34,6 @@ LOOP has no wallet creation, portfolio, internal balance or custody. A wallet co
 
 ## Network boundary
 
-Financial actions are hard-disabled outside TON testnet (`-3`). The UI labels every transaction as testnet. The browser demo never broadcasts transactions.
+Financial actions are hard-disabled outside TON testnet (`-3`). Primary user copy says “test
+GRAM” where the safety distinction matters without exposing network jargon on every screen. The
+browser demo never broadcasts transactions.

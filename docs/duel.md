@@ -7,11 +7,11 @@ DUEL is an escrow-based PvP mode independent of BANK.
 Every new LOOP challenge is equal 50/50: both players contribute the same stake and the
 contract settles one shared pool. There is no probability picker in the Mini App or public API.
 
-The deployed DuelEscrow v1.1 bytecode also understands canonical 25/75 and 75/25 terms.
+The deployed DuelEscrow v1.2 bytecode also understands canonical 25/75 and 75/25 terms.
 That support remains for deterministic recovery of already funded legacy offers and invitations;
 it is not exposed for creating a new AFK or direct challenge.
 
-Winner payout is `pool - floor(pool × fee / 10,000)`. DuelEscrow v1.1 enforces one global 2.5% fee.
+Winner payout is `pool - floor(pool × fee / 10,000)`. DuelEscrow v1.2 enforces one global 2.5% fee.
 
 ## Matchmaking
 

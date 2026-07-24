@@ -2,6 +2,8 @@
 
 Thanks for helping build LOOP as a Telegram Mini App for TON testnet. Contributions must preserve the BANK/DUEL boundary: LOOP is not a wallet, does not hold an internal balance, and uses TON Connect only for external wallet proofs and transactions.
 
+Start with the canonical [agent and maintainer knowledge base](docs/agents/README.md).
+
 ## Development workflow
 
 1. Create a focused branch from `main`.

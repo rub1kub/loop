@@ -106,7 +106,7 @@ def create_dispatcher(
                 await query.answer([], cache_time=1, is_personal=True)
                 return
             if challenge is None:
-                # V1.1 creates the invitation id before the creator signs the
+                # The address-bound direct flow creates the invitation id before the creator signs
                 # on-chain offer. Generating it here would not be covered by
                 # the contract's address-bound acceptance permit.
                 await query.answer([], cache_time=1, is_personal=True)

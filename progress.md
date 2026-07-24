@@ -3,7 +3,8 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 ## Product decisions
 
 - LOOP is not a wallet and has no internal spendable balance. TON Connect is limited to external wallet ownership proofs, transaction confirmation, payouts, and asset checks.
-- BANK is a seven-day living social cycle represented by a jar. Verified system, Telegram, and on-chain events advance its progress and history.
+- BANK is a FIFO queue represented by a jar. Later deposits fund the oldest unfinished positions;
+  progress comes only from verified contract allocation and can stop indefinitely.
 - DUEL is an equal 50/50 person-to-person challenge. The product rejects probability controls and casino language.
 - RATING is a monthly proof-backed reputation layer. Score never uses stake size, profit,
   balance, wins or losses.
@@ -13,14 +14,17 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 
 ## Completed
 
-- Replaced wallet-goal domain behavior with BANK cycles, event progress, history, and proof references.
+- Replaced wallet-goal domain behavior with BANK FIFO positions, partial progress, history, and
+  proof references.
 - Restricted the application, API, matcher, and bot to equal 50/50 DUEL terms while preserving the verifiable deployed contract.
 - Added AFK matchmaking, exact-offer direct challenges, Telegram inline messages, and invitation acceptance flows.
 - Rebuilt the Mini App around the selected monochrome Living Jar direction with functional onboarding, loader, BANK, DUEL, RATING, PROFILE, history, settings, and inline preview states.
 - Added reader-facing BANK queue rank, active participants, a transparent monthly LOOP Score,
   SIGNAL/PULSE/ORBIT/LOOP levels, global ranking and a qualified-friend circle.
 - Added masterchain-confirmed transaction validation, fail-closed checkpoints, contract/wallet/transaction/Jetton audit tools, and explorer proofs in application responses.
-- Audited the existing testnet deployment: active state, bytecode hash match, deployment transaction, owner/treasury, immutable fee, pause authority, recovery permissions, and locked state.
+- Audited the existing testnet deployment: active state, bytecode hash match, deployment
+  transaction, owner/treasury, current fee, protected owner controls, recovery permissions, and
+  locked state.
 - Passed frontend lint, unit tests, responsive Playwright flows and production build; strict API
   lint/type checks and proof-derived RATING integration tests; Acton contract coverage remains
   above the configured gate.

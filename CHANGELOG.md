@@ -23,3 +23,5 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Reader-facing BANK queue rank derived from unfinished proof-backed positions.
 - Separate browser owner site with TON proof login, live contract state, application intake controls and an administrative audit trail.
 - Owner-only contract reserve funding, protected surplus withdrawal, fee/treasury changes and ownership transfer with locked-value invariants.
+- Canonical agent knowledge base covering product rules, architecture, data, contracts, operations,
+  task playbooks and the dated production snapshot.

@@ -45,7 +45,7 @@ LOOP не является кошельком и не хранит внутре�
 ## What is implemented
 
 - FIFO BANK contract with 1.25×, 1.5× and 2× targets, partial funding, cascading settlement, deterministic fee and automatic payouts.
-- Equal 50/50 DUEL product with domain-separated commit–reveal, permissionless timeouts, refunds and replay protection. The verified v1.1 escrow can still settle legacy 25/75 offers, but the application no longer creates them.
+- Equal 50/50 DUEL product with domain-separated commit–reveal, permissionless timeouts, refunds and replay protection. The verified v1.2 escrow can still settle legacy 25/75 offers, but the application no longer creates them.
 - AFK matchmaking with durable reservations and direct Telegram invites cryptographically bound on-chain to the invited wallet.
 - Monthly LOOP Score, levels, global and qualified-friend rankings, live BANK/DUEL participation and a public point formula derived from finalized on-chain projections.
 - Independent BANK and DUEL models, API routers, database tables, chain event logs and checkpoints.
@@ -77,6 +77,8 @@ PostgreSQL stores projections and Telegram product state. Redis stores disposabl
 
 Read [product](docs/product.md), [architecture](docs/architecture.md), [BANK](docs/bank.md),
 [DUEL](docs/duel.md), [RATING](docs/rating.md) and [contracts](docs/contracts.md).
+Agents and maintainers should start with the canonical
+[project knowledge base](docs/agents/README.md).
 
 ## Stack
 
@@ -164,7 +166,7 @@ Full runbook: [deployment](docs/deployment.md).
 
 - BANK is intentionally a pyramid simulation. Payouts depend on later deposits and can stop indefinitely.
 - BANK always funds older FIFO positions first; any remainder visibly seeds the new position instead of becoming trapped protocol reserve.
-- DUEL v1.1 has one global 2.5% on-chain fee. PLUSH BRICK ownership is verified, but a holder discount is disabled until a contract version can enforce it on-chain across networks.
+- DUEL v1.2 has one global 2.5% on-chain fee. PLUSH BRICK ownership is verified, but a holder discount is disabled until a contract version can enforce it on-chain across networks.
 - Financial contracts run on testnet, while the configured PLUSH BRICK Jetton exists on mainnet; the two proofs are explicitly separated.
 - LOOP holds no user balance, seed phrase, private key or custodial wallet; two isolated low-value testnet keys are used only by the production DUEL canary.
 - Administrative withdrawals are limited on-chain to `balance − locked user value − retained reserve`, require a paused contract and always go to the configured treasury.
