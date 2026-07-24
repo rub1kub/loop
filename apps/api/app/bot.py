@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.exceptions import TelegramRetryAfter
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     BotCommand,
     InlineKeyboardButton,
@@ -41,6 +41,39 @@ BOT_SHORT_DESCRIPTION = (
     "Живой цикл: очередь BANK, равные DUEL один на один и рейтинг подтверждённых действий."
 )
 BOT_MENU_TEXT = "Открыть LOOP"
+BOT_COMMANDS = [
+    BotCommand(command="start", description="Открыть LOOP"),
+    BotCommand(command="support", description="Помощь и связь"),
+]
+START_TEXT = (
+    "∞ LOOP\n\n"
+    "Ты вошёл в живой цикл.\n\n"
+    "BANK\n"
+    "Прозрачная очередь, в которой каждый новый взнос продолжает движение и "
+    "постепенно наполняет более ранние позиции. Ты выбираешь сумму и цель, "
+    "а состояние цикла всегда видно в приложении.\n\n"
+    "DUEL\n"
+    "Равный вызов один на один. Одинаковые ставки, понятные условия и результат, "
+    "который нельзя изменить задним числом.\n\n"
+    "РЕЙТИНГ\n"
+    "Твой след в LOOP: завершённые циклы, дуэли и надёжность. Размер ставки не "
+    "делает участника выше остальных.\n\n"
+    "Кошелёк остаётся внешним. LOOP использует его только для подтверждения "
+    "действий и получения выплат.\n\n"
+    "Цикл уже идёт. Твой ход — войти.\n\n"
+    "Нужна помощь — /support"
+)
+SUPPORT_TEXT = (
+    "ПОДДЕРЖКА LOOP\n\n"
+    "Если действие зависло или результат не обновился:\n\n"
+    "1. Не отправляй транзакцию повторно.\n"
+    "2. Сделай снимок экрана.\n"
+    "3. Скопируй адрес кошелька и хэш транзакции, если он появился.\n"
+    "4. Напиши, где возникла проблема: BANK, DUEL, рейтинг или вход.\n\n"
+    "Никому не отправляй seed-фразу, приватный ключ, пароль или код из Telegram. "
+    "Поддержка LOOP никогда их не запрашивает.\n\n"
+    "Нажми кнопку ниже и отправь собранные данные."
+)
 
 
 def as_utc(value: datetime) -> datetime:
@@ -72,12 +105,22 @@ def create_dispatcher(
                 ]
             ]
         )
-        await message.answer(
-            "Ты вошёл в LOOP.\n\n"
-            "BANK — прозрачная очередь, где каждый новый взнос продолжает цикл. "
-            "DUEL — равный вызов один на один. Рейтинг — твой след в LOOP.",
-            reply_markup=keyboard,
+        await message.answer(START_TEXT, reply_markup=keyboard)
+
+    @router.message(Command("support"))
+    async def support(message: Message) -> None:
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="НАПИСАТЬ В ПОДДЕРЖКУ", url=settings.support_url)],
+                [
+                    InlineKeyboardButton(
+                        text="ВЕРНУТЬСЯ В LOOP",
+                        url=main_app_deep_link(settings.bot_username),
+                    )
+                ],
+            ]
         )
+        await message.answer(SUPPORT_TEXT, reply_markup=keyboard)
 
     @router.inline_query()
     async def inline_duel(query: InlineQuery) -> None:
@@ -182,12 +225,11 @@ async def configure_bot(bot: Bot, settings: Settings) -> None:
     if (await bot.get_my_short_description()).short_description != BOT_SHORT_DESCRIPTION:
         await apply_bot_setting(lambda: bot.set_my_short_description(BOT_SHORT_DESCRIPTION))
 
-    expected_commands = [BotCommand(command="start", description="Открыть LOOP")]
     current_commands = await bot.get_my_commands()
     if [(item.command, item.description) for item in current_commands] != [
-        (item.command, item.description) for item in expected_commands
+        (item.command, item.description) for item in BOT_COMMANDS
     ]:
-        await apply_bot_setting(lambda: bot.set_my_commands(expected_commands))
+        await apply_bot_setting(lambda: bot.set_my_commands(BOT_COMMANDS))
 
     menu = await bot.get_chat_menu_button()
     if (

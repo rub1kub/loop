@@ -4,11 +4,14 @@ import pytest
 from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
 from app.bot import (
+    BOT_COMMANDS,
     BOT_DESCRIPTION,
     BOT_MENU_TEXT,
     BOT_NAME,
     BOT_SHORT_DESCRIPTION,
     INLINE_PATTERN,
+    START_TEXT,
+    SUPPORT_TEXT,
     configure_bot,
     format_gram,
     main_app_deep_link,
@@ -40,6 +43,23 @@ def test_bot_profile_describes_independent_bank_and_duel() -> None:
     assert "твой кошелёк" not in copy
 
 
+def test_start_and_support_copy_are_clear_and_safe() -> None:
+    start_copy = START_TEXT.lower()
+    assert all(section in start_copy for section in ("bank", "duel", "рейтинг", "кошелёк"))
+    assert "seed-фразу" in SUPPORT_TEXT
+    assert "не отправляй транзакцию повторно" in SUPPORT_TEXT.lower()
+    assert len(START_TEXT) <= 4096
+    assert len(SUPPORT_TEXT) <= 4096
+
+
+def test_bot_commands_include_support() -> None:
+    commands = {(item.command, item.description) for item in BOT_COMMANDS}
+    assert commands == {
+        ("start", "Открыть LOOP"),
+        ("support", "Помощь и связь"),
+    }
+
+
 @pytest.mark.asyncio
 async def test_bot_configuration_only_mutates_drifted_metadata() -> None:
     settings = get_settings()
@@ -69,7 +89,10 @@ async def test_bot_configuration_only_mutates_drifted_metadata() -> None:
             return SimpleNamespace(short_description=BOT_SHORT_DESCRIPTION)
 
         async def get_my_commands(self):
-            return [BotCommand(command="start", description="Открыть LOOP")]
+            return [
+                BotCommand(command=item.command, description=item.description)
+                for item in BOT_COMMANDS
+            ]
 
         async def get_chat_menu_button(self):
             return MenuButtonWebApp(

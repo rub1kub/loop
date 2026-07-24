@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     bot_token: SecretStr = SecretStr("")
     bot_username: str = ""
+    support_url: str = "https://t.me/rub1kub"
     telegram_webhook_secret: SecretStr = SecretStr("")
     telegram_auth_max_age_seconds: int = 21_600
     telegram_future_skew_seconds: int = 30

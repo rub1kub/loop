@@ -48,7 +48,8 @@ Inline messages cannot override an amount, wallet, contract, probability, expiry
 
 The bot supports:
 
-- `/start` with a Mini App button;
+- `/start` with an expanded product introduction, Mini App button and `/support` hint;
+- `/support` with a recovery checklist, safety warning and configurable support link;
 - a persistent menu Web App button;
 - inline duel invitations;
 - start parameters for direct challenges and referrals;
@@ -56,7 +57,10 @@ The bot supports:
 
 The production webhook uses an unguessable path and validates Telegram's secret-token header. Bot API configuration may set the webhook and menu, but inline capability itself must be enabled once through BotFather `/setinline`. Deployment acceptance checks `getMe.supports_inline_queries`.
 
-The application configures the public bot name, description, short description, `/start` command, and **Открыть LOOP** menu button at API startup so a container restart cannot restore obsolete wallet-first copy.
+The application configures the public bot name, description, short description, `/start` and
+`/support` commands, and **Открыть LOOP** menu button at API startup so a container restart
+cannot restore obsolete wallet-first copy. `LOOP_SUPPORT_URL` controls the support destination
+without a code change.
 
 BotFather's Main App launch mode should remain **Fullsize**, not **Fullscreen**. LOOP promotes
 native iOS/Android sessions to fullscreen after initialization and explicitly exits fullscreen on
