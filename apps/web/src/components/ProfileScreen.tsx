@@ -55,6 +55,7 @@ export function ProfileScreen({
   const [referral, setReferral] = useState<Referral | null>(() =>
     isMockTelegram() ? demoReferral : null,
   );
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (isMockTelegram()) return;
@@ -63,6 +64,24 @@ export function ProfileScreen({
       .then(setReferral)
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (isMockTelegram()) return;
+    let active = true;
+    let objectUrl: string | null = null;
+    void api
+      .meAvatar()
+      .then((avatar) => {
+        if (!avatar || !active) return;
+        objectUrl = URL.createObjectURL(avatar);
+        setAvatarUrl(objectUrl);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [profile.user.id, profile.user.photo_url]);
 
   async function shareReferral() {
     if (!referral) return;
@@ -74,12 +93,20 @@ export function ProfileScreen({
 
   const recentBank = bankHistory.find((item) => item.proof_url);
   const recentDuel = duels.find((item) => item.settlement_proof_url);
+  const displayedAvatarUrl = isMockTelegram() ? profile.user.photo_url : avatarUrl;
 
   return (
     <section className="screen profile-screen" aria-labelledby="profile-title">
       <header className="profile-identity">
-        {profile.user.photo_url ? (
-          <img className="avatar" src={profile.user.photo_url} alt="" />
+        {displayedAvatarUrl ? (
+          <img
+            className="avatar"
+            src={displayedAvatarUrl}
+            alt=""
+            onError={() => {
+              if (!isMockTelegram()) setAvatarUrl(null);
+            }}
+          />
         ) : (
           <div className="avatar" aria-hidden="true">
             {profile.user.first_name.slice(0, 1).toUpperCase()}

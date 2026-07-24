@@ -18,7 +18,11 @@ for (const mode of modes) {
     const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
     expect(viewport).toContain('maximum-scale=1');
     expect(viewport).toContain('user-scalable=no');
-    await expect(page.locator('body')).toHaveCSS('user-select', 'none');
+    const userSelect = await page.locator('body').evaluate((body) => {
+      const styles = getComputedStyle(body);
+      return styles.userSelect || styles.getPropertyValue('-webkit-user-select');
+    });
+    expect(userSelect).toBe('none');
     await expect(page.locator('body')).toHaveCSS('touch-action', 'pan-y');
 
     const noHorizontalOverflow = await page
@@ -31,7 +35,11 @@ for (const mode of modes) {
     expect(screenPaddingTop).toBeGreaterThanOrEqual(mode.safeTop + 29);
 
     const input = page.locator('.stake-input input');
-    await expect(input).toHaveCSS('user-select', 'none');
+    const inputUserSelect = await input.evaluate((element) => {
+      const styles = getComputedStyle(element);
+      return styles.userSelect || styles.getPropertyValue('-webkit-user-select');
+    });
+    expect(inputUserSelect).toBe('none');
     await input.fill('2');
     const stableHeight = (await page.locator('.app-shell').boundingBox())!.height;
     const keyboardHeight = Math.max(360, mode.height - 220);

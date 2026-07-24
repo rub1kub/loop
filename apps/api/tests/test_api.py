@@ -2,8 +2,10 @@ import hashlib
 import hmac
 import json
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 from urllib.parse import urlencode
 
+import httpx
 import pytest
 from sqlalchemy import select
 
@@ -12,11 +14,14 @@ from app.modules.duel.models import Duel, DuelOffer, OfferState
 from app.ton import ContractState, JettonWalletState
 
 
-def signed_init_data(telegram_id: int = 777000111) -> str:
+def signed_init_data(telegram_id: int = 777000111, *, photo_url: str | None = None) -> str:
+    user = {"id": telegram_id, "first_name": "Loop"}
+    if photo_url:
+        user["photo_url"] = photo_url
     values = {
         "auth_date": str(int(datetime.now(UTC).timestamp())),
         "query_id": f"AAE-api-{telegram_id}",
-        "user": json.dumps({"id": telegram_id, "first_name": "Loop"}, separators=(",", ":")),
+        "user": json.dumps(user, separators=(",", ":")),
     }
     check = "\n".join(f"{key}={values[key]}" for key in sorted(values))
     secret = hmac.new(b"WebAppData", b"123456:test-token", hashlib.sha256).digest()
@@ -57,6 +62,55 @@ async def test_auth_profile_has_separate_bank_and_duel_domains(client) -> None:
     assert me.json()["duel"] == {"active": 0, "completed": 0, "total": 0}
     assert "balance_nano" not in me.json()
     assert (await client.post("/api/v1/bank/cycles", headers=headers, json={})).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_avatar_is_proxied_through_authenticated_same_origin_api(
+    client, app, monkeypatch
+) -> None:
+    photo_url = "https://t.me/i/userpic/320/loop.jpg"
+    auth = await client.post(
+        "/api/v1/auth/telegram",
+        json={"init_data": signed_init_data(777000112, photo_url=photo_url)},
+    )
+    headers = {"Authorization": f"Bearer {auth.json()['access_token']}"}
+    upstream = httpx.Response(
+        status_code=200,
+        headers={"Content-Type": "image/jpeg"},
+        content=b"\xff\xd8\xff\xd9",
+        request=httpx.Request("GET", "https://cdn4.telesco.pe/file/loop.jpg"),
+    )
+    get = AsyncMock(return_value=upstream)
+    monkeypatch.setattr(app.state.http, "get", get)
+
+    assert (await client.get("/api/v1/me/avatar")).status_code == 401
+    response = await client.get("/api/v1/me/avatar", headers=headers)
+
+    assert response.status_code == 200
+    assert response.content == b"\xff\xd8\xff\xd9"
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.headers["cache-control"] == "private, max-age=300"
+    get.assert_awaited_once_with(photo_url, follow_redirects=True)
+
+
+@pytest.mark.asyncio
+async def test_avatar_proxy_rejects_untrusted_photo_host(client, app, monkeypatch) -> None:
+    auth = await client.post(
+        "/api/v1/auth/telegram",
+        json={
+            "init_data": signed_init_data(
+                777000113, photo_url="https://example.com/avatar.jpg"
+            )
+        },
+    )
+    headers = {"Authorization": f"Bearer {auth.json()['access_token']}"}
+    get = AsyncMock()
+    monkeypatch.setattr(app.state.http, "get", get)
+
+    response = await client.get("/api/v1/me/avatar", headers=headers)
+
+    assert response.status_code == 404
+    get.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test';
 test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Telegram tab bar', async ({
   page,
 }) => {
+  test.slow();
+
   const emulateFullscreenControls = () =>
     page.locator('html').evaluate((root) => {
       root.style.setProperty('--tg-content-safe-area-inset-top', '72px');

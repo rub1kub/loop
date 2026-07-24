@@ -1,7 +1,9 @@
 import secrets
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter, HTTPException, Request, status
+import httpx
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -50,10 +52,31 @@ from .security import (
 from .ton import TonProviderError, explorer_transaction_url
 
 router = APIRouter(prefix="/api/v1")
+MAX_TELEGRAM_AVATAR_BYTES = 1_000_000
+TELEGRAM_PHOTO_HOSTS = ("t.me", "telegram.me", "telegram.org", "telesco.pe", "cdn-telegram.org")
 
 
 def as_utc(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def is_telegram_photo_url(value: str) -> bool:
+    try:
+        parsed = urlsplit(value)
+        host = (parsed.hostname or "").lower()
+        port = parsed.port
+    except ValueError:
+        return False
+    trusted_host = any(
+        host == suffix or host.endswith(f".{suffix}") for suffix in TELEGRAM_PHOTO_HOSTS
+    )
+    return (
+        parsed.scheme == "https"
+        and trusted_host
+        and port in (None, 443)
+        and parsed.username is None
+        and parsed.password is None
+    )
 
 
 def user_view(user: User) -> UserView:
@@ -263,6 +286,40 @@ async def get_me(user: CurrentUser, db: Db, request: Request, settings: Config) 
             duel_fee_bps=duel_fee_bps,
             fee_discount_active=False,
         ),
+    )
+
+
+@router.get(
+    "/me/avatar",
+    response_class=Response,
+    responses={
+        status.HTTP_200_OK: {"content": {"image/jpeg": {}, "image/png": {}, "image/webp": {}}},
+        status.HTTP_404_NOT_FOUND: {"description": "Telegram avatar is unavailable"},
+    },
+)
+async def get_my_avatar(user: CurrentUser, request: Request) -> Response:
+    if not user.photo_url or not is_telegram_photo_url(user.photo_url):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Telegram avatar is unavailable")
+    try:
+        upstream = await request.app.state.http.get(user.photo_url, follow_redirects=True)
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "Telegram avatar is temporarily unavailable"
+        ) from exc
+    media_type = upstream.headers.get("content-type", "").split(";", 1)[0].lower()
+    if (
+        upstream.status_code != status.HTTP_200_OK
+        or not is_telegram_photo_url(str(upstream.url))
+        or media_type not in {"image/jpeg", "image/png", "image/webp"}
+        or len(upstream.content) > MAX_TELEGRAM_AVATAR_BYTES
+    ):
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "Telegram avatar is temporarily unavailable"
+        )
+    return Response(
+        content=upstream.content,
+        media_type=media_type,
+        headers={"Cache-Control": "private, max-age=300"},
     )
 
 

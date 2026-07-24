@@ -74,4 +74,26 @@ describe('API session recovery', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('loads the Telegram avatar through the authenticated same-origin endpoint', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(new Uint8Array([255, 216, 255, 217]), {
+        status: 200,
+        headers: { 'Content-Type': 'image/jpeg' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api');
+    api.setToken('session-token');
+    const avatar = await api.meAvatar();
+
+    expect(avatar?.type).toBe('image/jpeg');
+    expect(avatar?.size).toBe(4);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/me/avatar');
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('Authorization')).toBe(
+      'Bearer session-token',
+    );
+  });
 });

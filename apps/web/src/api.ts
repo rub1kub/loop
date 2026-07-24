@@ -175,6 +175,26 @@ async function request<T>(path: string, init?: RequestInit, retryUnauthorized = 
   return (await response.json()) as T;
 }
 
+async function requestAvatar(retryUnauthorized = true): Promise<Blob | null> {
+  const headers = new Headers({ Accept: 'image/*' });
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/me/avatar`, { headers });
+  } catch (error) {
+    throw new Error('Не удалось загрузить аватар.', { cause: error });
+  }
+  if (response.status === 401 && retryUnauthorized) {
+    accessToken = null;
+    if (await restoreSession()) return requestAvatar(false);
+  }
+  if (response.status === 404) return null;
+  if (!response.ok || !response.headers.get('Content-Type')?.startsWith('image/')) {
+    throw new Error('Не удалось загрузить аватар.');
+  }
+  return await response.blob();
+}
+
 export const api = {
   async authenticate(initData: string): Promise<{ profile: Profile; token: string }> {
     const auth = await request<{ access_token: string }>('/auth/telegram', {
@@ -194,6 +214,10 @@ export const api = {
 
   async me(): Promise<Profile> {
     return profileSchema.parse(await request<unknown>('/me'));
+  },
+
+  async meAvatar(): Promise<Blob | null> {
+    return await requestAvatar();
   },
 
   async updateSettings(input: {
