@@ -45,10 +45,12 @@ def test_bot_profile_describes_independent_bank_and_duel() -> None:
 
 def test_start_and_support_copy_are_clear_and_safe() -> None:
     start_copy = START_TEXT.lower()
-    assert all(section in start_copy for section in ("bank", "duel", "рейтинг", "кошелёк"))
+    assert all(section in start_copy for section in ("bank", "duel", "очередь", "вызов"))
+    assert "рейтинг" not in start_copy
+    assert "кошелёк" not in start_copy
     assert "seed-фразу" in SUPPORT_TEXT
     assert "не отправляй транзакцию повторно" in SUPPORT_TEXT.lower()
-    assert len(START_TEXT) <= 4096
+    assert len(START_TEXT) <= 160
     assert len(SUPPORT_TEXT) <= 4096
 
 
