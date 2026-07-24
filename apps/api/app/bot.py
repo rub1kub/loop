@@ -1,7 +1,7 @@
 import asyncio
 import re
 from collections.abc import Awaitable, Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.exceptions import TelegramRetryAfter
@@ -17,6 +17,7 @@ from aiogram.types import (
     Message,
     WebAppInfo,
 )
+from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -45,6 +46,7 @@ BOT_COMMANDS = [
     BotCommand(command="start", description="Открыть LOOP"),
     BotCommand(command="support", description="Помощь и связь"),
 ]
+START_MESSAGE_COUNTER_TTL_SECONDS = 90 * 24 * 60 * 60
 START_MESSAGES = (
     "∞ LOOP\n\nЦикл уже идёт.\n\nBANK — войди в очередь.\n"
     "DUEL — брось вызов.\n\nТвой ход.",
@@ -137,13 +139,21 @@ def main_app_deep_link(bot_username: str) -> str:
     return f"https://t.me/{bot_username.removeprefix('@')}?startapp"
 
 
-def start_message_for(user_id: int, on_date: date | None = None) -> str:
-    current_date = on_date or datetime.now(UTC).date()
-    return START_MESSAGES[(user_id + current_date.toordinal()) % len(START_MESSAGES)]
+def start_message_for(user_id: int, sequence: int) -> str:
+    return START_MESSAGES[(user_id + sequence - 1) % len(START_MESSAGES)]
+
+
+async def next_start_message(redis_client: Redis, user_id: int) -> str:
+    key = f"loop:bot:start-message:{user_id}"
+    sequence = int(await redis_client.incr(key))
+    await redis_client.expire(key, START_MESSAGE_COUNTER_TTL_SECONDS)
+    return start_message_for(user_id, sequence)
 
 
 def create_dispatcher(
-    settings: Settings, session_factory: async_sessionmaker[AsyncSession]
+    settings: Settings,
+    session_factory: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
 ) -> Dispatcher:
     router = Router()
 
@@ -159,7 +169,10 @@ def create_dispatcher(
             ]
         )
         user_id = message.from_user.id if message.from_user is not None else 0
-        await message.answer(start_message_for(user_id), reply_markup=keyboard)
+        await message.answer(
+            await next_start_message(redis_client, user_id),
+            reply_markup=keyboard,
+        )
 
     @router.message(Command("support"))
     async def support(message: Message) -> None:

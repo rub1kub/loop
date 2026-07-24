@@ -1,4 +1,3 @@
-from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -59,10 +58,10 @@ def test_start_and_support_copy_are_clear_and_safe() -> None:
     assert len(SUPPORT_TEXT) <= 4096
 
 
-def test_start_message_rotates_daily_but_is_stable_within_a_day() -> None:
-    today = date(2026, 7, 24)
-    assert start_message_for(42, today) == start_message_for(42, today)
-    assert start_message_for(42, today) != start_message_for(42, today + timedelta(days=1))
+def test_start_message_rotates_on_every_call_without_early_repeats() -> None:
+    cycle = [start_message_for(42, sequence) for sequence in range(1, len(START_MESSAGES) + 1)]
+    assert len(set(cycle)) == len(START_MESSAGES)
+    assert start_message_for(42, len(START_MESSAGES) + 1) == cycle[0]
 
 
 def test_bot_commands_include_support() -> None:

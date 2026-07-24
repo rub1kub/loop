@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await connection.run_sync(Base.metadata.create_all)
     if settings.bot_token.get_secret_value():
         app.state.bot = Bot(settings.bot_token.get_secret_value())
-        app.state.dispatcher = create_dispatcher(settings, session_factory)
+        app.state.dispatcher = create_dispatcher(settings, session_factory, app.state.redis)
         if settings.app_env == "production":
             try:
                 await asyncio.wait_for(configure_bot(app.state.bot, settings), timeout=20)
