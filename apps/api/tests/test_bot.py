@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -10,11 +11,12 @@ from app.bot import (
     BOT_NAME,
     BOT_SHORT_DESCRIPTION,
     INLINE_PATTERN,
-    START_TEXT,
+    START_MESSAGES,
     SUPPORT_TEXT,
     configure_bot,
     format_gram,
     main_app_deep_link,
+    start_message_for,
 )
 from app.config import get_settings
 
@@ -44,14 +46,23 @@ def test_bot_profile_describes_independent_bank_and_duel() -> None:
 
 
 def test_start_and_support_copy_are_clear_and_safe() -> None:
-    start_copy = START_TEXT.lower()
-    assert all(section in start_copy for section in ("bank", "duel", "очередь", "вызов"))
-    assert "рейтинг" not in start_copy
-    assert "кошелёк" not in start_copy
+    assert len(START_MESSAGES) >= 32
+    assert len(set(START_MESSAGES)) == len(START_MESSAGES)
+    for message in START_MESSAGES:
+        start_copy = message.lower()
+        assert all(section in start_copy for section in ("∞ loop", "bank", "duel"))
+        assert "рейтинг" not in start_copy
+        assert "кошелёк" not in start_copy
+        assert len(message) <= 160
     assert "seed-фразу" in SUPPORT_TEXT
     assert "не отправляй транзакцию повторно" in SUPPORT_TEXT.lower()
-    assert len(START_TEXT) <= 160
     assert len(SUPPORT_TEXT) <= 4096
+
+
+def test_start_message_rotates_daily_but_is_stable_within_a_day() -> None:
+    today = date(2026, 7, 24)
+    assert start_message_for(42, today) == start_message_for(42, today)
+    assert start_message_for(42, today) != start_message_for(42, today + timedelta(days=1))
 
 
 def test_bot_commands_include_support() -> None:

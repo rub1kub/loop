@@ -1,7 +1,7 @@
 import asyncio
 import re
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.exceptions import TelegramRetryAfter
@@ -45,12 +45,71 @@ BOT_COMMANDS = [
     BotCommand(command="start", description="Открыть LOOP"),
     BotCommand(command="support", description="Помощь и связь"),
 ]
-START_TEXT = (
-    "∞ LOOP\n\n"
-    "Цикл уже идёт.\n\n"
-    "BANK — войди в очередь.\n"
-    "DUEL — брось вызов.\n\n"
-    "Твой ход."
+START_MESSAGES = (
+    "∞ LOOP\n\nЦикл уже идёт.\n\nBANK — войди в очередь.\n"
+    "DUEL — брось вызов.\n\nТвой ход.",
+    "∞ LOOP\n\nОдин цикл. Два пути.\n\nBANK — дождись момента.\n"
+    "DUEL — создай его.\n\nВойти?",
+    "∞ LOOP\n\nЗдесь всё движется дальше.\n\nBANK — займи место.\n"
+    "DUEL — выбери соперника.\n\nПродолжить?",
+    "∞ LOOP\n\nКруг уже замкнулся.\n\nBANK — стань частью очереди.\n"
+    "DUEL — выйди один на один.\n\nТвой ход.",
+    "∞ LOOP\n\nНичего не стоит на месте.\n\nBANK — очередь движется.\n"
+    "DUEL — вызов начинается с тебя.\n\nВойти.",
+    "∞ LOOP\n\nТы не первый. И не последний.\n\nBANK — войди в очередь.\n"
+    "DUEL — встреть соперника.\n\nПродолжить цикл.",
+    "∞ LOOP\n\nУ каждого хода есть продолжение.\n\nBANK — займи позицию.\n"
+    "DUEL — брось вызов.\n\nЧто выберешь?",
+    "∞ LOOP\n\nЦикл не ждёт.\n\nBANK — место в очереди.\n"
+    "DUEL — встреча один на один.\n\nВойти.",
+    "∞ LOOP\n\nДальше решает твой ход.\n\nBANK — войди в поток.\n"
+    "DUEL — найди равного.\n\nLOOP открыт.",
+    "∞ LOOP\n\nВсё возвращается. Но не прежним.\n\nBANK — очередь.\n"
+    "DUEL — вызов.\n\nПродолжить.",
+    "∞ LOOP\n\nЗдесь действие всегда имеет продолжение.\n\nBANK — займи место.\n"
+    "DUEL — сделай вызов.\n\nТвой ход.",
+    "∞ LOOP\n\nДва выбора. Один след.\n\nBANK — в очередь.\n"
+    "DUEL — один на один.\n\nВойти.",
+    "∞ LOOP\n\nЦикл начинается не с нуля.\n\nBANK — продолжи очередь.\n"
+    "DUEL — начни встречу.\n\nВойти в LOOP.",
+    "∞ LOOP\n\nСначала — один ход. Потом — цикл.\n\nBANK — займи место.\n"
+    "DUEL — брось вызов.\n\nНачать.",
+    "∞ LOOP\n\nОчередь или вызов.\n\nBANK — терпение.\n"
+    "DUEL — решимость.\n\nОба ведут дальше.",
+    "∞ LOOP\n\nЗдесь никто не остаётся вне цикла.\n\nBANK — войди в очередь.\n"
+    "DUEL — выйди навстречу.\n\nТвой ход.",
+    "∞ LOOP\n\nВнутри всё проще, чем кажется.\n\nBANK — очередь.\n"
+    "DUEL — вызов.\n\nОткрой LOOP.",
+    "∞ LOOP\n\nОдин шаг меняет следующий.\n\nBANK — займи позицию.\n"
+    "DUEL — найди соперника.\n\nПродолжить.",
+    "∞ LOOP\n\nЦикл видит каждый ход.\n\nBANK — очередь.\n"
+    "DUEL — один на один.\n\nВойти.",
+    "∞ LOOP\n\nТишина длится до первого хода.\n\nBANK — войди в очередь.\n"
+    "DUEL — брось вызов.\n\nНачать.",
+    "∞ LOOP\n\nНе наблюдай за циклом.\n\nBANK — займи место.\n"
+    "DUEL — сделай вызов.\n\nСтань его частью.",
+    "∞ LOOP\n\nСледующий ход уже за тобой.\n\nBANK — очередь ждёт.\n"
+    "DUEL — соперник найдётся.\n\nВойти.",
+    "∞ LOOP\n\nУ LOOP нет последнего хода.\n\nBANK — продолжи очередь.\n"
+    "DUEL — начни вызов.\n\nВойти.",
+    "∞ LOOP\n\nДва режима. Одно движение.\n\nBANK — войди в очередь.\n"
+    "DUEL — выйди один на один.\n\nТвой ход.",
+    "∞ LOOP\n\nМесто в цикле не дают. Его занимают.\n\nBANK — очередь.\n"
+    "DUEL — вызов.\n\nВойти.",
+    "∞ LOOP\n\nВсё начинается после нажатия.\n\nBANK — очередь.\n"
+    "DUEL — вызов.\n\nОткрыть LOOP.",
+    "∞ LOOP\n\nТы уже у входа.\n\nBANK — займи место.\n"
+    "DUEL — выбери соперника.\n\nОстался один ход.",
+    "∞ LOOP\n\nЦикл не объясняют. В него входят.\n\nBANK — очередь.\n"
+    "DUEL — вызов.\n\nВойти.",
+    "∞ LOOP\n\nЗа каждым действием — следующее.\n\nBANK — место в очереди.\n"
+    "DUEL — один на один.\n\nПродолжить.",
+    "∞ LOOP\n\nПравила просты. Цикл — нет.\n\nBANK — очередь.\n"
+    "DUEL — вызов.\n\nТвой ход.",
+    "∞ LOOP\n\nВремя идёт вперёд. LOOP — по кругу.\n\nBANK — займи место.\n"
+    "DUEL — встреть соперника.\n\nВойти.",
+    "∞ LOOP\n\nДо следующего хода — один шаг.\n\nBANK — войди в очередь.\n"
+    "DUEL — выйди один на один.\n\nОткрыть.",
 )
 SUPPORT_TEXT = (
     "ПОДДЕРЖКА LOOP\n\n"
@@ -78,6 +137,11 @@ def main_app_deep_link(bot_username: str) -> str:
     return f"https://t.me/{bot_username.removeprefix('@')}?startapp"
 
 
+def start_message_for(user_id: int, on_date: date | None = None) -> str:
+    current_date = on_date or datetime.now(UTC).date()
+    return START_MESSAGES[(user_id + current_date.toordinal()) % len(START_MESSAGES)]
+
+
 def create_dispatcher(
     settings: Settings, session_factory: async_sessionmaker[AsyncSession]
 ) -> Dispatcher:
@@ -94,7 +158,8 @@ def create_dispatcher(
                 ]
             ]
         )
-        await message.answer(START_TEXT, reply_markup=keyboard)
+        user_id = message.from_user.id if message.from_user is not None else 0
+        await message.answer(start_message_for(user_id), reply_markup=keyboard)
 
     @router.message(Command("support"))
     async def support(message: Message) -> None:
