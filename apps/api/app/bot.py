@@ -32,10 +32,14 @@ from .modules.duel.models import (
 INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
 BOT_NAME = "LOOP"
 BOT_DESCRIPTION = (
-    "LOOP — два независимых режима в TON. BANK — очередь позиций по порядку. "
-    "DUEL — равные вызовы между игроками 50/50."
+    "LOOP — живой цикл внутри Telegram. В BANK новые взносы постепенно наполняют "
+    "более ранние позиции прозрачной очереди. В DUEL два участника принимают "
+    "равный вызов один на один. Рейтинг показывает завершённые циклы и надёжность. "
+    "Все действия подтверждаются внешним TON-кошельком."
 )
-BOT_SHORT_DESCRIPTION = "BANK и равные вызовы DUEL на GRAM."
+BOT_SHORT_DESCRIPTION = (
+    "Живой цикл: очередь BANK, равные DUEL один на один и рейтинг подтверждённых действий."
+)
 BOT_MENU_TEXT = "Открыть LOOP"
 
 
@@ -68,7 +72,12 @@ def create_dispatcher(
                 ]
             ]
         )
-        await message.answer("LOOP\nBANK и DUEL открыты.", reply_markup=keyboard)
+        await message.answer(
+            "Ты вошёл в LOOP.\n\n"
+            "BANK — прозрачная очередь, где каждый новый взнос продолжает цикл. "
+            "DUEL — равный вызов один на один. Рейтинг — твой след в LOOP.",
+            reply_markup=keyboard,
+        )
 
     @router.inline_query()
     async def inline_duel(query: InlineQuery) -> None:
