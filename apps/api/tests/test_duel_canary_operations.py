@@ -178,6 +178,44 @@ def test_canary_reads_finalized_successful_settlement(
     }
 
 
+def test_canary_retries_temporary_finality_provider_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "transactions": [
+            {
+                "lt": "123",
+                "mc_block_seqno": 456,
+                "emulated": False,
+                "description": {
+                    "aborted": False,
+                    "compute_ph": {"success": True},
+                    "action": {"success": True},
+                },
+            }
+        ]
+    }
+    responses: Iterator[Any] = iter(
+        [
+            RUNNER.urllib.error.URLError("temporary failure"),
+            io.BytesIO(json.dumps(payload).encode()),
+        ]
+    )
+
+    def urlopen(*_args: Any, **_kwargs: Any) -> Any:
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    sleeps: list[int] = []
+    monkeypatch.setattr(RUNNER.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(RUNNER.time, "sleep", sleeps.append)
+
+    assert RUNNER.fetch_settlement_finality("testnet", "ab" * 32, 42)["status"] == "verified"
+    assert sleeps == [RUNNER.FINALITY_POLL_INTERVAL_SECONDS]
+
+
 def test_canary_report_requires_both_wallet_balances() -> None:
     with pytest.raises(ValidationError):
         DuelCanaryReport(

@@ -26,6 +26,8 @@ WALLET_ALIASES = {
 }
 FUNDING_POLL_ATTEMPTS = 12
 FUNDING_POLL_INTERVAL_SECONDS = 5
+FINALITY_POLL_ATTEMPTS = 12
+FINALITY_POLL_INTERVAL_SECONDS = 5
 
 
 def run(
@@ -184,18 +186,36 @@ def fetch_settlement_finality(
         f"{TONCENTER_URLS[network]}/api/v3/transactions?{query}",
         headers=headers,
     )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.loads(response.read())
-    except (urllib.error.URLError, TimeoutError) as exc:
-        raise SystemExit("TON settlement finality provider is unavailable") from exc
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise SystemExit(
-            "TON settlement finality provider returned invalid JSON"
-        ) from exc
-    transactions = payload.get("transactions") if isinstance(payload, dict) else None
-    if not isinstance(transactions, list) or len(transactions) != 1:
-        raise SystemExit("TON settlement transaction is missing or ambiguous")
+    transactions: list[Any] | None = None
+    for attempt in range(FINALITY_POLL_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                payload = json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            if exc.code not in {404, 429, 500, 502, 503, 504}:
+                raise SystemExit(
+                    f"TON settlement finality provider returned HTTP {exc.code}"
+                ) from exc
+        except (urllib.error.URLError, TimeoutError):
+            pass
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise SystemExit(
+                "TON settlement finality provider returned invalid JSON"
+            ) from exc
+        else:
+            candidate = (
+                payload.get("transactions") if isinstance(payload, dict) else None
+            )
+            if isinstance(candidate, list):
+                transactions = candidate
+                if len(transactions) == 1:
+                    break
+                if len(transactions) > 1:
+                    raise SystemExit("TON settlement transaction is ambiguous")
+        if attempt + 1 < FINALITY_POLL_ATTEMPTS:
+            time.sleep(FINALITY_POLL_INTERVAL_SECONDS)
+    if not transactions:
+        raise SystemExit("TON settlement transaction was not finalized before timeout")
     transaction = transactions[0]
     description = (
         transaction.get("description") if isinstance(transaction, dict) else None
