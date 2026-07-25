@@ -14,9 +14,9 @@ type WizardStep = 'amount' | 'multiplier' | 'confirm' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
 
 const statusCopy: Record<BankPosition['current_status'], string> = {
-  pending_confirmation: 'Подтверждаем вклад в TON',
-  queued: 'Банка ждёт пополнения',
-  partially_funded: 'Банка наполняется',
+  pending_confirmation: 'Проверяем вклад',
+  queued: 'Позиция ждёт пополнения',
+  partially_funded: 'Позиция наполняется',
   completed: 'Цель собрана',
   payout_sent: 'Выплата отправлена',
   failed: 'Вклад не подтверждён',
@@ -87,7 +87,7 @@ export function BankScreen({
       return;
     }
     if (wallet.account.chain !== '-3') {
-      setMessage('Выбранная сеть кошелька пока не поддерживается');
+      setMessage('Этот кошелёк сейчас не поддерживается');
       haptic('error');
       return;
     }
@@ -140,7 +140,7 @@ export function BankScreen({
         return;
       }
       if (!wallet || wallet.account.chain !== '-3') {
-        throw new Error('Подключите поддерживаемый внешний кошелёк TON');
+        throw new Error('Подключите поддерживаемый внешний кошелёк');
       }
       const quote = await api.quoteBankPosition({
         position_id: newOfferId(),
@@ -151,7 +151,7 @@ export function BankScreen({
       await tonConnectUI.sendTransaction(
         buildBankPositionTransaction(quote, wallet.account.address, wallet.account.chain),
       );
-      setMessage('Транзакция отправлена. Ждём подтверждённый блок TON.');
+      setMessage('Вклад отправлен. Ждём окончательный результат.');
       await onRefresh();
       haptic('success');
     } catch (error) {
@@ -167,7 +167,7 @@ export function BankScreen({
   const progressPercent = Math.min(100, Math.max(0, progress / 100));
   const sandStyle = { '--bank-fill': `${progressPercent}%` } as CSSProperties;
   const fundingCopy = position
-    ? `Собрано ${formatGram(position.funded_amount_nano, 3)} из ${formatGram(position.target_payout_nano, 3)} GRAM. На 100% контракт отправит выплату.`
+    ? `Собрано ${formatGram(position.funded_amount_nano, 3)} из ${formatGram(position.target_payout_nano, 3)} GRAM. На 100% выплата отправится автоматически.`
     : '';
 
   if (wizard) {
@@ -215,7 +215,7 @@ export function BankScreen({
             {wizard === 'multiplier' && (
               <>
                 <p className="eyebrow">ШАГ 2 ИЗ 3 · ЦЕЛЬ</p>
-                <h3>Сколько должна собрать банка?</h3>
+                <h3>Выбери целевую выплату.</h3>
                 <div className="choice-list">
                   {multipliers.map((value) => (
                     <button
@@ -233,8 +233,8 @@ export function BankScreen({
                   ))}
                 </div>
                 <p className="form-note">
-                  Очередь работает по порядку: более ранние позиции наполняются первыми. Чем выше
-                  цель, тем дольше может быть ожидание.
+                  Ранние позиции наполняются первыми. Чем выше цель, тем больше новых вкладов
+                  потребуется; выплата не гарантирована.
                 </p>
                 <button className="primary-button" onClick={() => void showConfirmation()}>
                   ПРОВЕРИТЬ
@@ -244,52 +244,52 @@ export function BankScreen({
             {wizard === 'confirm' && preview && (
               <>
                 <p className="eyebrow">ШАГ 3 ИЗ 3 · ПОДТВЕРЖДЕНИЕ</p>
-                <h3>Проверь, как будет работать позиция.</h3>
+                <h3>Проверь сумму и риск.</h3>
                 <dl className="detail-list">
                   <Detail
-                    label="К оплате в TON Connect"
+                    label="К оплате в кошельке"
                     value={`${formatGram(preview.transaction_amount_nano, 3)} GRAM`}
                   />
                   <Detail
-                    label="Вклад в BANK"
+                    label="Твой вклад"
                     value={`${formatGram(preview.principal_nano, 3)} GRAM`}
                   />
                   <Detail
                     label="Целевая выплата"
                     value={`${formatGram(preview.target_payout_nano, 3)} GRAM`}
                   />
-                  <Detail label="Комиссия BANK" value={`${formatGram(preview.fee_nano, 4)} GRAM`} />
+                  <Detail label="Комиссия" value={`${formatGram(preview.fee_nano, 4)} GRAM`} />
                   <Detail
-                    label="Запас на обработку в TON"
+                    label="Запас на проведение"
                     value={`${formatGram(preview.gas_nano, 3)} GRAM`}
                   />
                 </dl>
-                <div className="contract-truth">
+                <div className="contract-truth bank-risk-disclosure">
                   <strong>Что произойдёт</strong>
                   <p>
-                    Комиссия удержится из вклада. Остаток сначала наполнит ранние позиции и, если
-                    останется, начнёт наполнять твою.
+                    Комиссия удержится из вклада. Остаток пойдёт ранним позициям; если что-то
+                    останется — начнёт наполнять твою.
                   </p>
                   <p>
-                    Срок не фиксирован. После подтверждения в TON позицию нельзя отменить или
-                    вернуть досрочно.
+                    Выплата зависит от будущих вкладов и может не наступить. После подтверждения
+                    позицию нельзя отменить.
                   </p>
                 </div>
                 <details className="technical-details">
                   <summary>
-                    <span>ТЕХНИЧЕСКИЕ ДАННЫЕ</span>
+                    <span>ДАННЫЕ ДЛЯ ПРОВЕРКИ</span>
                     <DisclosureIndicator />
                   </summary>
                   <dl className="detail-list">
                     <Detail
-                      label="Контракт"
+                      label="Адрес BANK"
                       value={`${preview.contract_address.slice(0, 7)}…${preview.contract_address.slice(-5)}`}
                     />
                   </dl>
                 </details>
                 {message && <p className="form-note is-error">{message}</p>}
                 <button className="primary-button" onClick={() => void confirmPosition()}>
-                  ПОДТВЕРДИТЬ В TON
+                  ПОДТВЕРДИТЬ В КОШЕЛЬКЕ
                 </button>
               </>
             )}
@@ -297,8 +297,8 @@ export function BankScreen({
               <>
                 <div className="waiting-step">
                   <span className="waiting-ring" />
-                  <h3>Подтверждаем в TON</h3>
-                  <p>Ответ кошелька ещё не означает успех. LOOP ждёт транзакцию в блоке.</p>
+                  <h3>Проверяем подтверждение</h3>
+                  <p>Ждём окончательный результат. Это может занять немного времени.</p>
                   {message && <p className="form-note">{message}</p>}
                 </div>
                 <button className="secondary-button" onClick={() => setWizard(null)}>
@@ -325,7 +325,7 @@ export function BankScreen({
         aria-label={
           position
             ? `Открыть позицию BANK, собрано ${Math.round(progressPercent)} процентов`
-            : 'Начать цикл и создать позицию BANK'
+            : 'Создать позицию BANK'
         }
       >
         <motion.div
@@ -357,7 +357,7 @@ export function BankScreen({
               value={position.queue_position ? `#${position.queue_position}` : '—'}
               label="ТВОЁ МЕСТО"
             />
-            <CycleMetric value={pulse?.active_bank ?? '—'} label="БАНОК В ЦИКЛЕ" />
+            <CycleMetric value={pulse?.active_bank ?? '—'} label="ПОЗИЦИЙ В ОЧЕРЕДИ" />
           </div>
           <button className="primary-button" onClick={() => setDetails(true)}>
             СМОТРЕТЬ ПОЗИЦИЮ
@@ -365,13 +365,17 @@ export function BankScreen({
         </div>
       ) : (
         <div className="bank-state bank-empty-state">
-          <h2>Твоя очередь начинается здесь.</h2>
+          <h2>Создай позицию в очереди.</h2>
+          <p className="bank-risk">
+            <strong>Финансовая пирамида.</strong> Новые вклады платят ранним позициям. Без новых
+            вкладов выплаты может не быть; отмены нет.
+          </p>
           <div className="bank-cycle-metrics is-empty">
-            <CycleMetric value={pulse?.active_bank ?? '—'} label="БАНОК В ЦИКЛЕ" />
+            <CycleMetric value={pulse?.active_bank ?? '—'} label="ПОЗИЦИЙ В ОЧЕРЕДИ" />
             <CycleMetric value={pulse?.active_participants ?? '—'} label="УЧАСТНИКОВ СЕЙЧАС" />
           </div>
           <button className="primary-button" onClick={() => setWizard('amount')}>
-            НАЧАТЬ ЦИКЛ
+            СОЗДАТЬ ПОЗИЦИЮ
           </button>
         </div>
       )}
@@ -395,7 +399,7 @@ export function BankScreen({
             >
               <SheetTitle title="Позиция BANK" onClose={() => setDetails(false)} />
               <p className="bank-details-intro">
-                Банка показывает, сколько следующие вклады уже собрали до твоей целевой выплаты.
+                Банка показывает, сколько новых вкладов уже направлено в твою позицию.
               </p>
               <div className="big-progress">{Math.round(progressPercent)}%</div>
               <div className="progress-track">
@@ -429,10 +433,10 @@ export function BankScreen({
                 <Detail label="Состояние" value={statusCopy[position.current_status]} />
               </dl>
               <div className="contract-truth compact">
-                <strong>Правило очереди</strong>
+                <strong>Как работает очередь</strong>
                 <p>
-                  Ранние позиции получают пополнение первыми. Срок зависит от новых вкладов;
-                  досрочной отмены этой позиции нет.
+                  Новые вклады идут ранним позициям. Без них выплата может не наступить; досрочной
+                  отмены нет.
                 </p>
               </div>
               {position.proof_url && (
@@ -442,7 +446,7 @@ export function BankScreen({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  ПРОВЕРИТЬ В TON
+                  ПОСМОТРЕТЬ ОПЕРАЦИЮ
                   <ArrowSquareOut aria-hidden="true" />
                 </a>
               )}

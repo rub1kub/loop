@@ -148,6 +148,9 @@ test('browser control is a desktop site independent from Telegram Mini App', asy
   await page.getByRole('button', { name: /Вывести доступное/ }).click();
   await expect(page.getByRole('heading', { name: 'Вывести доступное' })).toBeVisible();
   await expect(page.getByText('Сначала поставь BANK на паузу')).toBeVisible();
+  await page.locator('.quick-sheet').evaluate(async (sheet) => {
+    await Promise.all(sheet.getAnimations().map((animation) => animation.finished));
+  });
   const sheet = await page.locator('.quick-sheet').boundingBox();
   const viewportHeight = await page.evaluate(() => window.innerHeight);
   expect(sheet).not.toBeNull();

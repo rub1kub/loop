@@ -62,7 +62,7 @@ try {
   await capture(page, 'bank-empty', 'bank-empty');
   await capture(page, 'bank-active', 'bank-active');
   await capture(page, 'bank-create-position', 'bank-empty', async (current) => {
-    await current.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ', exact: true }).click();
+    await current.getByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ', exact: true }).click();
     await current.getByLabel('Сумма в GRAM').fill('2');
     await current.getByRole('button', { name: /ДАЛЬШЕ/ }).click();
     await current.getByRole('button', { name: /×1.5/ }).click();

@@ -172,7 +172,7 @@ const demoRating: Rating = {
     { code: 'timely_reveal', label: 'Результат открыт вовремя', points: 20 },
     {
       code: 'qualified_referral',
-      label: 'Друг с подтверждённым действием в TON',
+      label: 'Друг с подтверждённым действием',
       points: 25,
     },
     { code: 'missed_reveal', label: 'Результат DUEL не открыт вовремя', points: -40 },

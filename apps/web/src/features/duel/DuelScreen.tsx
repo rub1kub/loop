@@ -125,8 +125,7 @@ export function DuelScreen({
           await tonConnectUI.openModal();
           return;
         }
-        if (wallet.account.chain !== '-3')
-          throw new Error('Выбранная сеть кошелька пока не поддерживается');
+        if (wallet.account.chain !== '-3') throw new Error('Этот кошелёк сейчас не поддерживается');
         if (!profile.wallet) throw new Error('Ждём подтверждение владения внешним кошельком');
         let acceptedInvite = invite;
         if (invite) acceptedInvite = await api.acceptInvite(invite.code);
@@ -136,7 +135,7 @@ export function DuelScreen({
           contract.status !== 'active' ||
           !contract.code_hash_matches
         ) {
-          throw new Error('Контракт DUEL не прошёл проверку в TON');
+          throw new Error('DUEL временно недоступен: проверка не пройдена');
         }
         const offerId = newOfferId();
         const secret = newSecret();
@@ -172,11 +171,11 @@ export function DuelScreen({
           ...(acceptedInvite ? { counterOfferId: acceptedInvite.counter_offer_id } : {}),
         });
         await storeDuelSecret(offerId, secret.toString(16).padStart(64, '0'));
-        setMessage('Подтверди блокировку тестовых GRAM во внешнем кошельке.');
+        setMessage('Подтверди ставку во внешнем кошельке.');
         await tonConnectUI.sendTransaction(
           buildOpenOfferTransaction(quote, wallet.account.address, wallet.account.chain),
         );
-        setMessage('Ждём подтверждение в TON. Ответ кошелька ещё не означает результат.');
+        setMessage('Проверяем ставку. Закрытие кошелька ещё не означает успех.');
         await onRefresh();
         haptic('success');
       } catch (error) {
@@ -214,7 +213,7 @@ export function DuelScreen({
       let intent;
       let secret: string | undefined;
       if (activeOffer.state === 'matched') {
-        if (!activeDuel) throw new Error('Синхронизируем DUEL с сетью');
+        if (!activeDuel) throw new Error('Обновляем состояние DUEL');
         if (duelExpired) intent = await api.expireDuelIntent(activeDuel.onchain_duel_id);
         else {
           if (activeDuel.own_revealed) return;
@@ -226,12 +225,12 @@ export function DuelScreen({
           ? await api.expireOfferIntent(activeOffer.onchain_offer_id)
           : await api.cancelOfferIntent(activeOffer.onchain_offer_id);
       } else {
-        throw new Error('Ждём подтверждение TON');
+        throw new Error('Ждём подтверждение предыдущего действия');
       }
       await tonConnectUI.sendTransaction(
         buildActionTransaction(intent, wallet.account.address, wallet.account.chain, secret),
       );
-      setMessage('Транзакция отправлена. Ждём финализацию TON.');
+      setMessage('Действие отправлено. Ждём окончательный результат.');
       await onRefresh();
       haptic('success');
     } catch (error) {
@@ -245,7 +244,7 @@ export function DuelScreen({
 
   function inviteToTelegram() {
     if (!activeOffer || activeOffer.state !== 'open') {
-      setMessage('Сначала дождись подтверждения вызова в TON.');
+      setMessage('Сначала дождись подтверждения вызова.');
       haptic('warning');
       return;
     }
@@ -313,7 +312,7 @@ export function DuelScreen({
                 ВЫЗОВ ОТ {invite.creator_name.toUpperCase()} · {chance / 100}/
                 {(10_000 - chance) / 100}
               </p>
-              <strong>Условия проверяются заново перед принятием.</strong>
+              <strong>Перед принятием ещё раз проверь сумму и выплату.</strong>
             </div>
           ) : (
             <>
@@ -339,37 +338,31 @@ export function DuelScreen({
             </>
           )}
 
-          <dl className="duel-terms duel-primary-terms">
+          <dl className="duel-terms duel-primary-terms" aria-label="Расчёт DUEL">
             <Term
-              label={invite ? 'Ставка создателя' : 'Соперник внесёт столько же'}
-              value={`${formatGram(terms.opponentStake, 3)} GRAM`}
+              label="Ставки"
+              value={`${formatGram(terms.stake, 3)} + ${formatGram(terms.opponentStake, 3)} GRAM`}
             />
             <Term label="Победитель получит" value={`${formatGram(payoutNano, 3)} GRAM`} />
+            <Term label="Комиссия" value={`${formatGram(feeNano, 4)} GRAM`} />
           </dl>
           <p className="duel-deadline-rule">
             <ShieldCheck aria-hidden="true" />
-            После матча — 5 минут, чтобы открыть результат.
+            Оба открыли числа — исход 50/50. Открыл только один за 5 минут — он победил.
           </p>
           <details className="technical-details duel-breakdown">
             <summary>
-              <span>ПОДРОБНОСТИ</span>
+              <span>ВОЗВРАТ И ПРАВИЛА</span>
               <DisclosureIndicator />
             </summary>
             <p>
-              Если соперник откроет результат, а ты нет — он получит выплату. Если не откроет никто,
-              контракт вернёт обе ставки.
+              После ставки изменить тайное число нельзя. Если не откроет никто, обе ставки вернутся.
             </p>
             <dl className="detail-list">
-              <Term label="Общий пул" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
-              <Term
-                label={`Комиссия DUEL · ${profile.plush_brick.duel_fee_bps / 100}%`}
-                value={`${formatGram(feeNano, 4)} GRAM`}
-              />
+              <Term label="Общая сумма" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
               <Term label="Чистый результат победы" value={`+${formatGram(profitNano, 3)} GRAM`} />
             </dl>
-            <p>
-              Открытый поиск можно остановить и вернуть свою ставку через отдельное подтверждение.
-            </p>
+            <p>Поиск можно остановить и вернуть ставку через подтверждение в кошельке.</p>
           </details>
         </div>
       )}
@@ -381,12 +374,12 @@ export function DuelScreen({
               ? 'СОПЕРНИК НАЙДЕН'
               : mode === 'direct'
                 ? 'ПРЯМОЙ ВЫЗОВ'
-                : 'ПОИСК В ФОНЕ'}
+                : 'ПОИСК СОПЕРНИКА'}
           </p>
           <strong>
             {status === 'matched'
               ? 'Соперник найден. Открой результат.'
-              : 'Ищем равную ставку. Можно закрыть приложение.'}
+              : 'Ищем игрока с такой же ставкой. Можно закрыть приложение.'}
           </strong>
           <div className="duel-live-numbers">
             <span>
@@ -400,8 +393,7 @@ export function DuelScreen({
           </div>
           {status === 'searching' && (
             <p className="duel-live-help">
-              Поиск можно остановить в любой момент: контракт вернёт ставку после отдельного
-              подтверждения в TON.
+              Остановить поиск можно в любой момент. Возврат нужно подтвердить в кошельке.
             </p>
           )}
         </div>
@@ -414,7 +406,7 @@ export function DuelScreen({
           <strong>{formatGram(latestDuel.payout_nano, 3)} GRAM</strong>
           {latestDuel.settlement_proof_url && (
             <a href={latestDuel.settlement_proof_url} target="_blank" rel="noreferrer">
-              Проверить результат в TON <ArrowSquareOut aria-hidden="true" />
+              Посмотреть подтверждение <ArrowSquareOut aria-hidden="true" />
             </a>
           )}
         </div>

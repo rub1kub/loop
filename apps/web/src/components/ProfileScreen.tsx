@@ -147,7 +147,7 @@ export function ProfileScreen({
       </div>
 
       <div className="section-label">
-        <span>ТВОЙ КРУГ</span>
+        <span>ТВОИ ДРУЗЬЯ</span>
         <small>{referral?.reward_points ?? 0} ОЧКОВ</small>
       </div>
       <button className="profile-row" onClick={() => void shareReferral()} disabled={!referral}>
@@ -169,7 +169,7 @@ export function ProfileScreen({
         <summary>
           <span>
             <ShieldCheck aria-hidden="true" />
-            КОШЕЛЁК И ПОДТВЕРЖДЕНИЯ
+            ПОДКЛЮЧЕНИЕ И ИСТОРИЯ
           </span>
           <DisclosureIndicator />
         </summary>
@@ -180,11 +180,11 @@ export function ProfileScreen({
           <button className="profile-row" onClick={() => void tonConnectUI.openModal()}>
             <span className="row-icon">{profile.wallet ? <ShieldCheck /> : <Wallet />}</span>
             <div>
-              <b>{profile.wallet ? 'Адрес подтверждён' : 'Подключить TON Connect'}</b>
+              <b>{profile.wallet ? 'Кошелёк подключён' : 'Подключить кошелёк'}</b>
               <small>
                 {profile.wallet
                   ? shortAddress(profile.wallet.address)
-                  : 'Для транзакций и получения выплат'}
+                  : 'Для подтверждения действий и получения выплат'}
               </small>
             </div>
             <ArrowRight aria-hidden="true" />

@@ -20,13 +20,16 @@ describe('Onboarding', () => {
     const { unmount } = render(<Onboarding initialPage={1} onDone={onDone} />);
 
     expect(
-      screen.getByRole('heading', { name: 'Твой вклад занимает очередь.' }),
+      screen.getByRole('heading', { name: 'Новые входят. Ранние получают.' }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Срок не фиксирован; досрочной отмены нет/)).toBeInTheDocument();
+    expect(screen.getByText(/BANK — финансовая пирамида/)).toBeInTheDocument();
+    expect(screen.getByText(/Без новых вкладов выплаты может не быть/)).toBeInTheDocument();
 
     unmount();
     render(<Onboarding initialPage={2} onDone={onDone} />);
-    expect(screen.getByText(/одинаковую ставку 50\/50/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Победителя определяют два заранее зафиксированных/),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'ВОЙТИ В LOOP' }));
     expect(onDone).toHaveBeenCalledOnce();
   });

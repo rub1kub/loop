@@ -54,7 +54,7 @@ const position: BankPosition = {
 describe('BankScreen', () => {
   afterEach(cleanup);
 
-  it('keeps the empty BANK focused after the one-time onboarding', () => {
+  it('explains the pyramid before the user creates a position', () => {
     render(
       <BankScreen
         profile={profile}
@@ -65,10 +65,15 @@ describe('BankScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Твоя очередь начинается здесь.' })).toBeVisible();
-    expect(screen.queryByText(/Следующие вклады сначала наполняют ранние банки/)).toBeNull();
-    expect(screen.queryByText(/Досрочной отмены и возврата нет/)).toBeNull();
-    expect(screen.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Создай позицию в очереди.' })).toBeVisible();
+    const disclosure = screen.getByText('Финансовая пирамида.');
+    const action = screen.getByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ' });
+    expect(disclosure).toBeVisible();
+    expect(screen.getByText(/Без новых вкладов выплаты может не быть/)).toBeVisible();
+    expect(disclosure.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(action).toBeVisible();
     expect(screen.queryByTestId('bank-sand-level')).not.toBeInTheDocument();
   });
 
@@ -89,7 +94,7 @@ describe('BankScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /собрано 37 процентов/i }));
     expect(
-      screen.getByText(/сколько следующие вклады уже собрали до твоей целевой выплаты/i),
+      screen.getByText(/сколько новых вкладов уже направлено в твою позицию/i),
     ).toBeInTheDocument();
     expect(screen.getByText('Уже собрано')).toBeInTheDocument();
     expect(screen.getByText('Осталось собрать')).toBeInTheDocument();

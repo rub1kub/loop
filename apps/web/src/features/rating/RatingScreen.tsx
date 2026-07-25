@@ -40,7 +40,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
         <div className="rating-unavailable">
           <span className="waiting-ring" aria-hidden="true" />
           <strong>Собираем подтверждённые действия.</strong>
-          <p>Рейтинг появится, когда LOOP сверит данные с TON.</p>
+          <p>Рейтинг появится, когда LOOP закончит проверку.</p>
         </div>
       </section>
     );
@@ -74,7 +74,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
         <p className="eyebrow">ТВОЙ СЧЁТ LOOP</p>
         <strong>{rating.me.score}</strong>
         <div className="rating-badges">
-          <span>{levelLabels[rating.me.level]}</span>
+          <span>УРОВЕНЬ · {levelLabels[rating.me.level]}</span>
         </div>
         <div
           className="rating-progress"
@@ -92,7 +92,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
           <span>#{rating.me.rank} В СЕЗОНЕ</span>
           <span>
             {nextLevel
-              ? `${nextLevel.score - rating.me.score} ДО ${levelLabels[nextLevel.level]}`
+              ? `${nextLevel.score - rating.me.score} ДО УРОВНЯ ${levelLabels[nextLevel.level]}`
               : 'МАКСИМАЛЬНЫЙ УРОВЕНЬ'}
           </span>
         </div>
@@ -103,7 +103,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
           ВСЕ
         </button>
         <button className={list === 'circle' ? 'active' : ''} onClick={() => setList('circle')}>
-          <UsersThree aria-hidden="true" /> МОЙ КРУГ
+          <UsersThree aria-hidden="true" /> ДРУЗЬЯ
         </button>
       </div>
 
@@ -122,8 +122,8 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
           {list === 'circle' && entries.length <= 1 && (
             <div className="rating-circle-empty">
               <UsersThree aria-hidden="true" />
-              <strong>Круг ещё не замкнулся.</strong>
-              <p>Здесь появятся друзья, которые совершили подтверждённое действие в TON.</p>
+              <strong>Здесь пока только ты.</strong>
+              <p>Пригласи друзей — они появятся после первого завершённого действия.</p>
             </div>
           )}
         </motion.div>
@@ -205,7 +205,7 @@ function RatingRow({ entry }: { entry: RatingEntry }) {
       <div>
         <strong>{entry.is_me ? 'ТЫ' : entry.first_name}</strong>
         <small>
-          {levelLabels[entry.level]} · {entry.proofs} ПОДТВЕРЖДЕНИЙ
+          УРОВЕНЬ {levelLabels[entry.level]} · {entry.proofs} ПОДТВЕРЖДЕНИЙ
         </small>
       </div>
       <b>{entry.score}</b>

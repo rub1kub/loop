@@ -50,7 +50,8 @@ describe('RatingScreen', () => {
 
     expect(screen.getAllByText('685')[0]).toBeVisible();
     expect(screen.getByText('#7 В СЕЗОНЕ')).toBeVisible();
-    expect(screen.getByText('315 ДО LOOP')).toBeVisible();
+    expect(screen.getByText('315 ДО УРОВНЯ LOOP')).toBeVisible();
+    expect(screen.getByText('УРОВЕНЬ · ОРБИТА')).toBeVisible();
     expect(screen.getByText('МОЯ СТАТИСТИКА').closest('details')).not.toHaveAttribute('open');
     expect(screen.queryByText(/Главный вклад:/)).not.toBeVisible();
     expect(screen.queryByText('СИСТЕМА СЕЙЧАС')).not.toBeInTheDocument();

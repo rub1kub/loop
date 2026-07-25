@@ -77,14 +77,16 @@ describe('DuelScreen', () => {
     expect(screen.getByText('РАВНЫЕ УСЛОВИЯ')).toBeInTheDocument();
     expect(screen.getByLabelText('Ставка в GRAM')).toBeInTheDocument();
     expect(screen.getByText('ВВЕДИ СУММУ')).toBeInTheDocument();
-    expect(screen.getByText('Соперник внесёт столько же')).toBeInTheDocument();
-    expect(screen.queryByText('Ставка соперника')).not.toBeInTheDocument();
-    expect(screen.getByText(/5 минут, чтобы открыть результат/i)).toBeInTheDocument();
+    expect(screen.getByText('Ставки')).toBeInTheDocument();
+    expect(screen.getByText('1 + 1 GRAM')).toBeInTheDocument();
     expect(screen.getByText('Победитель получит')).toBeInTheDocument();
-    expect(screen.getByText('ПОДРОБНОСТИ').closest('details')).not.toHaveAttribute('open');
-    expect(screen.getByText('ПОДРОБНОСТИ').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
+    expect(screen.getByText('0,05 GRAM')).toBeInTheDocument();
+    expect(screen.getByText(/Оба открыли числа — исход 50\/50/)).toBeVisible();
+    expect(screen.getByText(/Открыл только один за 5 минут — он победил/)).toBeVisible();
+    expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
     expect(screen.queryByText('Твоя ставка')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Если соперник откроет результат/)).not.toBeVisible();
+    expect(screen.queryByText(/После ставки изменить тайное число нельзя/)).not.toBeVisible();
     expect(screen.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeInTheDocument();
     expect(screen.queryByText(/Одинаковая ставка/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /25%/ })).not.toBeInTheDocument();
@@ -92,13 +94,14 @@ describe('DuelScreen', () => {
     expect(screen.queryByText(/позиция BANK/i)).not.toBeInTheDocument();
   });
 
-  it('shows an existing creator stake only for an incoming invite', () => {
+  it('shows the complete cost before an incoming invite is accepted', () => {
     render(
       <DuelScreen profile={profile} offers={[]} duels={[]} invite={invite} onRefresh={vi.fn()} />,
     );
 
-    expect(screen.getByText('Ставка создателя')).toBeInTheDocument();
-    expect(screen.queryByText('Соперник внесёт столько же')).not.toBeInTheDocument();
+    expect(screen.getByText(/ВЫЗОВ ОТ МИША/)).toBeInTheDocument();
+    expect(screen.getByText('1 + 1 GRAM')).toBeInTheDocument();
+    expect(screen.getByText('0,05 GRAM')).toBeInTheDocument();
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
   });
 });

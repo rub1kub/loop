@@ -25,7 +25,9 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   expect(
     Math.abs(jarBox!.x + jarBox!.width / 2 - (shellBox!.x + shellBox!.width / 2)),
   ).toBeLessThan(1);
-  await page.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ', exact: true }).click();
+  await expect(page.getByText('Финансовая пирамида.')).toBeVisible();
+  await expect(page.getByText(/Без новых вкладов выплаты может не быть/)).toBeVisible();
+  await page.getByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ', exact: true }).click();
   await expect(page.locator('.bank-flow-screen')).toHaveCSS('transform', 'none');
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
   await expect.poll(() => page.locator('.app-shell').evaluate((shell) => shell.scrollTop)).toBe(0);
@@ -70,7 +72,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
   await page.getByRole('button', { name: 'Закрыть' }).click();
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'visible');
-  await page.getByRole('button', { name: 'НАЧАТЬ ЦИКЛ', exact: true }).click();
+  await page.getByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ', exact: true }).click();
   await page.getByRole('button', { name: /ДАЛЬШЕ/ }).click();
   await expect.poll(() => page.locator('.app-shell').evaluate((shell) => shell.scrollTop)).toBe(0);
   await page.getByRole('button', { name: /×2/ }).click();
@@ -80,13 +82,20 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
     (await page.getByRole('heading', { name: 'Новая позиция' }).boundingBox())!.y,
   ).toBeGreaterThanOrEqual(100);
   await expect(page.getByText('4 GRAM')).toBeVisible();
-  await expect(page.getByText(/позицию нельзя отменить или вернуть досрочно/i)).toBeVisible();
+  await expect(
+    page.getByText(/Выплата зависит от будущих вкладов и может не наступить/i),
+  ).toBeVisible();
   await expect(page.locator('.technical-details .disclosure-open-label')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'ПОДТВЕРДИТЬ В TON' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ПОДТВЕРДИТЬ В КОШЕЛЬКЕ' })).toBeVisible();
 
   await page.goto('/?screen=bank-active');
   await emulateFullscreenControls();
-  await expect(page.getByRole('button', { name: /собрано 62 процентов/i })).toBeVisible();
+  await expect(
+    page.getByRole('button', {
+      name: 'Открыть позицию BANK, собрано 62 процентов',
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(page.getByText(/Собрано 1[,.]86 из 3 GRAM/)).toBeVisible();
   expect(
     await page
@@ -102,7 +111,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   const stakeInput = page.getByLabel('Ставка в GRAM');
   await expect(page.locator('.duel-stage')).toHaveCount(0);
   await expect(page.getByText('ВВЕДИ СУММУ')).toBeVisible();
-  await expect(page.getByText('Соперник внесёт столько же')).toBeVisible();
+  await expect(page.getByText('Ставки', { exact: true })).toBeVisible();
   await expect(page.locator('.stake-input > div')).toHaveCSS('border-top-width', '1px');
   await expect(page.locator('.stake-input > div')).toHaveCSS('border-radius', '16px');
   await stakeInput.fill('1');
@@ -118,26 +127,31 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await page.setViewportSize(initialViewport);
   await expect(page.getByText('50/50', { exact: true })).toBeVisible();
   await expect(page.getByText('РАВНЫЕ УСЛОВИЯ')).toBeVisible();
-  await expect(page.locator('.duel-terms')).toContainText(/1 GRAM/);
+  await expect(page.locator('.duel-terms')).toContainText(/1 \+ 1 GRAM/);
   await expect(page.locator('.duel-terms')).toContainText(/1[,.]95 GRAM/);
+  await expect(page.locator('.duel-terms')).toContainText(/0[,.]05 GRAM/);
   await expect(page.locator('.duel-primary-terms > div').first()).toHaveCSS(
     'border-bottom-width',
     '0px',
   );
-  await expect(page.getByText(/5 минут, чтобы открыть результат/i)).toBeVisible();
+  await expect(page.getByText(/Оба открыли числа — исход 50\/50/i)).toBeVisible();
+  await expect(page.getByText(/Открыл только один за 5 минут — он победил/i)).toBeVisible();
   expect(
     await page
       .locator('.duel-deadline-rule')
       .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
-  ).toBeGreaterThanOrEqual(11);
+  ).toBeGreaterThanOrEqual(12);
   await expect(page.locator('.duel-breakdown .disclosure-open-label')).toBeVisible();
   await expect(page.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeVisible();
-  await page.getByText('ПОДРОБНОСТИ').click();
+  const duelDisclosure = page.locator('.duel-breakdown summary');
+  await duelDisclosure.focus();
+  await expect(duelDisclosure).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
+  await page.getByText('ВОЗВРАТ И ПРАВИЛА').click();
   await expect(page.locator('.duel-breakdown .disclosure-close-label')).toBeVisible();
-  await expect(page.getByText('Общий пул')).toBeVisible();
+  await expect(page.getByText('Общая сумма')).toBeVisible();
   await expect(page.getByText('2 GRAM')).toBeVisible();
   await page.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }).click();
-  await expect(page.getByText('ПОИСК В ФОНЕ')).toBeVisible();
+  await expect(page.getByText('ПОИСК СОПЕРНИКА')).toBeVisible();
   await expect(page.getByText('ДО ИСТЕЧЕНИЯ')).toBeVisible();
   await expect(page.getByRole('button', { name: 'ОСТАНОВИТЬ ПОИСК' })).toBeVisible();
 
@@ -146,8 +160,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await expect(page.getByRole('heading', { name: 'РЕЙТИНГ' })).toBeVisible();
   await expect(page.getByText('ТВОЙ СЧЁТ LOOP')).toBeVisible();
   await expect(page.getByText('685').first()).toBeVisible();
-  await expect(page.getByText('315')).toBeVisible();
-  await expect(page.getByText('ДО LOOP')).toBeVisible();
+  await expect(page.getByText('315 ДО УРОВНЯ LOOP')).toBeVisible();
   await expect(page.locator('.rating-progress')).toBeVisible();
   await expect(page.getByText(/Главный вклад:/)).toBeHidden();
   await expect(page.locator('.rating-details .disclosure-open-label')).toHaveCount(1);
@@ -161,7 +174,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
       .locator('.rating-explainer')
       .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
   ).toBeGreaterThanOrEqual(11);
-  await page.getByRole('button', { name: /МОЙ КРУГ/ }).click();
+  await page.getByRole('button', { name: /ДРУЗЬЯ/ }).click();
   await expect(page.locator('.rating-list')).toContainText('Alex');
 
   await page.goto('/?screen=profile');
@@ -169,7 +182,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await expect(page.getByRole('heading', { name: 'Дмитрий' })).toBeVisible();
   expect((await page.locator('.profile-identity').boundingBox())!.y).toBeGreaterThanOrEqual(104);
   await expect(page.getByText('СЧЁТ LOOP')).toBeVisible();
-  await expect(page.getByText('КОШЕЛЁК И ПОДТВЕРЖДЕНИЯ')).toBeVisible();
+  await expect(page.getByText('ПОДКЛЮЧЕНИЕ И ИСТОРИЯ')).toBeVisible();
   await expect(page.locator('.profile-proof-details .disclosure-open-label')).toBeVisible();
   expect(
     await page
@@ -178,7 +191,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
       .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
   ).toBeGreaterThanOrEqual(11);
   await expect(page.getByText('PLUSH BRICK')).not.toBeVisible();
-  await page.getByText('КОШЕЛЁК И ПОДТВЕРЖДЕНИЯ').click();
+  await page.getByText('ПОДКЛЮЧЕНИЕ И ИСТОРИЯ').click();
   await expect(page.locator('.profile-proof-details .disclosure-close-label')).toBeVisible();
   await expect(page.getByText('PLUSH BRICK')).toBeVisible();
   const tabBar = page.getByRole('navigation', { name: 'Основная навигация' });

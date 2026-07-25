@@ -29,7 +29,7 @@
     var(--loop-safe-area-inset-left, 0px)
   );
   --line: #252525;
-  --muted: #8a8a8e;
+  --muted: #a1a1a6;
   --surface: #101010;
 }
 
@@ -75,9 +75,19 @@ button {
 
 button:focus-visible,
 input:focus-visible,
-a:focus-visible {
+a:focus-visible,
+summary:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 3px;
+}
+
+summary:focus-visible {
+  border-radius: 10px;
+}
+
+summary:focus-visible .disclosure-indicator {
+  border-color: #fff;
+  color: #fff;
 }
 
 .loader,
@@ -163,7 +173,7 @@ a:focus-visible {
 
 .story-signal {
   margin: 0;
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.24em;
@@ -492,7 +502,7 @@ a:focus-visible {
 .bank-state > span,
 .bank-state > p {
   margin: 7px 0 0;
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -518,9 +528,16 @@ a:focus-visible {
 }
 
 .bank-empty-state .bank-risk {
-  margin-top: 6px;
-  color: #b2b2b7;
-  font-size: 11px;
+  max-width: 330px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.bank-empty-state .bank-risk strong {
+  color: #f5f5f5;
+  font-weight: 650;
 }
 
 .bank-cycle-metrics {
@@ -550,10 +567,10 @@ a:focus-visible {
 }
 
 .bank-cycle-metrics small {
-  color: #85858a;
-  font-size: 9px;
+  color: var(--muted);
+  font-size: 10px;
   font-weight: 760;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.11em;
 }
 
 .bank-cycle-metrics.is-empty {
@@ -690,7 +707,7 @@ a:focus-visible {
 
 .detail-list dt,
 .duel-terms dt {
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 11px;
 }
 
@@ -752,7 +769,7 @@ a:focus-visible {
 .form-note {
   min-height: 18px;
   margin: 6px 0;
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -824,7 +841,7 @@ a:focus-visible {
   border: 1px solid #343434;
   border-radius: 999px;
   color: #b8b8bd;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.11em;
   line-height: 1;
@@ -1010,7 +1027,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .stake-input-heading > span:first-child {
-  color: #707070;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.18em;
@@ -1018,7 +1035,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .stake-edit-cue {
   color: #aaaab0;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.12em;
   transition: color 150ms ease;
@@ -1062,7 +1079,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .stake-input b {
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 11px;
   letter-spacing: 0.15em;
 }
@@ -1118,7 +1135,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .duel-primary-terms {
   grid-template-columns: 1fr;
-  gap: 3px;
+  gap: 1px;
   padding: 7px 2px 0;
 }
 
@@ -1126,7 +1143,7 @@ details[open] > summary .disclosure-indicator svg {
 .duel-primary-terms div:nth-child(odd),
 .duel-primary-terms div:nth-child(even) {
   display: flex;
-  min-height: 36px;
+  min-height: 32px;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -1144,8 +1161,8 @@ details[open] > summary .disclosure-indicator svg {
   align-items: flex-start;
   gap: 8px;
   margin: 13px 0 0;
-  color: #aaaab0;
-  font-size: 11px;
+  color: #c2c2c7;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -1157,7 +1174,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .duel-breakdown > p {
   margin: 4px 0 13px;
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -1222,7 +1239,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .duel-live-numbers small {
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.1em;
@@ -1231,7 +1248,7 @@ details[open] > summary .disclosure-indicator svg {
 .duel-live-help {
   max-width: 320px;
   margin: 13px 0 0;
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -1339,7 +1356,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .profile-identity > div > span {
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 11px;
 }
 
@@ -1491,7 +1508,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .profile-row small {
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 11px;
 }
 
@@ -1542,8 +1559,8 @@ details[open] > summary .disclosure-indicator svg {
 .profile-proof-details summary small,
 .rating-details summary small {
   margin-left: auto;
-  color: #77777c;
-  font-size: 9px;
+  color: var(--muted);
+  font-size: 10px;
   letter-spacing: 0.09em;
 }
 
@@ -1578,7 +1595,7 @@ details[open] > summary .disclosure-indicator svg {
 .rating-explainer {
   max-width: 330px;
   margin: 13px 0 0;
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -1621,7 +1638,7 @@ details[open] > summary .disclosure-indicator svg {
   justify-content: space-between;
   gap: 18px;
   margin-top: 8px;
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.08em;
@@ -1657,7 +1674,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .rating-proof-line span {
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.14em;
@@ -1688,7 +1705,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .rating-pulse span {
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.1em;
@@ -1833,7 +1850,7 @@ details[open] > summary .disclosure-indicator svg {
 .rating-unavailable p {
   max-width: 280px;
   margin: 7px 0 0;
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -1850,7 +1867,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .rating-formula > p {
   margin: 12px 0;
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -1865,7 +1882,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .rating-pulse-label {
   margin: 18px 0 8px !important;
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 9px !important;
   font-weight: 760;
   letter-spacing: 0.13em;
@@ -1956,7 +1973,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .proof-history small {
-  color: #8a8a8e;
+  color: var(--muted);
   font-size: 11px;
 }
 
@@ -2196,47 +2213,121 @@ details[open] > summary .disclosure-indicator svg {
   .mode-header h1 {
     font-size: 39px;
   }
+
   .bank-object {
     width: min(calc(100% + 34px), 430px);
-    height: min(40dvh, 310px);
+    height: min(31dvh, 240px);
+    margin-top: 2px;
   }
+
+  .bank-state {
+    margin-top: -2px;
+  }
+
+  .bank-empty-state h2 {
+    font-size: 20px;
+  }
+
+  .bank-empty-state .bank-risk {
+    margin-top: 5px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .bank-cycle-metrics.is-empty {
+    margin-top: 8px;
+  }
+
+  .bank-cycle-metrics > span {
+    min-height: 40px;
+  }
+
+  .bank-state .primary-button {
+    min-height: 52px;
+    margin-top: 8px;
+  }
+
   .bank-state > strong {
     font-size: 40px;
   }
+
   .duel-stage {
     margin-top: 21px;
   }
+
   .player-node {
     width: 70px;
     height: 70px;
   }
+
   .duel-stage {
     grid-template-columns: 70px minmax(52px, 1fr) 70px;
   }
+
   .duel-form {
-    margin-top: 12px;
+    margin-top: 8px;
   }
+
+  .stake-input-heading {
+    margin-bottom: 4px;
+  }
+
+  .stake-input > div {
+    padding: 6px 12px;
+  }
+
+  .stake-input input {
+    font-size: 36px;
+  }
+
+  .duel-equal-rule {
+    margin-top: 7px;
+  }
+
+  .duel-primary-terms {
+    margin-top: 8px;
+    padding-top: 2px;
+  }
+
   .duel-terms div {
     min-height: 41px;
   }
+
   .duel-primary-terms div {
-    min-height: 34px;
+    min-height: 27px;
   }
+
   .duel-deadline-rule {
-    margin-top: 9px;
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.35;
   }
+
   .duel-breakdown summary {
-    min-height: 46px;
+    min-height: 40px;
   }
+
   .duel-actions {
-    padding-top: 8px;
+    gap: 4px;
+    padding-top: 6px;
   }
+
+  .duel-actions .primary-button {
+    min-height: 52px;
+  }
+
+  .duel-direct-action {
+    min-height: 40px;
+  }
+
   .duel-message {
     margin-top: 8px;
   }
+
   .mode-stats article {
     min-height: 108px;
   }
+
   .section-label {
     margin-top: 16px;
   }
