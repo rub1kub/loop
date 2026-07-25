@@ -40,19 +40,23 @@ describe('browser landing', () => {
     );
   });
 
-  it('describes the real PLUSH BRICK behavior without promising an active discount', () => {
+  it('describes the intended PLUSH BRICK role without presenting it as already active', () => {
     render(<LandingPage />);
 
     expect(screen.getByRole('img', { name: 'Анимированный логотип PLUSH BRICK' })).toHaveAttribute(
       'src',
       'https://tonsuite.org/assets/plush-brick-video.gif',
     );
-    expect(screen.getByText(/LOOP проверит подключённый кошелёк/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'PLUSH BRICK замыкает круг.' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Его роль в LOOP — освободить держателей от комиссии LOOP/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Часть дохода — на рыночный выкуп/)).toBeInTheDocument();
+    expect(screen.getByText(/Статус подтверждается через кошелёк/)).toBeInTheDocument();
     expect(
       screen.queryByText(/Маркет адресов TON Suite помогает находить размеченные/),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/PLUSH BRICK даёт только отметку/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/скидк/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Маркет адресов/ })).not.toBeInTheDocument();
   });
 });

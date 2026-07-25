@@ -360,23 +360,23 @@ export function LandingPage() {
           <div className="landing-section-copy" data-reveal>
             <span className="landing-index">03</span>
             <span className="landing-eyebrow">PLUSH BRICK</span>
-            <h2>Есть PLUSH BRICK? LOOP это увидит.</h2>
+            <h2>PLUSH BRICK замыкает круг.</h2>
             <p>
-              Это мем‑токен TON Suite. LOOP проверит подключённый кошелёк и покажет отметку в
-              профиле.
+              Его роль в LOOP — освободить держателей от комиссии LOOP. Часть дохода приложения
+              будет направляться на выкуп PLUSH BRICK с рынка.
             </p>
             <div className="landing-plush__steps">
               <div>
-                <span>01</span>
-                <p>Кошелёк подключён</p>
+                <span>0%</span>
+                <p>Комиссия LOOP для держателей</p>
               </div>
               <div>
-                <span>02</span>
-                <p>Токен найден</p>
+                <span>↻</span>
+                <p>Часть дохода — на рыночный выкуп</p>
               </div>
               <div>
-                <span>03</span>
-                <p>Отметка в профиле</p>
+                <span>✓</span>
+                <p>Статус подтверждается через кошелёк</p>
               </div>
             </div>
             <div className="landing-inline-links">
