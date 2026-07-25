@@ -116,88 +116,10 @@ fun runCanary(
         before.inviteSignerPublicKey == signer.publicKey &&
         !before.paused
     ) throw CanaryErrors.WrongContract;
-    println("DUEL_CANARY_CLEANUP start");
-    val firstActive = duel.activeOffer(firstWallet);
-    val secondActive = duel.activeOffer(secondWallet);
-    if (firstActive != 0 || secondActive != 0) {
-        if (firstActive != 0 && secondActive == 0) {
-            assert (
-                duel.offerData(firstActive).state == OFFER_OPEN
-            ) throw CanaryErrors.CanaryStateBusy;
-            val cancelled = duel.sendCancelOffer(
-                firstWallet,
-                firstOfferId - 2,
-                firstActive,
-                { value: ton("0.03") },
-            );
-            val cancelTrace = cancelled.waitForTrace();
-            assert (cancelTrace != null) throw CanaryErrors.CanaryStateBusy;
-            expect(cancelTrace!).toHaveAllSuccessfulTxs();
-        } else if (firstActive == 0 && secondActive != 0) {
-            assert (
-                duel.offerData(secondActive).state == OFFER_OPEN
-            ) throw CanaryErrors.CanaryStateBusy;
-            val cancelled = duel.sendCancelOffer(
-                secondWallet,
-                firstOfferId - 2,
-                secondActive,
-                { value: ton("0.03") },
-            );
-            val cancelTrace = cancelled.waitForTrace();
-            assert (cancelTrace != null) throw CanaryErrors.CanaryStateBusy;
-            expect(cancelTrace!).toHaveAllSuccessfulTxs();
-        } else {
-            val firstOffer = duel.offerData(firstActive);
-            val secondOffer = duel.offerData(secondActive);
-            if (firstOffer.state == OFFER_OPEN && secondOffer.state == OFFER_OPEN) {
-                val firstCancelled = duel.sendCancelOffer(
-                    firstWallet,
-                    firstOfferId - 2,
-                    firstActive,
-                    { value: ton("0.03") },
-                );
-                val firstCancelTrace = firstCancelled.waitForTrace();
-                assert (firstCancelTrace != null) throw CanaryErrors.CanaryStateBusy;
-                expect(firstCancelTrace!).toHaveAllSuccessfulTxs();
-                val secondCancelled = duel.sendCancelOffer(
-                    secondWallet,
-                    firstOfferId - 1,
-                    secondActive,
-                    { value: ton("0.03") },
-                );
-                val secondCancelTrace = secondCancelled.waitForTrace();
-                assert (secondCancelTrace != null) throw CanaryErrors.CanaryStateBusy;
-                expect(secondCancelTrace!).toHaveAllSuccessfulTxs();
-            } else {
-                assert (
-                    firstOffer.state == OFFER_MATCHED && secondOffer.state == OFFER_MATCHED
-                ) throw CanaryErrors.CanaryStateBusy;
-                val staleDuelId = firstActive > secondActive ? firstActive : secondActive;
-                val staleDuel = duel.duelData(staleDuelId);
-                assert (
-                    blockchain.now() > staleDuel.revealDeadline
-                ) throw CanaryErrors.CanaryStateBusy;
-                val expired = duel.sendExpireDuel(
-                    firstWallet,
-                    firstOfferId - 2,
-                    staleDuelId,
-                    { value: ton("0.03") },
-                );
-                val expireTrace = expired.waitForTrace();
-                assert (expireTrace != null) throw CanaryErrors.CanaryStateBusy;
-                expect(expireTrace!).toHaveAllSuccessfulTxs();
-            }
-        }
-        assert (
-            duel.activeOffer(firstWallet) == 0 && duel.activeOffer(secondWallet) == 0
-        ) throw CanaryErrors.CanaryStateBusy;
-    }
-    println("DUEL_CANARY_CLEANUP complete");
-    println(
-        "DUEL_CANARY_STATE_READY first_active={} second_active={}",
-        duel.activeOffer(firstWallet),
-        duel.activeOffer(secondWallet),
-    );
+    // Acton 1.0.0 remote scripts silently stop when `activeOffer` reads a
+    // missing dictionary entry. Interrupted runs are recovered explicitly
+    // with cancel/expire scripts using the offer IDs printed above.
+    println("DUEL_CANARY_STATE_READY");
     val lockedBefore = duel.contractConfig().locked;
     val inviteId = beginCell()
         .storeUint(0x43414E59, 32)
