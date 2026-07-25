@@ -57,6 +57,15 @@
     "cancel_transaction_lt": 85548306000003,
     "cancel_masterchain_seqno": 73904039
   },
+  "verified_canary": {
+    "first_wallet": "kQBoCwZXlHudwydsHIGg06kAWoxSjFkkWjbP890Y7fLwkqFC",
+    "second_wallet": "kQD12D4f1MZN05riVMvmsCNZ9O87SBfs9BCwY_OIfYXrI3Qd",
+    "duel_id": 8500170045754465,
+    "query_id": 8500170045754465,
+    "settlement_transaction": "7ced535f487ea51536ffe080a9c015484f846a10dbf3c19be30dc3ffead5a931",
+    "settlement_transaction_lt": 85554531000003,
+    "masterchain_seqno": 73910017
+  },
   "previous_contract": {
     "address": "kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d",
     "paused": true,

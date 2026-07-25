@@ -259,9 +259,9 @@ make contracts-verify
 transaction, initial data hash, masterchain inclusion и getters. Smoke-проверка выполняется
 только если manifest содержит `verified_smoke`.
 
-DUEL manifest содержит masterchain-finalized доказательство цепочки open → cancel → refund.
-Verifier читает mutable `locked` из сети и проверяет покрытие обязательств резервом, поэтому
-активный offer не создаёт ложный failure.
+DUEL manifest содержит masterchain-finalized доказательства цепочек open → cancel → refund и
+полного двухкошелёчного settlement. Verifier читает mutable `locked` из сети и проверяет покрытие
+обязательств резервом, поэтому активный offer не создаёт ложный failure.
 
 ## Проверка сети 2026-07-26
 

@@ -31,9 +31,9 @@ make contracts-inspect
   sender, value, message body, transfers and masterchain block;
 - DUEL v1.2 reports the pinned testnet global ID, self-address and invite signer public key.
 
-The DUEL manifest contains a masterchain-finalized open/cancel/refund smoke proof. Mutable state is
-read live and checked against the retained-reserve invariant, so an active offer does not invalidate
-the deployment proof.
+The DUEL manifest contains masterchain-finalized open/cancel/refund and two-wallet settlement
+proofs. Mutable state is read live and checked against the retained-reserve invariant, so an active
+offer does not invalidate the deployment proof.
 
 `contracts-inspect` decodes live storage using the generated Acton wrappers. The API also exposes read-only contract, wallet, transaction and Jetton diagnostics to authenticated users.
 
