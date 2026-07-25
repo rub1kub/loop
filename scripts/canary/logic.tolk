@@ -78,11 +78,12 @@ fun canaryPermit(
 }
 
 fun cancelCanaryOffer(
-    duel: DuelEscrow,
+    duelAddress: address,
     walletAddress: address,
     offerId: uint64,
     queryId: uint64,
 ) {
+    val duel = DuelEscrow.fromAddress(duelAddress);
     val result = duel.sendCancelOffer(
         walletAddress,
         queryId,
@@ -95,11 +96,12 @@ fun cancelCanaryOffer(
 }
 
 fun cleanInterruptedCanary(
-    duel: DuelEscrow,
+    duelAddress: address,
     firstWallet: address,
     secondWallet: address,
     queryId: uint64,
 ) {
+    val duel = DuelEscrow.fromAddress(duelAddress);
     val firstActive = duel.activeOffer(firstWallet);
     val secondActive = duel.activeOffer(secondWallet);
     if (firstActive != 0 || secondActive != 0) {
@@ -107,18 +109,18 @@ fun cleanInterruptedCanary(
             assert (
                 duel.offerData(firstActive).state == OFFER_OPEN
             ) throw CanaryErrors.CanaryStateBusy;
-            cancelCanaryOffer(duel, firstWallet, firstActive, queryId);
+            cancelCanaryOffer(duelAddress, firstWallet, firstActive, queryId);
         } else if (firstActive == 0 && secondActive != 0) {
             assert (
                 duel.offerData(secondActive).state == OFFER_OPEN
             ) throw CanaryErrors.CanaryStateBusy;
-            cancelCanaryOffer(duel, secondWallet, secondActive, queryId);
+            cancelCanaryOffer(duelAddress, secondWallet, secondActive, queryId);
         } else {
             val firstOffer = duel.offerData(firstActive);
             val secondOffer = duel.offerData(secondActive);
             if (firstOffer.state == OFFER_OPEN && secondOffer.state == OFFER_OPEN) {
-                cancelCanaryOffer(duel, firstWallet, firstActive, queryId);
-                cancelCanaryOffer(duel, secondWallet, secondActive, queryId + 1);
+                cancelCanaryOffer(duelAddress, firstWallet, firstActive, queryId);
+                cancelCanaryOffer(duelAddress, secondWallet, secondActive, queryId + 1);
             } else {
                 assert (
                     firstOffer.state == OFFER_MATCHED && secondOffer.state == OFFER_MATCHED
@@ -170,7 +172,7 @@ fun runCanary(
         before.inviteSignerPublicKey == signer.publicKey &&
         !before.paused
     ) throw CanaryErrors.WrongContract;
-    cleanInterruptedCanary(duel, firstWallet, secondWallet, firstOfferId - 2);
+    cleanInterruptedCanary(duelAddress, firstWallet, secondWallet, firstOfferId - 2);
     println(
         "DUEL_CANARY_STATE_READY first_active={} second_active={}",
         duel.activeOffer(firstWallet),
