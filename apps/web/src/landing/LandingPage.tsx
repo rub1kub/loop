@@ -384,10 +384,6 @@ export function LandingPage() {
                 Сайт PLUSH BRICK
                 <ArrowIcon />
               </ExternalLink>
-              <ExternalLink href="https://tracker.plushbrick.fun/">
-                Маркет адресов
-                <ArrowIcon />
-              </ExternalLink>
             </div>
           </div>
         </section>

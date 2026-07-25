@@ -53,9 +53,6 @@ describe('browser landing', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/PLUSH BRICK даёт только отметку/)).not.toBeInTheDocument();
     expect(screen.queryByText(/скидк/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Маркет адресов/ })).toHaveAttribute(
-      'href',
-      'https://tracker.plushbrick.fun/',
-    );
+    expect(screen.queryByRole('link', { name: /Маркет адресов/ })).not.toBeInTheDocument();
   });
 });
