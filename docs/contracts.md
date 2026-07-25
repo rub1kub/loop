@@ -2,10 +2,10 @@
 
 Both contracts are built from Tolk sources with Acton and deployed independently on TON testnet.
 
-| Contract   | Address                                                                                         | Code hash         |  Fee |
-| ---------- | ----------------------------------------------------------------------------------------------- | ----------------- | ---: |
-| BankQueue  | [`kQAQ…v4FL_y`](https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y) | `9BF8EF5B…4A57C2` |   1% |
-| DuelEscrow | [`kQAi…Xv-t9d`](https://testnet.tonviewer.com/kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d) | `3347D324…083ACE` | 2.5% |
+| Contract   | Address                                                                                          | Code hash         |  Fee |
+| ---------- | ------------------------------------------------------------------------------------------------ | ----------------- | ---: |
+| BankQueue  | [`kQAQ…v4FL_y`](https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y)  | `9BF8EF5B…4A57C2` |   1% |
+| DuelEscrow | [`kQD9…02xo6yP`](https://testnet.tonviewer.com/kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP) | `F9E55EE5…62C3F6` | 2.5% |
 
 Complete addresses, code/data hashes, deployment transaction, logical time, compiler version,
 parameters, opcodes and getters are committed in `deployments/testnet/bank.json` and
@@ -31,9 +31,9 @@ make contracts-inspect
   sender, value, message body, transfers and masterchain block;
 - DUEL v1.2 reports the pinned testnet global ID, self-address and invite signer public key.
 
-The current v1.2 manifests do not yet contain separate `verified_smoke` records. The verifier also
-compares mutable `locked` state with the deployment snapshot, so an active offer can currently
-produce a false `locked balance mismatch` even when deployed bytecode matches.
+The DUEL manifest contains a masterchain-finalized open/cancel/refund smoke proof. Mutable state is
+read live and checked against the retained-reserve invariant, so an active offer does not invalidate
+the deployment proof.
 
 `contracts-inspect` decodes live storage using the generated Acton wrappers. The API also exposes read-only contract, wallet, transaction and Jetton diagnostics to authenticated users.
 

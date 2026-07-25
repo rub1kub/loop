@@ -53,7 +53,7 @@ LOOP — открытое социальное приложение в Telegram 
 Опубликованные контракты:
 
 - [BANK — BankQueue](https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y)
-- [DUEL — DuelEscrow](https://testnet.tonviewer.com/kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d)
+- [DUEL — DuelEscrow](https://testnet.tonviewer.com/kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP)
 
 ## Что находится в репозитории
 

@@ -1,14 +1,14 @@
 {
   "contract": "DuelEscrow",
-  "address": "kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d",
+  "address": "kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP",
   "network": "testnet",
   "workchain": 0,
-  "deployed_at": "2026-07-23T19:15:05Z",
-  "deploy_transaction": "mKhSRohA8IMdxlWglSkxpnMNnjKRJms3N2wzZ+it/t8=",
-  "deploy_transaction_lt": 85079720000003,
-  "code_hash": "3347D324C4EE67C23A29E5CFC70C817CB0863DBFC0C7B09F779E4CB889083ACE",
+  "deployed_at": "2026-07-25T22:59:54Z",
+  "deploy_transaction": "dcFPtX71kUhdqs1MRSjvcTq8RRFCwrDFDEiyJvidI60=",
+  "deploy_transaction_lt": 85548213000003,
+  "code_hash": "F9E55EE56C04765EC23F1BBE587509EB680E50251DFF3B7F8755FCA0D762C3F6",
   "data_hash": "FF65C78390686B6A2F4196B3D0BA5B2FC46BDD80F0C5B9F4DCA9661BF788931A",
-  "source_commit": "15391da0b46db01da049674719badd2da24d16f0",
+  "source_commit": "b2a999ef0e56a25b71a986b92e0e5f2048718934",
   "compiler_version": "Tolk 1.4.0",
   "acton_version": "1.0.0",
   "configuration": {
@@ -38,10 +38,32 @@
     "activeOffer",
     "adminState"
   ],
-  "previous_contract": {
-    "address": "kQDVeChmpyLsgjLZRLW-gtwSS4s5depJWpBhuYkfhgYdu3Tw",
-    "paused": true,
-    "locked_nano": 0
+  "verified_smoke": {
+    "owner": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
+    "offer_id": 2607260201,
+    "chance_bps": 5000,
+    "total_pool_nano": 2000000000,
+    "stake_nano": 1000000000,
+    "open_gas_nano": 50000000,
+    "cancel_gas_nano": 30000000,
+    "refund_nano": 1000000000,
+    "refund_reason": 3,
+    "commitment_hex": "6db31a65ea173b9ad53db0ba6944ca352cfd6e67fff061547406822659b894dc",
+    "expires_at": 1785021315,
+    "open_transaction": "LZS1noh0QS4iJch+7se6x3vxulKWCQUPc8ZhKgp/vOw=",
+    "open_transaction_lt": 85548295000003,
+    "open_masterchain_seqno": 73904028,
+    "cancel_transaction": "nfVUfqe1gaxTu5Ko/5YOwEiXewCYlDr3CpYnD/qF2/k=",
+    "cancel_transaction_lt": 85548306000003,
+    "cancel_masterchain_seqno": 73904039
   },
-  "explorer_url": "https://testnet.tonviewer.com/kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d"
+  "previous_contract": {
+    "address": "kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d",
+    "paused": true,
+    "locked_nano": 0,
+    "pause_transaction": "j2IKCd87Z7fYGHla9HjgxBeEbFfKc9AcnNMXwj+92Lg=",
+    "pause_transaction_lt": 85549400000003,
+    "pause_masterchain_seqno": 73905090
+  },
+  "explorer_url": "https://testnet.tonviewer.com/kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP"
 }

@@ -14,12 +14,12 @@ LOOP работает только с TON testnet, global ID `-3`. Пользо�
 | Контракт   | Version | Address                                            | Code hash                                                          | Fee  |
 | ---------- | ------- | -------------------------------------------------- | ------------------------------------------------------------------ | ---- |
 | BankQueue  | 1.2.0   | `kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y` | `9BF8EF5B9E75DF597E1EE4F4FE0DE2816D6B38899F4408E6A72857E0BD4A57C2` | 1%   |
-| DuelEscrow | 1.2.0   | `kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d` | `3347D324C4EE67C23A29E5CFC70C817CB0863DBFC0C7B09F779E4CB889083ACE` | 2.5% |
+| DuelEscrow | 1.2.0   | `kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP` | `F9E55EE56C04765EC23F1BBE587509EB680E50251DFF3B7F8755FCA0D762C3F6` | 2.5% |
 
 Explorer:
 
 - [BankQueue](https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y)
-- [DuelEscrow](https://testnet.tonviewer.com/kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d)
+- [DuelEscrow](https://testnet.tonviewer.com/kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP)
 
 Owner и treasury обоих deployments — публичный адрес
 `kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6`.
@@ -259,29 +259,21 @@ make contracts-verify
 transaction, initial data hash, masterchain inclusion и getters. Smoke-проверка выполняется
 только если manifest содержит `verified_smoke`.
 
-Текущие v1.2 manifests не содержат `verified_smoke`, поэтому verifier сейчас не доказывает
-отдельную smoke-транзакцию. Кроме того, он сравнивает живой mutable `locked` с начальным нулём в
-manifest. При активном offer это даёт ложный failure.
+DUEL manifest содержит masterchain-finalized доказательство цепочки open → cancel → refund.
+Verifier читает mutable `locked` из сети и проверяет покрытие обязательств резервом, поэтому
+активный offer не создаёт ложный failure.
 
-## Снимок сети 2026-07-24 06:32 UTC
+## Проверка сети 2026-07-26
 
 `make contracts-inspect` показал:
 
 - BankQueue active, code hash совпадает, balance `0.499907732 GRAM`, `lockedFunding=0`, queue
   пуста.
-- DuelEscrow active, code hash совпадает, balance `7.325824626 GRAM`, `locked=0.5 GRAM`.
-- В DUEL был один direct offer `8500169712360770`, expiry
-  `2026-07-24T01:33:00Z`, без opponent и duel.
-- `make contracts-verify` завершился ошибкой `DuelEscrow: locked balance mismatch` только из-за
-  сравнения с manifest `locked_nano=0`.
-
-Этот offer уже был просрочен на момент снимка. Перед recovery:
-
-1. повторно вызови `make contracts-inspect`;
-2. убедись, что offer всё ещё open и duel отсутствует;
-3. используй permissionless `ExpireOffer`, а не owner withdrawal;
-4. проверь refund и `locked=0` в masterchain-finalized транзакции;
-5. не раскрывай и не экспортируй signing key в логи.
+- Новый DuelEscrow active, code hash совпадает, `locked=0`.
+- Тестовый offer `2607260201` был открыт, отменён и полностью возвращён владельцу.
+- Обе транзакции зафиксированы в manifest вместе с LT и masterchain seqno.
+- Просроченный offer старого контракта возвращён permissionless-вызовом `ExpireOffer`;
+  старый контракт после переключения ставится на паузу.
 
 ## Предыдущие контракты
 
@@ -289,6 +281,8 @@ manifest. При активном offer это даёт ложный failure.
   `kQC1zcM8cxIDn3mFR0RV_PS_y2PzNkFttJ8NfAPHTyHrmc4l`, paused, recorded
   `locked=0.99 GRAM`, owner-only position `2207202601`.
 - Previous DUEL:
+  `kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d`, paused on-chain with `locked=0`.
+- Earlier DUEL:
   `kQDVeChmpyLsgjLZRLW-gtwSS4s5depJWpBhuYkfhgYdu3Tw`, paused, recorded `locked=0`.
 
 Старый BANK locked value нельзя выводить как surplus; это обязательство position. Старые адреса

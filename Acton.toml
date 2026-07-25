@@ -33,6 +33,7 @@ deploy-duel-testnet = "acton script --net testnet scripts/deploy-duel.tolk -3 0x
 deploy-duel-mainnet-emulation = "acton script scripts/deploy-duel.tolk -239 0x${LOOP_DUEL_INVITE_PUBLIC_KEY} true"
 deploy-duel-mainnet = "acton script --net mainnet scripts/deploy-duel.tolk -239 0x${LOOP_DUEL_INVITE_PUBLIC_KEY} true"
 pause-legacy-testnet = "acton script --net testnet scripts/pause-legacy-contracts.tolk"
+pause-duel-testnet = "acton script --net testnet scripts/set-duel-paused.tolk"
 
 [import-mappings]
 acton = ".acton"

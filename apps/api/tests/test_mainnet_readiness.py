@@ -7,7 +7,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 MAINNET_ADDRESS = "EQAJ40p3zlCoomgANMQ4u5eIktLMZtWP87GGKDKlyW_EZBwt"
-TESTNET_ADDRESS = "kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d"
+TESTNET_ADDRESS = "kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP"
 
 
 def load_script(name: str) -> ModuleType:

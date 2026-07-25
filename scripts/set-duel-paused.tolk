@@ -1,0 +1,40 @@
+import "@acton/io"
+import "@acton/emulation/network"
+import "@acton/emulation/scripts"
+import "@acton/testing/expect"
+import "@wrappers/DuelEscrow.gen"
+
+enum DuelPauseErrors {
+    UnexpectedPauseState = 992
+    UnexpectedOwner = 993
+}
+
+fun main(duelAddress: address, ownerAddress: address, paused: bool, queryId: uint64) {
+    val signer = scripts.wallet("deployer");
+    val duel = DuelEscrow.fromAddress(duelAddress);
+    val before = duel.contractConfig();
+    assert (before.owner == ownerAddress) throw DuelPauseErrors.UnexpectedOwner;
+    println(
+        "signer={} sender={} contract={}",
+        signer.address,
+        ownerAddress,
+        duelAddress,
+    );
+    println(
+        "current_paused={} target_paused={} locked={}",
+        before.paused,
+        paused,
+        before.locked,
+    );
+
+    val result = duel.sendSetPaused(
+        ownerAddress,
+        queryId,
+        paused,
+        { value: ton("0.03") },
+    );
+    val trace = result.waitForTrace();
+    expect(trace!).toHaveAllSuccessfulTxs();
+    assert (duel.contractConfig().paused == paused) throw DuelPauseErrors.UnexpectedPauseState;
+    println("DUEL pause state updated: paused={}", paused);
+}
