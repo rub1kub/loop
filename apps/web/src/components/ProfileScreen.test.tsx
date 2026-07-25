@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProfileScreen } from './ProfileScreen';
@@ -8,12 +8,17 @@ const apiMocks = vi.hoisted(() => ({
   meAvatar: vi.fn(),
   referrals: vi.fn(),
 }));
+const telegramMocks = vi.hoisted(() => ({
+  setHapticsEnabled: vi.fn(),
+}));
 const revokeObjectUrl = vi.fn();
 
 vi.mock('../api', () => ({ api: apiMocks }));
 vi.mock('../telegram', () => ({
   haptic: vi.fn(),
+  isHapticsEnabled: () => true,
   isMockTelegram: () => false,
+  setHapticsEnabled: telegramMocks.setHapticsEnabled,
   telegram: () => null,
 }));
 vi.mock('@tonconnect/ui-react', () => ({
@@ -80,5 +85,25 @@ describe('ProfileScreen', () => {
 
     unmount();
     expect(revokeObjectUrl).toHaveBeenCalledWith('blob:loop-avatar');
+  });
+
+  it('allows vibration to be disabled in settings', () => {
+    render(
+      <ProfileScreen
+        profile={profile}
+        rating={null}
+        bankHistory={[]}
+        duels={[]}
+        onReplay={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Настройки' }));
+    const vibration = screen.getByRole('switch', { name: 'Вибрация' });
+    expect(vibration).toBeChecked();
+
+    fireEvent.click(vibration);
+    expect(vibration).not.toBeChecked();
+    expect(telegramMocks.setHapticsEnabled).toHaveBeenCalledWith(false);
   });
 });

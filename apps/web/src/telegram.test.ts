@@ -1,11 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { initializeTelegram, telegramInitData, telegramStartParam } from './telegram';
+import {
+  haptic,
+  initializeTelegram,
+  isHapticsEnabled,
+  setHapticsEnabled,
+  telegramInitData,
+  telegramStartParam,
+} from './telegram';
 import type { TelegramWebApp } from './types';
 
 describe('Telegram launch compatibility', () => {
   afterEach(() => {
     window.history.replaceState(null, '', '/');
+    localStorage.removeItem('loop-haptics-enabled');
     delete window.Telegram;
   });
 
@@ -201,5 +209,28 @@ describe('Telegram launch compatibility', () => {
     expect(setHeaderColor).toHaveBeenLastCalledWith('#000000');
     expect(setBackgroundColor).toHaveBeenLastCalledWith('#000000');
     expect(setBottomBarColor).toHaveBeenLastCalledWith('#000000');
+  });
+
+  it('persists the vibration preference and suppresses haptics when disabled', () => {
+    const notificationOccurred = vi.fn();
+    window.Telegram = {
+      WebApp: {
+        HapticFeedback: {
+          impactOccurred: vi.fn(),
+          notificationOccurred,
+          selectionChanged: vi.fn(),
+        },
+      } as unknown as TelegramWebApp,
+    };
+
+    expect(isHapticsEnabled()).toBe(true);
+    setHapticsEnabled(false);
+    expect(isHapticsEnabled()).toBe(false);
+    haptic('success');
+    expect(notificationOccurred).not.toHaveBeenCalled();
+
+    setHapticsEnabled(true);
+    haptic('success');
+    expect(notificationOccurred).toHaveBeenCalledWith('success');
   });
 });

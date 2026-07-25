@@ -203,4 +203,12 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await expect(page.locator('body')).not.toContainText(
     /ON-CHAIN|PROOFS?|TESTNET|AFK|MINI APP|SETTLEMENT|HOLDER|JETTON|POINTS|LOOP SCORE|RATING|PROFILE|SEASON/i,
   );
+
+  await page.goto('/?screen=settings');
+  const vibration = page.getByRole('switch', { name: 'Вибрация' });
+  await expect(vibration).toBeChecked();
+  await vibration.click();
+  await expect(vibration).not.toBeChecked();
+  await page.reload();
+  await expect(page.getByRole('switch', { name: 'Вибрация' })).not.toBeChecked();
 });

@@ -4,6 +4,7 @@ const mockTelegram = import.meta.env.VITE_MOCK_TELEGRAM === 'true';
 const telegramSdkUrl = 'https://telegram.org/js/telegram-web-app.js?63';
 const immersiveTelegramPlatforms = new Set(['android', 'android_x', 'ios']);
 const telegramChromeColor = '#000000';
+const hapticsStorageKey = 'loop-haptics-enabled';
 const presentationGuardsInstalled = new WeakSet<TelegramWebApp>();
 let telegramSdkPromise: Promise<void> | null = null;
 
@@ -103,10 +104,26 @@ export function isMockTelegram(): boolean {
   return mockTelegram;
 }
 
+export function isHapticsEnabled(): boolean {
+  try {
+    return localStorage.getItem(hapticsStorageKey) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+export function setHapticsEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem(hapticsStorageKey, String(enabled));
+  } catch {
+    // Some embedded browsers can deny storage; keep the session usable.
+  }
+}
+
 export function haptic(
   type: 'selection' | 'light' | 'medium' | 'success' | 'warning' | 'error',
 ): void {
-  if (isMockTelegram()) return;
+  if (isMockTelegram() || !isHapticsEnabled()) return;
   const feedback = telegram()?.HapticFeedback;
   if (!feedback) return;
   if (type === 'selection') feedback.selectionChanged();

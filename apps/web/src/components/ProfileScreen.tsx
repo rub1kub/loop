@@ -7,6 +7,7 @@ import {
   PaperPlaneTilt,
   ShieldCheck,
   UsersThree,
+  Vibrate,
   Wallet,
   X,
 } from '@phosphor-icons/react';
@@ -15,7 +16,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 
 import { api } from '../api';
-import { haptic, isMockTelegram, telegram } from '../telegram';
+import { haptic, isHapticsEnabled, isMockTelegram, setHapticsEnabled, telegram } from '../telegram';
 import { formatGram } from '../ton';
 import type { BankPosition, Duel, Profile, Rating, Referral } from '../types';
 import { DisclosureIndicator } from './DisclosureIndicator';
@@ -56,6 +57,7 @@ export function ProfileScreen({
     isMockTelegram() ? demoReferral : null,
   );
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [vibrationEnabled, setVibrationEnabled] = useState(isHapticsEnabled);
 
   useEffect(() => {
     if (isMockTelegram()) return;
@@ -276,6 +278,23 @@ export function ProfileScreen({
                 </span>
                 <ArrowRight />
               </button>
+              <label className="settings-toggle">
+                <span>
+                  <Vibrate /> Вибрация
+                </span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-label="Вибрация"
+                  checked={vibrationEnabled}
+                  onChange={(event) => {
+                    const enabled = event.currentTarget.checked;
+                    setHapticsEnabled(enabled);
+                    setVibrationEnabled(enabled);
+                    if (enabled) haptic('light');
+                  }}
+                />
+              </label>
               {wallet && (
                 <button className="settings-row" onClick={() => void tonConnectUI.disconnect()}>
                   <span>
