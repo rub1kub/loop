@@ -77,76 +77,6 @@ fun canaryPermit(
     return crypto.rawSign(signerSeed, hash) as bits512;
 }
 
-fun cancelCanaryOffer(
-    duelAddress: address,
-    walletAddress: address,
-    offerId: uint64,
-    queryId: uint64,
-) {
-    val duel = DuelEscrow.fromAddress(duelAddress);
-    val result = duel.sendCancelOffer(
-        walletAddress,
-        queryId,
-        offerId,
-        { value: ton("0.03") },
-    );
-    val trace = result.waitForTrace();
-    assert (trace != null) throw CanaryErrors.CanaryStateBusy;
-    expect(trace!).toHaveAllSuccessfulTxs();
-}
-
-fun cleanInterruptedCanary(
-    duelAddress: address,
-    firstWallet: address,
-    secondWallet: address,
-    queryId: uint64,
-) {
-    val duel = DuelEscrow.fromAddress(duelAddress);
-    val firstActive = duel.activeOffer(firstWallet);
-    val secondActive = duel.activeOffer(secondWallet);
-    if (firstActive != 0 || secondActive != 0) {
-        if (firstActive != 0 && secondActive == 0) {
-            assert (
-                duel.offerData(firstActive).state == OFFER_OPEN
-            ) throw CanaryErrors.CanaryStateBusy;
-            cancelCanaryOffer(duelAddress, firstWallet, firstActive, queryId);
-        } else if (firstActive == 0 && secondActive != 0) {
-            assert (
-                duel.offerData(secondActive).state == OFFER_OPEN
-            ) throw CanaryErrors.CanaryStateBusy;
-            cancelCanaryOffer(duelAddress, secondWallet, secondActive, queryId);
-        } else {
-            val firstOffer = duel.offerData(firstActive);
-            val secondOffer = duel.offerData(secondActive);
-            if (firstOffer.state == OFFER_OPEN && secondOffer.state == OFFER_OPEN) {
-                cancelCanaryOffer(duelAddress, firstWallet, firstActive, queryId);
-                cancelCanaryOffer(duelAddress, secondWallet, secondActive, queryId + 1);
-            } else {
-                assert (
-                    firstOffer.state == OFFER_MATCHED && secondOffer.state == OFFER_MATCHED
-                ) throw CanaryErrors.CanaryStateBusy;
-                val duelId = firstActive > secondActive ? firstActive : secondActive;
-                val staleDuel = duel.duelData(duelId);
-                assert (
-                    blockchain.now() > staleDuel.revealDeadline
-                ) throw CanaryErrors.CanaryStateBusy;
-                val expired = duel.sendExpireDuel(
-                    firstWallet,
-                    queryId,
-                    duelId,
-                    { value: ton("0.03") },
-                );
-                val trace = expired.waitForTrace();
-                assert (trace != null) throw CanaryErrors.CanaryStateBusy;
-                expect(trace!).toHaveAllSuccessfulTxs();
-            }
-        }
-        assert (
-            duel.activeOffer(firstWallet) == 0 && duel.activeOffer(secondWallet) == 0
-        ) throw CanaryErrors.CanaryStateBusy;
-    }
-}
-
 fun runCanary(
     duelAddress: address,
     networkId: int32,
@@ -187,7 +117,81 @@ fun runCanary(
         !before.paused
     ) throw CanaryErrors.WrongContract;
     println("DUEL_CANARY_CLEANUP start");
-    cleanInterruptedCanary(duelAddress, firstWallet, secondWallet, firstOfferId - 2);
+    val firstActive = duel.activeOffer(firstWallet);
+    val secondActive = duel.activeOffer(secondWallet);
+    if (firstActive != 0 || secondActive != 0) {
+        if (firstActive != 0 && secondActive == 0) {
+            assert (
+                duel.offerData(firstActive).state == OFFER_OPEN
+            ) throw CanaryErrors.CanaryStateBusy;
+            val cancelled = duel.sendCancelOffer(
+                firstWallet,
+                firstOfferId - 2,
+                firstActive,
+                { value: ton("0.03") },
+            );
+            val cancelTrace = cancelled.waitForTrace();
+            assert (cancelTrace != null) throw CanaryErrors.CanaryStateBusy;
+            expect(cancelTrace!).toHaveAllSuccessfulTxs();
+        } else if (firstActive == 0 && secondActive != 0) {
+            assert (
+                duel.offerData(secondActive).state == OFFER_OPEN
+            ) throw CanaryErrors.CanaryStateBusy;
+            val cancelled = duel.sendCancelOffer(
+                secondWallet,
+                firstOfferId - 2,
+                secondActive,
+                { value: ton("0.03") },
+            );
+            val cancelTrace = cancelled.waitForTrace();
+            assert (cancelTrace != null) throw CanaryErrors.CanaryStateBusy;
+            expect(cancelTrace!).toHaveAllSuccessfulTxs();
+        } else {
+            val firstOffer = duel.offerData(firstActive);
+            val secondOffer = duel.offerData(secondActive);
+            if (firstOffer.state == OFFER_OPEN && secondOffer.state == OFFER_OPEN) {
+                val firstCancelled = duel.sendCancelOffer(
+                    firstWallet,
+                    firstOfferId - 2,
+                    firstActive,
+                    { value: ton("0.03") },
+                );
+                val firstCancelTrace = firstCancelled.waitForTrace();
+                assert (firstCancelTrace != null) throw CanaryErrors.CanaryStateBusy;
+                expect(firstCancelTrace!).toHaveAllSuccessfulTxs();
+                val secondCancelled = duel.sendCancelOffer(
+                    secondWallet,
+                    firstOfferId - 1,
+                    secondActive,
+                    { value: ton("0.03") },
+                );
+                val secondCancelTrace = secondCancelled.waitForTrace();
+                assert (secondCancelTrace != null) throw CanaryErrors.CanaryStateBusy;
+                expect(secondCancelTrace!).toHaveAllSuccessfulTxs();
+            } else {
+                assert (
+                    firstOffer.state == OFFER_MATCHED && secondOffer.state == OFFER_MATCHED
+                ) throw CanaryErrors.CanaryStateBusy;
+                val staleDuelId = firstActive > secondActive ? firstActive : secondActive;
+                val staleDuel = duel.duelData(staleDuelId);
+                assert (
+                    blockchain.now() > staleDuel.revealDeadline
+                ) throw CanaryErrors.CanaryStateBusy;
+                val expired = duel.sendExpireDuel(
+                    firstWallet,
+                    firstOfferId - 2,
+                    staleDuelId,
+                    { value: ton("0.03") },
+                );
+                val expireTrace = expired.waitForTrace();
+                assert (expireTrace != null) throw CanaryErrors.CanaryStateBusy;
+                expect(expireTrace!).toHaveAllSuccessfulTxs();
+            }
+        }
+        assert (
+            duel.activeOffer(firstWallet) == 0 && duel.activeOffer(secondWallet) == 0
+        ) throw CanaryErrors.CanaryStateBusy;
+    }
     println("DUEL_CANARY_CLEANUP complete");
     println(
         "DUEL_CANARY_STATE_READY first_active={} second_active={}",
