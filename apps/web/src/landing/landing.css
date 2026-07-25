@@ -849,6 +849,11 @@ svg {
   border-left: 1px solid var(--landing-line-light);
 }
 
+.landing-bank .landing-section-copy > small {
+  padding-top: 0;
+  border-top: 0;
+}
+
 .landing-jar-stage {
   position: relative;
   display: grid;
