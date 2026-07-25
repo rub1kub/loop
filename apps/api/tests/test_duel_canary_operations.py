@@ -254,6 +254,7 @@ def test_canary_retries_without_rejected_provider_key(
     assert RUNNER.fetch_settlement_finality("testnet", "ab" * 32, 42)["status"] == "verified"
     assert requests[0].get_header("X-api-key") == "rejected"
     assert requests[1].get_header("X-api-key") is None
+    assert requests[1].get_header("User-agent") == "loop-canary/1.0"
 
 
 def test_canary_report_requires_both_wallet_balances() -> None:

@@ -185,7 +185,10 @@ def fetch_settlement_finality(
     for attempt in range(FINALITY_POLL_ATTEMPTS):
         request = urllib.request.Request(
             provider_url,
-            headers={"X-API-Key": api_key} if use_api_key else {},
+            headers={
+                "User-Agent": "loop-canary/1.0",
+                **({"X-API-Key": api_key} if use_api_key else {}),
+            },
         )
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
