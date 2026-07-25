@@ -1,0 +1,16 @@
+{
+  "audited_commit": "REPLACE_WITH_40_HEX_COMMIT",
+  "external_audit": {
+    "provider": "REPLACE_WITH_AUDITOR",
+    "completed_at": "YYYY-MM-DD",
+    "report_path": "docs/audits/loop-mainnet-audit.pdf",
+    "report_sha256": "REPLACE_WITH_64_HEX_SHA256"
+  },
+  "owner": "REPLACE_WITH_MAINNET_OWNER_ADDRESS",
+  "treasury": "REPLACE_WITH_MAINNET_TREASURY_ADDRESS",
+  "duel_invite_signer_public_key": "REPLACE_WITH_64_HEX_PUBLIC_KEY",
+  "initial_limits": {
+    "bank_max_principal_nano": 10000000000,
+    "duel_max_pool_nano": 10000000000
+  }
+}

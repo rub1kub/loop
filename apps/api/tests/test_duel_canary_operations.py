@@ -1,4 +1,6 @@
 import importlib.util
+import io
+import json
 from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
@@ -29,6 +31,13 @@ def wallets(first_balance: int, second_balance: int) -> dict[str, dict[str, Any]
     return {
         "loop-canary-a": {"address": "a", "balance": first_balance},
         "loop-canary-b": {"address": "b", "balance": second_balance},
+    }
+
+
+def mainnet_wallets(first_balance: int, second_balance: int) -> dict[str, dict[str, Any]]:
+    return {
+        "loop-mainnet-canary-a": {"address": "a", "balance": first_balance},
+        "loop-mainnet-canary-b": {"address": "b", "balance": second_balance},
     }
 
 
@@ -80,6 +89,76 @@ def test_canary_fails_closed_when_airdrop_stays_below_floor(
 
     with pytest.raises(SystemExit, match="stayed below"):
         RUNNER.ensure_testnet_funding({}, "loop-canary-a", "loop-canary-b", 1_800_000_000)
+
+
+def test_mainnet_canary_never_requests_an_airdrop(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        RUNNER,
+        "wallet_snapshot",
+        lambda _environment: mainnet_wallets(1_000_000_000, 2_000_000_000),
+    )
+    with pytest.raises(SystemExit, match="below the configured safety floor"):
+        RUNNER.require_mainnet_funding(
+            {},
+            "loop-mainnet-canary-a",
+            "loop-mainnet-canary-b",
+            1_800_000_000,
+        )
+
+
+def test_canary_formats_manifest_ready_finality_evidence() -> None:
+    evidence = RUNNER.canary_evidence(
+        {
+            "status": "verified",
+            "duel_id": 42,
+            "settlement_transaction": "ab" * 32,
+            "settlement_transaction_lt": 123,
+            "masterchain_seqno": 456,
+        },
+        mainnet_wallets(2_000_000_000, 2_000_000_000),
+        "loop-mainnet-canary-a",
+        "loop-mainnet-canary-b",
+    )
+    assert evidence == {
+        "first_wallet": "a",
+        "second_wallet": "b",
+        "duel_id": 42,
+        "query_id": 42,
+        "settlement_transaction": "ab" * 32,
+        "settlement_transaction_lt": 123,
+        "masterchain_seqno": 456,
+    }
+
+
+def test_canary_reads_finalized_successful_settlement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "transactions": [
+            {
+                "lt": "123",
+                "mc_block_seqno": 456,
+                "emulated": False,
+                "description": {
+                    "aborted": False,
+                    "compute_ph": {"success": True},
+                    "action": {"success": True},
+                },
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        RUNNER.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: io.BytesIO(json.dumps(payload).encode()),
+    )
+    assert RUNNER.fetch_settlement_finality("mainnet", "ab" * 32, 42) == {
+        "status": "verified",
+        "duel_id": 42,
+        "settlement_transaction": "ab" * 32,
+        "settlement_transaction_lt": 123,
+        "masterchain_seqno": 456,
+    }
 
 
 def test_canary_report_requires_both_wallet_balances() -> None:

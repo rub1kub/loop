@@ -20,6 +20,7 @@ import {
   commitmentForOffer,
   assertOpenOfferQuoteContext,
   formatGram,
+  isSupportedTonNetwork,
   newOfferId,
   newSecret,
   parseGram,
@@ -125,13 +126,15 @@ export function DuelScreen({
           await tonConnectUI.openModal();
           return;
         }
-        if (wallet.account.chain !== '-3') throw new Error('Этот кошелёк сейчас не поддерживается');
+        if (!isSupportedTonNetwork(wallet.account.chain)) {
+          throw new Error('Этот кошелёк сейчас не поддерживается');
+        }
         if (!profile.wallet) throw new Error('Ждём подтверждение владения внешним кошельком');
         let acceptedInvite = invite;
         if (invite) acceptedInvite = await api.acceptInvite(invite.code);
         const contract = await api.contractState('duel');
         if (
-          contract.network !== -3 ||
+          contract.network !== Number(wallet.account.chain) ||
           contract.status !== 'active' ||
           !contract.code_hash_matches
         ) {

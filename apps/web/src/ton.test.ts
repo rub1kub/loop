@@ -1,11 +1,12 @@
 import { Address, beginCell, Cell } from '@ton/core';
 import { describe, expect, it } from 'vitest';
 
-import type { ActionIntent, OfferQuote } from './types';
+import type { ActionIntent, BankQuote, OfferQuote } from './types';
 import {
   ACCEPT_DIRECT_OFFER_OPCODE,
   assertOpenOfferQuoteContext,
   buildActionTransaction,
+  buildBankPositionTransaction,
   buildOpenOfferTransaction,
   COMMITMENT_DOMAIN,
   commitmentForOffer,
@@ -168,5 +169,66 @@ describe('TON duel encoding', () => {
     expect(slice.loadUintBig(64)).toBe(88n);
     expect(slice.loadUintBig(64)).toBe(77n);
     expect(slice.loadUintBig(256)).toBe(42n);
+  });
+
+  it('accepts mainnet only when the signed quote uses the same network', () => {
+    const bankQuote: BankQuote = {
+      position: {
+        id: 'position',
+        position_id: 91,
+        owner_wallet: `0:${'11'.repeat(32)}`,
+        principal_nano: 1_000_000_000,
+        multiplier_bps: 12500,
+        target_payout_nano: 1_250_000_000,
+        funded_amount_nano: 0,
+        remaining_amount_nano: 1_250_000_000,
+        progress_bps: 0,
+        queue_index: null,
+        queue_position: null,
+        current_status: 'pending_confirmation',
+        funding_transaction: null,
+        payout_transaction: null,
+        proof_url: null,
+        created_at: new Date(0).toISOString(),
+        completed_at: null,
+      },
+      transaction: {
+        operation: 'create_bank_position',
+        query_id: 91,
+        position_id: 91,
+        contract_address: `0:${'22'.repeat(32)}`,
+        amount_nano: '1080000000',
+        principal_nano: '1000000000',
+        multiplier_bps: 12500,
+        valid_until: 2_000_000_000,
+        network: -239,
+        fee_nano: '10000000',
+      },
+    };
+    const request = buildBankPositionTransaction(bankQuote, `0:${'11'.repeat(32)}`, '-239');
+    expect(request.network).toBe('-239');
+    expect(() =>
+      buildBankPositionTransaction(
+        { ...bankQuote, transaction: { ...bankQuote.transaction, network: -3 } },
+        `0:${'11'.repeat(32)}`,
+        '-239',
+      ),
+    ).toThrow('Сеть BANK изменилась');
+  });
+
+  it('rejects a DUEL intent when the wallet and backend networks differ', () => {
+    const intent: ActionIntent = {
+      operation: 'expire_offer',
+      query_id: 9,
+      offer_id: 77,
+      duel_id: 0,
+      contract_address: `0:${'22'.repeat(32)}`,
+      amount_nano: '30000000',
+      valid_until: 2_000_000_000,
+      network: -3,
+    };
+    expect(() => buildActionTransaction(intent, `0:${'11'.repeat(32)}`, '-239')).toThrow(
+      'Сеть DUEL изменилась',
+    );
   });
 });

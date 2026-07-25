@@ -361,7 +361,7 @@ async def wallet_verify(
     request: Request,
     settings: Config,
 ) -> WalletView:
-    if body.network != settings.ton_network_id or body.network != -3:
+    if body.network != settings.ton_network_id or not settings.ton_transactions_enabled:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
         )

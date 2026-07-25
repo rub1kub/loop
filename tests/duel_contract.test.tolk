@@ -67,6 +67,57 @@ fun testDirectPermit(
     return crypto.rawSign(INVITE_SIGNER_SEED, permitHash) as bits512;
 }
 
+fun storedOffer(
+    owner: address,
+    commitment: uint256,
+    chanceBps: uint16,
+    totalPool: coins,
+    expiresAt: uint32,
+    state: uint8,
+    direct: DirectOfferData,
+): Cell<OfferData> {
+    return OfferData {
+        owner,
+        commitment,
+        chanceBps,
+        totalPool,
+        stake: mulDivFloor(totalPool, chanceBps, 10_000),
+        expiresAt,
+        state,
+        direct: direct.toCell(),
+    }.toCell();
+}
+
+fun deployStoredDuel(
+    owner: Treasury,
+    treasury: Treasury,
+    feeBps: uint16,
+    paused: bool,
+    locked: coins,
+    offers: OfferMap,
+    duels: DuelMap,
+    activeOffers: ActiveOfferMap,
+    usedOfferIds: UsedOfferMap,
+): DuelEscrow {
+    val contract = DuelEscrow.fromStorage({
+        owner: owner.address,
+        treasury: treasury.address,
+        feeBps,
+        networkId: TEST_NETWORK_ID,
+        inviteSignerPublicKey: crypto.seedToKeyPair(INVITE_SIGNER_SEED).publicKey,
+        paused,
+        locked,
+        offers,
+        duels,
+        activeOffers,
+        usedOfferIds,
+    });
+    expect(contract.deploy(owner.address, { value: ton("2") })).toHaveSuccessfulDeploy({
+        to: contract.address,
+    });
+    return contract;
+}
+
 get fun `test Python permit encoding and signature match Tolk`() {
     val permitHash = beginCell()
         .storeUint(TEST_DIRECT_ACCEPT_DOMAIN, 32)
@@ -1643,6 +1694,334 @@ get fun `test DUEL configuration changes require the paused owner`() {
             { value: ton("0.02") },
         ),
     ).toHaveSuccessfulTx<SetPaused>();
+}
+
+get fun `test matching rejects a corrupted same-owner pair`() {
+    testing.setNow(1_800_000_000);
+    val owner = testing.treasury("same-owner-admin");
+    val treasury = testing.treasury("same-owner-treasury");
+    val player = testing.treasury("same-owner-player");
+    val matcher = testing.treasury("same-owner-matcher");
+    val expiresAt: uint32 = testing.getNow() + 900;
+    var offers = [] as OfferMap;
+    offers.set(
+        2_001,
+        storedOffer(
+            player.address,
+            1,
+            5_000,
+            ton("2"),
+            expiresAt,
+            OFFER_OPEN,
+            DirectOfferData { inviteId: 0, opponent: null },
+        ),
+    );
+    offers.set(
+        2_002,
+        storedOffer(
+            player.address,
+            2,
+            5_000,
+            ton("2"),
+            expiresAt,
+            OFFER_OPEN,
+            DirectOfferData { inviteId: 0, opponent: null },
+        ),
+    );
+    var activeOffers = [] as ActiveOfferMap;
+    activeOffers.set(player.address, 2_002);
+    var usedOfferIds = [] as UsedOfferMap;
+    usedOfferIds.set(2_001, true);
+    usedOfferIds.set(2_002, true);
+    val contract = deployStoredDuel(
+        owner,
+        treasury,
+        250,
+        false,
+        ton("2"),
+        offers,
+        [] as DuelMap,
+        activeOffers,
+        usedOfferIds,
+    );
+
+    expect(
+        contract.sendMatchOffers(
+            matcher.address,
+            2_003,
+            2_001,
+            2_002,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.SameOwner });
+}
+
+get fun `test locked-value invariants stop every refund path`() {
+    testing.setNow(1_800_000_000);
+    val owner = testing.treasury("locked-admin");
+    val treasury = testing.treasury("locked-treasury");
+    val playerA = testing.treasury("locked-player-a");
+    val playerB = testing.treasury("locked-player-b");
+    val caller = testing.treasury("locked-caller");
+    val expiresAt: uint32 = testing.getNow() + 60;
+
+    var cancelOffers = [] as OfferMap;
+    cancelOffers.set(
+        2_101,
+        storedOffer(
+            playerA.address,
+            1,
+            5_000,
+            ton("2"),
+            expiresAt,
+            OFFER_OPEN,
+            DirectOfferData { inviteId: 0, opponent: null },
+        ),
+    );
+    var cancelActive = [] as ActiveOfferMap;
+    cancelActive.set(playerA.address, 2_101);
+    var cancelUsed = [] as UsedOfferMap;
+    cancelUsed.set(2_101, true);
+    val cancelContract = deployStoredDuel(
+        owner,
+        treasury,
+        250,
+        false,
+        0,
+        cancelOffers,
+        [] as DuelMap,
+        cancelActive,
+        cancelUsed,
+    );
+    expect(
+        cancelContract.sendCancelOffer(
+            playerA.address,
+            2_102,
+            2_101,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InsufficientValue });
+
+    testing.setNow(expiresAt + 1);
+    expect(
+        cancelContract.sendExpireOffer(
+            caller.address,
+            2_103,
+            2_101,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InsufficientValue });
+
+    var matchedOffers = [] as OfferMap;
+    matchedOffers.set(
+        2_111,
+        storedOffer(
+            playerA.address,
+            1,
+            5_000,
+            ton("2"),
+            expiresAt + 900,
+            OFFER_MATCHED,
+            DirectOfferData { inviteId: 0, opponent: null },
+        ),
+    );
+    matchedOffers.set(
+        2_112,
+        storedOffer(
+            playerB.address,
+            2,
+            5_000,
+            ton("2"),
+            expiresAt + 900,
+            OFFER_MATCHED,
+            DirectOfferData { inviteId: 0, opponent: null },
+        ),
+    );
+    var matchedDuels = [] as DuelMap;
+    matchedDuels.set(
+        2_112,
+        DuelData {
+            offerAId: 2_111,
+            offerBId: 2_112,
+            revealDeadline: testing.getNow() - 1,
+            secretA: 0,
+            secretB: 0,
+            revealedMask: 0,
+        }.toCell(),
+    );
+    var matchedActive = [] as ActiveOfferMap;
+    matchedActive.set(playerA.address, 2_111);
+    matchedActive.set(playerB.address, 2_112);
+    var matchedUsed = [] as UsedOfferMap;
+    matchedUsed.set(2_111, true);
+    matchedUsed.set(2_112, true);
+    val matchedContract = deployStoredDuel(
+        owner,
+        treasury,
+        250,
+        false,
+        ton("1"),
+        matchedOffers,
+        matchedDuels,
+        matchedActive,
+        matchedUsed,
+    );
+    expect(
+        matchedContract.sendExpireDuel(
+            caller.address,
+            2_113,
+            2_112,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InsufficientValue });
+}
+
+get fun `test every DUEL admin boundary fails closed`() {
+    val (contract, owner, _, playerA, _) = setupTest();
+    expect(
+        contract.sendDuelFundReserve(
+            owner.address,
+            2_201,
+            0,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InvalidAdminAmount });
+    expect(
+        contract.sendDuelFundReserve(
+            owner.address,
+            2_202,
+            ton("1"),
+            { value: 1_019_999_999 },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InsufficientValue });
+    expect(
+        contract.sendDuelWithdrawSurplus(
+            owner.address,
+            2_203,
+            1,
+            { value: 49_999_999 },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InsufficientValue });
+    expect(
+        contract.sendDuelSetTreasury(
+            owner.address,
+            2_204,
+            playerA.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.MustBePaused });
+    expect(
+        contract.sendDuelSetOwner(
+            owner.address,
+            2_205,
+            playerA.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.MustBePaused });
+    expect(
+        contract.sendSetPaused(
+            owner.address,
+            2_206,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetPaused>();
+    expect(
+        contract.sendDuelWithdrawSurplus(
+            owner.address,
+            2_207,
+            0,
+            { value: ton("0.05") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InvalidAdminAmount });
+    expect(
+        contract.sendDuelSetFee(
+            owner.address,
+            2_208,
+            300,
+            { value: 19_999_999 },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InsufficientValue });
+    expect(
+        contract.sendDuelSetTreasury(
+            owner.address,
+            2_209,
+            playerA.address,
+            { value: 19_999_999 },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InsufficientValue });
+    expect(
+        contract.sendDuelSetTreasury(
+            owner.address,
+            2_210,
+            contract.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InvalidTreasury });
+    expect(
+        contract.sendDuelSetOwner(
+            owner.address,
+            2_211,
+            playerA.address,
+            { value: 19_999_999 },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InsufficientValue });
+    expect(
+        contract.sendDuelSetOwner(
+            owner.address,
+            2_212,
+            owner.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InvalidOwner });
+    expect(
+        contract.sendDuelSetOwner(
+            owner.address,
+            2_213,
+            contract.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InvalidOwner });
+}
+
+get fun `test zero-fee settlement emits no fee message`() {
+    val (_, owner, treasury, playerA, playerB) = setupTest();
+    val contract = deployStoredDuel(
+        owner,
+        treasury,
+        0,
+        false,
+        0,
+        [] as OfferMap,
+        [] as DuelMap,
+        [] as ActiveOfferMap,
+        [] as UsedOfferMap,
+    );
+    openPair(contract, playerA, playerB);
+    expect(
+        contract.sendReveal(
+            playerA.address,
+            2_301,
+            OFFER_B_ID,
+            OFFER_A_ID,
+            SECRET_A,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<Reveal>();
+    val settled = contract.sendReveal(
+        playerB.address,
+        2_302,
+        OFFER_B_ID,
+        OFFER_B_ID,
+        SECRET_B,
+        { value: ton("0.02") },
+    );
+    expect(settled).toHaveAllSuccessfulTxs();
+    expect(settled).toNotHaveTx<ProtocolFee>({
+        from: contract.address,
+        to: treasury.address,
+    });
+    expect(contract.contractConfig().locked).toEqual(0);
 }
 
 get fun `test 64 consecutive duels settle without locked value or active offer leaks`() {

@@ -60,17 +60,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             ),
         }
         for name, (address, expected) in contracts.items():
-            actual_code_hash = ""
+            contract_state = None
             for attempt in range(3):
                 try:
-                    actual_code_hash = await app.state.ton_client.get_contract_code_hash(address)
+                    contract_state = await app.state.ton_client.get_contract_state(address)
                     break
                 except TonProviderError:
                     if attempt == 2:
                         raise
                     await asyncio.sleep(2**attempt)
-            if not secrets.compare_digest(actual_code_hash, expected.removeprefix("0x").upper()):
+            if contract_state is None or not secrets.compare_digest(
+                contract_state.code_hash, expected.removeprefix("0x").upper()
+            ):
                 raise RuntimeError(f"configured {name} contract code hash mismatch")
+            admin = await app.state.ton_client.get_contract_admin_state(name.lower(), address)
+            if contract_state.balance_nano < admin.locked_nano + 200_000_000:
+                raise RuntimeError(f"configured {name} contract reserve is undercollateralized")
+        duel_domain = await app.state.ton_client.get_duel_contract_domain(
+            settings.effective_duel_contract_address
+        )
+        if (
+            duel_domain.network_id != settings.ton_network_id
+            or normalize_address(duel_domain.contract_address)
+            != normalize_address(settings.effective_duel_contract_address)
+            or not secrets.compare_digest(
+                duel_domain.invite_signer_public_key.lower(),
+                settings.duel_invite_public_key.lower(),
+            )
+        ):
+            raise RuntimeError("configured DUEL contract domain mismatch")
     app.state.bot = None
     app.state.dispatcher = None
     if settings.auto_create_schema:
@@ -226,7 +244,14 @@ def create_app() -> FastAPI:
                 },
             )
             await pipeline.execute()
-        return {"status": "verified", "duel_id": body.duel_id, "confirmed_at": timestamp}
+        return {
+            "status": "verified",
+            "duel_id": body.duel_id,
+            "confirmed_at": timestamp,
+            "settlement_transaction": proof.transaction_hash,
+            "settlement_transaction_lt": proof.logical_time,
+            "masterchain_seqno": proof.masterchain_seqno,
+        }
 
     @app.post(settings.webhook_path, include_in_schema=False)
     async def telegram_webhook(

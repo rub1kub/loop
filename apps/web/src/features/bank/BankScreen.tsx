@@ -7,7 +7,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
 import { DisclosureIndicator } from '../../components/DisclosureIndicator';
 import { haptic, isMockTelegram, setBackAction } from '../../telegram';
-import { buildBankPositionTransaction, formatGram, newOfferId, parseGram } from '../../ton';
+import {
+  buildBankPositionTransaction,
+  formatGram,
+  isSupportedTonNetwork,
+  newOfferId,
+  parseGram,
+} from '../../ton';
 import type { BankPosition, BankPreview, Profile, RatingPulse } from '../../types';
 
 type WizardStep = 'amount' | 'multiplier' | 'confirm' | 'waiting';
@@ -86,7 +92,7 @@ export function BankScreen({
       await tonConnectUI.openModal();
       return;
     }
-    if (wallet.account.chain !== '-3') {
+    if (!isSupportedTonNetwork(wallet.account.chain)) {
       setMessage('Этот кошелёк сейчас не поддерживается');
       haptic('error');
       return;
@@ -139,7 +145,7 @@ export function BankScreen({
         haptic('success');
         return;
       }
-      if (!wallet || wallet.account.chain !== '-3') {
+      if (!wallet || !isSupportedTonNetwork(wallet.account.chain)) {
         throw new Error('Подключите поддерживаемый внешний кошелёк');
       }
       const quote = await api.quoteBankPosition({

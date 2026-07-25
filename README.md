@@ -146,6 +146,12 @@ make contracts-build
 make contracts-test
 ```
 
+Строгий технический профиль перед основной сетью:
+
+```bash
+make contracts-mainnet-technical
+```
+
 Проверка кода и состояния опубликованных контрактов:
 
 ```bash

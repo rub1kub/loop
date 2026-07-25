@@ -45,6 +45,15 @@ class ContractAdminState:
 
 
 @dataclass(frozen=True)
+class DuelContractDomain:
+    network_id: int
+    invite_signer_public_key: str
+    contract_address: str
+    paused: bool
+    locked_nano: int
+
+
+@dataclass(frozen=True)
 class TransactionProof:
     transaction_hash: str
     account: str
@@ -253,6 +262,33 @@ class TonClient:
             paused=paused,
             locked_nano=locked_nano,
             extended_controls=extended,
+        )
+
+    async def get_duel_contract_domain(self, address: str) -> DuelContractDomain:
+        stack = await self._run_get_method(address, "contractConfig")
+        try:
+            if len(stack) != 8:
+                raise ValueError
+            network_id = _stack_number(stack[3])
+            invite_signer = _stack_number(stack[4])
+            invite_signer_public_key = f"{invite_signer:064x}"
+            contract_address = _stack_address(stack[5])
+            paused = _stack_number(stack[6]) != 0
+            locked_nano = _stack_number(stack[7])
+        except (IndexError, TypeError, ValueError) as exc:
+            raise TonProviderError("malformed DUEL contract domain") from exc
+        if (
+            not -(2**31) <= network_id < 2**31
+            or not 0 < invite_signer < 2**256
+            or locked_nano < 0
+        ):
+            raise TonProviderError("DUEL contract domain is outside valid bounds")
+        return DuelContractDomain(
+            network_id=network_id,
+            invite_signer_public_key=invite_signer_public_key,
+            contract_address=contract_address,
+            paused=paused,
+            locked_nano=locked_nano,
         )
 
     async def _verified_transaction(

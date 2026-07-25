@@ -85,7 +85,7 @@ async def create_offer_quote(
     settings: Config,
 ) -> OfferQuoteResponse:
     await ensure_mode_enabled(db, "duel")
-    if settings.ton_network_id != -3:
+    if not settings.ton_transactions_enabled:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
         )

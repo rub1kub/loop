@@ -90,7 +90,7 @@ async def preview_position(
     settings: Config,
 ) -> BankPositionPreviewResponse:
     await ensure_mode_enabled(db, "bank")
-    if settings.ton_network_id != -3:
+    if not settings.ton_transactions_enabled:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
         )
@@ -135,7 +135,7 @@ async def quote_position(
     settings: Config,
 ) -> BankPositionQuoteResponse:
     await ensure_mode_enabled(db, "bank")
-    if settings.ton_network_id != -3:
+    if not settings.ton_transactions_enabled:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Выбранная сеть кошелька пока не поддерживается"
         )

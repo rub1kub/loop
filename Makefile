@@ -5,7 +5,9 @@ PIP := .venv/bin/pip
 .PHONY: help setup dev lint typecheck test test-unit test-integration test-e2e \
 	test-security contracts-build contracts-test contracts-deploy-testnet \
 	contracts-deploy-duel-testnet \
-	contracts-verify contracts-inspect chain-smoke-test screenshots docker-up \
+	contracts-verify contracts-inspect contracts-mainnet-technical \
+	contracts-mainnet-preflight contracts-deploy-mainnet contracts-mainnet-verify \
+	chain-smoke-test screenshots docker-up \
 	docker-down deploy deploy-vps deploy-status deploy-restart smoke-test
 
 help: ## Show available project commands
@@ -59,10 +61,49 @@ contracts-deploy-testnet: ## Deploy contracts only with explicit broadcast conse
 	acton run deploy-bank-testnet
 	acton run deploy-duel-testnet
 
-contracts-deploy-duel-testnet: ## Deploy only DUEL v1.1 with an explicit broadcast gate
+contracts-deploy-duel-testnet: ## Deploy only the current DUEL with an explicit broadcast gate
 	@test "$(ALLOW_TESTNET_DEPLOY)" = "1" || (echo 'Set ALLOW_TESTNET_DEPLOY=1 to broadcast' >&2; exit 2)
 	@test -n "$(LOOP_DUEL_INVITE_PUBLIC_KEY)" || (echo 'LOOP_DUEL_INVITE_PUBLIC_KEY is required' >&2; exit 2)
 	acton run deploy-duel-testnet
+
+contracts-mainnet-technical: ## Run deterministic, fork, coverage, mutation and gas gates
+	acton fmt --check
+	acton check
+	acton build
+	acton test --fork-net mainnet --coverage --coverage-format lcov \
+		--coverage-file coverage.lcov
+	$(PYTHON) scripts/check-contract-coverage.py coverage.lcov \
+		--minimum-lines 98 --minimum-branches 75
+	acton test --baseline-snapshot contracts/gas-baseline.json --fail-on-diff
+	acton test tests/duel_contract.test.tolk --mutate --mutate-contract DuelEscrow \
+		--mutation-levels critical --mutation-minimum-percent 95
+	acton test tests/duel_contract.test.tolk --mutate --mutate-contract DuelEscrow \
+		--mutation-levels major --mutation-minimum-percent 75
+	$(PYTHON) -m pytest apps/api/tests/test_config.py \
+		apps/api/tests/test_duel_canary_operations.py \
+		apps/api/tests/test_mainnet_readiness.py \
+		apps/api/tests/test_network_switch_preflight.py apps/api/tests/test_security.py \
+		apps/api/tests/test_routes_hardening.py -q
+	npm --workspace @loop/web run test -- --run src/ton.test.ts
+
+contracts-mainnet-preflight: contracts-mainnet-technical ## Require external audit and release evidence
+	$(PYTHON) scripts/check-mainnet-readiness.py --phase pre-deploy
+
+contracts-deploy-mainnet: contracts-mainnet-preflight ## Deploy paused contracts with explicit real-funds consent
+	@test "$(ALLOW_MAINNET_DEPLOY)" = "I_UNDERSTAND_REAL_FUNDS" || \
+		(echo 'Set ALLOW_MAINNET_DEPLOY=I_UNDERSTAND_REAL_FUNDS to broadcast' >&2; exit 2)
+	@test -n "$(LOOP_CONTRACT_OWNER_ADDRESS)" || \
+		(echo 'LOOP_CONTRACT_OWNER_ADDRESS is required' >&2; exit 2)
+	@test -n "$(LOOP_CONTRACT_TREASURY_ADDRESS)" || \
+		(echo 'LOOP_CONTRACT_TREASURY_ADDRESS is required' >&2; exit 2)
+	@test -n "$(LOOP_DUEL_INVITE_PUBLIC_KEY)" || \
+		(echo 'LOOP_DUEL_INVITE_PUBLIC_KEY is required' >&2; exit 2)
+	acton run deploy-bank-mainnet
+	acton run deploy-duel-mainnet
+
+contracts-mainnet-verify: contracts-build ## Verify mainnet bytecode, state, smoke and published source
+	$(PYTHON) scripts/verify-contracts.py --network mainnet --require-smoke
+	$(PYTHON) scripts/check-mainnet-readiness.py --phase post-deploy
 
 contracts-verify: contracts-build ## Match local builds, manifests and finalized testnet state
 	$(PYTHON) scripts/verify-contracts.py

@@ -33,14 +33,23 @@ Run live read-only testnet verification:
 make chain-smoke-test
 ```
 
-DUEL release candidates additionally run line/branch coverage and critical/major mutation testing:
+The complete mainnet technical profile runs forked coverage, gas regression, separate
+critical/major DUEL mutation thresholds and focused API/web security checks:
 
 ```bash
-acton test tests/duel_contract.test.tolk --coverage --coverage-format text
-acton test tests/duel_contract.test.tolk --mutate --mutate-contract DuelEscrow \
-  --mutation-diff branch --mutation-levels critical,major
+make contracts-mainnet-technical
+```
+
+The evidence and live post-deployment gates are separate:
+
+```bash
+make contracts-mainnet-preflight
+make contracts-mainnet-verify
 ```
 
 ## E2E boundary
 
-The browser suite verifies interface and message construction without a seed phrase. Contract tests exercise full messages in an emulated TVM. Read-only verification proves deployed artifacts and recorded smoke transactions. The scheduled two-wallet DUEL canary is intentionally outside CI: it requires two pre-existing dedicated testnet signing wallets, never creates them automatically and only requests faucet funds below its configured safety floor.
+The browser suite verifies interface and message construction without a seed phrase. Contract
+tests exercise full messages in an emulated TVM. Read-only verification proves deployed artifacts,
+recorded smoke transactions, reserve coverage and—on mainnet—a finalized two-wallet settlement.
+The scheduled canary is intentionally outside CI and uses only pre-existing dedicated aliases.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed verification of LOOP testnet deployment manifests."""
+"""Fail-closed verification of LOOP deployment manifests and live invariants."""
 
 from __future__ import annotations
 
@@ -16,14 +16,26 @@ from tonsdk.boc import Cell  # type: ignore[import-untyped]
 from tonsdk.utils import Address  # type: ignore[import-untyped]
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST_DIR = ROOT / "deployments" / "testnet"
 BUILD_DIR = ROOT / "build"
-TONCENTER = "https://testnet.toncenter.com"
+NETWORKS = {
+    "testnet": {
+        "id": -3,
+        "toncenter": "https://testnet.toncenter.com",
+        "api_key_env": "TONCENTER_TESTNET_API_KEY",
+    },
+    "mainnet": {
+        "id": -239,
+        "toncenter": "https://toncenter.com",
+        "api_key_env": "TONCENTER_MAINNET_API_KEY",
+    },
+}
 BANK_CREATE_POSITION = 0x4C424E01
 BANK_PROTOCOL_FEE = 0x4C424E12
 DUEL_OPEN_OFFER = 0x4C4F4F01
 DUEL_CANCEL_OFFER = 0x4C4F4F02
+DUEL_REVEAL = 0x4C4F4F04
 DUEL_OFFER_REFUND = 0x4C4F4F12
+DUEL_PAYOUT = 0x4C4F4F11
 
 
 def normalize_hash(value: str) -> str:
@@ -63,6 +75,17 @@ def stack_number(item: list[Any]) -> int:
     if len(item) != 2 or item[0] != "num":
         raise ValueError("contractConfig returned a malformed numeric value")
     return int(str(item[1]), 0)
+
+
+def validate_live_balance(
+    contract: str,
+    *,
+    live_balance: int,
+    live_locked: int,
+    min_reserve: int,
+) -> None:
+    if live_locked < 0 or min_reserve < 0 or live_balance < live_locked + min_reserve:
+        raise ValueError(f"{contract}: live balance does not cover locked value and reserve")
 
 
 def body_parser(message: dict[str, Any]) -> Any:
@@ -285,12 +308,80 @@ async def verify_duel_smoke(
     }
 
 
+async def verify_duel_canary(
+    client: httpx.AsyncClient, manifest: dict[str, Any]
+) -> dict[str, Any] | None:
+    canary = manifest.get("verified_canary")
+    if not isinstance(canary, dict):
+        return None
+    first_wallet = raw_address(str(canary["first_wallet"]))
+    second_wallet = raw_address(str(canary["second_wallet"]))
+    if first_wallet == second_wallet:
+        raise ValueError("DuelEscrow: canary wallets must be distinct")
+    duel_id = int(canary["duel_id"])
+    if not 0 < duel_id < 2**64:
+        raise ValueError("DuelEscrow: canary duel id is invalid")
+    transaction = await duel_smoke_transaction(
+        client,
+        manifest,
+        str(canary["settlement_transaction"]),
+        int(canary["settlement_transaction_lt"]),
+        int(canary["masterchain_seqno"]),
+    )
+    incoming = transaction.get("in_msg") or {}
+    if raw_address(str(incoming.get("source", ""))) not in {
+        first_wallet,
+        second_wallet,
+    }:
+        raise ValueError("DuelEscrow: canary settlement sender mismatch")
+    parser = body_parser(incoming)
+    if (
+        parser.read_uint(32) != DUEL_REVEAL
+        or parser.read_uint(64) != int(canary["query_id"])
+        or parser.read_uint(64) != duel_id
+    ):
+        raise ValueError("DuelEscrow: canary settlement input mismatch")
+
+    payouts = []
+    for message in transaction.get("out_msgs", []):
+        try:
+            payout_parser = body_parser(message)
+            if payout_parser.read_uint(32) != DUEL_PAYOUT:
+                continue
+            payout_parser.read_uint(64)
+            payout_duel_id = payout_parser.read_uint(64)
+        except Exception:
+            continue
+        if payout_duel_id == duel_id:
+            payouts.append(message)
+    if len(payouts) != 1:
+        raise ValueError("DuelEscrow: canary payout proof is missing or ambiguous")
+    if raw_address(str(payouts[0].get("destination", ""))) not in {
+        first_wallet,
+        second_wallet,
+    } or int(payouts[0].get("value", 0)) <= 0:
+        raise ValueError("DuelEscrow: canary payout destination or value mismatch")
+    return {
+        "duel_id": duel_id,
+        "settlement_transaction": str(canary["settlement_transaction"]),
+        "masterchain_seqno": int(canary["masterchain_seqno"]),
+        "verified": True,
+    }
+
+
 async def verify_contract(
-    client: httpx.AsyncClient, manifest_path: Path
+    client: httpx.AsyncClient,
+    manifest_path: Path,
+    *,
+    network: str,
+    network_id: int,
+    require_smoke: bool,
 ) -> dict[str, Any]:
     manifest = load_json(manifest_path)
     contract = str(manifest["contract"])
     address = str(manifest["address"])
+    if manifest.get("network") != network:
+        raise ValueError(f"{contract}: manifest network mismatch")
     expected_code = normalize_hash(str(manifest["code_hash"]))
     expected_data = normalize_hash(str(manifest["data_hash"]))
     build = load_json(BUILD_DIR / f"{contract}.json")
@@ -368,7 +459,8 @@ async def verify_contract(
     if stack_number(stack[2]) != int(configuration["fee_bps"]):
         raise ValueError(f"{contract}: fee mismatch")
     if duel_address_bound:
-        if stack_number(stack[3]) != int(configuration["network_id"]):
+        configured_network_id = int(configuration["network_id"])
+        if configured_network_id != network_id or stack_number(stack[3]) != network_id:
             raise ValueError(f"{contract}: network domain mismatch")
         if f"{stack_number(stack[4]):064x}" != str(
             configuration["invite_signer_public_key"]
@@ -378,14 +470,23 @@ async def verify_contract(
             raise ValueError(f"{contract}: self address mismatch")
         if bool(stack_number(stack[6])) != bool(configuration["paused"]):
             raise ValueError(f"{contract}: pause state mismatch")
-        if stack_number(stack[7]) != int(configuration["locked_nano"]):
-            raise ValueError(f"{contract}: locked balance mismatch")
+        live_locked = stack_number(stack[7])
     else:
         if bool(stack_number(stack[3])) != bool(configuration["paused"]):
             raise ValueError(f"{contract}: pause state mismatch")
         if contract == "BankQueue" and "locked_nano" in configuration:
-            if stack_number(stack[6]) != int(configuration["locked_nano"]):
-                raise ValueError(f"{contract}: locked balance mismatch")
+            live_locked = stack_number(stack[6])
+        else:
+            live_locked = 0
+
+    live_balance = int(state.get("balance", 0))
+    min_reserve = int(configuration.get("min_retained_reserve_nano", 0))
+    validate_live_balance(
+        contract,
+        live_balance=live_balance,
+        live_locked=live_locked,
+        min_reserve=min_reserve,
+    )
 
     if configuration.get("version") == "1.2.0":
         admin_response = await provider_post(
@@ -402,14 +503,13 @@ async def verify_contract(
             or len(admin_stack) != 5
         ):
             raise ValueError(f"{contract}: adminState getter failed")
-        locked = int(configuration.get("locked_nano", 0))
         if (
             stack_address(admin_stack[0]) != raw_address(str(configuration["owner"]))
             or stack_address(admin_stack[1])
             != raw_address(str(configuration["treasury"]))
             or stack_number(admin_stack[2]) != int(configuration["fee_bps"])
             or bool(stack_number(admin_stack[3])) != bool(configuration["paused"])
-            or stack_number(admin_stack[4]) != locked
+            or stack_number(admin_stack[4]) != live_locked
         ):
             raise ValueError(f"{contract}: adminState mismatch")
 
@@ -422,6 +522,10 @@ async def verify_contract(
         "initial_data_hash": expected_data,
         "initial_data_hash_matches": True,
         "configuration_matches": True,
+        "live_balance_nano": live_balance,
+        "live_locked_nano": live_locked,
+        "min_retained_reserve_nano": min_reserve,
+        "reserve_covered": True,
         "deployment_transaction": str(manifest["deploy_transaction"]),
         "deployment_lt": int(manifest["deploy_transaction_lt"]),
         "masterchain_seqno": int(transaction["mc_block_seqno"]),
@@ -431,6 +535,11 @@ async def verify_contract(
         result["smoke"] = await verify_bank_smoke(client, manifest)
     elif contract == "DuelEscrow":
         result["smoke"] = await verify_duel_smoke(client, manifest)
+        result["canary"] = await verify_duel_canary(client, manifest)
+    if require_smoke and result.get("smoke") is None:
+        raise ValueError(f"{contract}: finalized smoke proof is required")
+    if network == "mainnet" and contract == "DuelEscrow" and result.get("canary") is None:
+        raise ValueError("DuelEscrow: finalized two-wallet canary proof is required")
     return result
 
 
@@ -438,7 +547,7 @@ async def provider_get(
     client: httpx.AsyncClient, path: str, params: dict[str, Any]
 ) -> httpx.Response:
     for attempt in range(4):
-        response = await client.get(f"{TONCENTER}{path}", params=params)
+        response = await client.get(path, params=params)
         if response.status_code != 429:
             response.raise_for_status()
             return response
@@ -451,7 +560,7 @@ async def provider_post(
     client: httpx.AsyncClient, path: str, payload: dict[str, Any]
 ) -> httpx.Response:
     for attempt in range(4):
-        response = await client.post(f"{TONCENTER}{path}", json=payload)
+        response = await client.post(path, json=payload)
         if response.status_code != 429:
             response.raise_for_status()
             return response
@@ -460,17 +569,32 @@ async def provider_post(
     raise AssertionError("unreachable")
 
 
-async def run(selected: list[str]) -> int:
+async def run(selected: list[str], network: str, require_smoke: bool) -> int:
+    network_config = NETWORKS[network]
+    manifest_dir = ROOT / "deployments" / network
     headers = {}
-    if api_key := os.getenv("LOOP_TONCENTER_API_KEY"):
+    api_key = os.getenv("LOOP_TONCENTER_API_KEY") or os.getenv(
+        str(network_config["api_key_env"])
+    )
+    if api_key:
         headers["X-API-Key"] = api_key
     try:
-        async with httpx.AsyncClient(headers=headers, timeout=20) as client:
+        async with httpx.AsyncClient(
+            base_url=str(network_config["toncenter"]),
+            headers=headers,
+            timeout=20,
+        ) as client:
             results = [
-                await verify_contract(client, MANIFEST_DIR / f"{name}.json")
+                await verify_contract(
+                    client,
+                    manifest_dir / f"{name}.json",
+                    network=network,
+                    network_id=int(network_config["id"]),
+                    require_smoke=require_smoke,
+                )
                 for name in selected
             ]
-    except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+    except (FileNotFoundError, httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
         print(json.dumps({"verified": False, "error": str(exc)}, ensure_ascii=False))
         return 1
     print(
@@ -484,9 +608,16 @@ async def run(selected: list[str]) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("contracts", nargs="*", choices=("bank", "duel"))
+    parser.add_argument("--network", choices=tuple(NETWORKS), default="testnet")
+    parser.add_argument(
+        "--require-smoke",
+        action="store_true",
+        help="require a finalized open/settle or open/cancel proof in every manifest",
+    )
     args = parser.parse_args()
     selected = args.contracts or ["bank", "duel"]
-    raise SystemExit(asyncio.run(run(selected)))
+    require_smoke = args.require_smoke or args.network == "mainnet"
+    raise SystemExit(asyncio.run(run(selected, args.network, require_smoke)))
 
 
 if __name__ == "__main__":

@@ -36,10 +36,13 @@ Each projection checks contract address, message direction, sender, value, opcod
 - redacted structured logs and no secret material in API responses;
 - read-only containers, dropped Linux capabilities and no-new-privileges;
 - startup attestation of both configured contract code hashes.
+- mainnet activation bound to an externally audited Git commit/report fingerprint, finalized smoke
+  and two-wallet canary evidence, published source verification and a drained source network.
 
 ## Known limits
 
-- The project is testnet-only and has not received an external professional audit.
+- The published project is testnet-only and has not received the independent audit required by the
+  mainnet gate.
 - The immutable direct-invite signer cannot be rotated in place; suspected key compromise requires pausing new activity and deploying a new contract after all recovery paths clear.
 - Referral anti-abuse prevents direct self-referral and duplicate qualification but cannot prove two Telegram accounts are unrelated people.
 - PLUSH BRICK is a mainnet Jetton while contracts are testnet. V1 holder fee discounts are disabled rather than trusted to the backend.

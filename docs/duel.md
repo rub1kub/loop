@@ -19,7 +19,11 @@ AFK offers remain open after the Mini App closes. The API reserves the oldest eq
 offer with the same pool under a database lock. A reservation has a deadline and returns to the
 queue if the second funding transaction never finalizes.
 
-Direct invitations have a Telegram-safe code and an independent 256-bit on-chain invite ID. Acceptance requires a short-lived Ed25519 permit signed by LOOP and bound to the testnet global ID, DuelEscrow address, creator offer, invite ID and verified invited wallet. The contract atomically verifies the permit, binds both opponents and matches the offers; another wallet cannot steal or replay it.
+Direct invitations have a Telegram-safe code and an independent 256-bit on-chain invite ID.
+Acceptance requires a short-lived Ed25519 permit signed by LOOP and bound to the configured
+network global ID, DuelEscrow address, creator offer, invite ID and verified invited wallet. The
+contract atomically verifies the permit, binds both opponents and matches the offers; another
+wallet cannot steal or replay it.
 
 ## Commit–reveal
 
@@ -34,7 +38,11 @@ Recovery is permissionless after deadlines. Offer and duel identifiers are repla
 
 ## Operational proof
 
-The migration gate refuses a contract switch unless the previous escrow reports `locked=0` and PostgreSQL has no active offer, duel or accepted invitation. A two-wallet canary performs direct open, address-bound accept, both reveals and settlement on testnet, then reports only a masterchain-finalized Reveal containing exactly one payout for the expected duel.
+The migration gate refuses a contract switch unless the previous escrow reports `locked=0` and
+PostgreSQL has no active offer, duel or accepted invitation. A two-wallet canary performs direct
+open, address-bound accept, both reveals and settlement, then reports only a masterchain-finalized
+Reveal containing exactly one payout for the expected duel. Interrupted dedicated canary offers
+are recovered before the next run; unrelated user state is never touched.
 
 ## PLUSH BRICK
 

@@ -48,7 +48,7 @@ DUEL_CANARY_AGE = Gauge(
 )
 DUEL_CANARY_MIN_WALLET_BALANCE = Gauge(
     "loop_duel_canary_min_wallet_balance_nano",
-    "Lowest reported testnet balance across the two DUEL canary wallets.",
+    "Lowest reported balance across the two DUEL canary wallets.",
 )
 
 

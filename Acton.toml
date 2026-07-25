@@ -24,10 +24,14 @@ width = 100
 ignore = ["wrappers"]
 
 [scripts]
-deploy-bank-emulation = "acton script scripts/deploy-bank.tolk"
-deploy-bank-testnet = "acton script scripts/deploy-bank.tolk --net testnet"
-deploy-duel-emulation = "acton script scripts/deploy-duel.tolk -3 1"
-deploy-duel-testnet = "acton script --net testnet scripts/deploy-duel.tolk -3 0x${LOOP_DUEL_INVITE_PUBLIC_KEY}"
+deploy-bank-emulation = "acton script scripts/deploy-bank.tolk -3 false"
+deploy-bank-testnet = "acton script --net testnet scripts/deploy-bank.tolk -3 false"
+deploy-bank-mainnet-emulation = "acton script scripts/deploy-bank.tolk -239 true"
+deploy-bank-mainnet = "acton script --net mainnet scripts/deploy-bank.tolk -239 true"
+deploy-duel-emulation = "acton script scripts/deploy-duel.tolk -3 1 false"
+deploy-duel-testnet = "acton script --net testnet scripts/deploy-duel.tolk -3 0x${LOOP_DUEL_INVITE_PUBLIC_KEY} false"
+deploy-duel-mainnet-emulation = "acton script scripts/deploy-duel.tolk -239 0x${LOOP_DUEL_INVITE_PUBLIC_KEY} true"
+deploy-duel-mainnet = "acton script --net mainnet scripts/deploy-duel.tolk -239 0x${LOOP_DUEL_INVITE_PUBLIC_KEY} true"
 pause-legacy-testnet = "acton script --net testnet scripts/pause-legacy-contracts.tolk"
 
 [import-mappings]

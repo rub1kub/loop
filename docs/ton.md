@@ -1,6 +1,9 @@
 # TON integration
 
-LOOP uses TON testnet for BANK and DUEL settlement. The product creates no user wallet and keeps no internal user balance. Two isolated, low-value operator wallets exist only for the scheduled DUEL canary and can never represent a user.
+The published LOOP release uses TON testnet for BANK and DUEL settlement. The application supports
+mainnet only behind an audited, evidence-bound release gate. It creates no user wallet and keeps
+no internal user balance. Two isolated, low-value operator wallets exist only for the scheduled
+DUEL canary and can never represent a user.
 
 ## TON Connect boundary
 

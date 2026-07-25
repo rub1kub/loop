@@ -34,6 +34,29 @@ nginx_changed=false
 rollback_armed=false
 database_changed=false
 
+read_network_id() {
+  local env_file=$1
+  local value
+  value=$(sed -n 's/^LOOP_TON_NETWORK_ID=//p' "$env_file" | tail -n 1)
+  value=${value%\"}
+  value=${value#\"}
+  value=${value%\'}
+  value=${value#\'}
+  if [[ $value != -3 && $value != -239 ]]; then
+    echo "unsupported LOOP_TON_NETWORK_ID in $env_file" >&2
+    return 1
+  fi
+  printf '%s\n' "$value"
+}
+
+network_name() {
+  case "$1" in
+    -3) printf 'testnet\n' ;;
+    -239) printf 'mainnet\n' ;;
+    *) return 1 ;;
+  esac
+}
+
 if [[ -L "$loop_root/current" ]]; then
   previous_release=$(readlink -f "$loop_root/current")
 fi
@@ -109,6 +132,11 @@ fi
 if [[ ! -s "$release_dir/apps/web/dist/index.html" ]]; then
   echo "release is missing the built web entrypoint: apps/web/dist/index.html" >&2
   exit 3
+fi
+source_network_id=$(read_network_id "$shared_env")
+target_network_id=$source_network_id
+if [[ -s $pending_env ]]; then
+  target_network_id=$(read_network_id "$pending_env")
 fi
 chmod 755 "$release_dir"
 install -d -m 0750 "$release_dir/build"
@@ -257,6 +285,10 @@ docker compose --project-name loop --env-file .env.production up -d --wait db re
 if [[ -n $previous_release ]]; then
   rollback_armed=true
   docker compose --project-name loop --env-file .env.production stop api worker
+  if [[ $source_network_id != "$target_network_id" ]]; then
+    docker compose --project-name loop --env-file .env.production run --rm --no-deps api \
+      python -m app.network_switch_preflight --target-network "$target_network_id"
+  fi
   if [[ -s $pending_env ]]; then
     env_backup="$loop_root/shared/.env.production.rollback-$release_id"
     install -m 600 "$shared_env" "$env_backup"
@@ -266,17 +298,20 @@ if [[ -n $previous_release ]]; then
     env_changed=true
   fi
 
-  previous_duel_manifest="$previous_release/deployments/testnet/duel.json"
-  target_duel_manifest="$release_dir/deployments/testnet/duel.json"
-  test -s "$previous_duel_manifest"
+  target_network_name=$(network_name "$target_network_id")
+  previous_duel_manifest="$previous_release/deployments/$target_network_name/duel.json"
+  target_duel_manifest="$release_dir/deployments/$target_network_name/duel.json"
   test -s "$target_duel_manifest"
-  previous_duel_address=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["address"])' "$previous_duel_manifest")
   target_duel_address=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["address"])' "$target_duel_manifest")
-  if [[ $previous_duel_address != "$target_duel_address" ]]; then
-    docker compose --project-name loop --env-file .env.production run --rm --no-deps api \
-      python -m app.duel_v11_preflight \
-      --previous-contract "$previous_duel_address" \
-      --target-contract "$target_duel_address"
+  if [[ $source_network_id == "$target_network_id" ]]; then
+    test -s "$previous_duel_manifest"
+    previous_duel_address=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["address"])' "$previous_duel_manifest")
+    if [[ $previous_duel_address != "$target_duel_address" ]]; then
+      docker compose --project-name loop --env-file .env.production run --rm --no-deps api \
+        python -m app.duel_v11_preflight \
+        --previous-contract "$previous_duel_address" \
+        --target-contract "$target_duel_address"
+    fi
   fi
 
   backup_path=$("$release_dir/deploy/backup-postgres.sh")
@@ -284,6 +319,11 @@ if [[ -n $previous_release ]]; then
     echo "database backup was not created at the expected path" >&2
     false
   fi
+fi
+if [[ $target_network_id == -239 ]]; then
+  docker compose --project-name loop --env-file .env.production run --rm --no-deps \
+    -e "LOOP_RELEASE_COMMIT=$release_id" api \
+    python scripts/check-mainnet-readiness.py --phase post-deploy
 fi
 database_changed=true
 docker compose --project-name loop --env-file .env.production run --rm migrate

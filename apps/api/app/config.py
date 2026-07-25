@@ -1,3 +1,4 @@
+import re
 import secrets
 from functools import lru_cache
 from typing import Literal
@@ -6,6 +7,10 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+TESTNET_NETWORK_ID = -3
+MAINNET_NETWORK_ID = -239
+SUPPORTED_TON_NETWORK_IDS = frozenset({TESTNET_NETWORK_ID, MAINNET_NETWORK_ID})
 
 
 class Settings(BaseSettings):
@@ -37,6 +42,11 @@ class Settings(BaseSettings):
     ton_network_id: int = -3
     toncenter_url: str = "https://testnet.toncenter.com"
     toncenter_api_key: SecretStr = SecretStr("")
+    mainnet_enabled: bool = False
+    mainnet_release_commit: str = ""
+    mainnet_audited_commit: str = ""
+    mainnet_audit_report_sha256: str = ""
+    require_duel_canary: bool = False
     bank_contract_address: str = ""
     bank_contract_code_hash: str = ""
     bank_fee_bps: int = 100
@@ -80,10 +90,18 @@ class Settings(BaseSettings):
     def effective_duel_contract_code_hash(self) -> str:
         return self.duel_contract_code_hash or self.ton_contract_code_hash
 
+    @property
+    def ton_transactions_enabled(self) -> bool:
+        return self.ton_network_id == TESTNET_NETWORK_ID or (
+            self.ton_network_id == MAINNET_NETWORK_ID and self.mainnet_enabled
+        )
+
     @model_validator(mode="after")
     def validate_production(self) -> "Settings":
         if self.app_env != "production":
             return self
+        if self.ton_network_id not in SUPPORTED_TON_NETWORK_IDS:
+            raise ValueError("unsupported TON network")
         required = {
             "LOOP_BOT_TOKEN": self.bot_token.get_secret_value(),
             "LOOP_BOT_USERNAME": self.bot_username,
@@ -137,8 +155,29 @@ class Settings(BaseSettings):
                 raise ValueError
         except ValueError as exc:
             raise ValueError("DUEL invite signing key pair is invalid") from exc
-        if self.ton_network_id != -3:
-            raise ValueError("mainnet is disabled until the documented release gate is complete")
+        if self.ton_network_id == MAINNET_NETWORK_ID:
+            if not self.mainnet_enabled:
+                raise ValueError("mainnet requires LOOP_MAINNET_ENABLED=true")
+            if not self.require_duel_canary:
+                raise ValueError("mainnet requires the two-wallet DUEL canary")
+            if "testnet" in self.toncenter_url.lower():
+                raise ValueError("mainnet cannot use a testnet TON provider")
+            commit_pattern = re.compile(r"[0-9a-f]{40}", re.IGNORECASE)
+            hash_pattern = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
+            if (
+                commit_pattern.fullmatch(self.mainnet_release_commit) is None
+                or commit_pattern.fullmatch(self.mainnet_audited_commit) is None
+                or not secrets.compare_digest(
+                    self.mainnet_release_commit.lower(),
+                    self.mainnet_audited_commit.lower(),
+                )
+            ):
+                raise ValueError("mainnet release commit must equal the externally audited commit")
+            if (
+                hash_pattern.fullmatch(self.mainnet_audit_report_sha256) is None
+                or set(self.mainnet_audit_report_sha256.lower()) == {"0"}
+            ):
+                raise ValueError("mainnet requires a SHA-256 audit report fingerprint")
         return self
 
 

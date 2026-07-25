@@ -25,8 +25,14 @@ export function newSecret(): bigint {
   return BigInt(`0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`);
 }
 
-function requireTestnet(network: string): asserts network is '-3' {
-  if (network !== '-3') throw new Error('Выбранная сеть кошелька пока не поддерживается');
+export function isSupportedTonNetwork(network: string): network is '-3' | '-239' {
+  return network === '-3' || network === '-239';
+}
+
+function requireSupportedNetwork(network: string): asserts network is '-3' | '-239' {
+  if (!isSupportedTonNetwork(network)) {
+    throw new Error('Выбранная сеть кошелька пока не поддерживается');
+  }
 }
 
 export function buildBankPositionTransaction(
@@ -34,8 +40,9 @@ export function buildBankPositionTransaction(
   from: string,
   network: string,
 ): SendTransactionRequest {
-  requireTestnet(network);
+  requireSupportedNetwork(network);
   const tx = quote.transaction;
+  if (tx.network !== Number(network)) throw new Error('Сеть BANK изменилась. Повторите попытку.');
   const payload = beginCell()
     .storeUint(BANK_CREATE_POSITION_OPCODE, 32)
     .storeUint(tx.query_id, 64)
@@ -125,7 +132,7 @@ export function buildOpenOfferTransaction(
   from: string,
   network: string,
 ): SendTransactionRequest {
-  requireTestnet(network);
+  requireSupportedNetwork(network);
   const tx = quote.transaction;
   if (tx.network !== Number(network)) throw new Error('Сеть DUEL изменилась. Повторите попытку.');
   const opcode =
@@ -174,7 +181,10 @@ export function buildActionTransaction(
   network: string,
   secretHex?: string,
 ): SendTransactionRequest {
-  requireTestnet(network);
+  requireSupportedNetwork(network);
+  if (intent.network !== Number(network)) {
+    throw new Error('Сеть DUEL изменилась. Повторите попытку.');
+  }
   const body = beginCell();
   if (intent.operation === 'reveal') {
     if (!secretHex || !/^[0-9a-f]{64}$/i.test(secretHex)) {

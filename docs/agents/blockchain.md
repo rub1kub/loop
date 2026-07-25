@@ -296,7 +296,7 @@ manifest. При активном offer это даёт ложный failure.
 
 ## DUEL canary
 
-Canary использует две заранее созданные изолированные low-value testnet Acton aliases:
+Canary использует две заранее созданные изолированные low-value Acton aliases на выбранной сети:
 
 1. fork rehearsal;
 2. direct open;
@@ -307,8 +307,8 @@ Canary использует две заранее созданные изоли�
 7. запись только подтверждённого результата в Redis metrics.
 
 Canary не создаёт кошельки автоматически, не использует user wallets и не запускается в CI.
-Testnet faucet запрашивается только ниже заданного balance floor. Private material остаётся в
-защищённом Acton store.
+Testnet faucet запрашивается только ниже заданного balance floor; mainnet никогда не вызывает
+faucet и требует отдельного явного разрешения. Private material остаётся в защищённом Acton store.
 
 ## Изменение контракта
 
@@ -321,4 +321,5 @@ Testnet faucet запрашивается только ниже заданног
 7. Зафиксируй новый manifest, адрес, code/data hash, deployment proof и smoke evidence.
 8. Обнови production environment через staged atomic release.
 9. Запусти read-only verification, API/worker attestation и live canary.
-10. Mainnet не разворачивать без независимого аудита, governance, legal и recovery gates.
+10. Mainnet не разворачивать без независимого аудита, release evidence, source verification,
+    finalized smoke/canary proof и проверки полного drain старой сети.

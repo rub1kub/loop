@@ -375,7 +375,6 @@ fun onInternalMessage(in: InMessage) {
                 acceptance.validUntil >= blockchain.now() && acceptance.validUntil <= msg.expiresAt
             ) throw Errors.DirectPermitExpired;
             var counter = storage.loadOffer(acceptance.counterOfferId);
-            assert (counter.state == OFFER_OPEN) throw Errors.OfferNotOpen;
             assert (counter.owner != in.senderAddress) throw Errors.SameOwner;
             var counterDirect = counter.direct.load();
             assert (

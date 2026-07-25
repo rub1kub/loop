@@ -201,6 +201,41 @@ async def test_contract_admin_state_parses_extended_and_legacy_getters() -> None
 
 
 @pytest.mark.asyncio
+async def test_duel_contract_domain_binds_network_address_and_signer() -> None:
+    contract = "0:" + "11" * 32
+    signer = int("42" * 32, 16)
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "ok": True,
+                "result": {
+                    "exit_code": 0,
+                    "stack": [
+                        address_stack("0:" + "22" * 32),
+                        address_stack("0:" + "33" * 32),
+                        ["num", "250"],
+                        ["num", "-239"],
+                        ["num", hex(signer)],
+                        address_stack(contract),
+                        ["num", "1"],
+                        ["num", "500000000"],
+                    ],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        domain = await TonClient(http, get_settings()).get_duel_contract_domain(contract)
+    assert domain.network_id == -239
+    assert domain.contract_address == contract
+    assert domain.invite_signer_public_key == "42" * 32
+    assert domain.paused is True
+    assert domain.locked_nano == 500_000_000
+
+
+@pytest.mark.asyncio
 async def test_transaction_without_masterchain_inclusion_is_rejected() -> None:
     tx_hash = hash_b64(7)
     account = "0:" + "55" * 32

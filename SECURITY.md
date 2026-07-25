@@ -12,4 +12,6 @@ The maintainer will acknowledge actionable reports, validate impact, prepare a f
 
 ## Supported versions
 
-Only the latest commit on `main` and the currently published testnet release receive security fixes. Mainnet is intentionally unsupported until the release gates in [docs/security.md](docs/security.md) are complete.
+Only the latest commit on `main` and the currently published testnet release receive security
+fixes. Mainnet code is not a supported deployment until every release gate in
+[docs/security.md](docs/security.md) is complete.
