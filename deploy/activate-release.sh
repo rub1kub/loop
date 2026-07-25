@@ -125,8 +125,13 @@ cd "$release_dir"
 export LOOP_IMAGE_TAG="$release_id"
 
 verify_web_asset() {
+  local asset
+  local asset_url
   local expected_asset
+  local expected_asset_file
   local index_html
+  local required_style
+  local -a dependent_assets=()
 
   expected_asset=$(
     sed -n 's/.*src="\([^"]*\/assets\/[^"]*\.js\)".*/\1/p' \
@@ -137,7 +142,33 @@ verify_web_asset() {
     echo "release index does not contain a valid JavaScript asset" >&2
     return 1
   fi
-  test -s "$release_dir/apps/web/dist$expected_asset"
+  expected_asset_file="$release_dir/apps/web/dist$expected_asset"
+  test -s "$expected_asset_file"
+  while IFS= read -r asset; do
+    dependent_assets+=("$asset")
+  done < <(
+    grep -oE 'assets/[A-Za-z0-9._-]+\.(js|css)' "$expected_asset_file" |
+      LC_ALL=C sort -u
+  )
+  if ((${#dependent_assets[@]} == 0)); then
+    echo "release JavaScript entry does not reference any dependent assets" >&2
+    return 1
+  fi
+  for required_style in control landing styles; do
+    if ! printf '%s\n' "${dependent_assets[@]}" |
+      grep -Eq "^assets/${required_style}-[A-Za-z0-9_-]+\.css$"; then
+      echo "release JavaScript entry does not reference the $required_style stylesheet" >&2
+      return 1
+    fi
+  done
+  for asset in "${dependent_assets[@]}"; do
+    if [[ ! $asset =~ ^assets/[A-Za-z0-9._-]+\.(js|css)$ ]]; then
+      echo "release JavaScript entry contains an invalid asset path: $asset" >&2
+      return 1
+    fi
+    test -s "$release_dir/apps/web/dist/$asset"
+  done
+
   index_html=$(
     curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
       --header 'Host: app.tonsuite.org' \
@@ -147,6 +178,12 @@ verify_web_asset() {
   curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
     --header 'Host: app.tonsuite.org' \
     "http://127.0.0.1:18791$expected_asset" >/dev/null
+  for asset in "${dependent_assets[@]}"; do
+    asset_url="/$asset"
+    curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+      --header 'Host: app.tonsuite.org' \
+      "http://127.0.0.1:18791$asset_url" >/dev/null
+  done
 }
 
 if [[ $release_kind == web ]]; then

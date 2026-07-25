@@ -670,16 +670,35 @@ REMOTE
 }
 
 verify_public_asset() {
+  local asset
   local attempt
+  local entry_file="$repo_root/apps/web/dist$index_asset"
   local index_html="$tmp_dir/public-index.html"
+  local -a dependent_assets=()
 
-  log "Verifying public health and built asset $index_asset"
+  test -s "$entry_file" || die "local built entry is missing: $entry_file"
+  while IFS= read -r asset; do
+    dependent_assets+=("$asset")
+  done < <(
+    grep -oE 'assets/[A-Za-z0-9._-]+\.(js|css)' "$entry_file" |
+      LC_ALL=C sort -u
+  )
+  ((${#dependent_assets[@]} > 0)) ||
+    die "local built entry does not reference any dependent assets"
+
+  log "Verifying public health and ${#dependent_assets[@]} built dependencies"
   for attempt in 1 2 3 4 5 6; do
     if curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
       "$public_origin/" >"$index_html" &&
       grep -Fq "$index_asset" "$index_html" &&
       curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
         "$public_origin$index_asset" >/dev/null &&
+      (
+        for asset in "${dependent_assets[@]}"; do
+          curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+            "$public_origin/$asset" >/dev/null || exit 1
+        done
+      ) &&
       curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
         "$public_origin/live" >/dev/null &&
       curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
