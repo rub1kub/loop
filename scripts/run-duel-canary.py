@@ -28,7 +28,13 @@ FUNDING_POLL_ATTEMPTS = 12
 FUNDING_POLL_INTERVAL_SECONDS = 5
 
 
-def run(command: list[str], environment: dict[str, str], *, echo: bool = True) -> str:
+def run(
+    command: list[str],
+    environment: dict[str, str],
+    *,
+    echo: bool = True,
+    include_stderr: bool = False,
+) -> str:
     result = subprocess.run(
         command,
         check=False,
@@ -43,7 +49,7 @@ def run(command: list[str], environment: dict[str, str], *, echo: bool = True) -
         if not echo:
             sys.stderr.write(result.stderr)
         raise SystemExit(result.returncode)
-    return result.stdout
+    return result.stdout + result.stderr if include_stderr else result.stdout
 
 
 def wallet_snapshot(environment: dict[str, str]) -> dict[str, dict[str, Any]]:
@@ -184,12 +190,16 @@ def fetch_settlement_finality(
     except (urllib.error.URLError, TimeoutError) as exc:
         raise SystemExit("TON settlement finality provider is unavailable") from exc
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise SystemExit("TON settlement finality provider returned invalid JSON") from exc
+        raise SystemExit(
+            "TON settlement finality provider returned invalid JSON"
+        ) from exc
     transactions = payload.get("transactions") if isinstance(payload, dict) else None
     if not isinstance(transactions, list) or len(transactions) != 1:
         raise SystemExit("TON settlement transaction is missing or ambiguous")
     transaction = transactions[0]
-    description = transaction.get("description") if isinstance(transaction, dict) else None
+    description = (
+        transaction.get("description") if isinstance(transaction, dict) else None
+    )
     compute = description.get("compute_ph") if isinstance(description, dict) else None
     action = description.get("action") if isinstance(description, dict) else None
     if (
@@ -219,9 +229,7 @@ def fetch_settlement_finality(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Run the LOOP two-wallet DUEL canary"
-    )
+    parser = argparse.ArgumentParser(description="Run the LOOP two-wallet DUEL canary")
     parser.add_argument("--contract", required=True)
     parser.add_argument("--first-wallet", required=True)
     parser.add_argument("--second-wallet", required=True)
@@ -264,7 +272,9 @@ def main() -> None:
     if network_id != NETWORK_IDS[args.network]:
         raise SystemExit("DUEL canary network does not match LOOP_TON_NETWORK_ID")
     if args.network == "mainnet" and not env_flag("LOOP_ALLOW_MAINNET_CANARY"):
-        raise SystemExit("set LOOP_ALLOW_MAINNET_CANARY=1 to broadcast a mainnet canary")
+        raise SystemExit(
+            "set LOOP_ALLOW_MAINNET_CANARY=1 to broadcast a mainnet canary"
+        )
     if minimum_balance_nano < 1_000_000_000:
         raise SystemExit("LOOP_DUEL_CANARY_MIN_BALANCE_NANO must be at least 1 GRAM")
 
@@ -314,6 +324,7 @@ def main() -> None:
             *script_args,
         ],
         environment,
+        include_stderr=True,
     )
     proof = PROOF_PATTERN.search(live_output)
     if not proof:
@@ -363,7 +374,9 @@ def main() -> None:
                 try:
                     proof_response = json.loads(response.read())
                 except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-                    raise SystemExit("canary proof endpoint returned invalid JSON") from exc
+                    raise SystemExit(
+                        "canary proof endpoint returned invalid JSON"
+                    ) from exc
         except urllib.error.HTTPError as exc:
             raise SystemExit(f"canary proof endpoint returned HTTP {exc.code}") from exc
         except (urllib.error.URLError, TimeoutError) as exc:

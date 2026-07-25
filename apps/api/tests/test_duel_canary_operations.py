@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
@@ -32,6 +33,22 @@ def wallets(first_balance: int, second_balance: int) -> dict[str, dict[str, Any]
         "loop-canary-a": {"address": "a", "balance": first_balance},
         "loop-canary-b": {"address": "b", "balance": second_balance},
     }
+
+
+def test_canary_can_parse_acton_proof_from_stderr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    completed = subprocess.CompletedProcess(
+        args=["acton"],
+        returncode=0,
+        stdout="",
+        stderr="DUEL_CANARY_PROOF duel_id=42 settlement_hash=ab\n",
+    )
+    monkeypatch.setattr(RUNNER.subprocess, "run", lambda *_args, **_kwargs: completed)
+
+    output = RUNNER.run(["acton"], {}, echo=False, include_stderr=True)
+
+    assert RUNNER.PROOF_PATTERN.search(output)
 
 
 def mainnet_wallets(first_balance: int, second_balance: int) -> dict[str, dict[str, Any]]:
