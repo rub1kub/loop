@@ -2,6 +2,7 @@ import importlib.util
 import io
 import json
 import subprocess
+import urllib.error
 from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
@@ -214,6 +215,45 @@ def test_canary_retries_temporary_finality_provider_failure(
 
     assert RUNNER.fetch_settlement_finality("testnet", "ab" * 32, 42)["status"] == "verified"
     assert sleeps == [RUNNER.FINALITY_POLL_INTERVAL_SECONDS]
+
+
+def test_canary_retries_without_rejected_provider_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "transactions": [
+            {
+                "lt": "123",
+                "mc_block_seqno": 456,
+                "emulated": False,
+                "description": {
+                    "aborted": False,
+                    "compute_ph": {"success": True},
+                    "action": {"success": True},
+                },
+            }
+        ]
+    }
+    requests: list[Any] = []
+
+    def urlopen(request: Any, **_kwargs: Any) -> Any:
+        requests.append(request)
+        if len(requests) == 1:
+            raise urllib.error.HTTPError(
+                request.full_url,
+                403,
+                "rejected key",
+                {},
+                None,
+            )
+        return io.BytesIO(json.dumps(payload).encode())
+
+    monkeypatch.setenv("LOOP_TONCENTER_API_KEY", "rejected")
+    monkeypatch.setattr(RUNNER.urllib.request, "urlopen", urlopen)
+
+    assert RUNNER.fetch_settlement_finality("testnet", "ab" * 32, 42)["status"] == "verified"
+    assert requests[0].get_header("X-api-key") == "rejected"
+    assert requests[1].get_header("X-api-key") is None
 
 
 def test_canary_report_requires_both_wallet_balances() -> None:

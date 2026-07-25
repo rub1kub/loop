@@ -174,24 +174,26 @@ def fetch_settlement_finality(
     duel_id: int,
 ) -> dict[str, Any]:
     query = urllib.parse.urlencode({"hash": transaction_hash, "limit": 2})
-    headers: dict[str, str] = {}
     api_key = os.getenv("LOOP_TONCENTER_API_KEY") or os.getenv(
         "TONCENTER_MAINNET_API_KEY"
         if network == "mainnet"
         else "TONCENTER_TESTNET_API_KEY"
     )
-    if api_key:
-        headers["X-API-Key"] = api_key
-    request = urllib.request.Request(
-        f"{TONCENTER_URLS[network]}/api/v3/transactions?{query}",
-        headers=headers,
-    )
+    provider_url = f"{TONCENTER_URLS[network]}/api/v3/transactions?{query}"
+    use_api_key = bool(api_key)
     transactions: list[Any] | None = None
     for attempt in range(FINALITY_POLL_ATTEMPTS):
+        request = urllib.request.Request(
+            provider_url,
+            headers={"X-API-Key": api_key} if use_api_key else {},
+        )
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
                 payload = json.loads(response.read())
         except urllib.error.HTTPError as exc:
+            if exc.code in {401, 403} and use_api_key:
+                use_api_key = False
+                continue
             if exc.code not in {404, 429, 500, 502, 503, 504}:
                 raise SystemExit(
                     f"TON settlement finality provider returned HTTP {exc.code}"
