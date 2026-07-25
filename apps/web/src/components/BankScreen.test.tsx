@@ -54,7 +54,7 @@ const position: BankPosition = {
 describe('BankScreen', () => {
   afterEach(cleanup);
 
-  it('explains the pyramid before the user creates a position', () => {
+  it('keeps the empty state concise before the user creates a position', () => {
     render(
       <BankScreen
         profile={profile}
@@ -65,12 +65,12 @@ describe('BankScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Создай позицию в очереди.' })).toBeVisible();
-    const disclosure = screen.getByText('Финансовая пирамида.');
+    expect(screen.getByRole('heading', { name: 'Войди в очередь.' })).toBeVisible();
+    const hint = screen.getByText('Каждая новая позиция двигает цикл дальше.');
     const action = screen.getByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ' });
-    expect(disclosure).toBeVisible();
-    expect(screen.getByText(/Без новых вкладов выплаты может не быть/)).toBeVisible();
-    expect(disclosure.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+    expect(hint).toBeVisible();
+    expect(screen.queryByText('Финансовая пирамида.')).not.toBeInTheDocument();
+    expect(hint.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
     expect(action).toBeVisible();

@@ -25,8 +25,8 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   expect(
     Math.abs(jarBox!.x + jarBox!.width / 2 - (shellBox!.x + shellBox!.width / 2)),
   ).toBeLessThan(1);
-  await expect(page.getByText('Финансовая пирамида.')).toBeVisible();
-  await expect(page.getByText(/Без новых вкладов выплаты может не быть/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Войди в очередь.' })).toBeVisible();
+  await expect(page.getByText('Каждая новая позиция двигает цикл дальше.')).toBeVisible();
   await page.getByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ', exact: true }).click();
   await expect(page.locator('.bank-flow-screen')).toHaveCSS('transform', 'none');
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');

@@ -365,11 +365,8 @@ export function BankScreen({
         </div>
       ) : (
         <div className="bank-state bank-empty-state">
-          <h2>Создай позицию в очереди.</h2>
-          <p className="bank-risk">
-            <strong>Финансовая пирамида.</strong> Новые вклады платят ранним позициям. Без новых
-            вкладов выплаты может не быть; отмены нет.
-          </p>
+          <h2>Войди в очередь.</h2>
+          <p className="bank-risk">Каждая новая позиция двигает цикл дальше.</p>
           <div className="bank-cycle-metrics is-empty">
             <CycleMetric value={pulse?.active_bank ?? '—'} label="ПОЗИЦИЙ В ОЧЕРЕДИ" />
             <CycleMetric value={pulse?.active_participants ?? '—'} label="УЧАСТНИКОВ СЕЙЧАС" />
