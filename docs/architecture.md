@@ -24,11 +24,17 @@ RATING is a read-only social projection over finalized `BankPayout`, `DuelSettle
 state or mutable score table: every response recomputes the public monthly formula from
 idempotent proof-backed records.
 
-The browser control site is a separate React entry point at `/control`. It does not initialize
-Telegram, request Mini App expansion or reuse Telegram bearer sessions. The owner authenticates
-with a one-time TON proof and receives an `HttpOnly`, `Secure`, `SameSite=Strict` cookie scoped to
-the control API. Application intake state, synchronized contract configuration and the audit trail
-are durable PostgreSQL records.
+The web entry point selects one of three isolated surfaces before loading product dependencies:
+
+- a regular browser at `/` receives the public LOOP landing and does not initialize Telegram,
+  TON Connect or the product API;
+- a launch URL containing Telegram Web App parameters receives the Mini App;
+- `/control` receives the owner site regardless of Telegram parameters.
+
+The browser control site does not initialize Telegram, request Mini App expansion or reuse
+Telegram bearer sessions. The owner authenticates with a one-time TON proof and receives an
+`HttpOnly`, `Secure`, `SameSite=Strict` cookie scoped to the control API. Application intake state,
+synchronized contract configuration and the audit trail are durable PostgreSQL records.
 
 ## Request path
 

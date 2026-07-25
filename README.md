@@ -19,7 +19,8 @@ LOOP не является кошельком и не хранит внутре�
 
 ## Demo
 
-- Mini App: <https://app.tonsuite.org>
+- Browser landing: <https://app.tonsuite.org>
+- Telegram Mini App: <https://t.me/getloopbot?startapp>
 - Browser control: <https://app.tonsuite.org/control>
 - Telegram: <https://t.me/getloopbot>
 - BANK: [`kQAQ…v4FL_y`](https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y)
@@ -50,16 +51,17 @@ LOOP не является кошельком и не хранит внутре�
 - Independent BANK and DUEL models, API routers, database tables, chain event logs and checkpoints.
 - Fail-closed chain worker: verifies sender, destination, value, opcode, identifiers, terms, exit status and masterchain finality before projecting state.
 - Telegram auth, TON ownership proof, idempotency, rate limits, referrals and independent BANK/DUEL history.
+- Separate Apple-style public landing at `/`; Telegram launch parameters route into the Mini App without exposing browser visitors to Telegram authentication errors.
 - Separate browser control site at `/control` with owner-only TON proof, application intake switches, live contract state, safe reserve operations and an administrative audit trail.
 - Monochrome responsive UI with Telegram safe areas, black header/bottom chrome, haptics and reduced-motion support.
 
 ## Architecture
 
 ```text
-Telegram Mini App                 Browser control
-       │ signed initData                 │ owner TON proof
-       └───────────────┬─────────────────┘
-                       ▼
+Public landing      Telegram Mini App            Browser control
+  static info          │ signed initData             │ owner TON proof
+                       └──────────────┬───────────────┘
+                                      ▼
  FastAPI + aiogram
    ├── BANK API ─── BANK tables ─── BANK chain events
    ├── DUEL API ─── DUEL tables ─── DUEL chain events

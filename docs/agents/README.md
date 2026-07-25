@@ -11,7 +11,8 @@
 | Последняя сверка             | 2026-07-24 06:32 UTC                       |
 | Проверенная runtime baseline | `3760e7774a6575c1c9f97f2181fe2c29559e5637` |
 | Основная ветка               | `main`                                     |
-| Публичное приложение         | <https://app.tonsuite.org>                 |
+| Публичный лендинг            | <https://app.tonsuite.org>                 |
+| Telegram Mini App            | <https://t.me/getloopbot?startapp>         |
 | Управление владельца         | <https://app.tonsuite.org/control>         |
 | Telegram                     | [@getloopbot](https://t.me/getloopbot)     |
 | Финансовая сеть              | TON testnet, global ID `-3`                |
@@ -37,6 +38,8 @@ LOOP — социальное приложение внутри Telegram с вн
   статус.
 - **ПРОФИЛЬ** — Telegram-личность, внешний TON Connect, история подтверждений, рефералы и
   проверка PLUSH BRICK.
+- **ПУБЛИЧНЫЙ ЛЕНДИНГ** — отдельная browser-поверхность без авторизации и загрузки Mini App.
+  Она объясняет продукт и переводит посетителя в Telegram.
 - **ПАНЕЛЬ УПРАВЛЕНИЯ** — отдельный обычный браузерный интерфейс владельца. Он не использует
   Telegram-авторизацию и не является частью Mini App.
 
