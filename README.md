@@ -1,131 +1,129 @@
 # LOOP
 
-LOOP — Telegram Mini App с двумя независимыми режимами в TON testnet.
+LOOP — открытое социальное приложение в Telegram на базе TON. В BANK участники занимают место в очереди, а в DUEL вызывают друг друга на равную игру 50/50. Приложение не хранит средства: действия с GRAM подтверждаются во внешнем кошельке, а результат можно проверить в блокчейне.
 
-**BANK** — открытая тестовая симуляция FIFO-пирамиды. Пользователь создаёт позицию и выбирает целевую выплату; следующие депозиты последовательно финансируют более ранние позиции. Доход не гарантирован: если новые позиции не появляются, очередь останавливается.
+[Открыть в Telegram](https://t.me/getloopbot?startapp) · [Посмотреть сайт](https://app.tonsuite.org) · [Исходный код](https://github.com/rub1kub/loop)
 
-**DUEL** — отдельный равный PvP-вызов 50/50. Два пользователя блокируют одинаковое
-количество тестовых GRAM, а результат фиксируется через commit–reveal. Победителю
-автоматически отправляется общий пул за вычетом комиссии.
+> Сейчас LOOP работает в тестовой сети и использует только тестовые GRAM. BANK намеренно воспроизводит модель финансовой пирамиды: выплаты зависят от новых участников и могут остановиться. Не отправляйте на адреса контрактов активы из основной сети.
 
-**RATING** — сезонная репутация участия. LOOP Score учитывает только подтверждённые
-выплаты BANK, завершённые DUEL, своевременные раскрытия и квалифицированных друзей.
-Размер ставок, прибыль, поражения и баланс не влияют на место.
+## Как работает LOOP
 
-LOOP не является кошельком и не хранит внутренний баланс. TON Connect подключает внешний кошелёк только для подписания транзакций и получения выплат. On-chain состояние — источник истины.
+### BANK
 
-[![TON testnet](https://img.shields.io/badge/TON-testnet-black)](docs/contracts.md)
-[![License: MIT](https://img.shields.io/badge/license-MIT-white)](LICENSE)
+Пользователь выбирает сумму и цель — 1,25×, 1,5× или 2× — и занимает место в очереди. Новые взносы сначала наполняют более ранние позиции. Когда выбранная цель достигнута, контракт сам отправляет выплату.
 
-## Demo
+Очередь движется только пока появляются новые позиции. Отменить подтверждённую позицию или забрать взнос раньше срока нельзя.
 
-- Browser landing: <https://app.tonsuite.org>
-- Telegram Mini App: <https://t.me/getloopbot?startapp>
-- Browser control: <https://app.tonsuite.org/control>
-- Telegram: <https://t.me/getloopbot>
-- BANK: [`kQAQ…v4FL_y`](https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y)
-- DUEL: [`kQAi…Xv-t9d`](https://testnet.tonviewer.com/kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d)
+### DUEL
 
-> В опубликованной версии используются только тестовые GRAM. Не отправляйте mainnet-активы на адреса testnet.
+Можно позвать друга или найти соперника автоматически. Оба участника вносят одинаковую сумму. Устройство каждого игрока заранее фиксирует скрытое значение, затем оба значения раскрываются, и контракт определяет победителя. Изменить результат после начала дуэли не может ни игрок, ни сервер LOOP.
 
-## Product preview
+Если один участник вовремя раскрывает своё значение, а второй нет, побеждает первый. Если этого не делает никто, контракт возвращает обоим их взносы. Сейчас контракт удерживает единую комиссию 2,5% с завершённого дуэля.
 
-| BANK: пустая очередь                           | BANK: активная позиция                           | BANK: создание позиции                                             |
-| ---------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------ |
-| ![BANK empty](docs/screenshots/bank-empty.png) | ![BANK active](docs/screenshots/bank-active.png) | ![BANK create position](docs/screenshots/bank-create-position.png) |
+### Рейтинг
 
-| DUEL: условия                                    | DUEL: AFK-поиск                                            | DUEL: результат                                  |
-| ------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------ |
-| ![DUEL create](docs/screenshots/duel-create.png) | ![DUEL matchmaking](docs/screenshots/duel-matchmaking.png) | ![DUEL result](docs/screenshots/duel-result.png) |
+Рейтинг обновляется каждый месяц и показывает не размер кошелька, а надёжность участника. Очки начисляются за подтверждённые выплаты BANK, завершённые дуэли, своевременные действия и приглашённых друзей хотя бы с одной подтверждённой операцией. Суммы, прибыль, победы и поражения на место не влияют.
 
-| Onboarding BANK                                          | Onboarding DUEL                                          | RATING                                 | Profile                                  |
-| -------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------- | ---------------------------------------- |
-| ![Onboarding BANK](docs/screenshots/onboarding-bank.png) | ![Onboarding DUEL](docs/screenshots/onboarding-duel.png) | ![RATING](docs/screenshots/rating.png) | ![Profile](docs/screenshots/profile.png) |
+Профиль также собирает историю BANK и DUEL, статус PLUSH BRICK и подтверждения операций в одном месте. LOOP проверяет PLUSH BRICK во внешнем кошельке и показывает отметку, но она не меняет очередь, шанс победы или комиссию.
 
-## What is implemented
+## Как это выглядит
 
-- FIFO BANK contract with 1.25×, 1.5× and 2× targets, partial funding, cascading settlement, deterministic fee and automatic payouts.
-- Equal 50/50 DUEL product with domain-separated commit–reveal, permissionless timeouts, refunds and replay protection. The verified v1.2 escrow can still settle legacy 25/75 offers, but the application no longer creates them.
-- AFK matchmaking with durable reservations and direct Telegram invites cryptographically bound on-chain to the invited wallet.
-- Monthly LOOP Score, levels, global and qualified-friend rankings, live BANK/DUEL participation and a public point formula derived from finalized on-chain projections.
-- Independent BANK and DUEL models, API routers, database tables, chain event logs and checkpoints.
-- Fail-closed chain worker: verifies sender, destination, value, opcode, identifiers, terms, exit status and masterchain finality before projecting state.
-- Telegram auth, TON ownership proof, idempotency, rate limits, referrals and independent BANK/DUEL history.
-- Separate Apple-style public landing at `/`; Telegram launch parameters route into the Mini App without exposing browser visitors to Telegram authentication errors.
-- Separate browser control site at `/control` with owner-only TON proof, application intake switches, live contract state, safe reserve operations and an administrative audit trail.
-- Monochrome responsive UI with Telegram safe areas, black header/bottom chrome, haptics and reduced-motion support.
+| BANK: пустая очередь                             | BANK: очередь движется                                     | BANK: создание позиции                                              |
+| ------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------- |
+| ![Пустая банка](docs/screenshots/bank-empty.png) | ![Активная позиция BANK](docs/screenshots/bank-active.png) | ![Создание позиции BANK](docs/screenshots/bank-create-position.png) |
 
-## Architecture
+| DUEL: условия                                     | DUEL: поиск соперника                                     | DUEL: результат                                     |
+| ------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------- |
+| ![Условия DUEL](docs/screenshots/duel-create.png) | ![Поиск соперника](docs/screenshots/duel-matchmaking.png) | ![Результат DUEL](docs/screenshots/duel-result.png) |
+
+Остальные экраны находятся в каталоге [docs/screenshots](docs/screenshots/).
+
+## Открытый проект
+
+Исходники интерфейса, бота, API, контрактов и тестов доступны в этом репозитории. Можно проверить правила, собрать свою версию или предложить изменение. Проект распространяется по лицензии MIT.
+
+Финансовый результат определяют контракты, а не интерфейс и не ответы сервера. История, очередь и рейтинг меняются только после подтверждения операции в TON.
+
+Опубликованные контракты:
+
+- [BANK — BankQueue](https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y)
+- [DUEL — DuelEscrow](https://testnet.tonviewer.com/kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d)
+
+## Что находится в репозитории
+
+| Каталог     | Содержимое                                                                 |
+| ----------- | -------------------------------------------------------------------------- |
+| `apps/web`  | Mini App, публичный сайт, панель владельца и проверки интерфейса           |
+| `apps/api`  | API, Telegram-бот, обработчик операций TON, фоновые задачи и их тесты      |
+| `contracts` | Контракты BANK и DUEL на Tolk                                              |
+| `tests`     | Тесты контрактов BANK и DUEL на Acton                                      |
+| `deploy`    | Прямое развёртывание на VPS, резервные копии и возврат к предыдущей версии |
+| `docs`      | Устройство продукта, контрактов, тестов и сервера                          |
+
+## Архитектура
 
 ```text
-Public landing      Telegram Mini App            Browser control
-  static info          │ signed initData             │ owner TON proof
-                       └──────────────┬───────────────┘
-                                      ▼
- FastAPI + aiogram
-   ├── BANK API ─── BANK tables ─── BANK chain events
-   ├── DUEL API ─── DUEL tables ─── DUEL chain events
-   ├── control API ─ application/contract state ─ audit log
-   ├── rating / referrals / wallet proof / Telegram inline
-   └── finalized chain worker
-              │
-        TON testnet
-        ├── BankQueue
-        └── DuelEscrow
+Обычный браузер ───────────────────────────► Статический лендинг
+
+Telegram ─► Mini App ── Telegram initData ─┐
+                                          ├─► FastAPI + aiogram ─┬─► PostgreSQL
+Владелец ─► /control ── TON-подтверждение ─┘                     └─► Redis
+
+Mini App или /control ─► внешний кошелёк ─► Тестовая сеть TON
+                                             ├── BankQueue
+                                             └── DuelEscrow
+                                                      │
+                                                      ▼
+                                         Обработчик операций TON
+                                                      │
+                                                      ▼
+                                                 PostgreSQL
 ```
 
-PostgreSQL stores projections and Telegram product state. Redis stores disposable locks and rate limits. The contracts, not the API or wallet callback, decide financial state.
+Обычный браузер получает только лендинг и не запускает Telegram, TON Connect или API продукта. PostgreSQL хранит данные приложения и подтверждённую историю, Redis — временные блокировки и ограничения частоты запросов. BANK и DUEL разделены на уровне API, таблиц, событий и контрактов.
 
-Read [product](docs/product.md), [architecture](docs/architecture.md), [BANK](docs/bank.md),
-[DUEL](docs/duel.md), [RATING](docs/rating.md) and [contracts](docs/contracts.md).
-Agents and maintainers should start with the canonical
-[project knowledge base](docs/agents/README.md).
+Подробнее: [устройство продукта](docs/product.md), [архитектура](docs/architecture.md), [BANK](docs/bank.md), [DUEL](docs/duel.md), [рейтинг](docs/rating.md) и [контракты](docs/contracts.md).
 
-## Stack
+## Технологии
 
-| Layer        | Technology                                          |
-| ------------ | --------------------------------------------------- |
-| Web clients  | React 19, TypeScript, Vite, Motion, TON Connect UI  |
-| API and bot  | FastAPI, aiogram, SQLAlchemy, Alembic, Pydantic     |
-| Data         | PostgreSQL 17, Redis 8                              |
-| Contracts    | Tolk 1.4, Acton 1.0, TVM                            |
-| Verification | pytest, Vitest, Playwright, Ruff, mypy, Acton tests |
-| Delivery     | Docker Compose, nginx, immutable releases           |
+| Часть проекта | Технологии                                         |
+| ------------- | -------------------------------------------------- |
+| Интерфейс     | React 19, TypeScript, Vite, Motion, TON Connect UI |
+| API и бот     | FastAPI, aiogram, SQLAlchemy, Alembic, Pydantic    |
+| Данные        | PostgreSQL 17, Redis 8                             |
+| Контракты     | Tolk 1.4, Acton 1.0, TVM                           |
+| Проверки      | pytest, Vitest, Playwright, Ruff, mypy, Acton      |
+| Сервер        | Docker Compose, Apache, nginx, systemd             |
 
-## Local setup
+## Быстрый запуск
 
-Requirements: Node.js 22+, Python 3.12+, Docker and Acton 1.0.
+Нужны Node.js 22+, Python 3.12+, Docker и Acton 1.0. Команда `make setup` вызывает `python3`, поэтому этот исполняемый файл должен вести на Python 3.12 или новее.
 
 ```bash
 cp .env.example .env
 make setup
 ```
 
-Start the web app:
+Запуск интерфейса с локальной имитацией Telegram:
 
 ```bash
 VITE_MOCK_TELEGRAM=true make dev
 ```
 
-Start PostgreSQL, Redis, API and worker with production-like settings:
+В этом режиме нет настоящей авторизации, подписи транзакций и отправки средств.
+
+Запуск PostgreSQL, Redis, API и обработчика TON:
 
 ```bash
 cp .env.example .env.production
 make docker-up
 ```
 
-The browser mock contains no real authentication or transaction signing and is never enabled in production.
-The real owner site is available at `/control`; it never uses Telegram identity or Mini App APIs.
+Все параметры окружения и варианты запуска описаны в [docs/setup.md](docs/setup.md).
 
-## Quality commands
+## Проверки
 
-Discover all supported commands:
-
-```bash
-make help
-```
-
-Run code checks:
+Основные проверки проекта:
 
 ```bash
 make lint
@@ -135,53 +133,58 @@ make test-e2e
 make test-security
 ```
 
-Build and verify both contracts against finalized testnet state:
+Локальная сборка и тесты контрактов:
 
 ```bash
 make contracts-build
 make contracts-test
+```
+
+Проверка кода и состояния опубликованных контрактов:
+
+```bash
 make contracts-verify
 make contracts-inspect
 ```
 
-Generate screenshots from the production build:
+Полный список команд доступен через `make help`, а границы наборов тестов описаны в [docs/testing.md](docs/testing.md).
 
-```bash
-make screenshots
-```
+## Развёртывание
 
-See [testing](docs/testing.md) for suite boundaries and [setup](docs/setup.md) for configuration.
-
-## Deployment
-
-Production releases are immutable. Deployment builds the API and web bundle, backs up PostgreSQL, runs Alembic, starts API and worker, validates contract code hashes, then checks internal and public readiness.
+Рабочая версия загружается прямо на VPS по SSH. GitHub Actions в выпуске не участвует.
 
 ```bash
 npm run deploy:vps
 ```
 
-The direct SSH deployer requires a clean, pushed `main`, verifies SHA-256 during upload,
-continues activation through a transient systemd unit if the connection drops and checks the
-active Git SHA, containers, Telegram bot, public health and exact frontend asset. GitHub Actions
-is not part of the production delivery path.
+Скрипт создаёт резервную копию, применяет миграции, запускает новый выпуск и проверяет сервисы. Подробности и порядок возврата к предыдущей версии описаны в инструкции.
 
-Full runbook: [deployment](docs/deployment.md).
+Подробная инструкция: [docs/deployment.md](docs/deployment.md).
 
-## Security and honest limits
+## Ограничения и безопасность
 
-- BANK is intentionally a pyramid simulation. Payouts depend on later deposits and can stop indefinitely.
-- BANK always funds older FIFO positions first; any remainder visibly seeds the new position instead of becoming trapped protocol reserve.
-- DUEL v1.2 has one global 2.5% on-chain fee. PLUSH BRICK ownership is verified, but a holder discount is disabled until a contract version can enforce it on-chain across networks.
-- Financial contracts run on testnet, while the configured PLUSH BRICK Jetton exists on mainnet; the two proofs are explicitly separated.
-- LOOP holds no user balance, seed phrase, private key or custodial wallet; two isolated low-value testnet keys are used only by the production DUEL canary.
-- Administrative withdrawals are limited on-chain to `balance − locked user value − retained reserve`, require a paused contract and always go to the configured treasury.
+- BANK не создаёт доход сам по себе. Без новых позиций выплаты останавливаются на неопределённый срок.
+- Подтверждённую позицию BANK нельзя отменить или вернуть раньше достижения цели.
+- В DUEL можно потерять весь взнос. Текущая единая комиссия контракта — 2,5% от общего пула завершённой игры.
+- Контракты BANK и DUEL работают только с тестовыми GRAM. Проверка PLUSH BRICK выполняется отдельно в основной сети и не меняет комиссию.
+- LOOP не получает секретные фразы или закрытые ключи пользователей и не ведёт внутренний пользовательский баланс.
+- Владелец может вывести только свободный остаток сверх обязательств перед пользователями и сохраняемого резерва, только в казначейство и только после приостановки контракта.
 
-Read [security](docs/security.md) and report vulnerabilities according to [SECURITY.md](SECURITY.md).
+Подробнее о границах доверия и сообщении об уязвимостях: [docs/security.md](docs/security.md) и [SECURITY.md](SECURITY.md).
 
-## Contributing
+## Документация
 
-Changes use Conventional Commits and must pass the affected checks. See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).
+- [База знаний проекта](docs/agents/README.md)
+- [Настройка окружения](docs/setup.md)
+- [Telegram Mini App и бот](docs/telegram.md)
+- [Работа с TON](docs/ton.md)
+- [Развёртывание и возврат версии](docs/deployment.md)
+- [История изменений](CHANGELOG.md)
 
-## License
+## Участие в разработке
+
+Изменения оформляются в формате Conventional Commits и должны проходить связанные проверки. Порядок работы описан в [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Лицензия
 
 [MIT](LICENSE)
