@@ -301,10 +301,14 @@ def main() -> None:
     second_offer_id = first_offer_id + 1
     expires_at = now + 600
     environment["LOOP_DUEL_CANARY_SIGNING_SEED"] = f"0x{signing_key}"
+    script_path = (
+        "scripts/canary-duel-two-wallet.tolk"
+        if args.network == "testnet"
+        else "scripts/canary-duel-two-wallet-mainnet.tolk"
+    )
     script_args = [
-        "scripts/canary-duel-two-wallet.tolk",
+        script_path,
         args.contract,
-        str(network_id),
         str(first_offer_id),
         str(second_offer_id),
         str(expires_at),

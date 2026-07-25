@@ -1,7 +1,7 @@
 import "@acton/emulation/scripts"
 import "@canary/logic"
 
-const CANARY_ENTRY_NETWORK_ID: int32 = -3
+const CANARY_ENTRY_NETWORK_ID: int32 = -239
 
 fun main(
     duelAddress: address,
@@ -9,15 +9,15 @@ fun main(
     secondOfferId: uint64,
     expiresAt: uint32,
 ) {
-    // Acton 1.0.0 resolves wallet aliases while preparing a script. Keep
-    // testnet and mainnet entrypoints separate so keys cannot cross networks.
+    // This entrypoint is unreachable from the testnet timer and uses distinct
+    // aliases that must be provisioned explicitly before a mainnet canary.
     runCanary(
         duelAddress,
         CANARY_ENTRY_NETWORK_ID,
         firstOfferId,
         secondOfferId,
         expiresAt,
-        scripts.wallet("loop-canary-a"),
-        scripts.wallet("loop-canary-b"),
+        scripts.wallet("loop-mainnet-canary-a"),
+        scripts.wallet("loop-mainnet-canary-b"),
     );
 }
