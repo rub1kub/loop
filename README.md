@@ -26,6 +26,12 @@ LOOP — открытое социальное приложение в Telegram 
 
 Профиль также собирает историю BANK и DUEL, статус PLUSH BRICK и подтверждения операций в одном месте. LOOP проверяет PLUSH BRICK во внешнем кошельке и показывает отметку, но она не меняет очередь, шанс победы или комиссию.
 
+<p align="center">
+  <a href="https://plushbrick.fun/">
+    <img src="https://tonsuite.org/assets/plush-brick-video.gif" width="280" alt="Анимированный логотип PLUSH BRICK">
+  </a>
+</p>
+
 ## Как это выглядит
 
 | BANK: пустая очередь                             | BANK: очередь движется                                     | BANK: создание позиции                                              |

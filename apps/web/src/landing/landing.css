@@ -1044,86 +1044,53 @@ svg {
 
 .landing-plush__mark {
   position: relative;
-  display: grid;
   width: min(52vw, 630px);
   aspect-ratio: 1;
-  place-items: center;
   justify-self: center;
+  overflow: hidden;
+  border: 1px solid rgb(0 0 0 / 8%);
   border-radius: 46px;
-  background:
-    linear-gradient(rgb(0 0 0 / 3%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(0 0 0 / 3%) 1px, transparent 1px), #f2f2f4;
-  background-size: 38px 38px;
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 6%);
-}
-
-.landing-plush__mark::after {
-  position: absolute;
-  width: 54%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: rgb(0 0 0 / 13%);
-  content: '';
-  filter: blur(62px);
-  transform: translateY(20%);
-}
-
-.landing-brick {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  width: 66%;
-  aspect-ratio: 1.9;
-  align-content: center;
-  padding: 0 11%;
-  border: 1px solid rgb(255 255 255 / 28%);
-  border-radius: 34px;
-  background:
-    linear-gradient(125deg, rgb(255 255 255 / 32%), transparent 28%),
-    linear-gradient(150deg, #3a3a3d, #090909 62%);
+  background: #0a69bc;
   box-shadow:
-    inset 0 1px 1px rgb(255 255 255 / 28%),
-    inset 0 -16px 24px rgb(0 0 0 / 38%),
-    0 42px 70px rgb(0 0 0 / 24%);
-  color: #fff;
-  transform: rotate(-8deg);
-  transition: transform 700ms var(--landing-ease);
+    0 32px 80px rgb(0 48 104 / 18%),
+    inset 0 0 0 1px rgb(255 255 255 / 18%);
+  isolation: isolate;
 }
 
-.landing-plush__mark:hover .landing-brick {
-  transform: rotate(-4deg) translateY(-5px);
-}
-
-.landing-brick::before,
-.landing-brick::after {
+.landing-plush__mark::before {
   position: absolute;
-  top: 18%;
-  bottom: 18%;
-  width: 1px;
-  background: rgb(255 255 255 / 13%);
+  z-index: 2;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, transparent 66%, rgb(0 0 0 / 38%));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 10%);
   content: '';
+  pointer-events: none;
 }
 
-.landing-brick::before {
-  left: 8%;
+.landing-plush__logo-link {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: block;
 }
 
-.landing-brick::after {
-  right: 8%;
+.landing-plush__logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.01);
+  transition: transform 900ms var(--landing-ease);
 }
 
-.landing-brick span {
-  color: #9b9ba0;
-  font-size: clamp(11px, 1.2vw, 15px);
-  font-weight: 700;
-  letter-spacing: 0.22em;
+.landing-plush__mark:hover .landing-plush__logo {
+  transform: scale(1.035);
 }
 
-.landing-brick strong {
-  font-size: clamp(38px, 5vw, 72px);
-  font-weight: 580;
-  letter-spacing: -0.065em;
-  line-height: 0.94;
+.landing-plush__logo-link:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: -8px;
 }
 
 .landing-plush__network {
@@ -1131,10 +1098,16 @@ svg {
   z-index: 3;
   right: 26px;
   bottom: 24px;
-  color: #8b8b90;
+  padding: 9px 12px;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 38%);
+  color: #fff;
+  backdrop-filter: blur(14px);
   font-size: 9px;
   font-weight: 680;
   letter-spacing: 0.18em;
+  pointer-events: none;
 }
 
 .landing-plush__steps {
@@ -1666,13 +1639,11 @@ svg {
     border-radius: 32px;
   }
 
-  .landing-brick {
-    width: 76%;
-    border-radius: 22px;
-  }
-
-  .landing-brick strong {
-    font-size: clamp(34px, 11vw, 52px);
+  .landing-plush__network {
+    right: 16px;
+    bottom: 16px;
+    padding: 8px 10px;
+    font-size: 8px;
   }
 
   .landing-inline-links {

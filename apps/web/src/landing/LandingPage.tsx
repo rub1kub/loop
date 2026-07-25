@@ -2,6 +2,7 @@ import { useEffect, useState, type PointerEvent as ReactPointerEvent, type React
 
 const telegramUrl = 'https://t.me/getloopbot?startapp';
 const githubUrl = 'https://github.com/rub1kub/loop';
+const plushBrickLogoUrl = 'https://tonsuite.org/assets/plush-brick-video.gif';
 
 const sourceAreas = [
   {
@@ -341,11 +342,18 @@ export function LandingPage() {
         </section>
 
         <section className="landing-plush" id="plush-brick">
-          <div className="landing-plush__mark" data-reveal aria-hidden="true">
-            <div className="landing-brick">
-              <span>PLUSH</span>
-              <strong>BRICK</strong>
-            </div>
+          <div className="landing-plush__mark" data-reveal>
+            <ExternalLink className="landing-plush__logo-link" href="https://plushbrick.fun/">
+              <img
+                className="landing-plush__logo"
+                src={plushBrickLogoUrl}
+                alt="Анимированный логотип PLUSH BRICK"
+                width="800"
+                height="800"
+                loading="lazy"
+                decoding="async"
+              />
+            </ExternalLink>
             <span className="landing-plush__network">ЭКОСИСТЕМА TON SUITE</span>
           </div>
 

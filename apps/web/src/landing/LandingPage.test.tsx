@@ -43,6 +43,10 @@ describe('browser landing', () => {
   it('describes the real PLUSH BRICK behavior without promising an active discount', () => {
     render(<LandingPage />);
 
+    expect(screen.getByRole('img', { name: 'Анимированный логотип PLUSH BRICK' })).toHaveAttribute(
+      'src',
+      'https://tonsuite.org/assets/plush-brick-video.gif',
+    );
     expect(screen.getByText(/LOOP проверит подключённый кошелёк/)).toBeInTheDocument();
     expect(screen.getByText(/На очередь BANK и шансы DUEL он не влияет/)).toBeInTheDocument();
     expect(
