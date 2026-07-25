@@ -3,7 +3,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import ControlApp from './ControlApp';
-import './control.css';
 
 const manifestUrl =
   import.meta.env.VITE_TONCONNECT_MANIFEST_URL ??

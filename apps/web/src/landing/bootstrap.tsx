@@ -2,7 +2,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { LandingPage } from './LandingPage';
-import './landing.css';
 
 document.title = 'LOOP — социальная игра в Telegram';
 document.documentElement.dataset.surface = 'landing';
