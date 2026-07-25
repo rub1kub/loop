@@ -11,13 +11,15 @@ fun main(
 ) {
     // This entrypoint is unreachable from the testnet timer and uses distinct
     // aliases that must be provisioned explicitly before a mainnet canary.
+    val firstWallet = scripts.wallet("loop-mainnet-canary-a");
+    val secondWallet = scripts.wallet("loop-mainnet-canary-b");
     runCanary(
         duelAddress,
         CANARY_ENTRY_NETWORK_ID,
         firstOfferId,
         secondOfferId,
         expiresAt,
-        scripts.wallet("loop-mainnet-canary-a"),
-        scripts.wallet("loop-mainnet-canary-b"),
+        firstWallet.address,
+        secondWallet.address,
     );
 }

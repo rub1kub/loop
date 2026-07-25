@@ -2,7 +2,6 @@ import "@acton/crypto"
 import "@acton/env"
 import "@acton/io"
 import "@acton/emulation/network"
-import "@acton/emulation/scripts"
 import "@acton/testing/expect"
 import "@acton/types/big_array"
 import "@acton/types/transaction"
@@ -80,12 +79,12 @@ fun canaryPermit(
 
 fun cancelCanaryOffer(
     duel: DuelEscrow,
-    wallet: ActonWallet,
+    walletAddress: address,
     offerId: uint64,
     queryId: uint64,
 ) {
     val result = duel.sendCancelOffer(
-        wallet.address,
+        walletAddress,
         queryId,
         offerId,
         { value: ton("0.03") },
@@ -97,12 +96,12 @@ fun cancelCanaryOffer(
 
 fun cleanInterruptedCanary(
     duel: DuelEscrow,
-    firstWallet: ActonWallet,
-    secondWallet: ActonWallet,
+    firstWallet: address,
+    secondWallet: address,
     queryId: uint64,
 ) {
-    val firstActive = duel.activeOffer(firstWallet.address);
-    val secondActive = duel.activeOffer(secondWallet.address);
+    val firstActive = duel.activeOffer(firstWallet);
+    val secondActive = duel.activeOffer(secondWallet);
     if (firstActive != 0 || secondActive != 0) {
         if (firstActive != 0 && secondActive == 0) {
             assert (
@@ -130,7 +129,7 @@ fun cleanInterruptedCanary(
                     blockchain.now() > staleDuel.revealDeadline
                 ) throw CanaryErrors.CanaryStateBusy;
                 val expired = duel.sendExpireDuel(
-                    firstWallet.address,
+                    firstWallet,
                     queryId,
                     duelId,
                     { value: ton("0.03") },
@@ -141,8 +140,7 @@ fun cleanInterruptedCanary(
             }
         }
         assert (
-            duel.activeOffer(firstWallet.address) == 0 &&
-            duel.activeOffer(secondWallet.address) == 0
+            duel.activeOffer(firstWallet) == 0 && duel.activeOffer(secondWallet) == 0
         ) throw CanaryErrors.CanaryStateBusy;
     }
 }
@@ -153,15 +151,15 @@ fun runCanary(
     firstOfferId: uint64,
     secondOfferId: uint64,
     expiresAt: uint32,
-    firstWallet: ActonWallet,
-    secondWallet: ActonWallet,
+    firstWallet: address,
+    secondWallet: address,
 ) {
     val signerSeed = env<int>("LOOP_DUEL_CANARY_SIGNING_SEED");
     assert (signerSeed != null) throw CanaryErrors.MissingSigner;
     assert (
         networkId == TESTNET_NETWORK_ID || networkId == MAINNET_NETWORK_ID
     ) throw CanaryErrors.UnsupportedNetwork;
-    assert (firstWallet.address != secondWallet.address) throw CanaryErrors.SameWallet;
+    assert (firstWallet != secondWallet) throw CanaryErrors.SameWallet;
     assert (firstOfferId < secondOfferId) throw CanaryErrors.WrongContract;
 
     val duel = DuelEscrow.fromAddress(duelAddress);
@@ -175,8 +173,8 @@ fun runCanary(
     cleanInterruptedCanary(duel, firstWallet, secondWallet, firstOfferId - 2);
     println(
         "DUEL_CANARY_STATE_READY first_active={} second_active={}",
-        duel.activeOffer(firstWallet.address),
-        duel.activeOffer(secondWallet.address),
+        duel.activeOffer(firstWallet),
+        duel.activeOffer(secondWallet),
     );
     val lockedBefore = duel.contractConfig().locked;
     val inviteId = beginCell()
@@ -187,14 +185,14 @@ fun runCanary(
         .hash();
 
     val opened = duel.sendOpenDirectOffer(
-        firstWallet.address,
+        firstWallet,
         firstOfferId,
         firstOfferId,
         canaryCommitment(
             networkId,
             duelAddress,
             firstOfferId,
-            firstWallet.address,
+            firstWallet,
             CANARY_SECRET_A,
         ),
         5_000,
@@ -209,14 +207,14 @@ fun runCanary(
     assert (transactionAt(openTrace!, duelAddress) != null) throw CanaryErrors.WrongContract;
 
     val accepted = duel.sendAcceptDirectOffer(
-        secondWallet.address,
+        secondWallet,
         secondOfferId,
         secondOfferId,
         canaryCommitment(
             networkId,
             duelAddress,
             secondOfferId,
-            secondWallet.address,
+            secondWallet,
             CANARY_SECRET_B,
         ),
         5_000,
@@ -231,7 +229,7 @@ fun runCanary(
                 duelAddress,
                 inviteId,
                 firstOfferId,
-                secondWallet.address,
+                secondWallet,
                 expiresAt,
             ),
         },
@@ -242,12 +240,12 @@ fun runCanary(
     expect(acceptTrace!).toHaveAllSuccessfulTxs();
     assert (transactionAt(acceptTrace!, duelAddress) != null) throw CanaryErrors.WrongContract;
     assert (
-        duel.directOfferData(firstOfferId).opponent! == secondWallet.address &&
-        duel.directOfferData(secondOfferId).opponent! == firstWallet.address
+        duel.directOfferData(firstOfferId).opponent! == secondWallet &&
+        duel.directOfferData(secondOfferId).opponent! == firstWallet
     ) throw CanaryErrors.WrongBinding;
 
     val firstReveal = duel.sendReveal(
-        firstWallet.address,
+        firstWallet,
         firstOfferId,
         secondOfferId,
         firstOfferId,
@@ -262,7 +260,7 @@ fun runCanary(
     ) throw CanaryErrors.MissingSettlement;
 
     val secondReveal = duel.sendReveal(
-        secondWallet.address,
+        secondWallet,
         secondOfferId,
         secondOfferId,
         secondOfferId,

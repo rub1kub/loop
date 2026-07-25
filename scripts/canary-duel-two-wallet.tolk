@@ -11,13 +11,15 @@ fun main(
 ) {
     // Acton 1.0.0 resolves wallet aliases while preparing a script. Keep
     // testnet and mainnet entrypoints separate so keys cannot cross networks.
+    val firstWallet = scripts.wallet("loop-canary-a");
+    val secondWallet = scripts.wallet("loop-canary-b");
     runCanary(
         duelAddress,
         CANARY_ENTRY_NETWORK_ID,
         firstOfferId,
         secondOfferId,
         expiresAt,
-        scripts.wallet("loop-canary-a"),
-        scripts.wallet("loop-canary-b"),
+        firstWallet.address,
+        secondWallet.address,
     );
 }
