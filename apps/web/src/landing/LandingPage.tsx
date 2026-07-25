@@ -8,8 +8,8 @@ const sourceAreas = [
     id: 'contracts',
     label: 'Контракты',
     path: 'contracts/',
-    title: 'BANK + DUEL',
-    description: 'Правила исполнения написаны на Tolk и доступны для независимой проверки.',
+    title: 'BANK И DUEL',
+    description: 'Контракты написаны на Tolk. Их можно прочитать, собрать и проверить.',
     files: ['bank/BankQueue.tolk', 'duel/DuelEscrow.tolk'],
     href: `${githubUrl}/tree/main/contracts`,
   },
@@ -17,17 +17,17 @@ const sourceAreas = [
     id: 'product',
     label: 'Приложение',
     path: 'apps/',
-    title: 'WEB + API + BOT',
-    description: 'Интерфейс, сервер и Telegram-бот открыты вместе с историей изменений.',
+    title: 'ПРИЛОЖЕНИЕ И БОТ',
+    description: 'Здесь весь LOOP: интерфейс, сервер и Telegram-бот.',
     files: ['web/src/', 'api/app/'],
     href: `${githubUrl}/tree/main/apps`,
   },
   {
     id: 'checks',
-    label: 'Проверки',
+    label: 'Тесты',
     path: 'tests/',
-    title: 'TESTS + PROOFS',
-    description: 'Сценарии BANK, DUEL и проверки сети можно запустить самостоятельно.',
+    title: 'ТЕСТЫ',
+    description: 'Тесты BANK и DUEL запускаются прямо из репозитория.',
     files: ['bank_queue.test.tolk', 'duel_contract.test.tolk'],
     href: `${githubUrl}/tree/main/tests`,
   },
@@ -160,13 +160,13 @@ export function LandingPage() {
           <span>LOOP</span>
         </a>
         <nav aria-label="Навигация по странице">
-          <a href="#open-source">OPEN SOURCE</a>
+          <a href="#open-source">GITHUB</a>
           <a href="#bank">BANK</a>
           <a href="#duel">DUEL</a>
           <a href="#plush-brick">PLUSH BRICK</a>
         </nav>
         <ExternalLink className="landing-header__cta" href={telegramUrl}>
-          Открыть
+          Запустить
           <ArrowIcon />
         </ExternalLink>
       </header>
@@ -174,25 +174,22 @@ export function LandingPage() {
       <main id="content">
         <section className="landing-hero" id="top">
           <div className="landing-hero__copy">
-            <span className="landing-eyebrow">TELEGRAM × TON</span>
+            <span className="landing-eyebrow">ИГРА ВНУТРИ TELEGRAM</span>
             <h1>
-              Ты входишь. <span>Цикл продолжается.</span>
+              Зайди. <span>Дальше — твой ход.</span>
             </h1>
-            <p>
-              LOOP — социальная игра внутри Telegram. Двигай очередь BANK или принимай честный вызов
-              DUEL. Важные действия подтверждает сеть TON.
-            </p>
+            <p>В LOOP есть очередь BANK и дуэли 50/50. Всё открывается прямо в Telegram.</p>
             <div className="landing-actions">
               <ExternalLink className="landing-button landing-button--light" href={telegramUrl}>
                 <TelegramIcon />
-                Открыть в Telegram
+                Запустить LOOP
               </ExternalLink>
               <a className="landing-button landing-button--ghost" href="#bank">
-                Как устроен LOOP
+                Посмотреть режимы
                 <ArrowIcon />
               </a>
             </div>
-            <span className="landing-wallet-note">Кошелёк остаётся внешним. Всегда.</span>
+            <span className="landing-wallet-note">Транзакции подписываются в твоём кошельке.</span>
           </div>
 
           <div
@@ -214,14 +211,17 @@ export function LandingPage() {
 
         <section className="landing-open-source" id="open-source">
           <div className="landing-open-source__copy" data-reveal>
-            <span className="landing-eyebrow">OPEN SOURCE</span>
+            <span className="landing-eyebrow">ОТКРЫТЫЙ КОД</span>
             <h2>
-              Код открыт. <span>Цикл виден.</span>
+              Весь LOOP — <span>на GitHub.</span>
             </h2>
-            <p>Контракты, приложение и тесты LOOP лежат в публичном репозитории.</p>
+            <p>
+              Интерфейс, бот, сервер, контракты и тесты доступны всем. Можно проверить, собрать или
+              предложить правку.
+            </p>
             <ExternalLink className="landing-button landing-button--source" href={githubUrl}>
               <GitHubIcon />
-              Смотреть на GitHub
+              Открыть репозиторий
               <ArrowIcon />
             </ExternalLink>
           </div>
@@ -280,19 +280,17 @@ export function LandingPage() {
           <div className="landing-section-copy" data-reveal>
             <span className="landing-index">01</span>
             <span className="landing-eyebrow">BANK</span>
-            <h2>Банка помнит очередь.</h2>
+            <h2>Встань в очередь.</h2>
             <p>
-              Создай позицию, выбери цель и наблюдай, как новые входы постепенно двигают цикл
-              вперёд.
+              Выбираешь сумму и цель — получаешь место. Новые взносы сначала пополняют позиции тех,
+              кто вошёл раньше.
             </p>
             <div className="landing-facts">
-              <span>Позиция</span>
+              <span>Твоё место</span>
               <span>Цель</span>
-              <span>Прогресс</span>
+              <span>До выплаты</span>
             </div>
-            <small>
-              Новые позиции финансируют более ранние. Без новых входов движение может остановиться.
-            </small>
+            <small>Нет новых позиций — очередь стоит. Выплата не гарантирована.</small>
           </div>
 
           <div className="landing-jar-stage" data-reveal>
@@ -304,7 +302,7 @@ export function LandingPage() {
               alt="Стеклянная банка LOOP, наполненная движущимся песком"
             />
             <div className="landing-jar-caption">
-              <span>ЖИВОЙ ЦИКЛ</span>
+              <span>ДО ЦЕЛИ</span>
               <strong>62%</strong>
             </div>
           </div>
@@ -329,15 +327,15 @@ export function LandingPage() {
           <div className="landing-section-copy landing-section-copy--dark" data-reveal>
             <span className="landing-index">02</span>
             <span className="landing-eyebrow">DUEL</span>
-            <h2>Один вызов. Два человека.</h2>
+            <h2>Брось вызов.</h2>
             <p>
-              Вызови друга или найди соперника. Одинаковые ставки, равные условия и результат,
-              который исполняет контракт.
+              Позови друга или найди соперника. Ставки равны, а исход складывается из скрытых чисел
+              обоих игроков — сервер его не выбирает.
             </p>
             <div className="landing-duel__rules">
-              <span>Прямой вызов</span>
-              <span>Поиск соперника</span>
-              <span>Возвраты по правилам</span>
+              <span>Друг или случайный соперник</span>
+              <span>Одинаковая ставка</span>
+              <span>Не сыграли — возврат</span>
             </div>
           </div>
         </section>
@@ -348,43 +346,45 @@ export function LandingPage() {
               <span>PLUSH</span>
               <strong>BRICK</strong>
             </div>
-            <span className="landing-plush__network">TON SUITE ECOSYSTEM</span>
+            <span className="landing-plush__network">ЭКОСИСТЕМА TON SUITE</span>
           </div>
 
           <div className="landing-section-copy" data-reveal>
             <span className="landing-index">03</span>
             <span className="landing-eyebrow">PLUSH BRICK</span>
-            <h2>Свой знак внутри экосистемы.</h2>
+            <h2>Есть PLUSH BRICK? LOOP это увидит.</h2>
             <p>
-              PLUSH BRICK — отдельный мем‑токен TON Suite. LOOP проверяет его во внешнем кошельке и
-              подтверждает статус владельца прямо через сеть.
+              Это мем‑токен TON Suite. LOOP проверит подключённый кошелёк и покажет отметку в
+              профиле.
             </p>
             <div className="landing-plush__steps">
               <div>
                 <span>01</span>
-                <p>Подключаешь внешний кошелёк.</p>
+                <p>Кошелёк подключён</p>
               </div>
               <div>
                 <span>02</span>
-                <p>LOOP проверяет владение, не забирая токен.</p>
+                <p>Токен найден</p>
               </div>
               <div>
                 <span>03</span>
-                <p>Подтверждённый статус появляется в профиле LOOP.</p>
+                <p>Отметка в профиле</p>
               </div>
             </div>
             <p className="landing-plush__market-note">
-              В той же экосистеме работает маркет адресов: он помогает находить размеченные
-              TON‑кошельки — китов, трейдеров и инфлюенсеров.
+              Маркет адресов TON Suite помогает находить размеченные кошельки китов, трейдеров и
+              инфлюенсеров.
             </p>
-            <small>PLUSH BRICK не меняет очередь BANK и не влияет на шансы DUEL.</small>
+            <small>
+              PLUSH BRICK даёт только отметку. На очередь BANK и шансы DUEL он не влияет.
+            </small>
             <div className="landing-inline-links">
               <ExternalLink href="https://plushbrick.fun/">
-                Открыть PLUSH BRICK
+                Сайт PLUSH BRICK
                 <ArrowIcon />
               </ExternalLink>
               <ExternalLink href="https://tracker.plushbrick.fun/">
-                Маркет TON‑адресов
+                Маркет адресов
                 <ArrowIcon />
               </ExternalLink>
             </div>
@@ -393,24 +393,24 @@ export function LandingPage() {
 
         <section className="landing-proof">
           <div className="landing-proof__heading" data-reveal>
-            <span className="landing-eyebrow">ТО, ЧТО МОЖНО ПРОВЕРИТЬ</span>
-            <h2>Правила живут не в обещаниях.</h2>
+            <span className="landing-eyebrow">ПРОВЕРКА</span>
+            <h2>Проверь сам.</h2>
           </div>
           <div className="landing-proof__grid">
             <article data-reveal>
               <span>01</span>
-              <h3>Внешний кошелёк</h3>
-              <p>LOOP не хранит ключи и средства пользователя.</p>
+              <h3>Ключи — у тебя</h3>
+              <p>LOOP их не получает.</p>
             </article>
             <article data-reveal>
               <span>02</span>
-              <h3>Подтверждение в TON</h3>
-              <p>Транзакции подписываются в подключённом кошельке.</p>
+              <h3>Подпись — в кошельке</h3>
+              <p>Транзакцию подтверждаешь сам.</p>
             </article>
             <article data-reveal>
               <span>03</span>
-              <h3>Видимая история</h3>
-              <p>Состояние BANK и DUEL сверяется с сетью.</p>
+              <h3>История — в TON</h3>
+              <p>BANK и DUEL можно сверить с сетью.</p>
             </article>
           </div>
         </section>
@@ -418,11 +418,11 @@ export function LandingPage() {
         <section className="landing-final">
           <div data-reveal>
             <InfinityMark />
-            <span className="landing-eyebrow">ЦИКЛ УЖЕ ИДЁТ</span>
-            <h2>Твоё место — внутри.</h2>
+            <span className="landing-eyebrow">LOOP В TELEGRAM</span>
+            <h2>Зайди и выбери режим.</h2>
             <ExternalLink className="landing-button landing-button--dark" href={telegramUrl}>
               <TelegramIcon />
-              Открыть LOOP
+              Запустить LOOP
             </ExternalLink>
           </div>
         </section>
@@ -439,7 +439,7 @@ export function LandingPage() {
           <ExternalLink href="https://plushbrick.fun/">PLUSH BRICK</ExternalLink>
           <ExternalLink href="https://github.com/rub1kub/loop">GitHub</ExternalLink>
         </nav>
-        <p>Участие связано с риском. Результат BANK не гарантирован.</p>
+        <p>В BANK нет гарантированной выплаты. В DUEL можно проиграть.</p>
         <div>
           <a href="/privacy.html">Конфиденциальность</a>
           <a href="/terms.html">Условия</a>

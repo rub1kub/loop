@@ -14,7 +14,7 @@ document
   .querySelector('meta[name="description"]')
   ?.setAttribute(
     'content',
-    'LOOP — социальная игра внутри Telegram: очередь BANK, честные вызовы DUEL и подтверждение действий в TON.',
+    'LOOP — очередь BANK и дуэли 50/50 внутри Telegram. Открытый код и операции в TON.',
   );
 
 createRoot(document.getElementById('root')!).render(
