@@ -189,10 +189,10 @@ export default function App() {
         <motion.div
           key={state.activeTab}
           className="screen-stage"
-          initial={{ opacity: 0, x: 12 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -8 }}
-          transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
+          initial={{ opacity: 0, x: 8, scale: 0.995 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={{ opacity: 0, x: -5, scale: 0.995 }}
+          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
         >
           {screen}
         </motion.div>

@@ -31,6 +31,10 @@
   --line: #252525;
   --muted: #a1a1a6;
   --surface: #101010;
+  --motion-fast: 140ms;
+  --motion-base: 240ms;
+  --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-apple-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
 }
 
 * {
@@ -243,14 +247,18 @@ summary:focus-visible .disclosure-indicator {
   text-decoration: none;
   cursor: pointer;
   transition:
-    opacity 120ms ease,
-    transform 120ms ease,
-    background 180ms ease;
+    opacity var(--motion-fast) ease,
+    transform var(--motion-fast) var(--ease-apple),
+    background var(--motion-base) var(--ease-apple),
+    border-color var(--motion-base) var(--ease-apple),
+    box-shadow var(--motion-base) var(--ease-apple);
+  will-change: transform;
 }
 
 .primary-button {
   border: 1px solid #fff;
   background: #fff;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 30%);
   color: #050505;
 }
 
@@ -262,9 +270,19 @@ summary:focus-visible .disclosure-indicator {
 
 .primary-button:active,
 .secondary-button:active,
-.profile-row:active,
-.bank-object:active {
-  transform: scale(0.975);
+.profile-row:active {
+  transform: scale(0.97);
+  transition-duration: 70ms;
+}
+
+.primary-button svg,
+.secondary-button svg {
+  transition: transform var(--motion-fast) var(--ease-apple);
+}
+
+.primary-button:active svg,
+.secondary-button:active svg {
+  transform: scale(0.88);
 }
 
 .primary-button:disabled,
@@ -376,10 +394,42 @@ summary:focus-visible .disclosure-indicator {
   font-size: 10px;
   font-weight: 780;
   letter-spacing: 0.16em;
+  transition: color var(--motion-base) var(--ease-apple);
+}
+
+.tab-bar button svg,
+.tab-bar button span {
+  transition:
+    opacity var(--motion-base) var(--ease-apple),
+    transform var(--motion-base) var(--ease-apple);
+}
+
+.tab-bar button svg {
+  opacity: 0.68;
+}
+
+.tab-bar button span {
+  opacity: 0.78;
 }
 
 .tab-bar button.active {
   color: #fff;
+}
+
+.tab-bar button.active svg {
+  opacity: 1;
+  filter: drop-shadow(0 2px 5px rgb(255 255 255 / 16%));
+  transform: translateY(-1px) scale(1.08);
+}
+
+.tab-bar button.active span {
+  opacity: 1;
+  transform: translateY(1px);
+}
+
+.tab-bar button:active svg {
+  transform: scale(0.86);
+  transition-duration: 70ms;
 }
 
 .bank-screen {
@@ -407,6 +457,20 @@ summary:focus-visible .disclosure-indicator {
   width: min(106%, 455px);
   aspect-ratio: 900 / 1015;
   justify-self: center;
+  scale: 1;
+  translate: 0 0;
+  transition:
+    filter var(--motion-base) var(--ease-apple),
+    scale var(--motion-base) var(--ease-apple-spring),
+    translate var(--motion-base) var(--ease-apple);
+  will-change: scale, translate;
+}
+
+.bank-object:active .bank-vessel {
+  filter: brightness(1.06);
+  scale: 0.975;
+  translate: 0 2px;
+  transition-duration: 80ms;
 }
 
 .bank-jar-shell,
@@ -662,11 +726,27 @@ summary:focus-visible .disclosure-indicator {
   background: #101010;
   color: #aaa;
   cursor: pointer;
+  transition:
+    color var(--motion-fast) ease,
+    background var(--motion-base) var(--ease-apple),
+    border-color var(--motion-base) var(--ease-apple),
+    transform var(--motion-fast) var(--ease-apple);
 }
 
 .round-icon-button svg {
   width: 18px;
   height: 18px;
+  transition: transform var(--motion-fast) var(--ease-apple);
+}
+
+.round-icon-button:active {
+  background: #171717;
+  transform: scale(0.9);
+  transition-duration: 70ms;
+}
+
+.round-icon-button:active svg {
+  transform: scale(0.86);
 }
 
 .big-progress {
@@ -688,6 +768,7 @@ summary:focus-visible .disclosure-indicator {
   height: 100%;
   border-radius: inherit;
   background: #fff;
+  transition: width 900ms var(--ease-apple);
 }
 
 .detail-list,
@@ -745,6 +826,14 @@ summary:focus-visible .disclosure-indicator {
   align-items: baseline;
   margin: 18px 0 10px;
   border-bottom: 1px solid #4a4a4a;
+  transition:
+    border-color var(--motion-base) var(--ease-apple),
+    box-shadow var(--motion-base) var(--ease-apple);
+}
+
+.amount-input:focus-within {
+  border-color: #fff;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 18%);
 }
 
 .amount-input input {
@@ -764,6 +853,11 @@ summary:focus-visible .disclosure-indicator {
   font-size: 11px;
   font-weight: 760;
   letter-spacing: 0.15em;
+  transition: color var(--motion-base) var(--ease-apple);
+}
+
+.amount-input:focus-within span {
+  color: #fff;
 }
 
 .form-note {
@@ -845,12 +939,16 @@ summary:focus-visible .disclosure-indicator {
   font-weight: 760;
   letter-spacing: 0.11em;
   line-height: 1;
+  transition:
+    color var(--motion-base) var(--ease-apple),
+    background var(--motion-base) var(--ease-apple),
+    border-color var(--motion-base) var(--ease-apple);
 }
 
 .disclosure-indicator svg {
   width: 12px;
   height: 12px;
-  transition: transform 180ms ease;
+  transition: transform var(--motion-base) var(--ease-apple-spring);
 }
 
 .disclosure-close-label {
@@ -880,6 +978,24 @@ details[open] > summary .disclosure-indicator svg {
   margin: 0 0 8px;
 }
 
+.technical-details[open] > :not(summary),
+.profile-proof-details[open] > :not(summary),
+.rating-details[open] > :not(summary) {
+  animation: disclosure-enter var(--motion-base) var(--ease-apple) both;
+}
+
+@keyframes disclosure-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .choice-list {
   display: grid;
   gap: 7px;
@@ -897,11 +1013,22 @@ details[open] > summary .disclosure-indicator svg {
   color: #777;
   text-align: left;
   cursor: pointer;
+  transition:
+    color var(--motion-base) var(--ease-apple),
+    background var(--motion-base) var(--ease-apple),
+    border-color var(--motion-base) var(--ease-apple),
+    transform var(--motion-fast) var(--ease-apple);
 }
 
 .choice-list button.active {
   border-color: #fff;
+  background: #111;
   color: #fff;
+}
+
+.choice-list button:active {
+  transform: scale(0.98);
+  transition-duration: 70ms;
 }
 
 .choice-list span {
@@ -1051,9 +1178,9 @@ details[open] > summary .disclosure-indicator svg {
   background: #0d0d0d;
   cursor: text;
   transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease,
-    background 150ms ease;
+    border-color var(--motion-base) var(--ease-apple),
+    box-shadow var(--motion-base) var(--ease-apple),
+    background var(--motion-base) var(--ease-apple);
 }
 
 .stake-input > div:focus-within {
@@ -1482,7 +1609,25 @@ details[open] > summary .disclosure-indicator svg {
   background: #0d0d0d;
   cursor: pointer;
   text-align: left;
-  transition: transform 120ms ease;
+  transition:
+    background var(--motion-base) var(--ease-apple),
+    border-color var(--motion-base) var(--ease-apple),
+    transform var(--motion-fast) var(--ease-apple);
+}
+
+.profile-row .row-icon,
+.profile-row > svg {
+  transition:
+    color var(--motion-base) var(--ease-apple),
+    transform var(--motion-base) var(--ease-apple);
+}
+
+.profile-row:active .row-icon {
+  transform: scale(0.92);
+}
+
+.profile-row:active > svg {
+  transform: translateX(2px);
 }
 
 .static-row {
@@ -1630,6 +1775,7 @@ details[open] > summary .disclosure-indicator svg {
   height: 100%;
   border-radius: inherit;
   background: #f5f5f5;
+  transition: width 900ms var(--ease-apple);
 }
 
 .rating-progress-copy {
@@ -1735,11 +1881,21 @@ details[open] > summary .disclosure-indicator svg {
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.14em;
+  cursor: pointer;
+  transition:
+    color var(--motion-base) var(--ease-apple),
+    background var(--motion-base) var(--ease-apple),
+    transform var(--motion-fast) var(--ease-apple);
 }
 
 .rating-list-switch button.active {
   background: #f5f5f5;
   color: #050505;
+}
+
+.rating-list-switch button:active {
+  transform: scale(0.96);
+  transition-duration: 70ms;
 }
 
 .rating-list-switch svg {
@@ -1956,6 +2112,15 @@ details[open] > summary .disclosure-indicator svg {
   padding: 10px 13px;
   color: inherit;
   text-decoration: none;
+  transition:
+    background var(--motion-base) var(--ease-apple),
+    transform var(--motion-fast) var(--ease-apple);
+}
+
+.proof-history > a:active {
+  background: #121212;
+  transform: scale(0.985);
+  transition-duration: 70ms;
 }
 
 .proof-history > * + * {
@@ -1998,6 +2163,16 @@ details[open] > summary .disclosure-indicator svg {
 
 .settings-row {
   cursor: pointer;
+  transition:
+    color var(--motion-base) var(--ease-apple),
+    opacity var(--motion-fast) ease,
+    transform var(--motion-fast) var(--ease-apple);
+}
+
+.settings-row:active {
+  opacity: 0.72;
+  transform: scale(0.985);
+  transition-duration: 70ms;
 }
 
 .settings-row > span,
@@ -2024,8 +2199,9 @@ details[open] > summary .disclosure-indicator svg {
   background: #171717;
   cursor: pointer;
   transition:
-    border-color 180ms ease,
-    background 180ms ease;
+    border-color var(--motion-base) var(--ease-apple),
+    background var(--motion-base) var(--ease-apple),
+    transform var(--motion-fast) var(--ease-apple);
 }
 
 .settings-toggle input::after {
@@ -2038,8 +2214,8 @@ details[open] > summary .disclosure-indicator svg {
   background: #888;
   content: '';
   transition:
-    transform 180ms ease,
-    background 180ms ease;
+    transform var(--motion-base) var(--ease-apple-spring),
+    background var(--motion-base) var(--ease-apple);
 }
 
 .settings-toggle input:checked {
@@ -2050,6 +2226,10 @@ details[open] > summary .disclosure-indicator svg {
 .settings-toggle input:checked::after {
   background: #000;
   transform: translateX(18px);
+}
+
+.settings-toggle input:active {
+  transform: scale(0.94);
 }
 
 .settings-toggle input:focus-visible {
@@ -2240,6 +2420,49 @@ details[open] > summary .disclosure-indicator svg {
   margin: 7px 0 0 9px;
   color: #737373;
   font-size: 9px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .primary-button:hover:not(:disabled):not(:active),
+  .secondary-button:hover:not(:disabled):not(:active) {
+    transform: translateY(-1px);
+  }
+
+  .primary-button:hover:not(:disabled):not(:active) {
+    box-shadow: 0 5px 18px rgb(255 255 255 / 12%);
+  }
+
+  .secondary-button:hover:not(:disabled),
+  .profile-row:hover:not(:disabled),
+  .proof-history > a:hover {
+    border-color: #464646;
+    background: #121212;
+  }
+
+  .choice-list button:hover:not(.active) {
+    border-color: #464646;
+    background: #121212;
+  }
+
+  .round-icon-button:hover {
+    border-color: #555;
+    background: #171717;
+    color: #fff;
+  }
+
+  .bank-object:hover:not(:active) .bank-vessel {
+    filter: brightness(1.04);
+    translate: 0 -2px;
+  }
+
+  .tab-bar button:hover:not(:active) svg {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.04);
+  }
+
+  .settings-row:hover {
+    color: #fff;
+  }
 }
 
 @media (max-width: 350px), (max-height: 720px) {

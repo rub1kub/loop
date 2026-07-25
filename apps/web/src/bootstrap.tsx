@@ -1,4 +1,5 @@
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
+import { MotionConfig } from 'motion/react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -14,7 +15,9 @@ createRoot(document.getElementById('root')!).render(
       manifestUrl={manifestUrl}
       actionsConfiguration={{ twaReturnUrl: window.location.href as `${string}://${string}` }}
     >
-      <App />
+      <MotionConfig reducedMotion="user">
+        <App />
+      </MotionConfig>
     </TonConnectUIProvider>
   </StrictMode>,
 );
