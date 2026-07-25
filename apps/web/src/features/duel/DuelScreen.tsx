@@ -287,21 +287,23 @@ export function DuelScreen({
         <h1 id="duel-title">DUEL</h1>
       </header>
 
-      <div className={`duel-stage is-${status}`}>
-        <span className="player-node">
-          <User aria-hidden="true" />
-        </span>
-        <span className="duel-link">
-          <HourglassSimple aria-hidden="true" />
-        </span>
-        <span className="player-node opponent">
-          {status === 'matched' || status === 'result' || invite ? (
-            <User weight="fill" aria-hidden="true" />
-          ) : (
-            <UserPlus aria-hidden="true" />
-          )}
-        </span>
-      </div>
+      {status !== 'idle' && (
+        <div className={`duel-stage is-${status}`}>
+          <span className="player-node">
+            <User aria-hidden="true" />
+          </span>
+          <span className="duel-link">
+            <HourglassSimple aria-hidden="true" />
+          </span>
+          <span className="player-node opponent">
+            {status === 'matched' || status === 'result' || invite ? (
+              <User weight="fill" aria-hidden="true" />
+            ) : (
+              <UserPlus aria-hidden="true" />
+            )}
+          </span>
+        </div>
+      )}
 
       {status === 'idle' && (
         <div className="duel-form">
@@ -317,8 +319,8 @@ export function DuelScreen({
             <>
               <label className="stake-input">
                 <span className="stake-input-heading">
-                  <span>ТВОЯ СТАВКА</span>
-                  <span className="stake-edit-cue">ИЗМЕНИТЬ</span>
+                  <span>СТАВКА</span>
+                  <span className="stake-edit-cue">ВВЕДИ СУММУ</span>
                 </span>
                 <div>
                   <input
@@ -338,23 +340,25 @@ export function DuelScreen({
           )}
 
           <dl className="duel-terms duel-primary-terms">
-            <Term label="Твоя ставка" value={`${formatGram(terms.stake, 3)} GRAM`} />
             <Term
-              label={invite ? 'Ставка создателя' : 'Соперник должен внести'}
+              label={invite ? 'Ставка создателя' : 'Соперник внесёт столько же'}
               value={`${formatGram(terms.opponentStake, 3)} GRAM`}
             />
-            <Term label="Выплата победителю" value={`${formatGram(payoutNano, 3)} GRAM`} />
+            <Term label="Победитель получит" value={`${formatGram(payoutNano, 3)} GRAM`} />
           </dl>
           <p className="duel-deadline-rule">
             <ShieldCheck aria-hidden="true" />
-            После матча открой результат за 5 минут. Если соперник откроет, а ты нет — он получит
-            выплату.
+            После матча — 5 минут, чтобы открыть результат.
           </p>
           <details className="technical-details duel-breakdown">
             <summary>
-              <span>РАСЧЁТ И ПРАВИЛА</span>
+              <span>ПОДРОБНОСТИ</span>
               <DisclosureIndicator />
             </summary>
+            <p>
+              Если соперник откроет результат, а ты нет — он получит выплату. Если не откроет никто,
+              контракт вернёт обе ставки.
+            </p>
             <dl className="detail-list">
               <Term label="Общий пул" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
               <Term
@@ -364,8 +368,7 @@ export function DuelScreen({
               <Term label="Чистый результат победы" value={`+${formatGram(profitNano, 3)} GRAM`} />
             </dl>
             <p>
-              Если никто не откроет результат, контракт вернёт обе ставки. Открытый поиск можно
-              остановить и вернуть свою ставку через контракт.
+              Открытый поиск можно остановить и вернуть свою ставку через отдельное подтверждение.
             </p>
           </details>
         </div>
@@ -443,11 +446,11 @@ export function DuelScreen({
             </button>
             {!invite && (
               <button
-                className="secondary-button"
+                className="duel-direct-action"
                 disabled={busy}
                 onClick={() => void start('direct')}
               >
-                <PaperPlaneTilt aria-hidden="true" /> СОЗДАТЬ ПРЯМОЙ ВЫЗОВ
+                <PaperPlaneTilt aria-hidden="true" /> ВЫЗВАТЬ ДРУГА
               </button>
             )}
           </>

@@ -100,8 +100,9 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   expect((await page.locator('.mode-header').boundingBox())!.y).toBeGreaterThanOrEqual(100);
   const stableShellHeight = (await page.locator('.app-shell').boundingBox())!.height;
   const stakeInput = page.getByLabel('Ставка в GRAM');
-  await expect(page.getByText('ИЗМЕНИТЬ')).toBeVisible();
-  await expect(page.getByText('Соперник должен внести')).toBeVisible();
+  await expect(page.locator('.duel-stage')).toHaveCount(0);
+  await expect(page.getByText('ВВЕДИ СУММУ')).toBeVisible();
+  await expect(page.getByText('Соперник внесёт столько же')).toBeVisible();
   await expect(page.locator('.stake-input > div')).toHaveCSS('border-top-width', '1px');
   await expect(page.locator('.stake-input > div')).toHaveCSS('border-radius', '16px');
   await stakeInput.fill('1');
@@ -123,14 +124,15 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
     'border-bottom-width',
     '0px',
   );
-  await expect(page.getByText(/открой результат за 5 минут/i)).toBeVisible();
+  await expect(page.getByText(/5 минут, чтобы открыть результат/i)).toBeVisible();
   expect(
     await page
       .locator('.duel-deadline-rule')
       .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
   ).toBeGreaterThanOrEqual(11);
   await expect(page.locator('.duel-breakdown .disclosure-open-label')).toBeVisible();
-  await page.getByText('РАСЧЁТ И ПРАВИЛА').click();
+  await expect(page.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeVisible();
+  await page.getByText('ПОДРОБНОСТИ').click();
   await expect(page.locator('.duel-breakdown .disclosure-close-label')).toBeVisible();
   await expect(page.getByText('Общий пул')).toBeVisible();
   await expect(page.getByText('2 GRAM')).toBeVisible();
@@ -146,9 +148,14 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await expect(page.getByText('685').first()).toBeVisible();
   await expect(page.getByText('315')).toBeVisible();
   await expect(page.getByText('ДО LOOP')).toBeVisible();
+  await expect(page.locator('.rating-progress')).toBeVisible();
+  await expect(page.getByText(/Главный вклад:/)).toBeHidden();
+  await expect(page.locator('.rating-details .disclosure-open-label')).toHaveCount(1);
+  await page.getByText('МОЯ СТАТИСТИКА').click();
   await expect(page.getByText(/Главный вклад:/)).toBeVisible();
-  await expect(page.getByText('Репутация участия, а не баланс.', { exact: false })).toBeVisible();
-  await expect(page.locator('.rating-details .disclosure-open-label')).toHaveCount(2);
+  await expect(
+    page.getByText('Счёт отражает участие и надёжность.', { exact: false }),
+  ).toBeVisible();
   expect(
     await page
       .locator('.rating-explainer')

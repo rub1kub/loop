@@ -48,6 +48,9 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
 
   const entries = list === 'all' ? rating.leaderboard : rating.circle;
   const nextLevel = levelThresholds.find((item) => item.score > rating.me.score);
+  const nextLevelProgress = nextLevel
+    ? Math.min(100, Math.max(0, (rating.me.score / nextLevel.score) * 100))
+    : 100;
   const formulaCounts: Record<string, number> = {
     bank_payout: rating.me.bank_payouts,
     duel_settlement: rating.me.duel_settlements,
@@ -73,24 +76,26 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
         <div className="rating-badges">
           <span>{levelLabels[rating.me.level]}</span>
         </div>
-        <div className="rating-focus">
+        <div
+          className="rating-progress"
+          role="progressbar"
+          aria-label={
+            nextLevel ? `Прогресс до уровня ${levelLabels[nextLevel.level]}` : 'Уровень LOOP'
+          }
+          aria-valuemin={0}
+          aria-valuemax={nextLevel?.score ?? rating.me.score}
+          aria-valuenow={rating.me.score}
+        >
+          <span style={{ width: `${nextLevelProgress}%` }} />
+        </div>
+        <div className="rating-progress-copy">
+          <span>#{rating.me.rank} В СЕЗОНЕ</span>
           <span>
-            <b>#{rating.me.rank}</b>
-            <small>МЕСТО В СЕЗОНЕ</small>
-          </span>
-          <span>
-            <b>{nextLevel ? nextLevel.score - rating.me.score : 'ПРЕДЕЛ'}</b>
-            <small>{nextLevel ? `ДО ${levelLabels[nextLevel.level]}` : 'УРОВЕНЬ LOOP'}</small>
+            {nextLevel
+              ? `${nextLevel.score - rating.me.score} ДО ${levelLabels[nextLevel.level]}`
+              : 'МАКСИМАЛЬНЫЙ УРОВЕНЬ'}
           </span>
         </div>
-        <p className="rating-driver">
-          {mainDriver
-            ? `Главный вклад: ${driverLabels[mainDriver.code] ?? mainDriver.label} · +${mainDriver.contribution}`
-            : 'Первое подтверждённое действие запустит твой счёт.'}
-        </p>
-        <p className="rating-explainer">
-          Репутация участия, а не баланс. Суммы, прибыль и поражения на место не влияют.
-        </p>
       </div>
 
       <div className="rating-list-switch" aria-label="Вид рейтинга">
@@ -128,21 +133,29 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
         <summary>
           <span>
             <ShieldCheck aria-hidden="true" />
-            МОЯ СТАТИСТИКА И ФОРМУЛА
+            МОЯ СТАТИСТИКА
           </span>
           <DisclosureIndicator />
         </summary>
+        <p className="rating-driver">
+          {mainDriver
+            ? `Главный вклад: ${driverLabels[mainDriver.code] ?? mainDriver.label} · +${mainDriver.contribution}`
+            : 'Первое завершённое действие запустит твой счёт.'}
+        </p>
+        <p className="rating-explainer">
+          Счёт отражает участие и надёжность. Размер ставки, прибыль и поражения на место не влияют.
+        </p>
         <div className="rating-proof-line" aria-label="Надёжность рейтинга">
           <div>
             <strong>{rating.me.proofs}</strong>
-            <span>ПОДТВЕРЖДЕНИЙ В TON</span>
+            <span>ПОДТВЕРЖДЁННЫХ ДЕЙСТВИЙ</span>
           </div>
           <div>
             <strong>{Math.round(rating.me.reliability_bps / 100)}%</strong>
             <span>БЕЗ ПРОСРОЧЕК</span>
           </div>
         </div>
-        <p>Считаются только действия, которые LOOP уже подтвердил в TON.</p>
+        <p>Считаются только действия, которые LOOP уже подтвердил.</p>
         <dl>
           {rating.formula.map((item) => (
             <div key={item.code}>
@@ -157,20 +170,12 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
             </div>
           ))}
         </dl>
-      </details>
-      <details className="rating-details rating-live-details">
-        <summary>
-          <span>
-            <UsersThree aria-hidden="true" />
-            СИСТЕМА СЕЙЧАС
-          </span>
-          <DisclosureIndicator />
-        </summary>
+        <p className="rating-pulse-label">СЕЙЧАС В LOOP</p>
         <div className="rating-pulse">
           <Metric value={rating.pulse.active_participants} label="УЧАСТНИКОВ" />
           <Metric value={rating.pulse.active_bank} label="В BANK" />
           <Metric value={rating.pulse.active_duels} label="В DUEL" />
-          <Metric value={rating.pulse.proofs_24h} label="ПОДТВЕРЖДЕНИЙ · 24Ч" />
+          <Metric value={rating.pulse.proofs_24h} label="ДЕЙСТВИЙ · 24Ч" />
         </div>
       </details>
     </section>

@@ -76,13 +76,16 @@ describe('DuelScreen', () => {
     expect(screen.getByText('50/50')).toBeInTheDocument();
     expect(screen.getByText('РАВНЫЕ УСЛОВИЯ')).toBeInTheDocument();
     expect(screen.getByLabelText('Ставка в GRAM')).toBeInTheDocument();
-    expect(screen.getByText('ИЗМЕНИТЬ')).toBeInTheDocument();
-    expect(screen.getByText('Соперник должен внести')).toBeInTheDocument();
+    expect(screen.getByText('ВВЕДИ СУММУ')).toBeInTheDocument();
+    expect(screen.getByText('Соперник внесёт столько же')).toBeInTheDocument();
     expect(screen.queryByText('Ставка соперника')).not.toBeInTheDocument();
-    expect(screen.getByText(/открой результат за 5 минут/i)).toBeInTheDocument();
-    expect(screen.getByText('Выплата победителю')).toBeInTheDocument();
-    expect(screen.getByText('РАСЧЁТ И ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
-    expect(screen.getByText('РАСЧЁТ И ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
+    expect(screen.getByText(/5 минут, чтобы открыть результат/i)).toBeInTheDocument();
+    expect(screen.getByText('Победитель получит')).toBeInTheDocument();
+    expect(screen.getByText('ПОДРОБНОСТИ').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('ПОДРОБНОСТИ').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
+    expect(screen.queryByText('Твоя ставка')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Если соперник откроет результат/)).not.toBeVisible();
+    expect(screen.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeInTheDocument();
     expect(screen.queryByText(/Одинаковая ставка/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /25%/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /75%/ })).not.toBeInTheDocument();
@@ -95,7 +98,7 @@ describe('DuelScreen', () => {
     );
 
     expect(screen.getByText('Ставка создателя')).toBeInTheDocument();
-    expect(screen.queryByText('Соперник должен внести')).not.toBeInTheDocument();
+    expect(screen.queryByText('Соперник внесёт столько же')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
   });
 });
