@@ -156,7 +156,14 @@ fun runCanary(
     firstWallet: address,
     secondWallet: address,
 ) {
+    println(
+        "DUEL_CANARY_ENTRY network={} first_offer={} second_offer={}",
+        networkId,
+        firstOfferId,
+        secondOfferId,
+    );
     val signerSeed = env<int>("LOOP_DUEL_CANARY_SIGNING_SEED");
+    println("DUEL_CANARY_SIGNER_READY present={}", signerSeed != null);
     assert (signerSeed != null) throw CanaryErrors.MissingSigner;
     assert (
         networkId == TESTNET_NETWORK_ID || networkId == MAINNET_NETWORK_ID
@@ -167,12 +174,21 @@ fun runCanary(
     val duel = DuelEscrow.fromAddress(duelAddress);
     val before = duel.contractConfig();
     val signer = crypto.seedToKeyPair(signerSeed!);
+    println(
+        "DUEL_CANARY_BINDING network={} address={} signer={} active={}",
+        before.networkId == networkId,
+        before.contractAddress == duelAddress,
+        before.inviteSignerPublicKey == signer.publicKey,
+        !before.paused,
+    );
     assert (
         before.networkId == networkId && before.contractAddress == duelAddress &&
         before.inviteSignerPublicKey == signer.publicKey &&
         !before.paused
     ) throw CanaryErrors.WrongContract;
+    println("DUEL_CANARY_CLEANUP start");
     cleanInterruptedCanary(duelAddress, firstWallet, secondWallet, firstOfferId - 2);
+    println("DUEL_CANARY_CLEANUP complete");
     println(
         "DUEL_CANARY_STATE_READY first_active={} second_active={}",
         duel.activeOffer(firstWallet),
