@@ -13,23 +13,47 @@ committed.
 
 ## Release
 
-1. All static, unit, browser and contract checks pass.
-2. `scripts/verify-contracts.py` matches local builds, manifests and finalized testnet state.
-3. The immutable Git commit is uploaded to `/opt/loop/releases/<sha>`.
-4. Writers stop and a staged `.env.production.next` is activated atomically with rollback protection.
-5. A DUEL address change requires `locked=0` on the previous contract and no active DUEL projection.
-6. PostgreSQL backup completes before migration.
-7. API image and web assets build; database and Redis become healthy.
-8. Alembic upgrades to head and repeats the idle-projection guard.
-9. API startup attests BankQueue and DuelEscrow code hashes.
-10. API and worker health pass before nginx reload and public smoke.
-11. `/control` loads as a regular browser route, rejects an unauthenticated overview request and
-    requests a one-time owner TON proof without Telegram initialization.
+The production path is a direct SSH release from a maintainer machine. GitHub stores the source
+history but GitHub Actions is not involved in delivery.
 
 ```bash
-make deploy RELEASE=<40-character-git-sha>
-make smoke-test
+npm run deploy:vps
 ```
+
+The deployer requires a clean `main` whose exact SHA is already on `origin/main`. It runs the
+standard local checks, creates the source tree with `git archive`, overlays only the fresh web
+build, strips macOS extended metadata, verifies SHA-256 on the server and installs the tree under
+`/opt/loop/releases/<sha>`. Activation runs in a transient systemd unit, so an SSH interruption
+does not terminate a release halfway through.
+
+Use the explicit modes when needed:
+
+```bash
+npm run deploy:vps -- --dry-run
+npm run deploy:vps -- --fast
+npm run deploy:vps -- --full-checks
+npm run deploy:vps:status
+npm run deploy:vps:restart
+```
+
+`--fast` still builds production web assets but skips local tests. `--full-checks` additionally
+runs browser, security and contract verification. `--allow-unpushed` is an emergency escape hatch
+and should not be used for routine releases. Override the SSH alias with
+`LOOP_DEPLOY_HOST=<host>`.
+
+The server activation then performs these guarded steps:
+
+1. The immutable Git commit and built web entrypoint are present under the release SHA.
+2. Writers stop and a staged `.env.production.next` is activated atomically with rollback protection.
+3. A DUEL address change requires `locked=0` on the previous contract and no active DUEL projection.
+4. PostgreSQL backup completes before migration.
+5. The API image builds; database and Redis become healthy.
+6. Alembic upgrades to head and repeats the idle-projection guard.
+7. API startup attests BankQueue and DuelEscrow code hashes.
+8. API and worker health pass before nginx reload and public smoke.
+9. The CLI verifies the active SHA, all four containers, Telegram webhook and exact frontend asset.
+10. `/control` loads as a regular browser route, rejects an unauthenticated overview request and
+    requests a one-time owner TON proof without Telegram initialization.
 
 The BANK/DUEL split migration archives old cycle-era tables under `legacy_*`; it does not reinterpret their records as financial state. The activation script stops writers before preflight and backup, then automatically restores the protected environment, pre-migration database and previous immutable release if migration, health, nginx or public smoke validation fails.
 

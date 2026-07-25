@@ -145,33 +145,18 @@ acton test tests/duel_contract.test.tolk --mutate --mutate-contract DuelEscrow \
   --mutation-diff branch --mutation-levels critical,major
 ```
 
-Не запускать live broadcast из обычного теста или CI.
+Не запускать live broadcast из обычного теста или release CLI.
 
-## CI
+## Локальный release gate
 
-`.github/workflows/ci.yml` запускает:
+Production deploy не зависит от GitHub Actions. `scripts/deploy-vps.sh` требует чистый `main`,
+сверяет HEAD с upstream, выполняет локальные проверки и передаёт на VPS только tracked source
+конкретного commit плюс свежий `apps/web/dist`. GitHub используется как журнал исходников, а не
+как среда выполнения.
 
-1. web lint/test/build/format + Chromium/WebKit E2E;
-2. API Ruff/mypy/pytest с coverage `>=60%` + PostgreSQL migrations;
-3. Acton build/check/test с coverage `>=75%` + live read-only verifier;
-4. deploy-testnet только после трёх успешных jobs на push в `main`.
-
-Actions и setup actions закреплены commit SHA, checkout не сохраняет credentials.
-
-### Текущий CI blocker
-
-Run `30042589425` для commit `3760e77` завершён красным до выполнения шагов:
-GitHub сообщил, что jobs не запущены из-за billing lock аккаунта. Следовательно:
-
-- красный badge сейчас не доказывает падение кода;
-- автоматический deploy не выполняется;
-- локальные проверки и manual immutable deployment не заменяют восстановленный CI навсегда.
-
-Проверка:
-
-```bash
-gh run view 30042589425 --repo rub1kub/loop
-```
+Обычный gate включает web/API lint, typecheck, unit tests, migration check и production build.
+`--full-checks` добавляет browser, security и contract verification; `--fast` оставлен только для
+явного срочного выпуска.
 
 ## Release model
 
@@ -202,9 +187,13 @@ gh run view 30042589425 --repo rub1kub/loop
 Релиз:
 
 ```bash
-make deploy RELEASE=<40-character-git-sha>
-make smoke-test
+npm run deploy:vps
+npm run deploy:vps:status
 ```
+
+CLI проверяет транспортный SHA-256, ставит release через staging+atomic rename, запускает
+activation в transient systemd unit и после переключения сверяет active SHA, Compose health,
+Telegram webhook, public endpoints и точный hashed frontend asset.
 
 Обычный release не deploy-ит contracts. Contract broadcast имеет отдельный явный
 `ALLOW_TESTNET_DEPLOY=1` gate.
@@ -308,11 +297,11 @@ CLI diagnostics после локальной настройки:
   `3760e7774a6575c1c9f97f2181fe2c29559e5637`.
 - Локальный `main` и `origin/main` указывали на тот же commit.
 - Последний функциональный change: упрощённая панель владельца `/control`.
-- GitHub automated checks/deploy заблокированы billing до начала job steps.
+- Production delivery выполняется напрямую через `scripts/deploy-vps.sh`, без GitHub Actions.
 - Живой TON-снимок содержит просроченный direct DUEL offer; см.
   [blockchain.md](blockchain.md#снимок-сети-2026-07-24-0632-utc).
 
-Перед использованием этого снимка повтори public health, Git SHA, contract getters и CI status.
+Перед использованием этого снимка повтори public health, Git SHA, contract getters и deploy status.
 
 ## Инцидентные подсказки
 

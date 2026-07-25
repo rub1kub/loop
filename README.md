@@ -14,7 +14,6 @@ LOOP — Telegram Mini App с двумя независимыми режимам
 
 LOOP не является кошельком и не хранит внутренний баланс. TON Connect подключает внешний кошелёк только для подписания транзакций и получения выплат. On-chain состояние — источник истины.
 
-[![CI](https://github.com/rub1kub/loop/actions/workflows/ci.yml/badge.svg)](https://github.com/rub1kub/loop/actions/workflows/ci.yml)
 [![TON testnet](https://img.shields.io/badge/TON-testnet-black)](docs/contracts.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-white)](LICENSE)
 
@@ -156,9 +155,13 @@ See [testing](docs/testing.md) for suite boundaries and [setup](docs/setup.md) f
 Production releases are immutable. Deployment builds the API and web bundle, backs up PostgreSQL, runs Alembic, starts API and worker, validates contract code hashes, then checks internal and public readiness.
 
 ```bash
-make deploy RELEASE=<40-character-git-sha>
-make smoke-test
+npm run deploy:vps
 ```
+
+The direct SSH deployer requires a clean, pushed `main`, verifies SHA-256 during upload,
+continues activation through a transient systemd unit if the connection drops and checks the
+active Git SHA, containers, Telegram bot, public health and exact frontend asset. GitHub Actions
+is not part of the production delivery path.
 
 Full runbook: [deployment](docs/deployment.md).
 

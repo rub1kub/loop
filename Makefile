@@ -6,7 +6,7 @@ PIP := .venv/bin/pip
 	test-security contracts-build contracts-test contracts-deploy-testnet \
 	contracts-deploy-duel-testnet \
 	contracts-verify contracts-inspect chain-smoke-test screenshots docker-up \
-	docker-down deploy smoke-test
+	docker-down deploy deploy-vps deploy-status deploy-restart smoke-test
 
 help: ## Show available project commands
 	@awk 'BEGIN {FS = ":.*## "; printf "LOOP commands:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-28s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -85,6 +85,15 @@ docker-down: ## Stop the local production stack without deleting data
 deploy: ## Activate an immutable server release (RELEASE=<40-char SHA>)
 	@test -n "$(RELEASE)" || (echo 'RELEASE is required' >&2; exit 2)
 	deploy/activate-release.sh "$(RELEASE)"
+
+deploy-vps: ## Build, upload and activate the current commit directly on the VPS
+	scripts/deploy-vps.sh deploy
+
+deploy-status: ## Verify the active VPS release, services, public health and bot
+	scripts/deploy-vps.sh status
+
+deploy-restart: ## Restart the active VPS API/bot and worker, then verify them
+	scripts/deploy-vps.sh restart
 
 smoke-test: ## Verify production readiness and public health
 	curl --fail --silent --show-error https://app.tonsuite.org/ready

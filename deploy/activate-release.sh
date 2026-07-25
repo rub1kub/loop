@@ -136,14 +136,17 @@ database_changed=true
 docker compose --project-name loop --env-file .env.production run --rm migrate
 docker compose --project-name loop --env-file .env.production up -d api worker
 docker compose --project-name loop --env-file .env.production up -d --wait --wait-timeout 120 api worker
-curl --fail --silent --show-error http://127.0.0.1:8000/ready >/dev/null
+curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+  http://127.0.0.1:8000/ready >/dev/null
 
 ln -sfn "$release_dir" "$loop_root/current.next"
 mv -Tf "$loop_root/current.next" "$loop_root/current"
 sudo nginx -t
 sudo systemctl reload nginx
-curl --fail --silent --show-error https://app.tonsuite.org/ >/dev/null
-curl --fail --silent --show-error https://app.tonsuite.org/ready >/dev/null
+curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+  https://app.tonsuite.org/ >/dev/null
+curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+  https://app.tonsuite.org/ready >/dev/null
 rollback_armed=false
 trap - ERR
 if [[ -n $env_backup ]]; then

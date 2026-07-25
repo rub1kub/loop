@@ -221,23 +221,22 @@ Wrappers обновляются штатной Acton-командой при и�
 
 ## Известные долги на снимке
 
-1. GitHub Actions jobs заблокированы billing до выполнения шагов.
-2. `contracts-verify` неверно сравнивает live mutable `locked` с начальным manifest value.
-3. V1.2 manifests пока не содержат отдельные `verified_smoke` evidence.
-4. В DUEL на снимке остался просроченный direct offer с `0.5 GRAM locked`; требуется повторная
+1. `contracts-verify` неверно сравнивает live mutable `locked` с начальным manifest value.
+2. V1.2 manifests пока не содержат отдельные `verified_smoke` evidence.
+3. В DUEL на снимке остался просроченный direct offer с `0.5 GRAM locked`; требуется повторная
    проверка и permissionless expiry.
-5. UI DUEL сообщает предварительный минимум `0.25 GRAM`, а effective equal-stake minimum —
+4. UI DUEL сообщает предварительный минимум `0.25 GRAM`, а effective equal-stake minimum —
    `0.5 GRAM`.
-6. Profile referral reward `100` и monthly rating referral score `25` имеют одинаковое
+5. Profile referral reward `100` и monthly rating referral score `25` имеют одинаковое
    пользовательское название.
-7. Referral qualification вызывается только после DUEL settlement, не после BANK payout.
-8. No-reveal `ExpireDuel` помечает offers как refunded, но worker сейчас не переводит
+6. Referral qualification вызывается только после DUEL settlement, не после BANK payout.
+7. No-reveal `ExpireDuel` помечает offers как refunded, но worker сейчас не переводит
    соответствующий `Duel.state` из `revealing`; это может оставить ложный overdue projection.
-9. Consumer browser identity отсутствует; пользовательское приложение по-прежнему требует
+8. Consumer browser identity отсутствует; пользовательское приложение по-прежнему требует
    Telegram.
-10. Mainnet выключен, внешнего профессионального аудита нет.
-11. PLUSH BRICK discount выключен.
-12. Старый BANK имеет recorded owner-only position и не должен считаться свободным surplus.
+9. Mainnet выключен, внешнего профессионального аудита нет.
+10. PLUSH BRICK discount выключен.
+11. Старый BANK имеет recorded owner-only position и не должен считаться свободным surplus.
 
 Не исправляй эти пункты попутно в несвязанной задаче. Если задача касается пункта — сначала
 повтори фактическую проверку.
