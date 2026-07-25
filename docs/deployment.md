@@ -26,6 +26,10 @@ build, strips macOS extended metadata, verifies SHA-256 on the server and instal
 `/opt/loop/releases/<sha>`. Activation runs in a transient systemd unit, so an SSH interruption
 does not terminate a release halfway through.
 
+Before upload, the CLI reserves headroom for the release, two database-sized copies and 4 GiB of
+Docker build space. Deploy and restart share the same server lock, so operational commands cannot
+interrupt migration or rollback.
+
 Use the explicit modes when needed:
 
 ```bash

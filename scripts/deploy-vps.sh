@@ -6,7 +6,7 @@ IFS=$'\n\t'
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$script_dir/.." && pwd)
 deploy_host=${LOOP_DEPLOY_HOST:-ton4-prod}
-public_origin=${LOOP_PUBLIC_ORIGIN:-https://app.tonsuite.org}
+public_origin=https://app.tonsuite.org
 expected_branch=${LOOP_DEPLOY_BRANCH:-main}
 command=deploy
 check_mode=standard
@@ -111,6 +111,9 @@ fi
 cleanup() {
   local exit_code=$?
   trap - EXIT
+  if [[ -n ${deploy_unit:-} ]]; then
+    cleanup_remote_unit_if_finished || true
+  fi
   if [[ -n ${tmp_dir:-} && -d $tmp_dir && $tmp_dir == "$tmp_base"/loop-deploy.* ]]; then
     rm -rf -- "$tmp_dir"
   fi
@@ -233,9 +236,9 @@ restart_remote() {
   ssh_run bash -s <<'REMOTE'
 set -Eeuo pipefail
 
-exec 8>/opt/loop/restart.lock
+exec 8>/opt/loop/deploy.lock
 if ! flock -n 8; then
-  echo "another LOOP restart is running" >&2
+  echo "another LOOP deployment or restart is running" >&2
   exit 75
 fi
 
@@ -419,14 +422,30 @@ for dependency in docker flock nginx sha256sum systemctl systemd-run tar; do
 done
 
 test -s /opt/loop/shared/.env.production
-install -d -m 0750 /opt/loop/incoming /opt/loop/releases
+install -d -m 0750 /opt/loop/incoming
+install -d -m 0755 /opt/loop/releases
+
+release_dir=$(readlink -f /opt/loop/current)
+release_id=$(basename "$release_dir")
+cd "$release_dir"
+export LOOP_IMAGE_TAG="$release_id"
+database_size=$(
+  docker compose --project-name loop --env-file .env.production exec -T db sh -c \
+    'psql --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --tuples-only --no-align --command="SELECT pg_database_size(current_database())"'
+)
+database_size=$(printf '%s' "$database_size" | tr -d '[:space:]')
+[[ $database_size =~ ^[0-9]+$ ]] || {
+  echo "could not determine production database size" >&2
+  exit 3
+}
+
 available=$(df -PB1 /opt/loop | awk 'NR == 2 { print $4 }')
-required=$((archive_size * 3 + 536870912))
+required=$((archive_size * 3 + database_size * 2 + 4294967296))
 if ((available < required)); then
   echo "not enough free space: need $required bytes, have $available" >&2
   exit 3
 fi
-printf 'remote free space: %s bytes\n' "$available"
+printf 'remote free space: %s bytes; required headroom: %s bytes\n' "$available" "$required"
 REMOTE
 }
 
@@ -534,6 +553,7 @@ remote_part=""
 
 systemd-run \
   --quiet \
+  --no-block \
   --unit="$deploy_unit" \
   --description="LOOP release $release_id" \
   --property=Type=oneshot \
@@ -647,6 +667,21 @@ cleanup_remote_unit() {
     ssh_run "systemctl stop '$deploy_unit.service' >/dev/null 2>&1 || true; systemctl reset-failed '$deploy_unit.service' >/dev/null 2>&1 || true" ||
       true
   fi
+}
+
+cleanup_remote_unit_if_finished() {
+  local remote_command
+  remote_command=$(
+    cat <<EOF
+sub_state=\$(systemctl show '$deploy_unit.service' --property=SubState --value 2>/dev/null || true)
+active_state=\$(systemctl show '$deploy_unit.service' --property=ActiveState --value 2>/dev/null || true)
+if [[ \$sub_state == exited || \$active_state == failed || \$active_state == inactive ]]; then
+  systemctl stop '$deploy_unit.service' >/dev/null 2>&1 || true
+  systemctl reset-failed '$deploy_unit.service' >/dev/null 2>&1 || true
+fi
+EOF
+  )
+  ssh_run "$remote_command"
 }
 
 case "$command" in
