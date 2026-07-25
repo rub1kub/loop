@@ -379,13 +379,6 @@ export function LandingPage() {
                 <p>Отметка в профиле</p>
               </div>
             </div>
-            <p className="landing-plush__market-note">
-              Маркет адресов TON Suite помогает находить размеченные кошельки китов, трейдеров и
-              инфлюенсеров.
-            </p>
-            <small>
-              PLUSH BRICK даёт только отметку. На очередь BANK и шансы DUEL он не влияет.
-            </small>
             <div className="landing-inline-links">
               <ExternalLink href="https://plushbrick.fun/">
                 Сайт PLUSH BRICK

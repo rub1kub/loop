@@ -1140,17 +1140,6 @@ svg {
   line-height: 1.45;
 }
 
-.landing-section-copy > .landing-plush__market-note {
-  margin-top: 18px;
-  padding: 16px;
-  border: 1px solid var(--landing-line-light);
-  border-radius: 16px;
-  background: #f5f5f7;
-  color: #4c4c50;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
 .landing-inline-links {
   display: flex;
   flex-wrap: wrap;

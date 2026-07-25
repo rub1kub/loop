@@ -48,10 +48,10 @@ describe('browser landing', () => {
       'https://tonsuite.org/assets/plush-brick-video.gif',
     );
     expect(screen.getByText(/LOOP проверит подключённый кошелёк/)).toBeInTheDocument();
-    expect(screen.getByText(/На очередь BANK и шансы DUEL он не влияет/)).toBeInTheDocument();
     expect(
-      screen.getByText(/Маркет адресов TON Suite помогает находить размеченные/),
-    ).toBeInTheDocument();
+      screen.queryByText(/Маркет адресов TON Suite помогает находить размеченные/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/PLUSH BRICK даёт только отметку/)).not.toBeInTheDocument();
     expect(screen.queryByText(/скидк/i)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Маркет адресов/ })).toHaveAttribute(
       'href',
