@@ -13,6 +13,7 @@
     "test:e2e": "npm --workspace @loop/web run e2e",
     "screenshots": "VITE_MOCK_TELEGRAM=true npm run build:web && node scripts/capture-screenshots.mjs",
     "deploy:vps": "bash scripts/deploy-vps.sh deploy",
+    "deploy:vps:web": "bash scripts/deploy-vps.sh deploy --web-only --fast",
     "deploy:vps:status": "bash scripts/deploy-vps.sh status",
     "deploy:vps:restart": "bash scripts/deploy-vps.sh restart",
     "format:check": "prettier --check .",

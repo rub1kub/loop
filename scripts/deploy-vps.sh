@@ -10,13 +10,14 @@ public_origin=https://app.tonsuite.org
 expected_branch=${LOOP_DEPLOY_BRANCH:-main}
 command=deploy
 check_mode=standard
+release_kind=full
 dry_run=false
 allow_unpushed=false
 
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/deploy-vps.sh deploy [--fast|--full-checks] [--dry-run] [--allow-unpushed] [--host HOST]
+  scripts/deploy-vps.sh deploy [--fast|--full-checks] [--web-only] [--dry-run] [--allow-unpushed] [--host HOST]
   scripts/deploy-vps.sh status [--host HOST]
   scripts/deploy-vps.sh restart [--host HOST]
 
@@ -28,6 +29,7 @@ Commands:
 Options:
   --fast             Build the web client but skip local tests.
   --full-checks      Include browser, security and contract verification.
+  --web-only         Activate static web files without restarting API/worker or touching the database.
   --dry-run          Run local checks and package the release without uploading it.
   --allow-unpushed   Permit a committed HEAD that is not present on its upstream branch.
   --host HOST        SSH host or alias. Default: LOOP_DEPLOY_HOST or ton4-prod.
@@ -72,6 +74,10 @@ while [[ $# -gt 0 ]]; do
       [[ $command == deploy ]] || die "--full-checks is only valid with deploy"
       [[ $check_mode != fast ]] || die "--fast and --full-checks are mutually exclusive"
       check_mode=full
+      ;;
+    --web-only)
+      [[ $command == deploy ]] || die "--web-only is only valid with deploy"
+      release_kind=web
       ;;
     --dry-run)
       [[ $command == deploy ]] || die "--dry-run is only valid with deploy"
@@ -136,7 +142,19 @@ ssh_run() {
 }
 
 remote_current_release() {
-  ssh_run 'current=$(readlink -f /opt/loop/current 2>/dev/null || true); if [[ -n $current ]]; then basename "$current"; fi'
+  ssh_run bash -s -- "$release_kind" <<'REMOTE'
+set -Eeuo pipefail
+
+release_kind=$1
+link=/opt/loop/current
+if [[ $release_kind == web ]]; then
+  link=/opt/loop/web-current
+fi
+current=$(readlink -f "$link" 2>/dev/null || true)
+if [[ -n $current ]]; then
+  basename "$current"
+fi
+REMOTE
 }
 
 status_remote() {
@@ -147,13 +165,17 @@ set -Eeuo pipefail
 loop_root=/opt/loop
 release_dir=$(readlink -f "$loop_root/current")
 release_id=$(basename "$release_dir")
+web_release_dir=$(readlink -f "$loop_root/web-current" 2>/dev/null || printf '%s' "$release_dir")
+web_release_id=$(basename "$web_release_dir")
 test -d "$release_dir"
+test -d "$web_release_dir"
 test -f "$release_dir/.env.production"
 
 cd "$release_dir"
 export LOOP_IMAGE_TAG="$release_id"
 
 printf 'release: %s\n' "$release_id"
+printf 'web release: %s\n' "$web_release_id"
 docker compose --project-name loop --env-file .env.production ps \
   --format 'table {{.Service}}\t{{.Status}}' db redis api worker
 
@@ -407,14 +429,16 @@ package_release() {
 
 remote_preflight() {
   log "Checking remote dependencies and disk space"
-  ssh_run bash -s -- "$archive_size" <<'REMOTE'
+  ssh_run bash -s -- "$archive_size" "$release_kind" <<'REMOTE'
 set -Eeuo pipefail
 
 archive_size=$1
+release_kind=$2
 [[ $archive_size =~ ^[0-9]+$ ]]
+[[ $release_kind == full || $release_kind == web ]]
 [[ $EUID -eq 0 ]]
 
-for dependency in docker flock nginx sha256sum systemctl systemd-run tar; do
+for dependency in cmp diff docker flock nginx sha256sum systemctl systemd-run tar; do
   command -v "$dependency" >/dev/null 2>&1 || {
     echo "missing remote dependency: $dependency" >&2
     exit 2
@@ -425,22 +449,25 @@ test -s /opt/loop/shared/.env.production
 install -d -m 0750 /opt/loop/incoming
 install -d -m 0755 /opt/loop/releases
 
-release_dir=$(readlink -f /opt/loop/current)
-release_id=$(basename "$release_dir")
-cd "$release_dir"
-export LOOP_IMAGE_TAG="$release_id"
-database_size=$(
-  docker compose --project-name loop --env-file .env.production exec -T db sh -c \
-    'psql --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --tuples-only --no-align --command="SELECT pg_database_size(current_database())"'
-)
-database_size=$(printf '%s' "$database_size" | tr -d '[:space:]')
-[[ $database_size =~ ^[0-9]+$ ]] || {
-  echo "could not determine production database size" >&2
-  exit 3
-}
-
 available=$(df -PB1 /opt/loop | awk 'NR == 2 { print $4 }')
-required=$((archive_size * 3 + database_size * 2 + 4294967296))
+if [[ $release_kind == web ]]; then
+  required=$((archive_size * 3 + 1073741824))
+else
+  release_dir=$(readlink -f /opt/loop/current)
+  release_id=$(basename "$release_dir")
+  cd "$release_dir"
+  export LOOP_IMAGE_TAG="$release_id"
+  database_size=$(
+    docker compose --project-name loop --env-file .env.production exec -T db sh -c \
+      'psql --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --tuples-only --no-align --command="SELECT pg_database_size(current_database())"'
+  )
+  database_size=$(printf '%s' "$database_size" | tr -d '[:space:]')
+  [[ $database_size =~ ^[0-9]+$ ]] || {
+    echo "could not determine production database size" >&2
+    exit 3
+  }
+  required=$((archive_size * 3 + database_size * 2 + 4294967296))
+fi
 if ((available < required)); then
   echo "not enough free space: need $required bytes, have $available" >&2
   exit 3
@@ -467,7 +494,8 @@ upload_and_start_activation() {
     "$archive_checksum" \
     "$content_hash" \
     "$remote_part" \
-    "$deploy_unit" <<'REMOTE'
+    "$deploy_unit" \
+    "$release_kind" <<'REMOTE'
 set -Eeuo pipefail
 
 release_id=$1
@@ -475,12 +503,14 @@ expected_archive_checksum=$2
 content_hash=$3
 remote_part=$4
 deploy_unit=$5
+release_kind=$6
 
 [[ $release_id =~ ^[0-9a-f]{40}$ ]]
 [[ $expected_archive_checksum =~ ^[0-9a-f]{64}$ ]]
 [[ $content_hash =~ ^[0-9a-f]{64}$ ]]
 [[ $remote_part == /opt/loop/incoming/"$release_id".*.part ]]
 [[ $deploy_unit =~ ^loop-deploy-[0-9a-f]{12}-[0-9]+-[0-9]+$ ]]
+[[ $release_kind == full || $release_kind == web ]]
 
 exec 8>/opt/loop/stage.lock
 if ! flock -w 30 8; then
@@ -559,7 +589,7 @@ systemd-run \
   --property=Type=oneshot \
   --property=RemainAfterExit=yes \
   -- \
-  /bin/bash "$release_dir/deploy/activate-release.sh" "$release_id"
+  /bin/bash "$release_dir/deploy/activate-release.sh" "$release_id" "$release_kind"
 
 printf 'activation unit: %s.service\n' "$deploy_unit"
 REMOTE

@@ -33,12 +33,19 @@ interrupt migration or rollback.
 Use the explicit modes when needed:
 
 ```bash
+npm run deploy:vps:web
 npm run deploy:vps -- --dry-run
 npm run deploy:vps -- --fast
 npm run deploy:vps -- --full-checks
 npm run deploy:vps:status
 npm run deploy:vps:restart
 ```
+
+`npm run deploy:vps:web` is the guarded static-web path. It switches
+`/opt/loop/web-current` atomically, reloads nginx and runs public health checks without restarting
+the API/worker or touching PostgreSQL. It refuses the release when API code, migrations, Compose,
+contracts or deployment manifests differ from the active runtime release. Use the full command
+for any such change or for a staged production environment.
 
 `--fast` still builds production web assets but skips local tests. `--full-checks` additionally
 runs browser, security and contract verification. `--allow-unpushed` is an emergency escape hatch
@@ -55,7 +62,7 @@ The server activation then performs these guarded steps:
 6. Alembic upgrades to head and repeats the idle-projection guard.
 7. API startup attests BankQueue and DuelEscrow code hashes.
 8. API and worker health pass before nginx reload and public smoke.
-9. The CLI verifies the active SHA, all four containers, Telegram webhook and exact frontend asset.
+9. The CLI verifies the runtime SHA, web SHA, all four containers, Telegram webhook and exact frontend asset.
 10. `/control` loads as a regular browser route, rejects an unauthenticated overview request and
     requests a one-time owner TON proof without Telegram initialization.
 

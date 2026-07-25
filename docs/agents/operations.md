@@ -158,6 +158,11 @@ Production deploy не зависит от GitHub Actions. `scripts/deploy-vps.s
 `--full-checks` добавляет browser, security и contract verification; `--fast` оставлен только для
 явного срочного выпуска.
 
+Если изменились только `apps/web` и документация, используй `npm run deploy:vps:web`. Этот путь
+атомарно переключает `/opt/loop/web-current`, не перезапускает API/worker и не трогает БД.
+Защитная сверка отклоняет web-only release при изменениях runtime-кода, migrations, Compose,
+contracts или deployment manifests.
+
 ## Release model
 
 Каждый release — полное дерево конкретного 40-character Git SHA:
@@ -166,6 +171,7 @@ Production deploy не зависит от GitHub Actions. `scripts/deploy-vps.s
 /opt/loop/releases/<sha>
 /opt/loop/shared/.env.production
 /opt/loop/current -> /opt/loop/releases/<sha>
+/opt/loop/web-current -> /opt/loop/releases/<sha>
 ```
 
 `deploy/activate-release.sh`:
@@ -180,7 +186,7 @@ Production deploy не зависит от GitHub Actions. `scripts/deploy-vps.s
 8. делает PostgreSQL backup;
 9. запускает Alembic head;
 10. поднимает API/worker и проверяет health;
-11. атомарно переключает `/opt/loop/current`;
+11. атомарно переключает `/opt/loop/current` и `/opt/loop/web-current`;
 12. проверяет nginx и public smoke;
 13. при ошибке возвращает env, DB dump и предыдущий release.
 
@@ -188,6 +194,7 @@ Production deploy не зависит от GitHub Actions. `scripts/deploy-vps.s
 
 ```bash
 npm run deploy:vps
+npm run deploy:vps:web
 npm run deploy:vps:status
 ```
 

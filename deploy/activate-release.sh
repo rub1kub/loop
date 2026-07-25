@@ -8,24 +8,39 @@ if ! flock -n 9; then
 fi
 
 release_id=${1:?release id is required}
+release_kind=${2:-full}
 if [[ ! $release_id =~ ^[0-9a-f]{40}$ ]]; then
   echo "invalid release id" >&2
+  exit 2
+fi
+if [[ $release_kind != full && $release_kind != web ]]; then
+  echo "invalid release kind" >&2
   exit 2
 fi
 
 loop_root=/opt/loop
 release_dir="$loop_root/releases/$release_id"
+web_current="$loop_root/web-current"
 shared_env="$loop_root/shared/.env.production"
 pending_env="$loop_root/shared/.env.production.next"
+nginx_site=/etc/nginx/sites-available/loop.conf
 previous_release=""
+previous_web_release=""
 backup_path=""
 env_backup=""
+nginx_backup=""
 env_changed=false
+nginx_changed=false
 rollback_armed=false
 database_changed=false
 
 if [[ -L "$loop_root/current" ]]; then
   previous_release=$(readlink -f "$loop_root/current")
+fi
+if [[ -L $web_current ]]; then
+  previous_web_release=$(readlink -f "$web_current")
+elif [[ -n $previous_release ]]; then
+  previous_web_release=$previous_release
 fi
 
 rollback_release() {
@@ -39,6 +54,11 @@ rollback_release() {
   echo "release activation failed; restoring the previous application and database" >&2
   if [[ $env_changed == true && -n $env_backup && -s $env_backup ]]; then
     install -m 600 "$env_backup" "$shared_env"
+  fi
+  if [[ $nginx_changed == true && -n $nginx_backup && -s $nginx_backup ]]; then
+    nginx_restore="$nginx_site.rollback"
+    install -m 0644 "$nginx_backup" "$nginx_restore"
+    mv -Tf "$nginx_restore" "$nginx_site"
   fi
   cd "$release_dir"
   export LOOP_IMAGE_TAG="$release_id"
@@ -67,6 +87,10 @@ rollback_release() {
     docker compose --project-name loop --env-file .env.production up -d --wait --wait-timeout 120 api
     ln -sfn "$previous_release" "$loop_root/current.next"
     mv -Tf "$loop_root/current.next" "$loop_root/current"
+    if [[ -n $previous_web_release && -d $previous_web_release ]]; then
+      ln -sfn "$previous_web_release" "$loop_root/web-current.next"
+      mv -Tf "$loop_root/web-current.next" "$web_current"
+    fi
     if sudo nginx -t; then
       sudo systemctl reload nginx
     fi
@@ -99,6 +123,98 @@ ln -sfn "$shared_env" "$release_dir/.env.production"
 
 cd "$release_dir"
 export LOOP_IMAGE_TAG="$release_id"
+
+verify_web_asset() {
+  local expected_asset
+  local index_html
+
+  expected_asset=$(
+    sed -n 's/.*src="\([^"]*\/assets\/[^"]*\.js\)".*/\1/p' \
+      "$release_dir/apps/web/dist/index.html" |
+      head -n 1
+  )
+  if [[ ! $expected_asset =~ ^/assets/[A-Za-z0-9._-]+\.js$ ]]; then
+    echo "release index does not contain a valid JavaScript asset" >&2
+    return 1
+  fi
+  test -s "$release_dir/apps/web/dist$expected_asset"
+  index_html=$(
+    curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+      --header 'Host: app.tonsuite.org' \
+      http://127.0.0.1:18791/
+  )
+  grep -Fq "$expected_asset" <<<"$index_html"
+  curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+    --header 'Host: app.tonsuite.org' \
+    "http://127.0.0.1:18791$expected_asset" >/dev/null
+}
+
+if [[ $release_kind == web ]]; then
+  if [[ -z $previous_release || ! -d $previous_release ]]; then
+    echo "web-only activation requires an active runtime release" >&2
+    exit 3
+  fi
+  if [[ -s $pending_env ]]; then
+    echo "pending production environment requires a full release" >&2
+    exit 3
+  fi
+  if ! sudo nginx -T 2>/dev/null |
+    grep -F 'root /opt/loop/web-current/apps/web/dist;' >/dev/null; then
+    echo "nginx is not configured for independent web releases; run one full release first" >&2
+    exit 3
+  fi
+  if ! cmp -s "$nginx_site" "$release_dir/deploy/nginx/loop.conf"; then
+    echo "web-only release changes the active nginx site; use a full release" >&2
+    exit 3
+  fi
+
+  runtime_paths=(
+    apps/api/app
+    apps/api/migrations
+    apps/api/alembic.ini
+    apps/api/pyproject.toml
+    compose.yaml
+    contracts
+    deploy/Dockerfile.api
+    deploy/nginx/loop-proxy.conf
+    deploy/nginx/loop-security-headers.conf
+    deployments
+  )
+  for runtime_path in "${runtime_paths[@]}"; do
+    if ! diff -qr "$previous_release/$runtime_path" "$release_dir/$runtime_path" >/dev/null; then
+      echo "web-only release changes runtime path: $runtime_path" >&2
+      exit 3
+    fi
+  done
+
+  rollback_web_release() {
+    local exit_code=$?
+    trap - ERR
+    set +e
+    if [[ -n $previous_web_release && -d $previous_web_release ]]; then
+      ln -sfn "$previous_web_release" "$loop_root/web-current.next"
+      mv -Tf "$loop_root/web-current.next" "$web_current"
+      if sudo nginx -t; then
+        sudo systemctl reload nginx
+      fi
+    fi
+    exit "$exit_code"
+  }
+  trap rollback_web_release ERR
+
+  ln -sfn "$release_dir" "$loop_root/web-current.next"
+  mv -Tf "$loop_root/web-current.next" "$web_current"
+  sudo nginx -t
+  sudo systemctl reload nginx
+  verify_web_asset
+  curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+    https://app.tonsuite.org/ >/dev/null
+  curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+    https://app.tonsuite.org/ready >/dev/null
+  trap - ERR
+  exit 0
+fi
+
 docker compose --project-name loop --env-file .env.production build --pull api
 docker compose --project-name loop --env-file .env.production up -d --wait db redis
 if [[ -n $previous_release ]]; then
@@ -139,10 +255,19 @@ docker compose --project-name loop --env-file .env.production up -d --wait --wai
 curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
   http://127.0.0.1:8000/ready >/dev/null
 
+nginx_backup="$loop_root/shared/nginx-loop.conf.rollback-$release_id"
+install -m 0644 "$nginx_site" "$nginx_backup"
+nginx_next="$nginx_site.$release_id.next"
+install -m 0644 "$release_dir/deploy/nginx/loop.conf" "$nginx_next"
+ln -sfn "$release_dir" "$loop_root/web-current.next"
+mv -Tf "$loop_root/web-current.next" "$web_current"
 ln -sfn "$release_dir" "$loop_root/current.next"
 mv -Tf "$loop_root/current.next" "$loop_root/current"
+mv -Tf "$nginx_next" "$nginx_site"
+nginx_changed=true
 sudo nginx -t
 sudo systemctl reload nginx
+verify_web_asset
 curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
   https://app.tonsuite.org/ >/dev/null
 curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
@@ -151,4 +276,7 @@ rollback_armed=false
 trap - ERR
 if [[ -n $env_backup ]]; then
   rm -f "$env_backup"
+fi
+if [[ -n $nginx_backup ]]; then
+  rm -f "$nginx_backup"
 fi
