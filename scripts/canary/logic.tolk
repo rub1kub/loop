@@ -154,6 +154,7 @@ fun runCanaryOpenAndBoost(
         ton("1"),
         expiresAt,
         inviteId,
+        null,
         { value: ton("0.55") },
     );
     val openTrace = opened.waitForTrace();
@@ -188,6 +189,7 @@ fun runCanaryOpenAndBoost(
                 expiresAt,
             ),
         },
+        null,
         { value: ton("0.55") },
     );
     val acceptTrace = accepted.waitForTrace();

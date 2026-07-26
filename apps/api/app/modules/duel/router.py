@@ -1,7 +1,7 @@
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import aliased
 
@@ -19,7 +19,12 @@ from ...schemas import (
     OfferQuoteResponse,
     OfferView,
 )
-from ...ton import explorer_transaction_url, sign_direct_accept_permit
+from ...ton import (
+    TonProviderError,
+    explorer_transaction_url,
+    sign_direct_accept_permit,
+    sign_holder_fee_permit,
+)
 from .math import canonical_duel_terms, payout_after_fee
 from .models import (
     ChallengeState,
@@ -50,6 +55,7 @@ def offer_view(offer: DuelOffer) -> OfferView:
         stake_nano=offer.stake_nano,
         opponent_stake_nano=offer.opponent_stake_nano,
         fee_bps=offer.fee_bps,
+        fee_exempt=offer.fee_exempt,
         payout_nano=offer.payout_nano,
         net_profit_nano=offer.payout_nano - offer.stake_nano,
         mode=offer.mode,
@@ -95,6 +101,7 @@ async def create_offer_quote(
     body: OfferQuoteRequest,
     user: CurrentUser,
     db: Db,
+    request: Request,
     settings: Config,
 ) -> OfferQuoteResponse:
     await ensure_mode_enabled(db, "duel")
@@ -219,7 +226,20 @@ async def create_offer_quote(
         address=contract_address,
         fallback=settings.duel_fee_bps,
     )
-    payout = payout_after_fee(total_pool, fee_bps)
+    fee_exempt = False
+    if settings.duel_holder_fee_enabled:
+        # The exemption is proven on chain by a signed permit, so the quote
+        # verifies mainnet PLUSH BRICK ownership before promising a fee-free
+        # payout. A provider outage fails open to the normal fee: the player
+        # keeps the exact terms shown, never better on screen than on chain.
+        try:
+            plush = await request.app.state.plush_ton_client.get_jetton_wallet(
+                wallet.address, settings.plush_brick_master
+            )
+            fee_exempt = plush.balance_nano >= settings.holder_min_balance_nano
+        except TonProviderError:
+            fee_exempt = False
+    payout = total_pool if fee_exempt else payout_after_fee(total_pool, fee_bps)
     if body.mode == "direct" and invitation is None:
         creator_invite_id = secrets.token_hex(32)
     offer = DuelOffer(
@@ -235,6 +255,7 @@ async def create_offer_quote(
         stake_nano=stake,
         opponent_stake_nano=opponent_stake,
         fee_bps=fee_bps,
+        fee_exempt=fee_exempt,
         payout_nano=payout,
         commitment_hex=body.commitment_hex,
         invite_id_hex=creator_invite_id,
@@ -283,6 +304,18 @@ async def create_offer_quote(
             invited_address=wallet.address,
             valid_until=direct_valid_until,
         )
+    holder_valid_until = 0
+    holder_signature_hex: str | None = None
+    if fee_exempt:
+        holder_valid_until = int((now + timedelta(minutes=5)).timestamp())
+        holder_signature_hex = sign_holder_fee_permit(
+            settings.duel_invite_signing_key.get_secret_value(),
+            network=offer.network,
+            contract_address=offer.contract_address,
+            offer_id=offer.onchain_offer_id,
+            owner_address=wallet.address,
+            valid_until=holder_valid_until,
+        )
     await db.commit()
     await db.refresh(offer)
     return OfferQuoteResponse(
@@ -308,6 +341,9 @@ async def create_offer_quote(
             direct_counter_offer_id=(counter.onchain_offer_id if invitation and counter else 0),
             direct_valid_until=direct_valid_until,
             direct_signature_hex=direct_signature_hex,
+            holder_fee_supported=settings.duel_holder_fee_enabled,
+            holder_valid_until=holder_valid_until,
+            holder_signature_hex=holder_signature_hex,
         ),
     )
 
@@ -388,6 +424,7 @@ async def list_duels(user: CurrentUser, db: Db, settings: Config) -> list[DuelVi
                 stake_nano=own_offer.stake_nano,
                 opponent_stake_nano=own_offer.opponent_stake_nano,
                 total_pool_nano=own_offer.total_pool_nano,
+                fee_exempt=own_offer.fee_exempt,
                 payout_nano=own_offer.payout_nano,
                 boost_deadline=duel.boost_deadline,
                 hard_deadline=duel.hard_deadline,

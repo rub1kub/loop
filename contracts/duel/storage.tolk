@@ -27,6 +27,7 @@ struct OfferData {
     stake: coins
     expiresAt: uint32
     state: uint8
+    feeExempt: bool
     direct: Cell<DirectOfferData>
 }
 
@@ -65,6 +66,7 @@ struct ContractConfigView {
     contractAddress: address
     paused: bool
     locked: coins
+    holderFeeSupported: bool
 }
 
 struct DuelAdminStateView {

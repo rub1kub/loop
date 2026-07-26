@@ -21,6 +21,7 @@ const MIN_CHANCE_BPS = 1_000
 const COMMITMENT_DOMAIN = 0x4C4F4F60
 const OUTCOME_DOMAIN = 0x4C4F4F61
 const DIRECT_ACCEPT_DOMAIN = 0x4C4F4F62
+const HOLDER_FEE_DOMAIN = 0x4C4F4F63
 
 const REASON_BOTH_REVEALED = 1
 const REASON_ONLY_REVEALER = 2
@@ -30,8 +31,8 @@ const REASON_NO_REVEALS = 5
 
 contract DuelEscrow {
     author: "LOOP"
-    version: "1.3.0"
-    description: "Address-bound TON escrow with a bounded boost phase and commit-reveal"
+    version: "1.4.0"
+    description: "Address-bound TON escrow with a bounded boost phase, commit-reveal and holder fee permits"
     storage: Storage
     incomingMessages: AllowedMessage
 }
@@ -77,6 +78,22 @@ fun commitmentHash(
         .hash();
 }
 
+fun holderFeeHash(
+    networkId: int32,
+    offerId: uint64,
+    owner: address,
+    validUntil: uint32,
+): uint256 {
+    return beginCell()
+        .storeUint(HOLDER_FEE_DOMAIN, 32)
+        .storeInt(networkId, 32)
+        .storeAddress(contract.getAddress())
+        .storeUint(offerId, 64)
+        .storeAddress(owner)
+        .storeUint(validUntil, 32)
+        .hash();
+}
+
 fun directAcceptHash(
     networkId: int32,
     inviteId: uint256,
@@ -95,6 +112,30 @@ fun directAcceptHash(
         .hash();
 }
 
+fun Storage.verifyHolderPermit(
+    self,
+    owner: address,
+    offerId: uint64,
+    holder: Cell<HolderFeePermit>?,
+): bool {
+    if (holder == null) {
+        return false;
+    }
+    val permit = holder.load();
+    assert (permit.validUntil >= blockchain.now()) throw Errors.HolderPermitExpired;
+    assert (
+        permit.validUntil <= blockchain.now() + MAX_EXPIRY_DELAY
+    ) throw Errors.HolderPermitExpired;
+    assert (
+        isSignatureValid(
+            holderFeeHash(self.networkId, offerId, owner, permit.validUntil),
+            permit.signature as slice,
+            self.inviteSignerPublicKey,
+        )
+    ) throw Errors.InvalidHolderPermit;
+    return true;
+}
+
 fun Storage.addOpenOffer(
     mutate self,
     owner: address,
@@ -105,6 +146,7 @@ fun Storage.addOpenOffer(
     totalPool: coins,
     expiresAt: uint32,
     direct: DirectOfferData,
+    holder: Cell<HolderFeePermit>?,
 ): void {
     assert (self.feeBps <= 1_000) throw Errors.InvalidFee;
     assert (offerId != 0) throw Errors.InvalidOfferId;
@@ -119,6 +161,7 @@ fun Storage.addOpenOffer(
     assert (!self.usedOfferIds.exists(offerId)) throw Errors.OfferAlreadyUsed;
     assert (!self.activeOffers.exists(owner)) throw Errors.OwnerAlreadyActive;
 
+    val feeExempt = self.verifyHolderPermit(owner, offerId, holder);
     val stake = stakeFor(totalPool, chanceBps);
     assert (valueCoins >= stake + OPEN_GAS_BUFFER) throw Errors.InsufficientValue;
     self
@@ -133,6 +176,7 @@ fun Storage.addOpenOffer(
                 stake,
                 expiresAt,
                 state: OFFER_OPEN,
+                feeExempt,
                 direct: direct.toCell(),
             }.toCell(),
         );
@@ -288,7 +332,10 @@ fun Storage.settleWinner(
     val offerB = self.loadOffer(duel.offerBId);
     val winner = winnerOfferId == duel.offerAId ? offerA : offerB;
     val totalPool = offerA.stake + offerB.stake;
-    val fee = mulDivFloor(totalPool, self.feeBps, BASIS_POINTS);
+    // A verified PLUSH BRICK holder pays no protocol fee on a won duel. The
+    // exemption was proven by a signed permit when the offer was opened; it
+    // never changes the chance math, only the fee withheld from the winner.
+    val fee = winner.feeExempt ? 0 : mulDivFloor(totalPool, self.feeBps, BASIS_POINTS);
     val payout = totalPool - fee;
 
     self.removeMatchedDuel(duelId, duel);
@@ -418,6 +465,7 @@ fun onInternalMessage(in: InMessage) {
                     inviteId: 0,
                     opponent: null,
                 },
+                msg.holder,
             );
 
             if (msg.counterOfferId != 0) {
@@ -441,6 +489,7 @@ fun onInternalMessage(in: InMessage) {
                     inviteId: msg.inviteId,
                     opponent: null,
                 },
+                msg.holder,
             );
             storage.save();
         }
@@ -484,6 +533,7 @@ fun onInternalMessage(in: InMessage) {
                     inviteId: 0,
                     opponent: counter.owner,
                 },
+                msg.holder,
             );
             counterDirect.opponent = in.senderAddress;
             counter.direct = counterDirect.toCell();
@@ -696,6 +746,7 @@ get fun contractConfig(): ContractConfigView {
         contractAddress: contract.getAddress(),
         paused: storage.paused,
         locked: storage.locked,
+        holderFeeSupported: true,
     };
 }
 

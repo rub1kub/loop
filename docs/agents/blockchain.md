@@ -150,12 +150,32 @@ Contract сохраняет canonical `25/75` и `75/25` только на вх�
 ```text
 chance A = floor(stake_A × 10_000 / (stake_A + stake_B))
 chance B = 10_000 − chance A
-fee      = floor((stake_A + stake_B) × fee_bps / 10_000)
+fee      = feeExempt(winner) ? 0 : floor((stake_A + stake_B) × fee_bps / 10_000)
 payout   = stake_A + stake_B − fee
 ```
 
 Для нового матча оба начинают с половины pool. После каждого boost оба offers получают новый
 итоговый pool/chance; `locked` увеличивается ровно на подтверждённую сумму.
+
+### Holder fee exemption (v1.4)
+
+Локальный source репозитория — DuelEscrow **1.4.0**; testnet deployment остаётся 1.3.0 до
+следующего явного broadcast. v1.4 добавляет:
+
+- `HolderFeePermit { validUntil, signature }` — опциональный maybe-ref в конце `OpenOffer`,
+  `OpenDirectOffer` и `AcceptDirectOffer`;
+- домен `0x4C4F4F63`: `hash(HOLDER_FEE_DOMAIN, network_id, contract_address, offer_id, owner,
+valid_until)`, подпись — тот же `inviteSignerPublicKey`;
+- `OfferData.feeExempt: bool` в storage и getter'ах; `contractConfig` дополнен
+  `holderFeeSupported`;
+- при settlement победитель с `feeExempt` получает полный пул: комиссия не удерживается и fee
+  message не отправляется. Шанс, boost-математика и refund paths не меняются;
+- невалидный или просроченный permit отвергает всё открытие (`InvalidHolderPermit=134`,
+  `HolderPermitExpired=135`) — молчаливого «взяли комиссию всё равно» нет;
+- v1.3 не принимает тела с maybe-bit, поэтому клиент строит layout строго по
+  `holder_fee_supported` из ответа API, а backend включает выдачу permits только флагом
+  `LOOP_DUEL_HOLDER_FEE_ENABLED`, который production startup сверяет с живым
+  `holderFeeSupported`.
 
 ### Domain separation
 

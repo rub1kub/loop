@@ -42,7 +42,7 @@ from app.modules.duel.models import (
     DuelState,
     OfferState,
 )
-from app.ton import sign_direct_accept_permit
+from app.ton import sign_direct_accept_permit, sign_holder_fee_permit
 
 
 def body_b64(opcode: int, fields: list[tuple[int, int]]) -> str:
@@ -852,3 +852,189 @@ async def test_confirmed_bank_payout_qualifies_the_referred_friend(app) -> None:
         reward = await db.scalar(select(ReferralReward))
         assert reward is not None
         assert reward.cause == "bank:300"
+
+
+def duel_open_body_with_holder(offer: DuelOffer, valid_until: int, signature_hex: str) -> str:
+    cell = Cell()
+    cell.bits.write_uint(DUEL_OPEN_OFFER, 32)
+    cell.bits.write_uint(offer.query_id, 64)
+    cell.bits.write_uint(offer.onchain_offer_id, 64)
+    cell.bits.write_uint(int(offer.commitment_hex, 16), 256)
+    cell.bits.write_uint(offer.chance_bps, 16)
+    cell.bits.write_coins(offer.total_pool_nano)
+    cell.bits.write_uint(int(offer.expires_at.timestamp()), 32)
+    cell.bits.write_uint(offer.counter_offer_id, 64)
+    cell.bits.write_bit(1)
+    permit = Cell()
+    permit.bits.write_uint(valid_until, 32)
+    permit.bits.write_uint(int(signature_hex, 16), 512)
+    cell.refs.append(permit)
+    return base64.b64encode(cell.to_boc(has_idx=False)).decode()
+
+
+@pytest.mark.asyncio
+async def test_verified_holder_permit_marks_the_offer_fee_exempt(app) -> None:
+    settings = get_settings()
+    expires = datetime.fromtimestamp(1_800_000_900, UTC)
+    async with app.state.session_factory() as db:
+        user = User(telegram_id=2201, first_name="Holder")
+        db.add(user)
+        await db.flush()
+        wallet = Wallet(
+            user_id=user.id,
+            network=-3,
+            address="0:" + "9a" * 32,
+            public_key="9b" * 32,
+        )
+        db.add(wallet)
+        await db.flush()
+        offer = DuelOffer(
+            onchain_offer_id=930,
+            query_id=930,
+            user_id=user.id,
+            wallet_id=wallet.id,
+            owner_wallet=wallet.address,
+            network=-3,
+            contract_address=settings.effective_duel_contract_address,
+            chance_bps=5000,
+            total_pool_nano=2_000_000_000,
+            stake_nano=1_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+            fee_bps=250,
+            fee_exempt=True,
+            payout_nano=2_000_000_000,
+            commitment_hex="d1" * 32,
+            expires_at=expires,
+        )
+        db.add(offer)
+        await db.commit()
+
+        valid_until = 1_800_000_290
+        signature = sign_holder_fee_permit(
+            settings.duel_invite_signing_key.get_secret_value(),
+            network=-3,
+            contract_address=settings.effective_duel_contract_address,
+            offer_id=930,
+            owner_address=wallet.address,
+            valid_until=valid_until,
+        )
+        tx = transaction(
+            settings.effective_duel_contract_address,
+            wallet.address,
+            60,
+            duel_open_body_with_holder(offer, valid_until, signature),
+            1_050_000_000,
+        )
+        assert await apply_transaction(db, settings, tx, "duel") == ProjectionResult.APPLIED
+        await db.commit()
+        await db.refresh(offer)
+        assert offer.state == OfferState.OPEN.value
+        assert offer.fee_exempt is True
+        assert offer.payout_nano == 2_000_000_000
+
+
+@pytest.mark.asyncio
+async def test_forged_holder_permit_blocks_the_projection(app) -> None:
+    settings = get_settings()
+    expires = datetime.fromtimestamp(1_800_000_900, UTC)
+    async with app.state.session_factory() as db:
+        user = User(telegram_id=2202, first_name="Forger")
+        db.add(user)
+        await db.flush()
+        wallet = Wallet(
+            user_id=user.id,
+            network=-3,
+            address="0:" + "9c" * 32,
+            public_key="9d" * 32,
+        )
+        db.add(wallet)
+        await db.flush()
+        offer = DuelOffer(
+            onchain_offer_id=931,
+            query_id=931,
+            user_id=user.id,
+            wallet_id=wallet.id,
+            owner_wallet=wallet.address,
+            network=-3,
+            contract_address=settings.effective_duel_contract_address,
+            chance_bps=5000,
+            total_pool_nano=2_000_000_000,
+            stake_nano=1_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+            fee_bps=250,
+            payout_nano=1_950_000_000,
+            commitment_hex="d2" * 32,
+            expires_at=expires,
+        )
+        db.add(offer)
+        await db.commit()
+
+        # Signed for a different offer id: the worker must refuse to project a
+        # fee exemption it cannot verify, even though the shape is valid.
+        signature = sign_holder_fee_permit(
+            settings.duel_invite_signing_key.get_secret_value(),
+            network=-3,
+            contract_address=settings.effective_duel_contract_address,
+            offer_id=999,
+            owner_address=wallet.address,
+            valid_until=1_800_000_290,
+        )
+        tx = transaction(
+            settings.effective_duel_contract_address,
+            wallet.address,
+            61,
+            duel_open_body_with_holder(offer, 1_800_000_290, signature),
+            1_050_000_000,
+        )
+        assert await apply_transaction(db, settings, tx, "duel") == ProjectionResult.RETRY
+
+
+@pytest.mark.asyncio
+async def test_funding_without_permit_clears_a_stale_local_exemption(app) -> None:
+    settings = get_settings()
+    expires = datetime.fromtimestamp(1_800_000_900, UTC)
+    async with app.state.session_factory() as db:
+        user = User(telegram_id=2203, first_name="Stale")
+        db.add(user)
+        await db.flush()
+        wallet = Wallet(
+            user_id=user.id,
+            network=-3,
+            address="0:" + "9e" * 32,
+            public_key="9f" * 32,
+        )
+        db.add(wallet)
+        await db.flush()
+        offer = DuelOffer(
+            onchain_offer_id=932,
+            query_id=932,
+            user_id=user.id,
+            wallet_id=wallet.id,
+            owner_wallet=wallet.address,
+            network=-3,
+            contract_address=settings.effective_duel_contract_address,
+            chance_bps=5000,
+            total_pool_nano=2_000_000_000,
+            stake_nano=1_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+            fee_bps=250,
+            fee_exempt=True,
+            payout_nano=2_000_000_000,
+            commitment_hex="d3" * 32,
+            expires_at=expires,
+        )
+        db.add(offer)
+        await db.commit()
+
+        tx = transaction(
+            settings.effective_duel_contract_address,
+            wallet.address,
+            62,
+            duel_open_body(offer),
+            1_050_000_000,
+        )
+        assert await apply_transaction(db, settings, tx, "duel") == ProjectionResult.APPLIED
+        await db.commit()
+        await db.refresh(offer)
+        assert offer.fee_exempt is False
+        assert offer.payout_nano == 1_950_000_000

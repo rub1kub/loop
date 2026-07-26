@@ -185,6 +185,7 @@ export interface Offer {
   stake_nano: number;
   opponent_stake_nano: number;
   fee_bps: number;
+  fee_exempt: boolean;
   payout_nano: number;
   net_profit_nano: number;
   mode: 'afk' | 'direct';
@@ -218,6 +219,9 @@ export interface OfferQuote {
     direct_counter_offer_id: number;
     direct_valid_until: number;
     direct_signature_hex: string | null;
+    holder_fee_supported: boolean;
+    holder_valid_until: number;
+    holder_signature_hex: string | null;
   };
 }
 
@@ -244,6 +248,7 @@ export interface Duel {
   stake_nano: number;
   opponent_stake_nano: number;
   total_pool_nano: number;
+  fee_exempt: boolean;
   payout_nano: number;
   boost_deadline: string | null;
   hard_deadline: string | null;

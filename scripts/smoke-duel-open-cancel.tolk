@@ -58,6 +58,7 @@ fun main(duelAddress: address, offerId: uint64, expiresAt: uint32) {
         ton("2"),
         expiresAt,
         0,
+        null,
         { value: ton("1.05") },
     );
     val openTrace = opened.waitForTrace();

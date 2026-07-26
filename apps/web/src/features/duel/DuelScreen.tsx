@@ -127,7 +127,11 @@ export function DuelScreen({
     }
   }, [stake]);
   const terms = useMemo(() => canonicalTerms(requestedStake, chance), [chance, requestedStake]);
-  const feeNano = (terms.totalPool * profile.plush_brick.duel_fee_bps) / 10_000;
+  // A verified PLUSH BRICK holder pays no protocol fee on a won duel; the
+  // exemption is proven on chain by a permit attached to the offer.
+  const feeNano = profile.plush_brick.fee_discount_active
+    ? 0
+    : (terms.totalPool * profile.plush_brick.duel_fee_bps) / 10_000;
   const payoutNano = terms.totalPool - feeNano;
   const profitNano = payoutNano - terms.stake;
   const boostNano = useMemo(() => {

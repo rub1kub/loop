@@ -168,6 +168,24 @@ export function buildOpenOfferTransaction(
   } else {
     body.storeUint(tx.counter_offer_id, 64);
   }
+  // DuelEscrow v1.4 expects a holder-permit maybe-ref at the end of every
+  // open message; v1.3 rejects unknown trailing bits. The server decides the
+  // layout, the client never guesses the deployed contract version.
+  if (tx.holder_fee_supported) {
+    if (tx.holder_signature_hex) {
+      if (tx.holder_signature_hex.length !== 128 || tx.holder_valid_until <= 0) {
+        throw new Error('Подтверждение владения PLUSH BRICK повреждено');
+      }
+      body.storeMaybeRef(
+        beginCell()
+          .storeUint(tx.holder_valid_until, 32)
+          .storeUint(BigInt(`0x${tx.holder_signature_hex}`), 512)
+          .endCell(),
+      );
+    } else {
+      body.storeMaybeRef(null);
+    }
+  }
   const payload = body.endCell().toBoc().toString('base64');
   return {
     validUntil: tx.valid_until,

@@ -46,6 +46,7 @@ describe('TON duel encoding', () => {
         stake_nano: 1_000_000_000,
         opponent_stake_nano: 1_000_000_000,
         fee_bps: 250,
+        fee_exempt: false,
         payout_nano: 1_950_000_000,
         net_profit_nano: 950_000_000,
         mode: 'direct',
@@ -76,6 +77,9 @@ describe('TON duel encoding', () => {
         direct_counter_offer_id: 0,
         direct_valid_until: 0,
         direct_signature_hex: null,
+        holder_fee_supported: false,
+        holder_valid_until: 0,
+        holder_signature_hex: null,
       },
     };
     const expectedContext = {
@@ -132,6 +136,105 @@ describe('TON duel encoding', () => {
     expect(permit.loadUintBig(64)).toBe(76n);
     expect(permit.loadUint(32)).toBe(1_999_999_999);
     expect(permit.loadUintBig(512)).toBe(42n);
+  });
+
+  it('appends the holder permit maybe-ref only when the contract supports it', () => {
+    const base: OfferQuote = {
+      offer: {
+        id: 'offer',
+        onchain_offer_id: 91,
+        chance_bps: 5000,
+        total_pool_nano: 2_000_000_000,
+        stake_nano: 1_000_000_000,
+        opponent_stake_nano: 1_000_000_000,
+        fee_bps: 250,
+        fee_exempt: true,
+        payout_nano: 2_000_000_000,
+        net_profit_nano: 1_000_000_000,
+        mode: 'afk',
+        direct_opponent_wallet: null,
+        state: 'pending_funding',
+        expires_at: new Date(2_000_000_000 * 1000).toISOString(),
+        funding_tx_hash: null,
+        funding_proof_url: null,
+      },
+      transaction: {
+        operation: 'open_offer',
+        query_id: 91,
+        offer_id: 91,
+        counter_offer_id: 0,
+        contract_address: `0:${'22'.repeat(32)}`,
+        amount_nano: '1050000000',
+        valid_until: 2_000_000_000,
+        network: -3,
+        chance_bps: 5000,
+        stake_nano: '1000000000',
+        opponent_stake_nano: '1000000000',
+        total_pool_nano: '2000000000',
+        commitment_hex: '11'.repeat(32),
+        expires_at: 2_000_000_000,
+        commitment_domain: COMMITMENT_DOMAIN,
+        fee_bps: 250,
+        invite_id_hex: null,
+        direct_counter_offer_id: 0,
+        direct_valid_until: 0,
+        direct_signature_hex: null,
+        holder_fee_supported: true,
+        holder_valid_until: 1_999_999_000,
+        holder_signature_hex: '00'.repeat(63) + '2a',
+      },
+    };
+    const withPermit = buildOpenOfferTransaction(base, `0:${'11'.repeat(32)}`, '-3');
+    const permitPayload = withPermit.messages?.[0]?.payload;
+    if (!permitPayload) throw new Error('missing holder payload');
+    const slice = Cell.fromBoc(Buffer.from(permitPayload, 'base64'))[0].beginParse();
+    slice.skip(32 + 64 + 64 + 256 + 16);
+    slice.loadCoins();
+    slice.skip(32 + 64);
+    expect(slice.loadBit()).toBe(true);
+    const permit = slice.loadRef().beginParse();
+    expect(permit.loadUint(32)).toBe(1_999_999_000);
+    expect(permit.loadUintBig(512)).toBe(42n);
+    expect(slice.remainingBits).toBe(0);
+
+    const withoutPermit = buildOpenOfferTransaction(
+      {
+        ...base,
+        transaction: { ...base.transaction, holder_signature_hex: null, holder_valid_until: 0 },
+      },
+      `0:${'11'.repeat(32)}`,
+      '-3',
+    );
+    const emptyPayload = withoutPermit.messages?.[0]?.payload;
+    if (!emptyPayload) throw new Error('missing payload');
+    const emptySlice = Cell.fromBoc(Buffer.from(emptyPayload, 'base64'))[0].beginParse();
+    emptySlice.skip(32 + 64 + 64 + 256 + 16);
+    emptySlice.loadCoins();
+    emptySlice.skip(32 + 64);
+    expect(emptySlice.loadBit()).toBe(false);
+    expect(emptySlice.remainingBits).toBe(0);
+
+    // A v1.3 contract must keep receiving the legacy body without a maybe-bit.
+    const legacy = buildOpenOfferTransaction(
+      {
+        ...base,
+        transaction: {
+          ...base.transaction,
+          holder_fee_supported: false,
+          holder_signature_hex: null,
+          holder_valid_until: 0,
+        },
+      },
+      `0:${'11'.repeat(32)}`,
+      '-3',
+    );
+    const legacyPayload = legacy.messages?.[0]?.payload;
+    if (!legacyPayload) throw new Error('missing payload');
+    const legacySlice = Cell.fromBoc(Buffer.from(legacyPayload, 'base64'))[0].beginParse();
+    legacySlice.skip(32 + 64 + 64 + 256 + 16);
+    legacySlice.loadCoins();
+    legacySlice.skip(32 + 64);
+    expect(legacySlice.remainingBits).toBe(0);
   });
 
   it('keeps offer ids inside JavaScript safe integer range', () => {

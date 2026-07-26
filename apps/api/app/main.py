@@ -90,6 +90,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
         ):
             raise RuntimeError("configured DUEL contract domain mismatch")
+        if settings.duel_holder_fee_enabled and not duel_domain.holder_fee_supported:
+            raise RuntimeError(
+                "holder fee exemption is enabled but the live DUEL contract "
+                "does not support holder permits"
+            )
     app.state.bot = None
     app.state.dispatcher = None
     if settings.auto_create_schema:

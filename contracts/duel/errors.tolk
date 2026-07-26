@@ -32,5 +32,7 @@ enum Errors {
     InvalidBoost = 131
     StaleBoost = 132
     RevealNotOpen = 133
+    InvalidHolderPermit = 134
+    HolderPermitExpired = 135
     InvalidMessage = 0xFFFF
 }

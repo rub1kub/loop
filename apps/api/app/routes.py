@@ -283,10 +283,11 @@ async def get_me(user: CurrentUser, db: Db, request: Request, settings: Config) 
             verified=plush_verified,
             balance_nano=plush_balance,
             holder=holder,
-            # The current DuelEscrow exposes one global on-chain fee. Reporting a
-            # holder discount here would make the quote disagree with settlement.
             duel_fee_bps=duel_fee_bps,
-            fee_discount_active=False,
+            # Active only when DuelEscrow v1.4 holder permits are enabled:
+            # against v1.3 bytecode a reported discount would disagree with
+            # the actual settlement, so startup refuses that combination.
+            fee_discount_active=settings.duel_holder_fee_enabled and holder,
         ),
     )
 

@@ -585,9 +585,11 @@ async def verify_contract(
     configuration = manifest["configuration"]
     version = str(configuration.get("version", ""))
     duel_address_bound = contract == "DuelEscrow" and "network_id" in configuration
+    # v1.4 appends `holderFeeSupported` to the DUEL contractConfig view.
+    duel_holder_fee = duel_address_bound and not version.startswith("1.3")
     bank_v13 = contract == "BankQueue" and version == "1.3.0"
     expected_stack_size = (
-        8
+        (9 if duel_holder_fee else 8)
         if duel_address_bound
         else 9
         if bank_v13
@@ -621,6 +623,8 @@ async def verify_contract(
         if bool(stack_number(stack[6])) != bool(configuration["paused"]):
             raise ValueError(f"{contract}: pause state mismatch")
         live_locked = stack_number(stack[7])
+        if duel_holder_fee and stack_number(stack[8]) != 1:
+            raise ValueError(f"{contract}: holder fee support flag mismatch")
     else:
         if bool(stack_number(stack[3])) != bool(configuration["paused"]):
             raise ValueError(f"{contract}: pause state mismatch")

@@ -87,6 +87,9 @@ class DuelOffer(Base):
     state: Mapped[str] = mapped_column(
         String(24), default=OfferState.PENDING_FUNDING.value, nullable=False, index=True
     )
+    # Proven PLUSH BRICK holder permit was attached on chain: a won duel pays
+    # the full pool without the protocol fee (DuelEscrow v1.4+).
+    fee_exempt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     revealed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     reserved_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)

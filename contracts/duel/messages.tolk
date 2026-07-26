@@ -1,3 +1,13 @@
+/// Backend Ed25519 proof that the offer owner holds PLUSH BRICK. The permit is
+/// domain-separated and bound to the network, contract, offer id, owner wallet
+/// and expiry, so it cannot be replayed for another player or deployment. A
+/// valid permit marks the offer fee-exempt: if it wins, no protocol fee is
+/// withheld from the payout.
+struct HolderFeePermit {
+    validUntil: uint32
+    signature: bits512
+}
+
 struct (0x4C4F4F01) OpenOffer {
     queryId: uint64
     offerId: uint64
@@ -6,6 +16,7 @@ struct (0x4C4F4F01) OpenOffer {
     totalPool: coins
     expiresAt: uint32
     counterOfferId: uint64
+    holder: Cell<HolderFeePermit>?
 }
 
 struct (0x4C4F4F02) CancelOffer {
@@ -52,6 +63,7 @@ struct (0x4C4F4F08) OpenDirectOffer {
     totalPool: coins
     expiresAt: uint32
     inviteId: uint256
+    holder: Cell<HolderFeePermit>?
 }
 
 struct DirectAcceptance {
@@ -70,6 +82,7 @@ struct (0x4C4F4F09) AcceptDirectOffer {
     totalPool: coins
     expiresAt: uint32
     acceptance: Cell<DirectAcceptance>
+    holder: Cell<HolderFeePermit>?
 }
 
 struct (0x4C4F4F0A) DuelFundReserve {

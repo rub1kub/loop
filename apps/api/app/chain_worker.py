@@ -39,7 +39,13 @@ from .modules.duel.models import (
     OfferState,
 )
 from .result_cards import create_result_card
-from .ton import TonClient, TonProviderError, normalize_address, verify_direct_accept_permit
+from .ton import (
+    TonClient,
+    TonProviderError,
+    normalize_address,
+    verify_direct_accept_permit,
+    verify_holder_fee_permit,
+)
 
 logger = structlog.get_logger()
 
@@ -168,6 +174,14 @@ def decode_body(body_b64: str) -> dict[str, Any]:
                 counter_offer_id=acceptance.read_uint(64),
                 direct_valid_until=acceptance.read_uint(32),
                 direct_signature=acceptance.read_uint(512),
+            )
+        # DuelEscrow v1.4 appends an optional holder fee permit. v1.3 bodies
+        # simply end here, so the maybe-bit is read only when it exists.
+        if len(parser) >= 1 and parser.read_bit():
+            permit = parser.read_ref().begin_parse()
+            result.update(
+                holder_valid_until=permit.read_uint(32),
+                holder_signature=permit.read_uint(512),
             )
     elif opcode in {DUEL_CANCEL_OFFER, DUEL_EXPIRE_OFFER}:
         result["offer_id"] = parser.read_uint(64)
@@ -699,9 +713,27 @@ async def apply_duel_transaction(
         stake = decoded["total_pool_nano"] * decoded["chance_bps"] // 10_000
         if value < stake + settings.offer_gas_nano:
             return ProjectionResult.IGNORED
+        # The contract accepted this transaction, so any attached holder
+        # permit was already signature-checked on chain. The worker still
+        # re-verifies with the configured public key: a projection must never
+        # trust a fee exemption the backend cannot prove itself.
+        fee_exempt = "holder_signature" in decoded and verify_holder_fee_permit(
+            settings.duel_invite_public_key,
+            f"{decoded['holder_signature']:0128x}",
+            network=settings.ton_network_id,
+            contract_address=account,
+            offer_id=decoded["offer_id"],
+            owner_address=source,
+            valid_until=decoded.get("holder_valid_until", 0),
+        )
+        if "holder_signature" in decoded and not fee_exempt:
+            return ProjectionResult.RETRY
         if offer is None:
-            payout = decoded["total_pool_nano"] - (
-                decoded["total_pool_nano"] * control.fee_bps // 10_000
+            payout = (
+                decoded["total_pool_nano"]
+                if fee_exempt
+                else decoded["total_pool_nano"]
+                - (decoded["total_pool_nano"] * control.fee_bps // 10_000)
             )
             offer = MatchmakingOffer(
                 onchain_offer_id=decoded["offer_id"],
@@ -737,8 +769,11 @@ async def apply_duel_transaction(
             or decoded.get("invite_id", 0) != int(offer.invite_id_hex or "0", 16)
             or decoded["expires_at"] != int(offer.expires_at.timestamp())
         ):
-            payout = decoded["total_pool_nano"] - (
-                decoded["total_pool_nano"] * control.fee_bps // 10_000
+            payout = (
+                decoded["total_pool_nano"]
+                if fee_exempt
+                else decoded["total_pool_nano"]
+                - (decoded["total_pool_nano"] * control.fee_bps // 10_000)
             )
             offer.user_id = None
             offer.wallet_id = None
@@ -757,6 +792,15 @@ async def apply_duel_transaction(
             offer.counter_offer_id = decoded["counter_offer_id"]
             offer.mode = "external" if opcode == DUEL_OPEN_OFFER else "external_direct"
             offer.expires_at = datetime.fromtimestamp(decoded["expires_at"], UTC)
+        # The chain is authoritative for the exemption in both directions: a
+        # verified permit sets it, and a funding message without one clears a
+        # stale local promise, so the payout is recomputed either way.
+        offer.fee_exempt = fee_exempt
+        offer.payout_nano = (
+            offer.total_pool_nano
+            if fee_exempt
+            else offer.total_pool_nano - offer.total_pool_nano * offer.fee_bps // 10_000
+        )
         offer.state = OfferState.OPEN.value
         offer.funding_tx_hash = tx_hash
         offer.reserved_until = None
@@ -907,15 +951,17 @@ async def apply_duel_transaction(
             or boosted_chance < decoded["min_chance_bps"]
         ):
             return ProjectionResult.RETRY
-        payout = total_pool - total_pool * first.fee_bps // 10_000
+        # The winner-if-won payout is per offer: an exempt holder keeps the
+        # full pool while the other side still pays the protocol fee.
+        fee = total_pool * first.fee_bps // 10_000
         first.chance_bps = chance_a
         first.total_pool_nano = total_pool
         first.opponent_stake_nano = second.stake_nano
-        first.payout_nano = payout
+        first.payout_nano = total_pool if first.fee_exempt else total_pool - fee
         second.chance_bps = chance_b
         second.total_pool_nano = total_pool
         second.opponent_stake_nano = first.stake_nano
-        second.payout_nano = payout
+        second.payout_nano = total_pool if second.fee_exempt else total_pool - fee
         duel.boost_revision += 1
         extended_deadline = chain_time + timedelta(seconds=20)
         if extended_deadline > as_utc(duel.boost_deadline):

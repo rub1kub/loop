@@ -29,6 +29,12 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- DuelEscrow v1.4: PLUSH BRICK holders win the full pool with no protocol fee, proven by a
+  domain-separated Ed25519 holder permit bound to the network, contract, offer and wallet.
+  Quotes verify mainnet ownership before issuing a permit, the worker re-verifies it before
+  projecting an exemption, and enabling the mode requires the live contract to report holder
+  support at startup.
+
 - Reproducible testnet deployment manifests and fail-closed verification.
 - Finalized chain worker projections, AFK matchmaking reservations and referral attribution.
 - Production screenshots, operations runbooks and unified Make targets.

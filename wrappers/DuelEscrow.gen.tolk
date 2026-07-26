@@ -53,6 +53,7 @@ fun DuelEscrow.sendOpenOffer(
     totalPool: coins,
     expiresAt: uint32,
     counterOfferId: uint64,
+    holder: Cell<HolderFeePermit>?,
     config: SendParams = {},
 ): SendResultList {
     val genericMsg = createMessage({
@@ -67,6 +68,7 @@ fun DuelEscrow.sendOpenOffer(
             totalPool,
             expiresAt,
             counterOfferId,
+            holder,
         },
     });
     return net.send(from, genericMsg);
@@ -181,6 +183,7 @@ fun DuelEscrow.sendOpenDirectOffer(
     totalPool: coins,
     expiresAt: uint32,
     inviteId: uint256,
+    holder: Cell<HolderFeePermit>?,
     config: SendParams = {},
 ): SendResultList {
     val genericMsg = createMessage({
@@ -195,6 +198,7 @@ fun DuelEscrow.sendOpenDirectOffer(
             totalPool,
             expiresAt,
             inviteId,
+            holder,
         },
     });
     return net.send(from, genericMsg);
@@ -210,6 +214,7 @@ fun DuelEscrow.sendAcceptDirectOffer(
     totalPool: coins,
     expiresAt: uint32,
     acceptance: DirectAcceptance,
+    holder: Cell<HolderFeePermit>?,
     config: SendParams = {},
 ): SendResultList {
     val genericMsg = createMessage({
@@ -224,6 +229,7 @@ fun DuelEscrow.sendAcceptDirectOffer(
             totalPool,
             expiresAt,
             acceptance: acceptance.toCell(),
+            holder,
         },
     });
     return net.send(from, genericMsg);

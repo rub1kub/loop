@@ -9,10 +9,11 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.models import User, Wallet
 from app.modules.bank.router import GRAM, maturity_limit
 from app.modules.duel.models import Duel, DuelOffer, DuelState, OfferState
-from app.ton import ContractState, JettonWalletState
+from app.ton import ContractState, JettonWalletState, verify_holder_fee_permit
 
 
 def signed_init_data(telegram_id: int = 777000111, *, photo_url: str | None = None) -> str:
@@ -420,3 +421,118 @@ async def test_onchain_diagnostics_are_scoped_by_mode_and_network(client, app) -
         assert response.json()["mode"] == mode
         assert response.json()["network"] == -3
         assert response.json()["wallet_balance_nano"] == 456
+
+
+@pytest.mark.asyncio
+async def test_holder_quote_issues_a_verifiable_fee_permit(client, app, monkeypatch) -> None:
+    monkeypatch.setenv("LOOP_DUEL_HOLDER_FEE_ENABLED", "true")
+    get_settings.cache_clear()
+
+    class HolderPlushClient:
+        async def get_jetton_wallet(
+            self, owner_address: str, jetton_master: str
+        ) -> JettonWalletState:
+            return JettonWalletState(
+                owner_address=owner_address,
+                jetton_master=jetton_master,
+                wallet_address="0:" + "5" * 64,
+                balance_nano=1,
+            )
+
+    app.state.plush_ton_client = HolderPlushClient()
+    headers = await authenticate(client)
+    wallet = await add_wallet(app, 777000111)
+    quote = await client.post(
+        "/api/v1/duels/offers/quote",
+        headers=headers,
+        json={
+            "offer_id": 54321,
+            "chance_bps": 5000,
+            "stake_nano": 1_000_000_000,
+            "commitment_hex": "cd" * 32,
+            "mode": "afk",
+        },
+    )
+    assert quote.status_code == 201, quote.text
+    result = quote.json()
+    # The winner-if-won payout equals the pool: no protocol fee for holders.
+    assert result["offer"]["fee_exempt"] is True
+    assert result["offer"]["payout_nano"] == result["offer"]["total_pool_nano"]
+    tx = result["transaction"]
+    assert tx["holder_fee_supported"] is True
+    assert tx["holder_valid_until"] > 0
+    settings = get_settings()
+    assert verify_holder_fee_permit(
+        settings.duel_invite_public_key,
+        tx["holder_signature_hex"],
+        network=-3,
+        contract_address=tx["contract_address"],
+        offer_id=54321,
+        owner_address=wallet.address,
+        valid_until=tx["holder_valid_until"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_non_holder_quote_keeps_the_fee_and_issues_no_permit(
+    client, app, monkeypatch
+) -> None:
+    monkeypatch.setenv("LOOP_DUEL_HOLDER_FEE_ENABLED", "true")
+    get_settings.cache_clear()
+
+    class EmptyPlushClient:
+        async def get_jetton_wallet(
+            self, owner_address: str, jetton_master: str
+        ) -> JettonWalletState:
+            return JettonWalletState(
+                owner_address=owner_address,
+                jetton_master=jetton_master,
+                wallet_address=None,
+                balance_nano=0,
+            )
+
+    app.state.plush_ton_client = EmptyPlushClient()
+    headers = await authenticate(client)
+    await add_wallet(app, 777000111)
+    quote = await client.post(
+        "/api/v1/duels/offers/quote",
+        headers=headers,
+        json={
+            "offer_id": 54322,
+            "chance_bps": 5000,
+            "stake_nano": 1_000_000_000,
+            "commitment_hex": "ce" * 32,
+            "mode": "afk",
+        },
+    )
+    assert quote.status_code == 201, quote.text
+    result = quote.json()
+    assert result["offer"]["fee_exempt"] is False
+    assert result["offer"]["payout_nano"] == 1_950_000_000
+    tx = result["transaction"]
+    # The wire layout flag still tells the client to emit the v1.4 maybe-bit.
+    assert tx["holder_fee_supported"] is True
+    assert tx["holder_signature_hex"] is None
+
+
+@pytest.mark.asyncio
+async def test_disabled_holder_fee_never_promises_a_discount(client, app) -> None:
+    headers = await authenticate(client)
+    await add_wallet(app, 777000111)
+    quote = await client.post(
+        "/api/v1/duels/offers/quote",
+        headers=headers,
+        json={
+            "offer_id": 54323,
+            "chance_bps": 5000,
+            "stake_nano": 1_000_000_000,
+            "commitment_hex": "cf" * 32,
+            "mode": "afk",
+        },
+    )
+    assert quote.status_code == 201, quote.text
+    result = quote.json()
+    assert result["offer"]["fee_exempt"] is False
+    tx = result["transaction"]
+    assert tx["holder_fee_supported"] is False
+    assert tx["holder_signature_hex"] is None

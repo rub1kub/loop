@@ -20,6 +20,7 @@ class TonProviderError(RuntimeError):
 
 
 DUEL_DIRECT_ACCEPT_DOMAIN = 0x4C4F4F62
+DUEL_HOLDER_FEE_DOMAIN = 0x4C4F4F63
 DUEL_REVEAL = 0x4C4F4F04
 DUEL_PAYOUT = 0x4C4F4F11
 
@@ -51,6 +52,7 @@ class DuelContractDomain:
     contract_address: str
     paused: bool
     locked_nano: int
+    holder_fee_supported: bool
 
 
 @dataclass(frozen=True)
@@ -267,7 +269,8 @@ class TonClient:
     async def get_duel_contract_domain(self, address: str) -> DuelContractDomain:
         stack = await self._run_get_method(address, "contractConfig")
         try:
-            if len(stack) != 8:
+            # v1.3 exposes 8 fields; v1.4 appends `holderFeeSupported`.
+            if len(stack) not in {8, 9}:
                 raise ValueError
             network_id = _stack_number(stack[3])
             invite_signer = _stack_number(stack[4])
@@ -275,6 +278,7 @@ class TonClient:
             contract_address = _stack_address(stack[5])
             paused = _stack_number(stack[6]) != 0
             locked_nano = _stack_number(stack[7])
+            holder_fee_supported = len(stack) == 9 and _stack_number(stack[8]) != 0
         except (IndexError, TypeError, ValueError) as exc:
             raise TonProviderError("malformed DUEL contract domain") from exc
         if (
@@ -289,6 +293,7 @@ class TonClient:
             contract_address=contract_address,
             paused=paused,
             locked_nano=locked_nano,
+            holder_fee_supported=holder_fee_supported,
         )
 
     async def _verified_transaction(
@@ -556,6 +561,83 @@ def verify_direct_accept_permit(
         Ed25519PublicKey.from_public_bytes(public_key).verify(
             signature,
             direct_accept_permit_hash(**context),
+        )
+    except (ValueError, InvalidSignature, TonProviderError):
+        return False
+    return True
+
+
+def holder_fee_permit_hash(
+    *,
+    network: int,
+    contract_address: str,
+    offer_id: int,
+    owner_address: str,
+    valid_until: int,
+) -> bytes:
+    """Domain-separated digest of a PLUSH BRICK holder fee exemption.
+
+    Mirrors `holderFeeHash` in DuelEscrow v1.4: the permit binds the network,
+    contract, on-chain offer id, owner wallet and expiry, so it cannot be
+    replayed for another player, offer or deployment.
+    """
+    try:
+        if not -(2**31) <= network < 2**31:
+            raise ValueError
+        if not 0 < offer_id < 2**64 or not 0 < valid_until < 2**32:
+            raise ValueError
+        cell = Cell()
+        cell.bits.write_uint(DUEL_HOLDER_FEE_DOMAIN, 32)
+        cell.bits.write_int(network, 32)
+        cell.bits.write_address(Address(contract_address))
+        cell.bits.write_uint(offer_id, 64)
+        cell.bits.write_address(Address(owner_address))
+        cell.bits.write_uint(valid_until, 32)
+        return bytes(cell.bytes_hash())
+    except (ValueError, OverflowError, TypeError) as exc:
+        raise TonProviderError("invalid DUEL holder permit context") from exc
+
+
+def sign_holder_fee_permit(
+    private_seed_hex: str,
+    *,
+    network: int,
+    contract_address: str,
+    offer_id: int,
+    owner_address: str,
+    valid_until: int,
+) -> str:
+    try:
+        seed = bytes.fromhex(private_seed_hex)
+        if len(seed) != 32:
+            raise ValueError
+        signature = Ed25519PrivateKey.from_private_bytes(seed).sign(
+            holder_fee_permit_hash(
+                network=network,
+                contract_address=contract_address,
+                offer_id=offer_id,
+                owner_address=owner_address,
+                valid_until=valid_until,
+            )
+        )
+    except ValueError as exc:
+        raise TonProviderError("DUEL invite signing key must be 32-byte hex") from exc
+    return signature.hex()
+
+
+def verify_holder_fee_permit(
+    public_key_hex: str,
+    signature_hex: str,
+    **context: Any,
+) -> bool:
+    try:
+        public_key = bytes.fromhex(public_key_hex)
+        signature = bytes.fromhex(signature_hex)
+        if len(public_key) != 32 or len(signature) != 64:
+            return False
+        Ed25519PublicKey.from_public_bytes(public_key).verify(
+            signature,
+            holder_fee_permit_hash(**context),
         )
     except (ValueError, InvalidSignature, TonProviderError):
         return False

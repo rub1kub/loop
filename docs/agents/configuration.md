@@ -95,6 +95,7 @@ canary обязателен и остальные production validators прох
 | `LOOP_DUEL_FEE_BPS`              | fallback до live control projection              |
 | `LOOP_DUEL_INVITE_SIGNING_KEY`   | private Ed25519 seed для address-bound permits   |
 | `LOOP_DUEL_INVITE_PUBLIC_KEY`    | публичная половина, должна совпасть с seed       |
+| `LOOP_DUEL_HOLDER_FEE_ENABLED`   | выдача holder-permit; только с v1.4 bytecode     |
 | `LOOP_OFFER_TTL_SECONDS`         | срок нового offer                                |
 | `LOOP_REVEAL_TTL_SECONDS`        | зеркало reveal window                            |
 | `LOOP_OFFER_GAS_NANO`            | open-offer gas buffer                            |

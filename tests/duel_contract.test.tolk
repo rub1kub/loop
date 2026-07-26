@@ -84,7 +84,41 @@ fun storedOffer(
         stake: mulDivFloor(totalPool, chanceBps, 10_000),
         expiresAt,
         state,
+        feeExempt: false,
         direct: direct.toCell(),
+    }.toCell();
+}
+
+const TEST_HOLDER_FEE_DOMAIN = 0x4C4F4F63
+
+fun testHolderPermitHash(
+    contract: DuelEscrow,
+    offerId: uint64,
+    owner: address,
+    validUntil: uint32,
+): uint256 {
+    return beginCell()
+        .storeUint(TEST_HOLDER_FEE_DOMAIN, 32)
+        .storeInt(TEST_NETWORK_ID, 32)
+        .storeAddress(contract.address)
+        .storeUint(offerId, 64)
+        .storeAddress(owner)
+        .storeUint(validUntil, 32)
+        .hash();
+}
+
+fun testHolderPermit(
+    contract: DuelEscrow,
+    offerId: uint64,
+    owner: address,
+    validUntil: uint32,
+): Cell<HolderFeePermit> {
+    return HolderFeePermit {
+        validUntil,
+        signature: crypto.rawSign(
+            INVITE_SIGNER_SEED,
+            testHolderPermitHash(contract, offerId, owner, validUntil),
+        ) as bits512,
     }.toCell();
 }
 
@@ -157,6 +191,7 @@ fun openPair(contract: DuelEscrow, playerA: Treasury, playerB: Treasury): void {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("1.05") },
     );
     expect(first).toHaveSuccessfulTx<OpenOffer>({
@@ -173,6 +208,7 @@ fun openPair(contract: DuelEscrow, playerA: Treasury, playerB: Treasury): void {
         ton("4"),
         expiresAt,
         OFFER_A_ID,
+        null,
         { value: ton("3.05") },
     );
     expect(second).toHaveSuccessfulTx<OpenOffer>({
@@ -193,6 +229,7 @@ fun openEqualPair(contract: DuelEscrow, playerA: Treasury, playerB: Treasury): v
             ton("2"),
             expiresAt,
             0,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -206,6 +243,7 @@ fun openEqualPair(contract: DuelEscrow, playerA: Treasury, playerB: Treasury): v
             ton("2"),
             expiresAt,
             OFFER_A_ID,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -229,6 +267,7 @@ fun openEqualPairWithIds(
             ton("2"),
             expiresAt,
             0,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -242,6 +281,7 @@ fun openEqualPairWithIds(
             ton("2"),
             expiresAt,
             firstOfferId,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -602,6 +642,7 @@ get fun `test maximum boosted pool is inclusive`() {
             ton("99.9"),
             expiresAt,
             0,
+            null,
             { value: ton("50") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -615,6 +656,7 @@ get fun `test maximum boosted pool is inclusive`() {
             ton("99.9"),
             expiresAt,
             OFFER_A_ID,
+            null,
             { value: ton("50") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -884,6 +926,7 @@ get fun `test owner cancellation refunds and offer id remains replay protected`(
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("1.05") },
     );
     expect(opened).toHaveSuccessfulTx<OpenOffer>();
@@ -910,6 +953,7 @@ get fun `test owner cancellation refunds and offer id remains replay protected`(
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("1.05") },
     );
     expect(replay).toHaveFailedTx({ exitCode: Errors.OfferAlreadyUsed });
@@ -928,6 +972,7 @@ get fun `test permissionless expiry refunds an unmatched offer`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(opened).toHaveSuccessfulTx<OpenOffer>();
@@ -960,6 +1005,7 @@ get fun `test pause blocks new offers but preserves recovery`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(opened).toHaveSuccessfulTx<OpenOffer>();
@@ -983,6 +1029,7 @@ get fun `test pause blocks new offers but preserves recovery`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(blocked).toHaveFailedTx({ exitCode: Errors.Paused });
@@ -1001,6 +1048,7 @@ get fun `test one owner cannot create concurrent offers`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(first).toHaveSuccessfulTx<OpenOffer>();
@@ -1013,6 +1061,7 @@ get fun `test one owner cannot create concurrent offers`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(second).toHaveFailedTx({ exitCode: Errors.OwnerAlreadyActive });
@@ -1031,6 +1080,7 @@ get fun `test operational calls reject dust before spending contract reserve`() 
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(opened).toHaveSuccessfulTx<OpenOffer>();
@@ -1052,6 +1102,7 @@ get fun `test permissionless matcher cannot alter terms or ordering`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("1.05") },
     );
     val second = contract.sendOpenOffer(
@@ -1063,6 +1114,7 @@ get fun `test permissionless matcher cannot alter terms or ordering`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("3.05") },
     );
     expect(first).toHaveSuccessfulTx<OpenOffer>();
@@ -1093,6 +1145,7 @@ get fun `test unauthorized recovery and pause attempts fail`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(opened).toHaveSuccessfulTx<OpenOffer>();
@@ -1182,6 +1235,7 @@ get fun `test malformed offers and unsafe deployment fee cannot lock value`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(unsafeFee).toHaveFailedTx({ exitCode: Errors.InvalidFee });
@@ -1195,6 +1249,7 @@ get fun `test malformed offers and unsafe deployment fee cannot lock value`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(invalidChance).toHaveFailedTx({ exitCode: Errors.InvalidChance });
@@ -1207,6 +1262,7 @@ get fun `test malformed offers and unsafe deployment fee cannot lock value`() {
         ton("4"),
         expiresAt,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(zeroId).toHaveFailedTx({ exitCode: Errors.InvalidOfferId });
@@ -1224,6 +1280,7 @@ get fun `test offer boundaries fail before any value is locked`() {
         999_999_996,
         now + 900,
         0,
+        null,
         { value: ton("0.55") },
     );
     expect(tooSmall).toHaveFailedTx({ exitCode: Errors.InvalidPool });
@@ -1237,6 +1294,7 @@ get fun `test offer boundaries fail before any value is locked`() {
         100_000_000_004,
         now + 900,
         0,
+        null,
         { value: ton("50.05") },
     );
     expect(tooLarge).toHaveFailedTx({ exitCode: Errors.InvalidPool });
@@ -1250,6 +1308,7 @@ get fun `test offer boundaries fail before any value is locked`() {
         1_000_000_002,
         now + 900,
         0,
+        null,
         { value: ton("0.55") },
     );
     expect(uneven).toHaveFailedTx({ exitCode: Errors.InvalidPool });
@@ -1263,6 +1322,7 @@ get fun `test offer boundaries fail before any value is locked`() {
         ton("4"),
         now + 29,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(tooSoon).toHaveFailedTx({ exitCode: Errors.InvalidExpiry });
@@ -1276,6 +1336,7 @@ get fun `test offer boundaries fail before any value is locked`() {
         ton("4"),
         now + 3_601,
         0,
+        null,
         { value: ton("2.05") },
     );
     expect(tooLate).toHaveFailedTx({ exitCode: Errors.InvalidExpiry });
@@ -1289,6 +1350,7 @@ get fun `test offer boundaries fail before any value is locked`() {
         ton("4"),
         now + 900,
         0,
+        null,
         { value: 2_049_999_999 },
     );
     expect(underfunded).toHaveFailedTx({ exitCode: Errors.InsufficientValue });
@@ -1324,6 +1386,7 @@ get fun `test inclusive fee pool and expiry boundaries are accepted`() {
             1_000_000_000,
             now + 30,
             0,
+            null,
             { value: 550_000_000 },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -1340,6 +1403,7 @@ get fun `test inclusive fee pool and expiry boundaries are accepted`() {
             100_000_000_000,
             now + 3_600,
             0,
+            null,
             { value: 50_050_000_000 },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -1358,6 +1422,7 @@ get fun `test matching rejects duplicate incompatible stale and terminal offers`
         ton("4"),
         now + 120,
         0,
+        null,
         { value: ton("1.05") },
     );
     expect(first).toHaveSuccessfulTx<OpenOffer>();
@@ -1379,6 +1444,7 @@ get fun `test matching rejects duplicate incompatible stale and terminal offers`
         ton("4"),
         now + 900,
         0,
+        null,
         { value: ton("1.05") },
     );
     expect(wrongChance).toHaveSuccessfulTx<OpenOffer>();
@@ -1403,6 +1469,7 @@ get fun `test matching rejects duplicate incompatible stale and terminal offers`
         ton("8"),
         now + 900,
         0,
+        null,
         { value: ton("6.05") },
     );
     expect(wrongPool).toHaveSuccessfulTx<OpenOffer>();
@@ -1427,6 +1494,7 @@ get fun `test matching rejects duplicate incompatible stale and terminal offers`
         ton("4"),
         now + 900,
         0,
+        null,
         { value: ton("3.05") },
     );
     expect(compatible).toHaveSuccessfulTx<OpenOffer>();
@@ -1455,6 +1523,7 @@ get fun `test operational guards reject dust pause wrong state and early calls`(
             ton("4"),
             expiresAt,
             0,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -1468,6 +1537,7 @@ get fun `test operational guards reject dust pause wrong state and early calls`(
             ton("4"),
             expiresAt,
             0,
+            null,
             { value: ton("3.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -1650,6 +1720,7 @@ get fun `test direct invite permit binds the accepting wallet on chain`() {
             ton("4"),
             expiresAt,
             inviteId,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenDirectOffer>();
@@ -1663,6 +1734,7 @@ get fun `test direct invite permit binds the accepting wallet on chain`() {
             ton("4"),
             expiresAt,
             0,
+            null,
             { value: ton("3.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -1695,6 +1767,7 @@ get fun `test direct invite permit binds the accepting wallet on chain`() {
                 expiresAt,
             ),
         },
+        null,
         { value: ton("3.05") },
     );
     expect(accepted).toHaveSuccessfulTx<AcceptDirectOffer>();
@@ -1719,6 +1792,7 @@ get fun `test direct permit cannot be replayed by another wallet`() {
             ton("2"),
             expiresAt,
             inviteId,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenDirectOffer>();
@@ -1742,6 +1816,7 @@ get fun `test direct permit cannot be replayed by another wallet`() {
                 expiresAt,
             ),
         },
+        null,
         { value: ton("1.05") },
     );
     expect(stolen).toHaveFailedTx({ exitCode: Errors.InvalidDirectPermit });
@@ -1766,6 +1841,7 @@ get fun `test direct offer creation and acceptance honor pause`() {
             ton("2"),
             expiresAt,
             inviteId,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveFailedTx({ exitCode: Errors.Paused });
@@ -1782,6 +1858,7 @@ get fun `test direct offer creation and acceptance honor pause`() {
             ton("2"),
             expiresAt,
             inviteId,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenDirectOffer>();
@@ -1808,6 +1885,7 @@ get fun `test direct offer creation and acceptance honor pause`() {
                     expiresAt,
                 ),
             },
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveFailedTx({ exitCode: Errors.Paused });
@@ -1826,6 +1904,7 @@ get fun `test direct path rejects zero invite and AFK counter`() {
             ton("2"),
             expiresAt,
             0,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveFailedTx({ exitCode: Errors.DirectInviteRequired });
@@ -1839,6 +1918,7 @@ get fun `test direct path rejects zero invite and AFK counter`() {
             ton("2"),
             expiresAt,
             0,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -1856,6 +1936,7 @@ get fun `test direct path rejects zero invite and AFK counter`() {
                 validUntil: expiresAt,
                 signature: testDirectPermit(contract, 0, 1_852, playerB.address, expiresAt),
             },
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveFailedTx({ exitCode: Errors.DirectInviteRequired });
@@ -1875,6 +1956,7 @@ get fun `test direct permit enforces owner and both expiry boundaries`() {
             ton("2"),
             expiresAt,
             inviteId,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenDirectOffer>();
@@ -1899,6 +1981,7 @@ get fun `test direct permit enforces owner and both expiry boundaries`() {
                     expiresAt,
                 ),
             },
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveFailedTx({ exitCode: Errors.SameOwner });
@@ -1924,6 +2007,7 @@ get fun `test direct permit enforces owner and both expiry boundaries`() {
                     expiredPermit,
                 ),
             },
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveFailedTx({ exitCode: Errors.DirectPermitExpired });
@@ -1949,6 +2033,7 @@ get fun `test direct permit enforces owner and both expiry boundaries`() {
                     tooLatePermit,
                 ),
             },
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveFailedTx({ exitCode: Errors.DirectPermitExpired });
@@ -1974,6 +2059,7 @@ get fun `test direct permit enforces owner and both expiry boundaries`() {
                     exactNow,
                 ),
             },
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<AcceptDirectOffer>();
@@ -1992,6 +2078,7 @@ get fun `test commitment cannot cross network domains`() {
             ton("2"),
             expiresAt,
             0,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -2005,6 +2092,7 @@ get fun `test commitment cannot cross network domains`() {
             ton("2"),
             expiresAt,
             1_821,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -2048,6 +2136,7 @@ get fun `test commitment cannot cross contract addresses`() {
             ton("2"),
             expiresAt,
             0,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -2061,6 +2150,7 @@ get fun `test commitment cannot cross contract addresses`() {
             ton("2"),
             expiresAt,
             1_831,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -2129,6 +2219,7 @@ get fun `test DUEL admin changes cannot alter active locked stakes`() {
             ton("2"),
             testing.getNow() + 900,
             0,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -2678,6 +2769,7 @@ get fun `test exact expiry reveal and call-gas boundaries are enforced`() {
             ton("2"),
             offerExpiry,
             0,
+            null,
             { value: ton("1.05") },
         ),
     ).toHaveSuccessfulTx<OpenOffer>();
@@ -2808,6 +2900,7 @@ get fun `test 64 consecutive duels settle without locked value or active offer l
                 ton("2"),
                 expiresAt,
                 0,
+                null,
                 { value: ton("1.05") },
             ),
         ).toHaveSuccessfulTx<OpenOffer>();
@@ -2821,6 +2914,7 @@ get fun `test 64 consecutive duels settle without locked value or active offer l
                 ton("2"),
                 expiresAt,
                 offerAId,
+                null,
                 { value: ton("1.05") },
             ),
         ).toHaveSuccessfulTx<OpenOffer>();
@@ -2872,4 +2966,318 @@ fun setupTest(): (DuelEscrow, Treasury, Treasury, Treasury, Treasury) {
     val deployed = contract.deploy(owner.address, { value: ton("2") });
     expect(deployed).toHaveSuccessfulDeploy({ to: contract.address });
     return (contract, owner, feeCollector, playerA, playerB);
+}
+
+fun openPairWithExemptA(contract: DuelEscrow, playerA: Treasury, playerB: Treasury): void {
+    val expiresAt: uint32 = testing.getNow() + 900;
+    val first = contract.sendOpenOffer(
+        playerA.address,
+        OFFER_A_ID,
+        OFFER_A_ID,
+        testCommitment(contract, OFFER_A_ID, playerA.address, SECRET_A),
+        2_500,
+        ton("4"),
+        expiresAt,
+        0,
+        testHolderPermit(contract, OFFER_A_ID, playerA.address, testing.getNow() + 600),
+        { value: ton("1.05") },
+    );
+    expect(first).toHaveSuccessfulTx<OpenOffer>({
+        from: playerA.address,
+        to: contract.address,
+    });
+    expect(contract.offerData(OFFER_A_ID).feeExempt).toEqual(true);
+
+    val second = contract.sendOpenOffer(
+        playerB.address,
+        OFFER_B_ID,
+        OFFER_B_ID,
+        testCommitment(contract, OFFER_B_ID, playerB.address, SECRET_B),
+        7_500,
+        ton("4"),
+        expiresAt,
+        OFFER_A_ID,
+        null,
+        { value: ton("3.05") },
+    );
+    expect(second).toHaveSuccessfulTx<OpenOffer>({
+        from: playerB.address,
+        to: contract.address,
+    });
+    expect(contract.offerData(OFFER_B_ID).feeExempt).toEqual(false);
+}
+
+get fun `test exempt sole winner receives the full pool without a fee message`() {
+    val (contract, _, feeCollector, playerA, playerB) = setupTest();
+    openPairWithExemptA(contract, playerA, playerB);
+    advancePastBoost(contract, OFFER_B_ID);
+
+    val reveal = contract.sendReveal(
+        playerA.address,
+        401,
+        OFFER_B_ID,
+        OFFER_A_ID,
+        SECRET_A,
+        { value: ton("0.03") },
+    );
+    expect(reveal).toHaveSuccessfulTx<Reveal>();
+
+    testing.setNow(testing.getNow() + 301);
+    val expire = contract.sendExpireDuel(
+        playerB.address,
+        402,
+        OFFER_B_ID,
+        { value: ton("0.03") },
+    );
+    expect(expire).toHaveAllSuccessfulTxs();
+    expect(expire).toHaveSuccessfulTx<DuelPayout>({
+        from: contract.address,
+        to: playerA.address,
+        value: ton("4"),
+    });
+    expect(expire).toNotHaveTx<ProtocolFee>({ from: contract.address });
+    expect(contract.contractConfig().locked).toEqual(0);
+}
+
+get fun `test opponent exemption does not waive the fee of a non-exempt winner`() {
+    val (contract, _, feeCollector, playerA, playerB) = setupTest();
+    openPairWithExemptA(contract, playerA, playerB);
+    advancePastBoost(contract, OFFER_B_ID);
+
+    val reveal = contract.sendReveal(
+        playerB.address,
+        403,
+        OFFER_B_ID,
+        OFFER_B_ID,
+        SECRET_B,
+        { value: ton("0.03") },
+    );
+    expect(reveal).toHaveSuccessfulTx<Reveal>();
+
+    testing.setNow(testing.getNow() + 301);
+    val expire = contract.sendExpireDuel(
+        playerA.address,
+        404,
+        OFFER_B_ID,
+        { value: ton("0.03") },
+    );
+    expect(expire).toHaveAllSuccessfulTxs();
+    expect(expire).toHaveSuccessfulTx<DuelPayout>({
+        from: contract.address,
+        to: playerB.address,
+        value: ton("3.9"),
+    });
+    expect(expire).toHaveSuccessfulTx<ProtocolFee>({
+        from: contract.address,
+        to: feeCollector.address,
+        value: ton("0.1"),
+    });
+    expect(contract.contractConfig().locked).toEqual(0);
+}
+
+get fun `test both exempt players settle the full pool on weighted reveal`() {
+    val (contract, _, feeCollector, playerA, playerB) = setupTest();
+    val expiresAt: uint32 = testing.getNow() + 900;
+    val first = contract.sendOpenOffer(
+        playerA.address,
+        OFFER_A_ID,
+        OFFER_A_ID,
+        testCommitment(contract, OFFER_A_ID, playerA.address, SECRET_A),
+        2_500,
+        ton("4"),
+        expiresAt,
+        0,
+        testHolderPermit(contract, OFFER_A_ID, playerA.address, testing.getNow() + 600),
+        { value: ton("1.05") },
+    );
+    expect(first).toHaveSuccessfulTx<OpenOffer>();
+    val second = contract.sendOpenOffer(
+        playerB.address,
+        OFFER_B_ID,
+        OFFER_B_ID,
+        testCommitment(contract, OFFER_B_ID, playerB.address, SECRET_B),
+        7_500,
+        ton("4"),
+        expiresAt,
+        OFFER_A_ID,
+        testHolderPermit(contract, OFFER_B_ID, playerB.address, testing.getNow() + 600),
+        { value: ton("3.05") },
+    );
+    expect(second).toHaveSuccessfulTx<OpenOffer>();
+    advancePastBoost(contract, OFFER_B_ID);
+
+    expect(
+        contract.sendReveal(
+            playerA.address,
+            405,
+            OFFER_B_ID,
+            OFFER_A_ID,
+            SECRET_A,
+            { value: ton("0.03") },
+        ),
+    ).toHaveSuccessfulTx<Reveal>();
+    val settle = contract.sendReveal(
+        playerB.address,
+        406,
+        OFFER_B_ID,
+        OFFER_B_ID,
+        SECRET_B,
+        { value: ton("0.03") },
+    );
+    expect(settle).toHaveAllSuccessfulTxs();
+    expect(settle).toHaveSuccessfulTx<DuelPayout>({
+        from: contract.address,
+        value: ton("4"),
+    });
+    expect(settle).toNotHaveTx<ProtocolFee>({ from: contract.address });
+    expect(contract.contractConfig().locked).toEqual(0);
+}
+
+get fun `test holder permit boundaries fail closed before locking value`() {
+    val (contract, _, _, playerA, playerB) = setupTest();
+    val expiresAt: uint32 = testing.getNow() + 900;
+
+    // Signature over a different offer id is not transferable.
+    val wrongOffer = contract.sendOpenOffer(
+        playerA.address,
+        501,
+        501,
+        testCommitment(contract, 501, playerA.address, SECRET_A),
+        2_500,
+        ton("4"),
+        expiresAt,
+        0,
+        testHolderPermit(contract, 999, playerA.address, testing.getNow() + 600),
+        { value: ton("1.05") },
+    );
+    expect(wrongOffer).toHaveFailedTx({
+        from: playerA.address,
+        to: contract.address,
+        exitCode: Errors.InvalidHolderPermit,
+    });
+
+    // A permit signed for another wallet cannot be attached by the sender.
+    val wrongWallet = contract.sendOpenOffer(
+        playerA.address,
+        502,
+        502,
+        testCommitment(contract, 502, playerA.address, SECRET_A),
+        2_500,
+        ton("4"),
+        expiresAt,
+        0,
+        testHolderPermit(contract, 502, playerB.address, testing.getNow() + 600),
+        { value: ton("1.05") },
+    );
+    expect(wrongWallet).toHaveFailedTx({
+        from: playerA.address,
+        to: contract.address,
+        exitCode: Errors.InvalidHolderPermit,
+    });
+
+    // An expired permit is rejected outright instead of silently charging.
+    val expired = contract.sendOpenOffer(
+        playerA.address,
+        503,
+        503,
+        testCommitment(contract, 503, playerA.address, SECRET_A),
+        2_500,
+        ton("4"),
+        expiresAt,
+        0,
+        testHolderPermit(contract, 503, playerA.address, testing.getNow() - 1),
+        { value: ton("1.05") },
+    );
+    expect(expired).toHaveFailedTx({
+        from: playerA.address,
+        to: contract.address,
+        exitCode: Errors.HolderPermitExpired,
+    });
+
+    // A permit living longer than the maximum expiry delay is rejected too.
+    val eternal = contract.sendOpenOffer(
+        playerA.address,
+        504,
+        504,
+        testCommitment(contract, 504, playerA.address, SECRET_A),
+        2_500,
+        ton("4"),
+        expiresAt,
+        0,
+        testHolderPermit(contract, 504, playerA.address, testing.getNow() + 3_601),
+        { value: ton("1.05") },
+    );
+    expect(eternal).toHaveFailedTx({
+        from: playerA.address,
+        to: contract.address,
+        exitCode: Errors.HolderPermitExpired,
+    });
+
+    expect(contract.contractConfig().locked).toEqual(0);
+}
+
+get fun `test direct acceptance carries the acceptor holder exemption on chain`() {
+    val (contract, _, feeCollector, playerA, playerB) = setupTest();
+    val expiresAt: uint32 = testing.getNow() + 900;
+    val inviteId: uint256 = 0x77;
+    val opened = contract.sendOpenDirectOffer(
+        playerA.address,
+        601,
+        601,
+        testCommitment(contract, 601, playerA.address, SECRET_A),
+        5_000,
+        ton("4"),
+        expiresAt,
+        inviteId,
+        null,
+        { value: ton("2.05") },
+    );
+    expect(opened).toHaveSuccessfulTx<OpenDirectOffer>();
+
+    val accepted = contract.sendAcceptDirectOffer(
+        playerB.address,
+        602,
+        602,
+        testCommitment(contract, 602, playerB.address, SECRET_B),
+        5_000,
+        ton("4"),
+        expiresAt,
+        DirectAcceptance {
+            counterOfferId: 601,
+            validUntil: expiresAt,
+            signature: testDirectPermit(contract, inviteId, 601, playerB.address, expiresAt),
+        },
+        testHolderPermit(contract, 602, playerB.address, testing.getNow() + 600),
+        { value: ton("2.05") },
+    );
+    expect(accepted).toHaveAllSuccessfulTxs();
+    expect(contract.offerData(601).feeExempt).toEqual(false);
+    expect(contract.offerData(602).feeExempt).toEqual(true);
+
+    advancePastBoost(contract, 602);
+    expect(
+        contract.sendReveal(
+            playerB.address,
+            603,
+            602,
+            602,
+            SECRET_B,
+            { value: ton("0.03") },
+        ),
+    ).toHaveSuccessfulTx<Reveal>();
+    testing.setNow(testing.getNow() + 301);
+    val expire = contract.sendExpireDuel(
+        playerA.address,
+        604,
+        602,
+        { value: ton("0.03") },
+    );
+    expect(expire).toHaveAllSuccessfulTxs();
+    expect(expire).toHaveSuccessfulTx<DuelPayout>({
+        from: contract.address,
+        to: playerB.address,
+        value: ton("4"),
+    });
+    expect(expire).toNotHaveTx<ProtocolFee>({ from: contract.address });
+    expect(contract.contractConfig().locked).toEqual(0);
 }

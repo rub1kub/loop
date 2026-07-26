@@ -47,10 +47,10 @@ make contracts-mainnet-preflight
 make contracts-mainnet-verify
 ```
 
-## Current v1.3 evidence
+## Current evidence
 
-- 19 BANK and 48 DUEL contract tests;
-- 99.66% contract line coverage and 86.67% branch coverage;
+- 19 BANK and 53 DUEL contract tests (incl. DuelEscrow v1.4 holder-permit paths);
+- 99.67% contract line coverage and 87.45% branch coverage;
 - BANK mutation scores: 93.5% critical and 82.4% major;
 - DUEL mutation scores: 99.1% critical and 90.0% major;
 - 64 consecutive DUEL settlements without an active-offer or locked-value leak;

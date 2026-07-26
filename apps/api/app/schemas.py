@@ -230,6 +230,12 @@ class ContractCall(BaseModel):
     direct_counter_offer_id: int = 0
     direct_valid_until: int = 0
     direct_signature_hex: str | None = None
+    # DuelEscrow v1.4 holder fee exemption. The wire layout of every open
+    # message depends on the deployed contract version, so the client must
+    # follow `holder_fee_supported` exactly instead of guessing.
+    holder_fee_supported: bool = False
+    holder_valid_until: int = 0
+    holder_signature_hex: str | None = None
 
 
 class OfferView(BaseModel):
@@ -240,6 +246,7 @@ class OfferView(BaseModel):
     stake_nano: int
     opponent_stake_nano: int
     fee_bps: int
+    fee_exempt: bool = False
     payout_nano: int
     net_profit_nano: int
     mode: str
@@ -275,6 +282,7 @@ class DuelView(BaseModel):
     stake_nano: int
     opponent_stake_nano: int
     total_pool_nano: int
+    fee_exempt: bool = False
     payout_nano: int
     boost_deadline: datetime | None
     hard_deadline: datetime | None

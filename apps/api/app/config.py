@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     duel_fee_bps: int = 250
     duel_invite_signing_key: SecretStr = SecretStr("")
     duel_invite_public_key: str = ""
+    # Holder fee exemption may only be enabled against DuelEscrow v1.4+
+    # bytecode: v1.3 stores one global fee, so an advertised discount would
+    # disagree with the actual settlement. Production startup verifies the
+    # live contract reports holder-fee support before serving quotes.
+    duel_holder_fee_enabled: bool = False
     # Legacy names are read during the one-release migration window.
     ton_contract_address: str = ""
     ton_contract_code_hash: str = ""
