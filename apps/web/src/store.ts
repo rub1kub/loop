@@ -224,7 +224,14 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   rating: null,
   error: null,
   showOnboarding: false,
-  onboardingPage: mockScreen === 'onboarding-bank' ? 1 : mockScreen === 'onboarding-duel' ? 2 : 0,
+  onboardingPage:
+    mockScreen === 'onboarding-bank'
+      ? 1
+      : mockScreen === 'onboarding-duel'
+        ? 2
+        : mockScreen === 'onboarding-plush'
+          ? 3
+          : 0,
 
   async bootstrap() {
     const started = performance.now();
@@ -247,7 +254,8 @@ export const useLoopStore = create<LoopState>((set, get) => ({
           showOnboarding:
             mockScreen === 'onboarding' ||
             mockScreen === 'onboarding-bank' ||
-            mockScreen === 'onboarding-duel',
+            mockScreen === 'onboarding-duel' ||
+            mockScreen === 'onboarding-plush',
         });
         return;
       }

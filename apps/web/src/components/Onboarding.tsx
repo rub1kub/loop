@@ -1,7 +1,26 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 
-import { haptic, setBackAction } from '../telegram';
+import { haptic, openPlatformLink, setBackAction } from '../telegram';
+
+const plushBrickLogoUrl = 'https://tonsuite.org/assets/plush-brick-video.gif';
+const plushBrickMarkets = [
+  {
+    name: 'dTrade',
+    url: 'https://t.me/dtrade?start=1IPvnLpaEN_EQAJ40p3zlCoomgANMQ4u5eIktLMZtWP87GGKDKlyW_EZBwt',
+    telegramNative: true,
+  },
+  {
+    name: 'RedoTrade',
+    url: 'https://t.me/redotrade?start=rubikub-EQAJ40p3zlCoomgANMQ4u5eIktLMZtWP87GGKDKlyW_EZBwt',
+    telegramNative: true,
+  },
+  {
+    name: 'STON.fi',
+    url: 'https://app.ston.fi/swap?chartVisible=true&ft=GRAM&tt=EQAJ40p3zlCoomgANMQ4u5eIktLMZtWP87GGKDKlyW_EZBwt&chartInterval=1w&fa=%2225%22',
+    telegramNative: false,
+  },
+] as const;
 
 const stories = [
   {
@@ -20,6 +39,13 @@ const stories = [
     title: 'Равная ставка.\nСлучайный исход.',
     detail:
       'Оба вносят одинаковую сумму. Победителя определяют два заранее зафиксированных тайных числа; завершённые действия повышают твой счёт LOOP.',
+  },
+  {
+    signal: '03 · PLUSH BRICK',
+    title: 'Кирпич замыкает\nцикл.',
+    detail:
+      'PLUSH BRICK нужен для режима без комиссии. Часть дохода LOOP возвращается на рынок — на выкуп токена.',
+    mark: plushBrickLogoUrl,
   },
 ];
 
@@ -41,6 +67,13 @@ export function Onboarding({
     else setPage((value) => value + 1);
   }
 
+  function openMarket(url: string, telegramNative: boolean) {
+    haptic('light');
+    openPlatformLink(url, telegramNative);
+  }
+
+  const isPlushBrickStory = story.mark === plushBrickLogoUrl;
+
   return (
     <main className="onboarding">
       <span className="onboarding-brand">LOOP</span>
@@ -54,7 +87,11 @@ export function Onboarding({
             exit={{ opacity: 0, y: -12, filter: 'blur(6px)' }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           >
-            <img className="story-mark" src="/assets/loop-loader.webp" alt="" />
+            <img
+              className={`story-mark${isPlushBrickStory ? ' story-mark-plush' : ''}`}
+              src={story.mark ?? '/assets/loop-loader.webp'}
+              alt={isPlushBrickStory ? 'Анимированный логотип PLUSH BRICK' : ''}
+            />
             <p className="story-signal">{story.signal}</p>
             <h1 aria-label={story.title.replace('\n', ' ')}>
               {story.title.split('\n').map((line) => (
@@ -66,6 +103,26 @@ export function Onboarding({
         </AnimatePresence>
       </button>
       <div className="story-footer">
+        {isPlushBrickStory ? (
+          <div className="story-market-links" aria-label="Купить PLUSH BRICK">
+            {plushBrickMarkets.map((market) => (
+              <a
+                key={market.name}
+                href={market.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Купить PLUSH BRICK в ${market.name}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  openMarket(market.url, market.telegramNative);
+                }}
+              >
+                <small>КУПИТЬ В</small>
+                <span>{market.name}</span>
+              </a>
+            ))}
+          </div>
+        ) : null}
         <div className="story-dots" aria-label={`Экран ${page + 1} из ${stories.length}`}>
           {stories.map((story, index) => (
             <span key={story.signal} className={index === page ? 'active' : ''} />

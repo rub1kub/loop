@@ -4,6 +4,7 @@ import {
   haptic,
   initializeTelegram,
   isHapticsEnabled,
+  openPlatformLink,
   setHapticsEnabled,
   telegramInitData,
   telegramStartParam,
@@ -232,5 +233,22 @@ describe('Telegram launch compatibility', () => {
     setHapticsEnabled(true);
     haptic('success');
     expect(notificationOccurred).toHaveBeenCalledWith('success');
+  });
+
+  it('opens Telegram and web market links through the matching native bridge', () => {
+    const openTelegramLink = vi.fn();
+    const openLink = vi.fn();
+    window.Telegram = {
+      WebApp: {
+        openTelegramLink,
+        openLink,
+      } as unknown as TelegramWebApp,
+    };
+
+    openPlatformLink('https://t.me/dtrade', true);
+    openPlatformLink('https://app.ston.fi/swap');
+
+    expect(openTelegramLink).toHaveBeenCalledWith('https://t.me/dtrade');
+    expect(openLink).toHaveBeenCalledWith('https://app.ston.fi/swap');
   });
 });

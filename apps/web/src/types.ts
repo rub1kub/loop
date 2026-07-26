@@ -26,6 +26,7 @@ export interface TelegramWebApp {
   enableClosingConfirmation?(): void;
   onEvent?(event: string, callback: (payload?: { isStateStable?: boolean }) => void): void;
   offEvent?(event: string, callback: (payload?: { isStateStable?: boolean }) => void): void;
+  openLink?(url: string): void;
   openTelegramLink(url: string): void;
   switchInlineQuery?(query: string, chooseChatTypes?: string[]): void;
   BackButton: {

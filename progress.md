@@ -35,3 +35,12 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 
 - Resolve the GitHub account billing lock if hosted Actions remain unable to start.
 - Keep mainnet disabled until all documented release gates are complete.
+
+## Latest iteration
+
+- Added a fourth onboarding story for PLUSH BRICK with concise fee/buyback context.
+- Added direct purchase paths for dTrade, RedoTrade, and STON.fi using Telegram-native link
+  bridges with a browser fallback.
+- Added a dedicated mock route (`?screen=onboarding-plush`) for repeatable visual QA.
+- Targeted tests cover the fourth story, all three market URLs, and Telegram-native navigation;
+  the 430 × 720 visual pass fits without overlap or new console errors.

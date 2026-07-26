@@ -147,6 +147,19 @@ export function setBackAction(action?: () => void): () => void {
   };
 }
 
+export function openPlatformLink(url: string, telegramNative = false): void {
+  const app = telegram();
+  if (telegramNative && app?.openTelegramLink) {
+    app.openTelegramLink(url);
+    return;
+  }
+  if (app?.openLink) {
+    app.openLink(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 export async function storeDuelSecret(offerId: number, secretHex: string): Promise<void> {
   const key = `loop-duel-${offerId}`;
   const storage = telegram()?.SecureStorage;
