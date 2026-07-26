@@ -3281,3 +3281,53 @@ get fun `test direct acceptance carries the acceptor holder exemption on chain`(
     expect(expire).toNotHaveTx<ProtocolFee>({ from: contract.address });
     expect(contract.contractConfig().locked).toEqual(0);
 }
+
+get fun `test a stale v1.3 client body is rejected without touching state`() {
+    val (contract, _, _, playerA, playerB) = setupTest();
+    val expiresAt: uint32 = testing.getNow() + 900;
+    // Byte-for-byte the v1.3 OpenOffer layout: it ends after counterOfferId,
+    // without the holder maybe-bit that v1.4 appends. A cached Mini App bundle
+    // keeps sending exactly this after a cutover.
+    val staleBody = beginCell()
+        .storeUint(0x4C4F4F01, 32)
+        .storeUint(OFFER_A_ID, 64)
+        .storeUint(OFFER_A_ID, 64)
+        .storeUint(testCommitment(contract, OFFER_A_ID, playerA.address, SECRET_A), 256)
+        .storeUint(5_000, 16)
+        .storeCoins(ton("2"))
+        .storeUint(expiresAt, 32)
+        .storeUint(0, 64)
+        .endCell();
+
+    val stale = contract.sendAny(playerA.address, staleBody, { value: ton("1.05") });
+    // Truncated body: the union deserializer runs off the end of the slice, so
+    // TVM aborts with a cell underflow before any storage write.
+    expect(stale).toHaveFailedTx({
+        from: playerA.address,
+        to: contract.address,
+        exitCode: 9,
+    });
+    expect(contract.contractConfig().locked).toEqual(0);
+
+    // The rejected attempt must not have consumed the offer id or the owner
+    // slot: the same wallet can immediately open the same offer correctly.
+    val retry = contract.sendOpenOffer(
+        playerA.address,
+        OFFER_A_ID,
+        OFFER_A_ID,
+        testCommitment(contract, OFFER_A_ID, playerA.address, SECRET_A),
+        5_000,
+        ton("2"),
+        expiresAt,
+        0,
+        null,
+        { value: ton("1.05") },
+    );
+    expect(retry).toHaveSuccessfulTx<OpenOffer>({
+        from: playerA.address,
+        to: contract.address,
+    });
+    expect(contract.contractConfig().locked).toEqual(ton("1"));
+    expect(contract.offerData(OFFER_A_ID).feeExempt).toEqual(false);
+    expect(playerB.address).toNotEqual(playerA.address);
+}

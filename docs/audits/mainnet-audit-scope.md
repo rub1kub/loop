@@ -47,6 +47,14 @@ sessions and chain-projection idempotency are included.
    permit rejects the whole open, and the exemption only removes the winner's protocol
    fee — it never changes chance, boosts, refunds or locked accounting.
 
+## Prior internal work
+
+`docs/reviews/audit-request-package.md` carries the threat model, the invariant-to-evidence map
+and six open questions (`R1`-`R6`) we specifically want an external verdict on.
+`docs/reviews/internal-review-2026-07-26.md` records an adversarial review written by the author
+of the code: it is disclosed as self-review, not as an audit, and it is deliberately stored
+outside `docs/audits/` so it cannot be mistaken for release evidence.
+
 ## Evidence expected from the release candidate
 
 ```bash

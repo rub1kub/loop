@@ -22,6 +22,8 @@ FILES = (
     "deployments/mainnet/release.example.json",
     "docs/audits/mainnet-audit-scope.md",
     "docs/contracts.md",
+    "docs/reviews/audit-request-package.md",
+    "docs/reviews/internal-review-2026-07-26.md",
     "docs/security.md",
     "docs/testing.md",
 )
