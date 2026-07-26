@@ -143,12 +143,12 @@ export function ProfileScreen({
         <article>
           <strong>{profile.bank.completed}</strong>
           <span>BANK · ВЫПЛАЧЕНО</span>
-          <small>{profile.bank.active ? `${profile.bank.active} активно` : 'нет активных'}</small>
+          <small>{profile.bank.active ? `${profile.bank.active} в работе` : 'нет активных'}</small>
         </article>
         <article>
           <strong>{profile.duel.completed}</strong>
           <span>DUEL</span>
-          <small>{profile.duel.active ? `${profile.duel.active} активно` : 'нет активных'}</small>
+          <small>{profile.duel.active ? `${profile.duel.active} в работе` : 'нет активных'}</small>
         </article>
       </div>
 
@@ -193,7 +193,7 @@ export function ProfileScreen({
               <small>
                 {profile.wallet
                   ? shortAddress(profile.wallet.address)
-                  : 'Для подтверждения действий и получения выплат'}
+                  : 'Для подписи операций и получения выплат'}
               </small>
             </div>
             <ArrowRight aria-hidden="true" />
@@ -209,16 +209,18 @@ export function ProfileScreen({
             <div>
               <b>{profile.plush_brick.holder ? 'Владение подтверждено' : 'Токен не найден'}</b>
               <small>
-                {profile.plush_brick.verified
-                  ? `Комиссия DUEL ${profile.plush_brick.duel_fee_bps / 100}%${profile.plush_brick.fee_discount_active ? ' со скидкой' : ''}`
-                  : 'Проверка временно недоступна'}
+                {!profile.plush_brick.verified
+                  ? 'Проверка временно недоступна'
+                  : profile.plush_brick.fee_discount_active
+                    ? 'Комиссия DUEL 0% — ты держатель PLUSH BRICK'
+                    : `Комиссия DUEL ${String(profile.plush_brick.duel_fee_bps / 100).replace('.', ',')}%`}
               </small>
             </div>
             <ShieldCheck aria-hidden="true" />
           </div>
 
           <div className="section-label">
-            <span>ПОСЛЕДНИЕ ПОДТВЕРЖДЕНИЯ</span>
+            <span>ПОСЛЕДНИЕ ОПЕРАЦИИ</span>
           </div>
           <div className="proof-history">
             <ProofRow

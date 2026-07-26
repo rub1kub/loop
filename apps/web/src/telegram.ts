@@ -216,7 +216,7 @@ export async function storeDuelSecret(offerId: number, secretHex: string): Promi
     return;
   }
   if (isMockTelegram()) sessionStorage.setItem(key, secretHex);
-  else throw new Error('Обновите Telegram: для дуэли требуется SecureStorage');
+  else throw new Error('Обнови Telegram: без SecureStorage дуэль не запустится');
 }
 
 export async function readDuelSecret(offerId: number): Promise<string | null> {

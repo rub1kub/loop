@@ -336,7 +336,7 @@ export function LandingPage() {
             <div className="landing-duel__rules">
               <span>Друг или случайный соперник</span>
               <span>Одинаковая ставка</span>
-              <span>Не сыграли — возврат</span>
+              <span>Никто не открыл — возврат обоим</span>
             </div>
           </div>
         </section>

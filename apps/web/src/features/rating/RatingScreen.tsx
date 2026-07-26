@@ -139,7 +139,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
         </summary>
         <p className="rating-driver">
           {mainDriver
-            ? `Главный вклад: ${driverLabels[mainDriver.code] ?? mainDriver.label} · +${mainDriver.contribution}`
+            ? `Главный фактор: ${driverLabels[mainDriver.code] ?? mainDriver.label} · +${mainDriver.contribution}`
             : 'Первое завершённое действие запустит твой счёт.'}
         </p>
         <p className="rating-explainer">

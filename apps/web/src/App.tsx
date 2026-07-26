@@ -88,7 +88,7 @@ export default function App() {
       })
       .then(() => refresh())
       .catch((error: unknown) => {
-        setError(error instanceof Error ? error.message : 'Подтверждение в кошельке отклонено');
+        setError(error instanceof Error ? error.message : 'Подпись в кошельке отклонена');
         void tonConnectUI.disconnect();
       });
   }, [refresh, setError, state.profile?.wallet?.address, tonConnectUI, wallet]);
@@ -227,7 +227,7 @@ export default function App() {
               try {
                 await state.markResultSeen(active.id);
               } catch {
-                state.setError('Результат закрыт. При следующем входе он может показаться снова.');
+                state.setError('Результат закрыт. При следующем входе он может появиться снова.');
               }
             }}
             onError={(message) => state.setError(message)}

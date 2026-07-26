@@ -115,7 +115,11 @@ describe('DuelScreen', () => {
     expect(screen.getByText('Победитель получит')).toBeInTheDocument();
     expect(screen.getByText('0,05 GRAM')).toBeInTheDocument();
     expect(screen.getByText(/Старт 50\/50/)).toBeVisible();
-    expect(screen.getByText(/минута, чтобы усилить/)).toBeVisible();
+    expect(
+      screen.getByText(
+        /есть минута на усиление; каждое усиление продлевает её, но не дольше трёх минут/,
+      ),
+    ).toBeVisible();
     expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
     expect(screen.queryByText('Твоя ставка')).not.toBeInTheDocument();
@@ -190,7 +194,9 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByText('Соперник найден. Теперь можно изменить перевес.')).toBeVisible();
+    expect(
+      screen.getByText('Соперник найден. Усилиться может каждый — твой шанс может и упасть.'),
+    ).toBeVisible();
     expect(screen.getByLabelText('Сумма усиления в GRAM')).toHaveValue('0.5');
     expect(screen.getByText('После подтверждения:')).toHaveTextContent('60,0%');
     expect(screen.getByRole('button', { name: 'УСИЛИТЬ' })).toBeVisible();

@@ -20,12 +20,12 @@ type WizardStep = 'amount' | 'multiplier' | 'confirm' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
 
 const statusCopy: Record<BankPosition['current_status'], string> = {
-  pending_confirmation: 'Проверяем вклад',
-  queued: 'Позиция ждёт пополнения',
-  partially_funded: 'Позиция наполняется',
+  pending_confirmation: 'Проверяем взнос в сети',
+  queued: 'Позиция ждёт новых взносов',
+  partially_funded: 'Позиция наполнена частично',
   completed: 'Цель собрана',
   payout_sent: 'Выплата отправлена',
-  failed: 'Вклад не подтверждён',
+  failed: 'Взнос не подтверждён',
 };
 
 export function BankScreen({
@@ -190,7 +190,7 @@ export function BankScreen({
       await tonConnectUI.sendTransaction(
         buildBankPositionTransaction(quote, wallet.account.address, wallet.account.chain),
       );
-      setMessage('Вклад отправлен. Ждём окончательный результат.');
+      setMessage('Взнос отправлен. Ждём подтверждение сети.');
       await onRefresh();
       haptic('success');
     } catch (error) {
@@ -280,7 +280,7 @@ export function BankScreen({
                   ))}
                 </div>
                 <p className="form-note">
-                  Ранние позиции наполняются первыми. Чем выше цель, тем больше новых вкладов
+                  Ранние позиции наполняются первыми. Чем выше цель, тем больше новых взносов
                   потребуется; выплата не гарантирована.
                 </p>
                 <button className="primary-button" onClick={() => void showConfirmation()}>
@@ -290,7 +290,7 @@ export function BankScreen({
             )}
             {wizard === 'confirm' && preview && (
               <>
-                <p className="eyebrow">ШАГ 3 ИЗ 3 · ПОДТВЕРЖДЕНИЕ</p>
+                <p className="eyebrow">ШАГ 3 ИЗ 3 · ИТОГ</p>
                 <h3>Проверь сумму и риск.</h3>
                 <dl className="detail-list">
                   <Detail
@@ -298,7 +298,7 @@ export function BankScreen({
                     value={`${formatGram(preview.transaction_amount_nano, 3)} GRAM`}
                   />
                   <Detail
-                    label="Твой вклад"
+                    label="Твой взнос"
                     value={`${formatGram(preview.principal_nano, 3)} GRAM`}
                   />
                   <Detail
@@ -314,12 +314,12 @@ export function BankScreen({
                 <div className="contract-truth bank-risk-disclosure">
                   <strong>Что произойдёт</strong>
                   <p>
-                    Комиссия удержится из вклада. Остаток пойдёт ранним позициям; если что-то
+                    Комиссия удержится из взноса. Остаток пойдёт ранним позициям; если что-то
                     останется — начнёт наполнять твою.
                   </p>
                   <p>
-                    Выплата зависит от будущих вкладов и может не наступить. После подтверждения
-                    позицию нельзя отменить.
+                    Выплата зависит от будущих взносов и может не наступить. Подписанный взнос
+                    вернуть нельзя.
                   </p>
                 </div>
                 <details className="technical-details">
@@ -340,7 +340,7 @@ export function BankScreen({
                   </p>
                 )}
                 <button className="primary-button" onClick={() => void confirmPosition()}>
-                  ПОДТВЕРДИТЬ В КОШЕЛЬКЕ
+                  ПОДПИСАТЬ В КОШЕЛЬКЕ
                 </button>
               </>
             )}
@@ -348,7 +348,7 @@ export function BankScreen({
               <>
                 <div className="waiting-step">
                   <span className="waiting-ring" />
-                  <h3>Проверяем подтверждение</h3>
+                  <h3>Ждём подтверждение сети</h3>
                   <p>Ждём окончательный результат. Это может занять немного времени.</p>
                   {message && <p className="form-note">{message}</p>}
                 </div>
@@ -417,7 +417,7 @@ export function BankScreen({
       ) : (
         <div className="bank-state bank-empty-state">
           <h2>Войди в очередь.</h2>
-          <p className="bank-risk">Каждая новая позиция двигает цикл дальше.</p>
+          <p className="bank-risk">Выплата зависит от новых взносов и не гарантирована.</p>
           <div className="bank-cycle-metrics is-empty">
             <CycleMetric value={pulse?.active_bank ?? '—'} label="В ОЧЕРЕДИ" />
             <CycleMetric value={pulse?.active_participants ?? '—'} label="СЕЙЧАС В LOOP" />
@@ -447,7 +447,7 @@ export function BankScreen({
             >
               <SheetTitle title="Позиция BANK" onClose={() => setDetails(false)} />
               <p className="bank-details-intro">
-                Банка показывает, сколько новых вкладов уже направлено в твою позицию.
+                Банка показывает, сколько новых взносов уже направлено в твою позицию.
               </p>
               <div className="big-progress">{Math.round(progressPercent)}%</div>
               <div className="progress-track">
@@ -455,7 +455,7 @@ export function BankScreen({
               </div>
               <dl className="detail-list">
                 <Detail
-                  label="Твой вклад"
+                  label="Твой взнос"
                   value={`${formatGram(position.principal_nano, 3)} GRAM`}
                 />
                 <Detail
@@ -483,7 +483,7 @@ export function BankScreen({
               <div className="contract-truth compact">
                 <strong>Как работает очередь</strong>
                 <p>
-                  Новые вклады идут ранним позициям. Без них выплата может не наступить; досрочной
+                  Новые взносы идут ранним позициям. Без них выплата может не наступить; досрочной
                   отмены нет.
                 </p>
               </div>

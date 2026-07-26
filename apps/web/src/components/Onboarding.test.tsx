@@ -27,7 +27,7 @@ describe('Onboarding', () => {
       screen.getByRole('heading', { name: 'Новые входят. Ранние получают.' }),
     ).toBeInTheDocument();
     expect(screen.getByText(/BANK — финансовая пирамида/)).toBeInTheDocument();
-    expect(screen.getByText(/Без новых вкладов выплаты может не быть/)).toBeInTheDocument();
+    expect(screen.getByText(/Без новых взносов выплаты может не быть/)).toBeInTheDocument();
 
     unmount();
     render(<Onboarding initialPage={2} onDone={onDone} />);

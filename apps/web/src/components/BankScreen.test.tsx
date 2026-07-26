@@ -67,7 +67,7 @@ describe('BankScreen', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Войди в очередь.' })).toBeVisible();
-    const hint = screen.getByText('Каждая новая позиция двигает цикл дальше.');
+    const hint = screen.getByText('Выплата зависит от новых взносов и не гарантирована.');
     const action = screen.getByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ' });
     expect(hint).toBeVisible();
     expect(screen.queryByText('Финансовая пирамида.')).not.toBeInTheDocument();
@@ -95,7 +95,7 @@ describe('BankScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /собрано 37%/i }));
     expect(
-      screen.getByText(/сколько новых вкладов уже направлено в твою позицию/i),
+      screen.getByText(/сколько новых взносов уже направлено в твою позицию/i),
     ).toBeInTheDocument();
     expect(screen.getByText('Уже собрано')).toBeInTheDocument();
     expect(screen.getByText('Осталось собрать')).toBeInTheDocument();

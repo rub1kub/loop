@@ -247,11 +247,11 @@ export function DuelScreen({
           ...(acceptedInvite ? { counterOfferId: acceptedInvite.counter_offer_id } : {}),
         });
         await storeDuelSecret(offerId, secret.toString(16).padStart(64, '0'));
-        setMessage('Подтверди ставку во внешнем кошельке.');
+        setMessage('Подпиши ставку во внешнем кошельке.');
         await tonConnectUI.sendTransaction(
           buildOpenOfferTransaction(quote, wallet.account.address, wallet.account.chain),
         );
-        setMessage('Проверяем ставку. Закрытие кошелька ещё не означает успех.');
+        setMessage('Проверяем ставку. Кошелёк её отправил — сеть ещё не подтвердила.');
         await onRefresh();
         haptic('success');
       } catch (error) {
@@ -304,7 +304,7 @@ export function DuelScreen({
           ? await api.expireOfferIntent(activeOffer.onchain_offer_id)
           : await api.cancelOfferIntent(activeOffer.onchain_offer_id);
       } else {
-        throw new Error('Ждём подтверждение предыдущего действия');
+        throw new Error('Ждём, пока сеть подтвердит предыдущее действие');
       }
       await tonConnectUI.sendTransaction(
         buildActionTransaction(intent, wallet.account.address, wallet.account.chain, secret),
@@ -398,7 +398,7 @@ export function DuelScreen({
 
   function inviteToTelegram() {
     if (!activeOffer || activeOffer.state !== 'open') {
-      failed('Сначала дождись подтверждения вызова.');
+      failed('Сначала дождись, пока вызов появится в сети.');
       haptic('warning');
       return;
     }
@@ -504,7 +504,8 @@ export function DuelScreen({
           </dl>
           <p className="duel-deadline-rule">
             <ShieldCheck aria-hidden="true" />
-            Старт 50/50. После пары будет минута, чтобы усилить свою сторону.
+            Старт 50/50. После пары есть минута на усиление; каждое усиление продлевает её, но не
+            дольше трёх минут.
           </p>
           <details className="technical-details duel-breakdown">
             <summary>
@@ -513,14 +514,14 @@ export function DuelScreen({
             </summary>
             <p>
               После ставки своё число изменить нельзя. Результат нужно открыть самому, и на это есть
-              несколько минут после конца усиления. Откроют оба — забирает победитель. Откроет
-              только соперник — он забирает весь пул. Не откроет никто — обе ставки вернутся.
+              пять минут после конца усиления. Откроют оба — забирает победитель. Откроет только
+              соперник — он забирает весь пул. Не откроет никто — обе ставки вернутся.
             </p>
             <dl className="detail-list">
               <Term label="Общая сумма" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
               <Term label="Чистый результат победы" value={`+${formatGram(profitNano, 3)} GRAM`} />
             </dl>
-            <p>Поиск можно остановить и вернуть ставку через подтверждение в кошельке.</p>
+            <p>Поиск можно остановить и вернуть ставку — возврат подписывается в кошельке.</p>
           </details>
         </div>
       )}
@@ -537,8 +538,8 @@ export function DuelScreen({
           <strong>
             {status === 'matched'
               ? duelBoosting
-                ? 'Соперник найден. Теперь можно изменить перевес.'
-                : 'Усиление закрыто. Открой результат.'
+                ? 'Соперник найден. Усилиться может каждый — твой шанс может и упасть.'
+                : 'Усиление закрыто. Открой результат сам — иначе его заберёт соперник.'
               : // Telling the player to close the app is only true while the
                 // offer is unmatched. Once a match lands there is no push
                 // notification, the secret lives on this device, and a player
@@ -603,7 +604,7 @@ export function DuelScreen({
                 <strong>{(boostedChanceBps / 100).toFixed(1).replace('.', ',')}%</strong>
               </p>
               <button className="primary-button" disabled={busy} onClick={() => void boostDuel()}>
-                {busy ? 'ПОДТВЕРЖДАЕМ…' : 'УСИЛИТЬ'}
+                {busy ? 'ОТПРАВЛЯЕМ…' : 'УСИЛИТЬ'}
               </button>
               {activeDuel.boost_events.length > 0 && (
                 <ol className="duel-boost-events" aria-label="Подтверждённые усиления">
@@ -615,7 +616,7 @@ export function DuelScreen({
                         <span>{event.side === 'you' ? 'Ты' : 'Соперник'}</span>
                         <strong>
                           +{formatGram(event.amount_nano, 3)} GRAM ·{' '}
-                          {(event.chance_bps / 100).toFixed(1)}%
+                          {(event.chance_bps / 100).toFixed(1).replace('.', ',')}%
                         </strong>
                       </li>
                     ))}
@@ -625,7 +626,7 @@ export function DuelScreen({
           )}
           {status === 'searching' && (
             <p className="duel-live-help">
-              Остановить поиск можно в любой момент. Возврат нужно подтвердить в кошельке.
+              Остановить поиск можно в любой момент. Возврат нужно подписать в кошельке.
             </p>
           )}
         </div>
@@ -643,7 +644,7 @@ export function DuelScreen({
           </p>
           {latestDuel.settlement_proof_url && (
             <a href={latestDuel.settlement_proof_url} target="_blank" rel="noreferrer">
-              Посмотреть подтверждение <ArrowSquareOut aria-hidden="true" />
+              Посмотреть операцию <ArrowSquareOut aria-hidden="true" />
             </a>
           )}
         </div>

@@ -26,7 +26,9 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
     Math.abs(jarBox!.x + jarBox!.width / 2 - (shellBox!.x + shellBox!.width / 2)),
   ).toBeLessThan(1);
   await expect(page.getByRole('heading', { name: 'Войди в очередь.' })).toBeVisible();
-  await expect(page.getByText('Каждая новая позиция двигает цикл дальше.')).toBeVisible();
+  await expect(
+    page.getByText('Выплата зависит от новых взносов и не гарантирована.'),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ', exact: true }).click();
   await expect(page.locator('.bank-flow-screen')).toHaveCSS('transform', 'none');
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
@@ -83,10 +85,10 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   ).toBeGreaterThanOrEqual(100);
   await expect(page.getByText('4 GRAM')).toBeVisible();
   await expect(
-    page.getByText(/Выплата зависит от будущих вкладов и может не наступить/i),
+    page.getByText(/Выплата зависит от будущих взносов и может не наступить/i),
   ).toBeVisible();
   await expect(page.locator('.technical-details .disclosure-open-label')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'ПОДТВЕРДИТЬ В КОШЕЛЬКЕ' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ПОДПИСАТЬ В КОШЕЛЬКЕ' })).toBeVisible();
 
   await page.goto('/?screen=bank-active');
   await emulateFullscreenControls();
@@ -135,7 +137,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
     '0px',
   );
   await expect(page.getByText(/Старт 50\/50/i)).toBeVisible();
-  await expect(page.getByText(/минута, чтобы усилить/i)).toBeVisible();
+  await expect(page.getByText(/минута на усиление/i)).toBeVisible();
   expect(
     await page
       .locator('.duel-deadline-rule')
@@ -157,7 +159,9 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
 
   await page.goto('/?screen=duel-boost');
   await emulateFullscreenControls();
-  await expect(page.getByText('Соперник найден. Теперь можно изменить перевес.')).toBeVisible();
+  await expect(
+    page.getByText('Соперник найден. Усилиться может каждый — твой шанс может и упасть.'),
+  ).toBeVisible();
   await expect(page.getByText('ТЫ 60%')).toBeVisible();
   await expect(page.getByText('СОПЕРНИК 40%')).toBeVisible();
   await expect(page.getByLabel('Сумма усиления в GRAM')).toBeVisible();
@@ -172,10 +176,10 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await expect(page.getByText('685').first()).toBeVisible();
   await expect(page.getByText('315 ДО УРОВНЯ LOOP')).toBeVisible();
   await expect(page.locator('.rating-progress')).toBeVisible();
-  await expect(page.getByText(/Главный вклад:/)).toBeHidden();
+  await expect(page.getByText(/Главный фактор:/)).toBeHidden();
   await expect(page.locator('.rating-details .disclosure-open-label')).toHaveCount(1);
   await page.getByText('МОЯ СТАТИСТИКА').click();
-  await expect(page.getByText(/Главный вклад:/)).toBeVisible();
+  await expect(page.getByText(/Главный фактор:/)).toBeVisible();
   await expect(
     page.getByText('Счёт отражает участие и надёжность.', { exact: false }),
   ).toBeVisible();

@@ -53,12 +53,12 @@ describe('RatingScreen', () => {
     expect(screen.getByText('315 ДО УРОВНЯ LOOP')).toBeVisible();
     expect(screen.getByText('УРОВЕНЬ · ОРБИТА')).toBeVisible();
     expect(screen.getByText('МОЯ СТАТИСТИКА').closest('details')).not.toHaveAttribute('open');
-    expect(screen.queryByText(/Главный вклад:/)).not.toBeVisible();
+    expect(screen.queryByText(/Главный фактор:/)).not.toBeVisible();
     expect(screen.queryByText('СИСТЕМА СЕЙЧАС')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('МОЯ СТАТИСТИКА'));
 
-    expect(screen.getByText(/Главный вклад:/)).toBeVisible();
+    expect(screen.getByText(/Главный фактор:/)).toBeVisible();
     expect(screen.getByText(/Счёт отражает участие и надёжность/)).toBeVisible();
     expect(screen.getByText('СЕЙЧАС В LOOP')).toBeVisible();
   });

@@ -44,7 +44,7 @@ export function buildBankPositionTransaction(
 ): SendTransactionRequest {
   requireSupportedNetwork(network);
   const tx = quote.transaction;
-  if (tx.network !== Number(network)) throw new Error('Сеть BANK изменилась. Повторите попытку.');
+  if (tx.network !== Number(network)) throw new Error('Сеть BANK изменилась. Повтори попытку.');
   const payload = beginCell()
     .storeUint(BANK_CREATE_POSITION_OPCODE, 32)
     .storeUint(tx.query_id, 64)
@@ -125,7 +125,7 @@ export function assertOpenOfferQuoteContext(
           tx.direct_counter_offer_id === expected.counterOfferId
         : true;
   if (!coreMatches || !directMatches) {
-    throw new Error('Контекст DUEL изменился. Создайте вызов заново.');
+    throw new Error('Контекст DUEL изменился. Создай вызов заново.');
   }
 }
 
@@ -136,7 +136,7 @@ export function buildOpenOfferTransaction(
 ): SendTransactionRequest {
   requireSupportedNetwork(network);
   const tx = quote.transaction;
-  if (tx.network !== Number(network)) throw new Error('Сеть DUEL изменилась. Повторите попытку.');
+  if (tx.network !== Number(network)) throw new Error('Сеть DUEL изменилась. Повтори попытку.');
   const opcode =
     tx.operation === 'open_direct_offer'
       ? OPEN_DIRECT_OFFER_OPCODE
@@ -203,12 +203,14 @@ export function buildActionTransaction(
 ): SendTransactionRequest {
   requireSupportedNetwork(network);
   if (intent.network !== Number(network)) {
-    throw new Error('Сеть DUEL изменилась. Повторите попытку.');
+    throw new Error('Сеть DUEL изменилась. Повтори попытку.');
   }
   const body = beginCell();
   if (intent.operation === 'reveal') {
     if (!secretHex || !/^[0-9a-f]{64}$/i.test(secretHex)) {
-      throw new Error('Секрет дуэли недоступен на этом устройстве');
+      throw new Error(
+        'Секрет этой дуэли не найден на устройстве. Открыть результат можно только там, где она началась.',
+      );
     }
     body
       .storeUint(REVEAL_OPCODE, 32)
@@ -309,7 +311,7 @@ export function formatGram(nano: number | bigint | null, precision = 2): string 
 
 export function parseGram(value: string): number {
   const normalized = value.trim().replace(',', '.');
-  if (!/^\d+(?:\.\d{0,9})?$/.test(normalized)) throw new Error('Введите сумму в GRAM');
+  if (!/^\d+(?:\.\d{0,9})?$/.test(normalized)) throw new Error('Введи сумму в GRAM');
   const [whole, fraction = ''] = normalized.split('.');
   const nano = BigInt(whole) * 1_000_000_000n + BigInt(fraction.padEnd(9, '0'));
   if (nano > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Сумма слишком велика');
