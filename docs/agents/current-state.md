@@ -7,8 +7,8 @@ TON от намерений, примеров и будущего mainnet-рел
 
 | Поле                    | Значение                                   |
 | ----------------------- | ------------------------------------------ |
-| Проверено               | 2026-07-26 20:38 UTC                       |
-| Активный runtime commit | `14760d475c3689013365044382ee7b5ab7f4a037` |
+| Проверено               | 2026-07-26 21:45 UTC                       |
+| Активный runtime commit | `dcb5c6eb3e048d9ce9015d7f3a41fc8487c7ba9d` |
 | Активная ветка          | `main`                                     |
 | Пользовательская сеть   | TON testnet, global ID `-3`                |
 | Публичный домен         | <https://app.tonsuite.org>                 |
@@ -24,7 +24,7 @@ TON от намерений, примеров и будущего mainnet-рел
 На момент проверки:
 
 - `/live` и `/ready` отвечают успешно;
-- release и web release указывают на один commit `14760d47…`;
+- release и web release указывают на один commit `dcb5c6eb…`;
 - `api`, `worker`, `notifier`, `db` и `redis` имеют состояние `healthy`;
 - бот отвечает как `@getloopbot`;
 - inline mode и webhook включены;
@@ -62,7 +62,7 @@ curl --fail https://app.tonsuite.org/ready
 Полные transaction hashes, LT, masterchain blocks и message values находятся в
 [`deployments/testnet/bank.json`](../../deployments/testnet/bank.json).
 
-### DuelEscrow 1.4.0
+### DuelEscrow 1.5.0
 
 | Поле               | Значение                                                           |
 | ------------------ | ------------------------------------------------------------------ |
@@ -82,8 +82,17 @@ open → cancel → refund и двухкошельковая цепочка dire
 то есть **не**-льготный путь при отсутствии permit. Полные доказательства находятся в
 [`deployments/testnet/duel.json`](../../deployments/testnet/duel.json).
 
-Предыдущий `DuelEscrow 1.3.0` (`kQD7JaRb…`) выведен из обращения: `paused=true`, `locked=0`,
-транзакция паузы `LbAv8Dg6hl0nTxeDtulYpLsblpK/sOnslhI9gFqaUqg=` (mc `74079149`).
+Предыдущие `DuelEscrow 1.3.0` (`kQD7JaRb…`) и `1.4.0` (`kQCO9-90…`) выведены из обращения:
+оба `paused=true` с `locked=0`. Доказательство нулевой комиссии holder'а получено на 1.4.0 и
+сохранено в манифесте как история: `verified_holder_fee` внутри `previous_contract`.
+
+**BankQueue остаётся на 1.3.0.** Газовый фикс каскада написан и протестирован на ветке
+`feat/bank-v1.4-gas-safe`, но не развёрнут: в очереди живёт позиция с `lockedFunding=0.73 GRAM`,
+а погасить её взносом нельзя — ей нужно `0.52 GRAM` при минимальном взносе `1 GRAM`, поэтому
+каждый взнос закрывает голову и тут же наполняет следующую позицию. `locked` колеблется и никогда
+не приходит к нулю. Любая миграция BANK неизбежно оставит чьё-то обязательство в старом
+контракте — это решение владельца и одновременно ограничение, которое нужно снять по дизайну до
+mainnet.
 
 Повторная read-only проверка:
 

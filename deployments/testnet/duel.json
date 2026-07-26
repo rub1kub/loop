@@ -114,7 +114,8 @@
       "settlement_transaction_lt": 85733257000003,
       "masterchain_seqno": 74082040,
       "holder_ownership_checked_by": "backend jetton getter, not repeated on chain"
-    }
+    },
+    "paused": true
   },
   "explorer_url": "https://testnet.tonviewer.com/kQDSf1AYuCjHVryjcJtuTEoUOS6t6xvO2awO4BIHJL7hkSNe"
 }
