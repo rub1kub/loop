@@ -49,8 +49,40 @@ const invite: Invite = {
   expires_at: '2026-07-23T21:00:00.000Z',
 };
 
+const walletOf = (address: string): Profile['wallet'] => ({
+  address,
+  network: -3,
+  verified_at: '2026-07-01T00:00:00.000Z',
+});
+
+const settledDuel = (overrides: Partial<Duel>): Duel => ({
+  id: 'settled-duel',
+  onchain_duel_id: 900,
+  state: 'settled',
+  offer_id: 901,
+  own_revealed: true,
+  chance_bps: 5_000,
+  stake_nano: 1_000_000_000,
+  opponent_stake_nano: 1_000_000_000,
+  total_pool_nano: 2_000_000_000,
+  fee_exempt: false,
+  payout_nano: 1_950_000_000,
+  boost_deadline: null,
+  hard_deadline: null,
+  boost_revision: 0,
+  reveal_deadline: '2026-07-01T00:00:00.000Z',
+  boost_events: [],
+  winner_wallet: null,
+  settled_tx_hash: 'settled',
+  settlement_proof_url: null,
+  ...overrides,
+});
+
 describe('DuelScreen', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
 
   beforeEach(() => {
     tonConnect.openModal.mockClear();
@@ -88,8 +120,6 @@ describe('DuelScreen', () => {
     expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
     expect(screen.queryByText('Твоя ставка')).not.toBeInTheDocument();
     expect(screen.queryByText(/После ставки своё число изменить нельзя/)).not.toBeVisible();
-    // The sole-revealer rule takes the whole pool, so the interface must never
-    // go back to implying that doing nothing merely forfeits a refund.
     expect(screen.getByText(/Откроет только соперник — он забирает весь пул/)).toBeInTheDocument();
     expect(screen.queryByText(/Можно закрыть приложение/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeInTheDocument();
@@ -162,9 +192,75 @@ describe('DuelScreen', () => {
 
     expect(screen.getByText('Соперник найден. Теперь можно изменить перевес.')).toBeVisible();
     expect(screen.getByLabelText('Сумма усиления в GRAM')).toHaveValue('0.5');
-    // ru-RU throughout: a dot here sat next to comma-formatted GRAM.
     expect(screen.getByText('После подтверждения:')).toHaveTextContent('60,0%');
     expect(screen.getByRole('button', { name: 'УСИЛИТЬ' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).not.toBeInTheDocument();
+  });
+
+  it('names a loss and never shows the winner-if-won payout as the outcome', () => {
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[settledDuel({ winner_wallet: '0:bbb' })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'ПОРАЖЕНИЕ' })).toBeVisible();
+    expect(screen.getByText('−1 GRAM')).toBeVisible();
+    expect(screen.getByText(/Ставка 1 GRAM ушла сопернику/)).toBeVisible();
+    expect(screen.queryByText(/1,95/)).not.toBeInTheDocument();
+    expect(screen.queryByText('ЗАВЕРШЕНО')).not.toBeInTheDocument();
+  });
+
+  it('states the win as net gain and what actually reached the wallet', () => {
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[settledDuel({ winner_wallet: '0:aaa' })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'ПОБЕДА' })).toBeVisible();
+    expect(screen.getByText('+0,95 GRAM')).toBeVisible();
+    expect(screen.getByText(/В кошелёк пришло 1,95 GRAM/)).toBeVisible();
+  });
+
+  it('lets a settled result be closed so another duel can be opened', () => {
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[settledDuel({ winner_wallet: '0:bbb' })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'ЗАКРЫТЬ' }));
+
+    expect(screen.queryByRole('heading', { name: 'ПОРАЖЕНИЕ' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Ставка в GRAM')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' })).toBeVisible();
+  });
+
+  it('offers no rematch wording that pushes a losing player straight back in', () => {
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[settledDuel({ winner_wallet: '0:bbb' })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/ЕЩЁ РАЗ|ОТЫГРАТЬСЯ|РЕВАНШ|СЫГРАТЬ СНОВА/i)).not.toBeInTheDocument();
   });
 });

@@ -5,6 +5,7 @@ const telegramSdkUrl = 'https://telegram.org/js/telegram-web-app.js?63';
 const immersiveTelegramPlatforms = new Set(['android', 'android_x', 'ios']);
 const telegramChromeColor = '#000000';
 const hapticsStorageKey = 'loop-haptics-enabled';
+const seenDuelStorageKey = 'loop-duel-seen';
 const presentationGuardsInstalled = new WeakSet<TelegramWebApp>();
 let telegramSdkPromise: Promise<void> | null = null;
 
@@ -117,6 +118,22 @@ export function setHapticsEnabled(enabled: boolean): void {
     localStorage.setItem(hapticsStorageKey, String(enabled));
   } catch {
     // Some embedded browsers can deny storage; keep the session usable.
+  }
+}
+
+export function readSeenDuelId(): string | null {
+  try {
+    return localStorage.getItem(seenDuelStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+export function markDuelSeen(duelId: string): void {
+  try {
+    localStorage.setItem(seenDuelStorageKey, duelId);
+  } catch {
+    return;
   }
 }
 

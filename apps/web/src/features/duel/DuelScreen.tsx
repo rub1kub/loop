@@ -13,7 +13,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../api';
 import { DisclosureIndicator } from '../../components/DisclosureIndicator';
-import { haptic, isMockTelegram, readDuelSecret, storeDuelSecret, telegram } from '../../telegram';
+import {
+  haptic,
+  isMockTelegram,
+  markDuelSeen,
+  readDuelSecret,
+  readSeenDuelId,
+  storeDuelSecret,
+  telegram,
+} from '../../telegram';
 import {
   buildActionTransaction,
   buildBoostTransaction,
@@ -69,6 +77,7 @@ export function DuelScreen({
   const [mockExpiresAt, setMockExpiresAt] = useState<number | null>(null);
   const [message, setMessage] = useState(invite ? `${invite.creator_name} бросил тебе вызов.` : '');
   const [now, setNow] = useState(() => Date.now());
+  const [seenDuelId, setSeenDuelId] = useState(() => readSeenDuelId());
   const locked = useRef(false);
   const lastBoostRevision = useRef<number | null>(null);
 
@@ -152,9 +161,17 @@ export function DuelScreen({
       ? 'matched'
       : activeOffer || mockSearching
         ? 'searching'
-        : latestDuel?.state === 'settled'
+        : latestDuel?.state === 'settled' && latestDuel.id !== seenDuelId
           ? 'result'
           : 'idle';
+  const resultWon = Boolean(
+    latestDuel?.winner_wallet && latestDuel.winner_wallet === profile.wallet?.address,
+  );
+  const resultDeltaNano = latestDuel
+    ? resultWon
+      ? latestDuel.payout_nano - latestDuel.stake_nano
+      : latestDuel.stake_nano
+    : 0;
 
   const start = useCallback(
     async (selectedMode: 'afk' | 'direct') => {
@@ -604,8 +621,13 @@ export function DuelScreen({
       {status === 'result' && latestDuel && (
         <div className="duel-result">
           <p className="eyebrow">РЕЗУЛЬТАТ ПОДТВЕРЖДЁН</p>
-          <h2>{latestDuel.winner_wallet === profile.wallet?.address ? 'ПОБЕДА' : 'ЗАВЕРШЕНО'}</h2>
-          <strong>{formatGram(latestDuel.payout_nano, 3)} GRAM</strong>
+          <h2>{resultWon ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ'}</h2>
+          <strong>{`${resultWon ? '+' : '−'}${formatGram(resultDeltaNano, 3)} GRAM`}</strong>
+          <p className="duel-result-note">
+            {resultWon
+              ? `В кошелёк пришло ${formatGram(latestDuel.payout_nano, 3)} GRAM — ставка вернулась вместе с выигрышем.`
+              : `Ставка ${formatGram(latestDuel.stake_nano, 3)} GRAM ушла сопернику.`}
+          </p>
           {latestDuel.settlement_proof_url && (
             <a href={latestDuel.settlement_proof_url} target="_blank" rel="noreferrer">
               Посмотреть подтверждение <ArrowSquareOut aria-hidden="true" />
@@ -629,6 +651,19 @@ export function DuelScreen({
       </AnimatePresence>
 
       <div className="duel-actions">
+        {status === 'result' && latestDuel && (
+          <button
+            className="secondary-button"
+            onClick={() => {
+              markDuelSeen(latestDuel.id);
+              setSeenDuelId(latestDuel.id);
+              setMessage('');
+              haptic('selection');
+            }}
+          >
+            ЗАКРЫТЬ
+          </button>
+        )}
         {status === 'idle' && (
           <>
             <button
