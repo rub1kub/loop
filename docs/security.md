@@ -59,7 +59,7 @@ Each projection checks contract address, message direction, sender, value, opcod
   exists. Mainnet remains fail-closed until an independent reviewer audits the exact release commit.
 - The immutable direct-invite signer cannot be rotated in place; suspected key compromise requires pausing new activity and deploying a new contract after all recovery paths clear.
 - Referral anti-abuse prevents direct self-referral and duplicate qualification but cannot prove two Telegram accounts are unrelated people.
-- PLUSH BRICK is a mainnet Jetton while contracts are testnet. V1 holder fee discounts are disabled rather than trusted to the backend.
+- PLUSH BRICK is a mainnet Jetton while contracts are testnet, so holder ownership is proven off chain: the backend checks the balance against the Jetton master and signs a permit the contract verifies. A compromised backend or provider can therefore waive protocol fees, but cannot reach user stakes or change an outcome. Fee-exempt settlements are exported as metrics so unexplained volume is visible.
 - BANK depends entirely on later deposits; a stalled queue is expected behavior, not a solvency guarantee.
 - Ownership transfer is intentionally powerful and immediate; the browser requires an explicit confirmation, but the final authority is the owner-signed contract message.
 
