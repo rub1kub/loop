@@ -2,10 +2,10 @@
 
 Both contracts are built from Tolk sources with Acton and deployed independently on TON testnet.
 
-| Contract   | Address                                                                                          | Code hash         |  Fee |
-| ---------- | ------------------------------------------------------------------------------------------------ | ----------------- | ---: |
-| BankQueue  | [`kQAQ…v4FL_y`](https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y)  | `9BF8EF5B…4A57C2` |   1% |
-| DuelEscrow | [`kQD9…02xo6yP`](https://testnet.tonviewer.com/kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP) | `F9E55EE5…62C3F6` | 2.5% |
+| Contract   | Address                                                                                         | Code hash         |  Fee |
+| ---------- | ----------------------------------------------------------------------------------------------- | ----------------- | ---: |
+| BankQueue  | [`kQCq…50Il3`](https://testnet.tonviewer.com/kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3)  | `BA0A33E5…1FB3E2` |   1% |
+| DuelEscrow | [`kQD7…w4lg3M`](https://testnet.tonviewer.com/kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M) | `5BDAED2F…3C17FB` | 2.5% |
 
 Complete addresses, code/data hashes, deployment transaction, logical time, compiler version,
 parameters, opcodes and getters are committed in `deployments/testnet/bank.json` and
@@ -29,11 +29,13 @@ make contracts-inspect
 - the transaction has masterchain finality.
 - when a manifest contains `verified_smoke`, the recorded BANK or DUEL smoke has the expected
   sender, value, message body, transfers and masterchain block;
-- DUEL v1.2 reports the pinned testnet global ID, self-address and invite signer public key.
+- BANK v1.3 reports the finalized completion counter and current principal limit;
+- DUEL v1.3 reports the pinned network global ID, self-address and invite signer public key.
 
-The DUEL manifest contains masterchain-finalized open/cancel/refund and two-wallet settlement
-proofs. Mutable state is read live and checked against the retained-reserve invariant, so an active
-offer does not invalidate the deployment proof.
+The DUEL manifest contains masterchain-finalized open/cancel/refund, boost and two-wallet settlement
+proofs. The boost proof binds sender, amount, duel, offer, revision, minimum chance and expiry.
+Mutable state is read live and checked against the retained-reserve invariant, so an active offer
+does not invalidate the deployment proof.
 
 `contracts-inspect` decodes live storage using the generated Acton wrappers. The API also exposes read-only contract, wallet, transaction and Jetton diagnostics to authenticated users.
 

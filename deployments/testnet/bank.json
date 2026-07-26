@@ -1,26 +1,35 @@
 {
   "contract": "BankQueue",
-  "address": "kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y",
+  "address": "kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3",
   "network": "testnet",
   "workchain": 0,
-  "deployed_at": "2026-07-23T19:15:00Z",
-  "deploy_transaction": "SKYiGXMbjcX7CPa0OXRtmHTvCl+BdIEX5n/5pKzs7OQ=",
-  "deploy_transaction_lt": 85079708000003,
-  "code_hash": "9BF8EF5B9E75DF597E1EE4F4FE0DE2816D6B38899F4408E6A72857E0BD4A57C2",
-  "data_hash": "A966BC751B755486007DFD03A98D621CA023951AC4F6B36CBAFD41EC512BBD45",
-  "source_commit": "15391da0b46db01da049674719badd2da24d16f0",
+  "deployed_at": "2026-07-26T10:13:20Z",
+  "deploy_transaction": "DTLUspR+QXk1EkdPFcz+AtYsCxdHTpimGu8uavhe1WI=",
+  "deploy_transaction_lt": 85649707000003,
+  "code_hash": "BA0A33E5D7A39358732E89720981EA421374A453AAF5B44C552569C5C71FB3E2",
+  "data_hash": "55C177BD7833F04BCD9E678A59F6043E96DFBFDFF8A109BCFF44D5E92AF2B6E2",
+  "source_commit": "21e604ceedb061ac15da9122a927f81557194534",
   "compiler_version": "Tolk 1.4.0",
   "acton_version": "1.0.0",
   "configuration": {
-    "version": "1.2.0",
+    "version": "1.3.0",
     "owner": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
     "treasury": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
     "fee_bps": 100,
     "paused": false,
+    "completed_positions": 0,
+    "principal_limit_nano": 5000000000,
     "locked_nano": 0,
     "min_retained_reserve_nano": 200000000,
     "min_principal_nano": 1000000000,
     "max_principal_nano": 100000000000,
+    "maturity_limits": [
+      { "completed_positions": 0, "principal_limit_nano": 5000000000 },
+      { "completed_positions": 25, "principal_limit_nano": 10000000000 },
+      { "completed_positions": 100, "principal_limit_nano": 15000000000 }
+    ],
+    "expansion_every_completions": 250,
+    "expansion_step_nano": 5000000000,
     "multipliers_bps": [12500, 15000, 20000]
   },
   "supported_opcodes": [
@@ -28,11 +37,20 @@
     1279413778, 1279413779
   ],
   "getters": ["contractConfig", "queueData", "positionData", "activePosition", "adminState"],
-  "previous_contract": {
-    "address": "kQC1zcM8cxIDn3mFR0RV_PS_y2PzNkFttJ8NfAPHTyHrmc4l",
-    "paused": true,
-    "locked_nano": 990000000,
-    "owner_only_position": 2207202601
+  "verified_limit_smoke": {
+    "contract_address": "kQCN-hU-uBcu_TLd0p74hyW32CdTNAIVP_A9ttHhKNB9N_MW",
+    "position_id": 2607261301,
+    "principal_nano": 5000000000,
+    "principal_limit_nano": 5000000000,
+    "transaction": "tFh/JPyLhJLroTFZDnyDm7wYm6wE4bZGVHdMx7MGtrA=",
+    "transaction_lt": 85649576000003,
+    "masterchain_seqno": 74001550
   },
-  "explorer_url": "https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y"
+  "previous_contract": {
+    "address": "kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y",
+    "paused": false,
+    "locked_nano": 0,
+    "open_positions": 0
+  },
+  "explorer_url": "https://testnet.tonviewer.com/kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3"
 }

@@ -11,7 +11,17 @@ target payout = floor(P × M / 10,000)
 BANK fee      = floor(P × F / 10,000)
 ```
 
-Supported multipliers are 12,500, 15,000 and 20,000. Published limits are 1–100 GRAM principal and a 1% fee. The attached gas value is not part of the principal.
+Supported multipliers are 12,500, 15,000 and 20,000. The minimum principal is 1 GRAM and the
+fee is 1%. The upper limit matures with the queue:
+
+| Completed positions | Maximum principal |
+| ------------------: | ----------------: |
+|                0–24 |            5 GRAM |
+|               25–99 |           10 GRAM |
+|             100–349 |           15 GRAM |
+
+After that it grows by 5 GRAM every 250 completed positions and stops at 100 GRAM. Only completed
+on-chain payouts move the counter. The attached gas value is not part of the principal.
 
 ## Allocation
 

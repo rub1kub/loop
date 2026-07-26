@@ -13,13 +13,13 @@ LOOP работает только с TON testnet, global ID `-3`. Пользо�
 
 | Контракт   | Version | Address                                            | Code hash                                                          | Fee  |
 | ---------- | ------- | -------------------------------------------------- | ------------------------------------------------------------------ | ---- |
-| BankQueue  | 1.2.0   | `kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y` | `9BF8EF5B9E75DF597E1EE4F4FE0DE2816D6B38899F4408E6A72857E0BD4A57C2` | 1%   |
-| DuelEscrow | 1.2.0   | `kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP` | `F9E55EE56C04765EC23F1BBE587509EB680E50251DFF3B7F8755FCA0D762C3F6` | 2.5% |
+| BankQueue  | 1.3.0   | `kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3` | `BA0A33E5D7A39358732E89720981EA421374A453AAF5B44C552569C5C71FB3E2` | 1%   |
+| DuelEscrow | 1.3.0   | `kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M` | `5BDAED2F56EF9F51B33F0B388EF7B31DDE843961D23876A16243BA06D53C17FB` | 2.5% |
 
 Explorer:
 
-- [BankQueue](https://testnet.tonviewer.com/kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y)
-- [DuelEscrow](https://testnet.tonviewer.com/kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP)
+- [BankQueue](https://testnet.tonviewer.com/kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3)
+- [DuelEscrow](https://testnet.tonviewer.com/kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M)
 
 Owner и treasury обоих deployments — публичный адрес
 `kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6`.
@@ -32,13 +32,17 @@ Owner и treasury обоих deployments — публичный адрес
 Manifest доказывает развёртывание и начальную конфигурацию. Он не является live state для
 `locked`, balance, paused, fee, owner или treasury.
 
-## BankQueue 1.2.0
+## BankQueue 1.3.0
 
 ### Константы
 
 | Параметр                | Значение                      |
 | ----------------------- | ----------------------------- |
-| principal               | `1–100 GRAM`                  |
+| minimum principal       | `1 GRAM`                      |
+| initial principal limit | `5 GRAM`                      |
+| maturity thresholds     | `10 @ 25`, `15 @ 100` GRAM    |
+| later expansion         | `+5 GRAM / 250 completions`   |
+| absolute limit          | `100 GRAM`                    |
 | multiplier              | `12500`, `15000`, `20000` bps |
 | максимальная fee        | `1000 bps`                    |
 | текущая fee             | `100 bps`                     |
@@ -64,8 +68,8 @@ distributable = principal − fee
 
 1. выделяет старой position `min(available, target - funded)`;
 2. увеличивает `lockedFunding`;
-3. при полном target удаляет position из active map и queue, уменьшает `lockedFunding` на target
-   и отправляет `BankPayout`;
+3. при полном target увеличивает `completedPositions`, удаляет position из active map и queue,
+   уменьшает `lockedFunding` на target и отправляет `BankPayout`;
 4. продолжает до конца available или queue;
 5. нераспределённый остаток становится `fundedAmount` новой position;
 6. новая position всегда добавляется в tail.
@@ -75,7 +79,7 @@ Contract не имеет cancel/early-refund сообщения для подт�
 ### Storage
 
 - owner, treasury, feeBps, paused;
-- headQueueIndex, nextQueueIndex, lockedFunding;
+- headQueueIndex, nextQueueIndex, completedPositions, lockedFunding;
 - positions: position ID → owner/principal/multiplier/target/funded/index/timestamps/status;
 - queue: queue index → position ID;
 - activePositions: owner address → position ID;
@@ -112,15 +116,17 @@ Getters: `contractConfig`, `queueData`, `positionData`, `activePosition`, `admin
 - Treasury не может быть адресом самого контракта.
 - Новый owner должен отличаться от текущего и контракта.
 
-## DuelEscrow 1.2.0
+## DuelEscrow 1.3.0
 
 ### Константы
 
 | Параметр                 | Значение                        |
 | ------------------------ | ------------------------------- |
 | total pool               | `1–100 GRAM`, кратен 4 nanoGRAM |
-| supported chances        | `2500`, `5000`, `7500` bps      |
-| новый продукт            | только `5000 + 5000`            |
+| initial chances          | новый продукт `5000 + 5000`     |
+| boost range              | `1000–9000` bps                 |
+| minimum boost            | `0.1 GRAM`                      |
+| boost / extension / cap  | `60 / 20 / 180` секунд          |
 | текущая fee              | `250 bps`                       |
 | open gas buffer          | `0.05 GRAM`                     |
 | action/admin minimum gas | `0.02 GRAM`                     |
@@ -129,19 +135,21 @@ Getters: `contractConfig`, `queueData`, `positionData`, `activePosition`, `admin
 | reveal window            | 300 секунд                      |
 | retained reserve         | `0.2 GRAM`                      |
 
-Contract сохраняет weighted `25/75` и `75/25` для recovery старых offers. API запрещает создавать
-новые неравные AFK/direct offers.
+Contract сохраняет canonical `25/75` и `75/25` только на входе для protocol compatibility. API
+создаёт новые AFK/direct offers с равными начальными долями. После match доли меняются только
+сообщением `BoostDuel`.
 
 ### Stakes и payout
 
 ```text
-stake A = floor(total_pool × chance_A / 10_000)
-stake B = total_pool − stake A
-fee     = floor(total_pool × fee_bps / 10_000)
-payout  = total_pool − fee
+chance A = floor(stake_A × 10_000 / (stake_A + stake_B))
+chance B = 10_000 − chance A
+fee      = floor((stake_A + stake_B) × fee_bps / 10_000)
+payout   = stake_A + stake_B − fee
 ```
 
-Для нового `50/50` оба вносят ровно половину pool.
+Для нового матча оба начинают с половины pool. После каждого boost оба offers получают новый
+итоговый pool/chance; `locked` увеличивается ровно на подтверждённую сумму.
 
 ### Domain separation
 
@@ -174,6 +182,10 @@ hash(DIRECT_ACCEPT_DOMAIN, network_id, contract_address,
 - AFK match разрешён только между двумя offers без direct metadata.
 - Direct match требует взаимно связанных opponent addresses.
 - Duel ID равен большему из двух offer IDs; canonical order — по ID.
+- Match создаёт `boostDeadline=now+60`, `hardDeadline=now+180` и revision `0`.
+- Boost разрешён только владельцу своего offer, с точной revision и до обоих дедлайнов.
+- Поздний boost переносит soft deadline на `min(now+20, hardDeadline)`.
+- Reveal до `boostDeadline` запрещён.
 - При двух reveals `outcome % total_pool < stake_A` выбирает A, иначе B.
 - При одном reveal после deadline выигрывает единственный revealer.
 - При нуле reveals оба stakes возвращаются.
@@ -182,7 +194,7 @@ hash(DIRECT_ACCEPT_DOMAIN, network_id, contract_address,
 
 - owner, treasury, feeBps, networkId, inviteSignerPublicKey, paused, locked;
 - offers: offer ID → owner/commitment/chance/pool/stake/expiry/state/direct;
-- duels: duel ID → two offer IDs/deadline/secrets/revealedMask;
+- duels: duel ID → offer IDs, boost/hard/reveal deadlines, revision, secrets/revealedMask;
 - activeOffers: owner address → offer ID;
 - usedOfferIds: replay protection.
 
@@ -191,28 +203,29 @@ Contract удаляет terminal offers/duel из active maps и уменьша�
 
 ### Сообщения
 
-| Opcode       | Message               | Назначение                        |
-| ------------ | --------------------- | --------------------------------- |
-| `0x4C4F4F01` | `OpenOffer`           | AFK/legacy offer                  |
-| `0x4C4F4F02` | `CancelOffer`         | owner refund до match             |
-| `0x4C4F4F03` | `MatchOffers`         | permissionless AFK match          |
-| `0x4C4F4F04` | `Reveal`              | раскрытие секрета                 |
-| `0x4C4F4F05` | `ExpireOffer`         | permissionless unmatched refund   |
-| `0x4C4F4F06` | `ExpireDuel`          | deadline settlement/refund        |
-| `0x4C4F4F07` | `SetPaused`           | owner pause                       |
-| `0x4C4F4F08` | `OpenDirectOffer`     | creator direct invite             |
-| `0x4C4F4F09` | `AcceptDirectOffer`   | address-bound atomic accept/match |
-| `0x4C4F4F0A` | `DuelFundReserve`     | owner reserve                     |
-| `0x4C4F4F0B` | `DuelWithdrawSurplus` | owner surplus withdrawal          |
-| `0x4C4F4F0C` | `DuelSetFee`          | owner fee                         |
-| `0x4C4F4F0D` | `DuelSetTreasury`     | owner treasury                    |
-| `0x4C4F4F0E` | `DuelSetOwner`        | ownership transfer                |
-| `0x4C4F4F11` | `DuelPayout`          | исходящее winner event            |
-| `0x4C4F4F12` | `OfferRefund`         | исходящее refund event            |
-| `0x4C4F4F13` | `ProtocolFee`         | исходящее fee event               |
-| `0x4C4F4F14` | `DuelAdminWithdrawal` | исходящее admin withdrawal        |
+| Opcode       | Message               | Назначение                         |
+| ------------ | --------------------- | ---------------------------------- |
+| `0x4C4F4F01` | `OpenOffer`           | AFK/legacy offer                   |
+| `0x4C4F4F02` | `CancelOffer`         | owner refund до match              |
+| `0x4C4F4F03` | `MatchOffers`         | permissionless AFK match           |
+| `0x4C4F4F04` | `Reveal`              | раскрытие секрета                  |
+| `0x4C4F4F05` | `ExpireOffer`         | permissionless unmatched refund    |
+| `0x4C4F4F06` | `ExpireDuel`          | deadline settlement/refund         |
+| `0x4C4F4F07` | `SetPaused`           | owner pause                        |
+| `0x4C4F4F08` | `OpenDirectOffer`     | creator direct invite              |
+| `0x4C4F4F09` | `AcceptDirectOffer`   | address-bound atomic accept/match  |
+| `0x4C4F4F0A` | `DuelFundReserve`     | owner reserve                      |
+| `0x4C4F4F0B` | `DuelWithdrawSurplus` | owner surplus withdrawal           |
+| `0x4C4F4F0C` | `DuelSetFee`          | owner fee                          |
+| `0x4C4F4F0D` | `DuelSetTreasury`     | owner treasury                     |
+| `0x4C4F4F0E` | `DuelSetOwner`        | ownership transfer                 |
+| `0x4C4F4F0F` | `BoostDuel`           | увеличить stake и пересчитать шанс |
+| `0x4C4F4F11` | `DuelPayout`          | исходящее winner event             |
+| `0x4C4F4F12` | `OfferRefund`         | исходящее refund event             |
+| `0x4C4F4F13` | `ProtocolFee`         | исходящее fee event                |
+| `0x4C4F4F14` | `DuelAdminWithdrawal` | исходящее admin withdrawal         |
 
-Getters: `contractConfig`, `offerData`, `duelData`, `directOfferData`, `activeOffer`,
+Getters: `contractConfig`, `offerData`, `duelData`, `duelBoostData`, `directOfferData`, `activeOffer`,
 `adminState`.
 
 ### Owner controls
@@ -238,7 +251,8 @@ Worker принимает transaction только если:
 - ожидаемые outgoing payout/refund/fee имеют точный destination и value.
 
 BANK worker заново проигрывает FIFO allocation и не завершает event, пока outgoing payout не
-совпадёт. DUEL worker перепроверяет direct permit, match, reveal owner и terminal payout/refund.
+совпадёт. DUEL worker перепроверяет direct permit, match, boost sender/value/revision/deadlines,
+reveal owner и terminal payout/refund.
 
 ## Проверка deployment
 
@@ -260,27 +274,27 @@ transaction, initial data hash, masterchain inclusion и getters. Smoke-пров
 только если manifest содержит `verified_smoke`.
 
 DUEL manifest содержит masterchain-finalized доказательства цепочек open → cancel → refund и
-полного двухкошелёчного settlement. Verifier читает mutable `locked` из сети и проверяет покрытие
-обязательств резервом, поэтому активный offer не создаёт ложный failure.
+direct pair → boost → reveal → settlement. Verifier декодирует boost context, читает mutable
+`locked` из сети и проверяет покрытие обязательств резервом.
 
 ## Проверка сети 2026-07-26
 
 `make contracts-inspect` показал:
 
-- BankQueue active, code hash совпадает, balance `0.499907732 GRAM`, `lockedFunding=0`, queue
-  пуста.
-- Новый DuelEscrow active, code hash совпадает, `locked=0`.
-- Тестовый offer `2607260201` был открыт, отменён и полностью возвращён владельцу.
-- Обе транзакции зафиксированы в manifest вместе с LT и masterchain seqno.
-- Просроченный offer старого контракта возвращён permissionless-вызовом `ExpireOffer`;
-  старый контракт после переключения ставится на паузу.
+- BankQueue v1.3 active, queue пуста, `completedPositions=0`, `principalLimit=5 GRAM`,
+  `lockedFunding=0`.
+- DuelEscrow v1.3 active, active offers/duels пусты, `locked=0`.
+- Отдельный BANK smoke принял ровно 5 GRAM при стартовом лимите.
+- DUEL smoke открыл и отменил offer с полным возвратом.
+- Двухкошельковый canary подтвердил boost `0.1 GRAM`, шанс `54.54%`, реальный deadline,
+  settlement и masterchain finality.
 
 ## Предыдущие контракты
 
-- Previous BANK:
+- Earlier BANK:
   `kQC1zcM8cxIDn3mFR0RV_PS_y2PzNkFttJ8NfAPHTyHrmc4l`, paused, recorded
   `locked=0.99 GRAM`, owner-only position `2207202601`.
-- Previous DUEL:
+- Earlier DUEL:
   `kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d`, paused on-chain with `locked=0`.
 - Earlier DUEL:
   `kQDVeChmpyLsgjLZRLW-gtwSS4s5depJWpBhuYkfhgYdu3Tw`, paused, recorded `locked=0`.
@@ -292,12 +306,12 @@ DUEL manifest содержит masterchain-finalized доказательств�
 
 Canary использует две заранее созданные изолированные low-value Acton aliases на выбранной сети:
 
-1. fork rehearsal;
-2. direct open;
-3. address-bound accept;
-4. оба reveals;
-5. settlement;
-6. серверная повторная проверка transaction и payout;
+1. fork rehearsal с искусственным переводом времени;
+2. direct open и address-bound accept в реальной сети;
+3. подтверждённый boost и проверка revision/chance;
+4. ожидание реального boost deadline;
+5. оба reveals и settlement;
+6. повторная проверка boost, payout и masterchain finality;
 7. запись только подтверждённого результата в Redis metrics.
 
 Canary не создаёт кошельки автоматически, не использует user wallets и не запускается в CI.

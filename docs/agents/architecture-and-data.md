@@ -151,6 +151,7 @@ Browser и API не могут выполнить admin действие без 
 | ------ | ------------------------- | ------------------------------------------ |
 | `POST` | `/bank/positions/preview` | чистая математика суммы/цели/комиссии/газа |
 | `POST` | `/bank/positions/quote`   | создать pending intent и contract call     |
+| `GET`  | `/bank/limits`            | текущий лимит и следующая ступень          |
 | `GET`  | `/bank/positions/current` | текущая активная position                  |
 | `GET`  | `/bank/positions`         | история пользователя                       |
 
@@ -161,6 +162,7 @@ Browser и API не могут выполнить admin действие без 
 | `POST` | `/duels/offers/quote`                    | создать AFK/direct/accept intent        |
 | `GET`  | `/duels/offers`                          | offers пользователя                     |
 | `GET`  | `/duels`                                 | duels пользователя                      |
+| `POST` | `/duels/{duel_id}/boost-intent`          | context для дополнительного взноса      |
 | `POST` | `/duels/{duel_id}/reveal-intent`         | BOC context для reveal                  |
 | `POST` | `/duels/offers/{offer_id}/cancel-intent` | отмена открытого offer                  |
 | `POST` | `/duels/offers/{offer_id}/expire-intent` | permissionless expiry offer             |
@@ -226,6 +228,7 @@ position_id)`, `(network, contract, query_id)` и event identity уникаль�
 | `duels`             | matched pair и terminal state                              |
 | `duel_players`      | связь duel ↔ offer/user/wallet                             |
 | `duel_commits`      | подтверждённый commitment tx                               |
+| `duel_boosts`       | подтверждённые дополнительные взносы и resulting chance    |
 | `duel_reveals`      | подтверждённый reveal tx                                   |
 | `duel_settlements`  | одна terminal settlement на duel                           |
 | `duel_chain_events` | идемпотентные события                                      |
@@ -284,18 +287,18 @@ position_id)`, `(network, contract, query_id)` и event identity уникаль�
 
 Все ключи описаны без значений в `.env.example`.
 
-| Категория      | Примеры                                          |
-| -------------- | ------------------------------------------------ |
-| runtime        | app env, log level, database, Redis              |
-| Telegram       | bot identity, webhook secret, auth age           |
-| sessions       | user/control TTL, owner wallet, public origin    |
-| TON            | network, provider URL/key, addresses/code hashes |
-| BANK           | fee fallback, gas, principal limits              |
-| DUEL           | fee fallback, signer pair, TTL, gas, pool limits |
-| PLUSH          | mainnet Jetton master/provider/min balance       |
-| monitoring     | metrics token, canary age/balance thresholds     |
-| infrastructure | PostgreSQL, Redis, domain, ACME                  |
-| web build      | API base, manifest URL, compile-time mock flag   |
+| Категория      | Примеры                                           |
+| -------------- | ------------------------------------------------- |
+| runtime        | app env, log level, database, Redis               |
+| Telegram       | bot identity, webhook secret, auth age            |
+| sessions       | user/control TTL, owner wallet, public origin     |
+| TON            | network, provider URL/key, addresses/code hashes  |
+| BANK           | fee fallback, gas и зеркало maturity limit        |
+| DUEL           | fee fallback, signer pair, TTL, gas, boost limits |
+| PLUSH          | mainnet Jetton master/provider/min balance        |
+| monitoring     | metrics token, canary age/balance thresholds      |
+| infrastructure | PostgreSQL, Redis, domain, ACME                   |
+| web build      | API base, manifest URL, compile-time mock flag    |
 
 Production validator требует HTTPS, сильные secrets, два адреса/хеша контрактов, owner wallet,
 совпадающую Ed25519 key pair и network `-3`.

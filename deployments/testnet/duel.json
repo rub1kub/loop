@@ -1,18 +1,18 @@
 {
   "contract": "DuelEscrow",
-  "address": "kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP",
+  "address": "kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M",
   "network": "testnet",
   "workchain": 0,
-  "deployed_at": "2026-07-25T22:59:54Z",
-  "deploy_transaction": "dcFPtX71kUhdqs1MRSjvcTq8RRFCwrDFDEiyJvidI60=",
-  "deploy_transaction_lt": 85548213000003,
-  "code_hash": "F9E55EE56C04765EC23F1BBE587509EB680E50251DFF3B7F8755FCA0D762C3F6",
+  "deployed_at": "2026-07-26T10:10:35Z",
+  "deploy_transaction": "o1ZiRp473pnRKaZ2O/zTuml8/4sF2B7BevNcjo8D8B8=",
+  "deploy_transaction_lt": 85649293000007,
+  "code_hash": "5BDAED2F56EF9F51B33F0B388EF7B31DDE843961D23876A16243BA06D53C17FB",
   "data_hash": "FF65C78390686B6A2F4196B3D0BA5B2FC46BDD80F0C5B9F4DCA9661BF788931A",
-  "source_commit": "b2a999ef0e56a25b71a986b92e0e5f2048718934",
+  "source_commit": "21e604ceedb061ac15da9122a927f81557194534",
   "compiler_version": "Tolk 1.4.0",
   "acton_version": "1.0.0",
   "configuration": {
-    "version": "1.2.0",
+    "version": "1.3.0",
     "owner": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
     "treasury": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
     "fee_bps": 250,
@@ -23,24 +23,32 @@
     "min_retained_reserve_nano": 200000000,
     "min_pool_nano": 1000000000,
     "max_pool_nano": 100000000000,
-    "chances_bps": [2500, 5000, 7500]
+    "initial_chance_bps": 5000,
+    "min_chance_bps": 1000,
+    "max_chance_bps": 9000,
+    "min_boost_nano": 100000000,
+    "boost_window_seconds": 60,
+    "boost_extension_seconds": 20,
+    "boost_hard_cap_seconds": 180,
+    "reveal_window_seconds": 300
   },
   "supported_opcodes": [
     1280265985, 1280265986, 1280265987, 1280265988, 1280265989, 1280265990, 1280265991, 1280265992,
-    1280265993, 1280265994, 1280265995, 1280265996, 1280265997, 1280265998, 1280266001, 1280266002,
-    1280266003, 1280266004
+    1280265993, 1280265994, 1280265995, 1280265996, 1280265997, 1280265998, 1280265999, 1280266001,
+    1280266002, 1280266003, 1280266004
   ],
   "getters": [
     "contractConfig",
     "offerData",
     "duelData",
+    "duelBoostData",
     "directOfferData",
     "activeOffer",
     "adminState"
   ],
   "verified_smoke": {
     "owner": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
-    "offer_id": 2607260201,
+    "offer_id": 2607261302,
     "chance_bps": 5000,
     "total_pool_nano": 2000000000,
     "stake_nano": 1000000000,
@@ -48,31 +56,38 @@
     "cancel_gas_nano": 30000000,
     "refund_nano": 1000000000,
     "refund_reason": 3,
-    "commitment_hex": "6db31a65ea173b9ad53db0ba6944ca352cfd6e67fff061547406822659b894dc",
-    "expires_at": 1785021315,
-    "open_transaction": "LZS1noh0QS4iJch+7se6x3vxulKWCQUPc8ZhKgp/vOw=",
-    "open_transaction_lt": 85548295000003,
-    "open_masterchain_seqno": 73904028,
-    "cancel_transaction": "nfVUfqe1gaxTu5Ko/5YOwEiXewCYlDr3CpYnD/qF2/k=",
-    "cancel_transaction_lt": 85548306000003,
-    "cancel_masterchain_seqno": 73904039
+    "commitment_hex": "898891cf4941e7198e11da63aa0c66bee62f9588cd8a215f95743a88ddf309cf",
+    "expires_at": 1785061800,
+    "open_transaction": "496b08eaf6673bb84e1cc78ab03aad22beefae4231f174a86f762fac4e6a092f",
+    "open_transaction_lt": 85649496000003,
+    "open_masterchain_seqno": 74001474,
+    "cancel_transaction": "76aa6338f65f310beeb185c9ac322fdd3e5893e52cf5be3431ebdac85039ecee",
+    "cancel_transaction_lt": 85649507000003,
+    "cancel_masterchain_seqno": 74001485
   },
   "verified_canary": {
     "first_wallet": "kQBoCwZXlHudwydsHIGg06kAWoxSjFkkWjbP890Y7fLwkqFC",
     "second_wallet": "kQD12D4f1MZN05riVMvmsCNZ9O87SBfs9BCwY_OIfYXrI3Qd",
-    "duel_id": 8500170045754465,
-    "query_id": 8500170045754465,
-    "settlement_transaction": "7ced535f487ea51536ffe080a9c015484f846a10dbf3c19be30dc3ffead5a931",
-    "settlement_transaction_lt": 85554531000003,
-    "masterchain_seqno": 73910017
+    "first_offer_id": 8500170121990210,
+    "duel_id": 8500170121990211,
+    "query_id": 8500170121990211,
+    "boost_query_id": 8500170121990220,
+    "boost_nano": 100000000,
+    "boost_gas_nano": 50000000,
+    "min_chance_bps": 5400,
+    "resulting_chance_bps": 5454,
+    "boost_valid_until": 1785061190,
+    "boost_transaction": "9459725bb229361ee38f0bf14b5753cd5028a8735cd38d0e30f80cc8883e5c1e",
+    "boost_transaction_lt": 85650255000003,
+    "boost_masterchain_seqno": 74002199,
+    "settlement_transaction": "83a6276edf0b956c143eb367c527cb4c7cb559c39e25261670dfff0b1722dfbe",
+    "settlement_transaction_lt": 85650415000003,
+    "masterchain_seqno": 74002353
   },
   "previous_contract": {
-    "address": "kQAiTNwDqQf0NB4iTWJCDjjm-12d6RH94lc4aJXFoWXv-t9d",
-    "paused": true,
-    "locked_nano": 0,
-    "pause_transaction": "j2IKCd87Z7fYGHla9HjgxBeEbFfKc9AcnNMXwj+92Lg=",
-    "pause_transaction_lt": 85549400000003,
-    "pause_masterchain_seqno": 73905090
+    "address": "kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP",
+    "paused": false,
+    "locked_nano": 0
   },
-  "explorer_url": "https://testnet.tonviewer.com/kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP"
+  "explorer_url": "https://testnet.tonviewer.com/kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M"
 }

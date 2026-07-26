@@ -10,9 +10,20 @@
 
 ## Contract invariants
 
-BankQueue rejects unsupported multipliers, amounts outside limits, duplicate identifiers, concurrent owner positions, malformed messages and underfunded gas. Older FIFO positions always receive priority; only the remainder seeds the newly appended position. Fees, initial funding and payouts are deterministic integer calculations.
+BankQueue rejects unsupported multipliers, amounts outside the current maturity limit, duplicate
+identifiers, concurrent owner positions, malformed messages and underfunded gas. The live limit is
+derived only from completed contract positions: 5/10/15 GRAM at 0/25/100 completions, then +5
+GRAM per 250 completions up to 100 GRAM. Older FIFO positions always receive priority; only the
+remainder seeds the newly appended position. Fees, initial funding and payouts are deterministic
+integer calculations.
 
-DuelEscrow rejects noncanonical pools, incompatible matches, repeated owners, commitment mismatch, early timeout, duplicate reveal/acceptance and dust messages. Commitments and outcomes are domain-separated by network and contract address. Direct acceptance requires a short-lived server signature bound to the invited wallet and is matched atomically. Pausing does not disable cancel, expiry, reveal or settlement. Outcomes do not depend on backend randomness.
+DuelEscrow rejects noncanonical pools, incompatible matches, repeated owners, commitment mismatch,
+early reveal, duplicate reveal/acceptance, stale boost revision and dust messages. Boosts are
+owner-bound, expiry-bound, limited to 90/10 and cannot extend the match past 180 seconds.
+Commitments and outcomes are domain-separated by network and contract address. Direct acceptance
+requires a short-lived server signature bound to the invited wallet and is matched atomically.
+Pausing does not disable cancel, expiry, reveal or settlement. Outcomes do not depend on backend
+randomness.
 
 Both current contracts expose explicit owner commands for pause, reserve funding, bounded surplus
 withdrawal, fee/treasury changes and ownership transfer. Configuration changes require a paused

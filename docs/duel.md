@@ -1,49 +1,61 @@
 # DUEL
 
-DUEL is an escrow-based PvP mode independent of BANK.
+DUEL — отдельный от BANK PvP-режим с хранением ставок в контракте до результата.
 
-## Product terms
+## Правила
 
-Every new LOOP challenge is equal 50/50: both players contribute the same stake and the
-contract settles one shared pool. There is no probability picker in the Mini App or public API.
+Каждый новый вызов начинается с равных ставок и шанса 50/50. После появления пары контракт
+открывает 60-секундную фазу усиления. В ней любой участник может добавить не меньше `0.1 GRAM`;
+шанс всегда равен его подтверждённой доле общего пула.
 
-The deployed DuelEscrow v1.2 bytecode also understands canonical 25/75 and 75/25 terms.
-That support remains for deterministic recovery of already funded legacy offers and invitations;
-it is not exposed for creating a new AFK or direct challenge.
+```text
+chance A = floor(stake A × 10,000 / total pool)
+chance B = 10,000 − chance A
+```
 
-Winner payout is `pool - floor(pool × fee / 10,000)`. DuelEscrow v1.2 enforces one global 2.5% fee.
+Шанс ограничен диапазоном 10–90%. Пополнение в последние секунды переносит мягкий дедлайн на
+`now + 20 секунд`, но не дальше жёсткой границы `match + 180 секунд`. Интерфейс меняет цифры
+только после подтверждения транзакции в TON.
 
-## Matchmaking
+Победитель получает `pool - floor(pool × fee / 10,000)`. Текущая комиссия — 2,5%.
 
-AFK offers remain open after the Mini App closes. The API reserves the oldest equal 50/50
-offer with the same pool under a database lock. A reservation has a deadline and returns to the
-queue if the second funding transaction never finalizes.
+## Защита от гонок
 
-Direct invitations have a Telegram-safe code and an independent 256-bit on-chain invite ID.
-Acceptance requires a short-lived Ed25519 permit signed by LOOP and bound to the configured
-network global ID, DuelEscrow address, creator offer, invite ID and verified invited wallet. The
-contract atomically verifies the permit, binds both opponents and matches the offers; another
-wallet cannot steal or replay it.
+Каждое усиление содержит номер ожидаемой ревизии, duel ID, offer ID, сумму, минимально приемлемый
+результирующий шанс и срок действия. Контракт отвергает повтор, устаревшую ревизию, чужой offer,
+пыль, превышение 90%, выход за общий пул или любой вызов после дедлайна.
+
+Раскрыть секрет до закрытия фазы усиления нельзя. Поэтому ни один игрок не может сначала увидеть
+результат, а потом изменить ставку.
+
+## Поиск и прямой вызов
+
+AFK-предложения остаются в очереди после закрытия Mini App. API резервирует самое старое
+совместимое предложение с таким же начальным пулом под блокировкой БД.
+
+Прямое приглашение содержит отдельный 256-битный invite ID. Короткоживущая Ed25519-подпись LOOP
+связана с сетью, адресом контракта, предложением создателя, invite ID и адресом приглашённого.
+Другой кошелёк не может перехватить или повторить принятие.
 
 ## Commit–reveal
 
-Each player generates a 256-bit secret locally and funds an offer with its commitment. Every commitment includes a versioned domain, network global ID and contract address, so it cannot be replayed across deployments or networks. The secret is kept in secure Telegram/device storage, never in the backend database. Once matched, players reveal within the deadline. The contract combines valid reveals to select a weighted winner.
+Каждый игрок создаёт 256-битный секрет локально и отправляет только commitment. В commitment
+входят версия домена, global ID сети, адрес контракта, offer ID и адрес владельца. Секрет хранится
+в Telegram SecureStorage или локальном хранилище устройства и не передаётся backend.
 
-- Two reveals: weighted settlement.
-- One reveal by deadline: sole revealer wins.
-- No reveals: both principals are refunded.
-- Unmatched expiry or creator cancellation: principal is refunded.
+- Два раскрытия: контракт выбирает победителя пропорционально итоговым долям.
+- Одно раскрытие к дедлайну: выигрывает раскрывший участник.
+- Ни одного раскрытия: контракт возвращает обе подтверждённые доли.
+- Непарное предложение: владелец может отменить его, а после expiry возврат доступен любому.
 
-Recovery is permissionless after deadlines. Offer and duel identifiers are replay protected.
+## Доказательство работы
 
-## Operational proof
-
-The migration gate refuses a contract switch unless the previous escrow reports `locked=0` and
-PostgreSQL has no active offer, duel or accepted invitation. A two-wallet canary performs direct
-open, address-bound accept, both reveals and settlement, then reports only a masterchain-finalized
-Reveal containing exactly one payout for the expected duel. Interrupted dedicated canary offers
-are recovered before the next run; unrelated user state is never touched.
+Перед сменой адреса migration gate требует `locked=0` у старого контракта и отсутствие активных
+проекций в PostgreSQL. Двухкошельковый canary репетирует сценарий на fork, затем в реальной сети
+создаёт пару, усиливает одну сторону, ждёт сетевой дедлайн, раскрывает оба секрета и проверяет
+единственную выплату с финальностью мастерчейна.
 
 ## PLUSH BRICK
 
-Ownership is checked independently against the configured mainnet Jetton master. No V1 discount is advertised or applied: a testnet escrow cannot securely enforce a mainnet ownership-dependent fee without an additional proof/oracle design.
+Владение PLUSH BRICK проверяется отдельно. Оно не меняет вероятность DUEL: шанс определяется
+только суммами, которые оба игрока добровольно подтвердили в текущем матче.

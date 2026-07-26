@@ -1,6 +1,7 @@
 import "@acton/io"
 import "@acton/emulation/network"
 import "@acton/emulation/scripts"
+import "@acton/testing/expect"
 import "@wrappers/BankQueue.gen"
 import "@wrappers/DuelEscrow.gen"
 
@@ -13,7 +14,6 @@ fun main(bankAddress: address, duelAddress: address, queryId: uint64) {
     val deployer = scripts.wallet("deployer");
     val bank = BankQueue.fromAddress(bankAddress);
     val duel = DuelEscrow.fromAddress(duelAddress);
-    println("sender={} bank_owner={} duel_owner={}", deployer.address, bank.contractConfig().owner, duel.contractConfig().owner);
 
     val bankResult = bank.sendSetBankPaused(
         deployer.address,
@@ -21,8 +21,9 @@ fun main(bankAddress: address, duelAddress: address, queryId: uint64) {
         true,
         { value: ton("0.03") },
     );
-    println(bankResult.waitForTrace());
-    assert (bank.contractConfig().paused) throw PauseErrors.BankPauseFailed;
+    val bankTrace = bankResult.waitForTrace();
+    assert (bankTrace != null) throw PauseErrors.BankPauseFailed;
+    expect(bankTrace!).toHaveAllSuccessfulTxs();
 
     val duelResult = duel.sendSetPaused(
         deployer.address,
@@ -30,7 +31,8 @@ fun main(bankAddress: address, duelAddress: address, queryId: uint64) {
         true,
         { value: ton("0.03") },
     );
-    println(duelResult.waitForTrace());
-    assert (duel.contractConfig().paused) throw PauseErrors.DuelPauseFailed;
+    val duelTrace = duelResult.waitForTrace();
+    assert (duelTrace != null) throw PauseErrors.DuelPauseFailed;
+    expect(duelTrace!).toHaveAllSuccessfulTxs();
     println("Previous LOOP contracts paused");
 }
