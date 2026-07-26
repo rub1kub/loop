@@ -2,9 +2,10 @@
 
 ## Граница TON
 
-LOOP работает только с TON testnet, global ID `-3`. Пользователь подписывает действия внешним
-кошельком через TON Connect. Backend не имеет пользовательских ключей и не может подписать
-финансовую транзакцию вместо пользователя.
+Текущий пользовательский runtime LOOP работает с TON testnet, global ID `-3`. Код также
+поддерживает mainnet `-239`, но этот путь закрыт evidence gate и не активирован. Пользователь
+подписывает действия внешним кошельком через TON Connect. Backend не имеет пользовательских
+ключей и не может подписать финансовую транзакцию вместо пользователя.
 
 `1 GRAM = 1_000_000_000 nanoGRAM`. Все расчёты контрактов целочисленные; `mulDivFloor`
 округляет вниз.
@@ -31,6 +32,11 @@ Owner и treasury обоих deployments — публичный адрес
 
 Manifest доказывает развёртывание и начальную конфигурацию. Он не является live state для
 `locked`, balance, paused, fee, owner или treasury.
+
+Поле `source_commit=21e604…` в testnet manifests — commit, из которого был собран неизменившийся
+bytecode контрактов. Оно не обязано совпадать с более новым application runtime commit
+`fc9f786…`: verifier отдельно доказывает, что текущая локальная сборка всё ещё имеет тот же code
+hash.
 
 ## BankQueue 1.3.0
 
@@ -277,20 +283,28 @@ DUEL manifest содержит masterchain-finalized доказательств�
 direct pair → boost → reveal → settlement. Verifier декодирует boost context, читает mutable
 `locked` из сети и проверяет покрытие обязательств резервом.
 
-## Проверка сети 2026-07-26
+## Проверка сети 2026-07-26 16:32 UTC
 
-`make contracts-inspect` показал:
+`scripts/verify-contracts.py --network testnet --require-smoke` показал:
 
-- BankQueue v1.3 active, queue пуста, `completedPositions=0`, `principalLimit=5 GRAM`,
-  `lockedFunding=0`.
+- BankQueue v1.3 active, `completedPositions=1`, `principalLimit=5 GRAM`,
+  `lockedFunding=0.73 GRAM`, live balance `1.417633799 GRAM`, reserve covered.
 - DuelEscrow v1.3 active, active offers/duels пусты, `locked=0`.
-- Отдельный BANK smoke принял ровно 5 GRAM при стартовом лимите.
+- BANK limit smoke принял ровно 5 GRAM при стартовом лимите.
+- BANK two-wallet smoke подтвердил два deposits, две fees и payout `1.25 GRAM`; остаток второго
+  contributor стал текущей активной позицией и не является surplus.
 - DUEL smoke открыл и отменил offer с полным возвратом.
 - Двухкошельковый canary подтвердил boost `0.1 GRAM`, шанс `54.54%`, реальный deadline,
   settlement и masterchain finality.
 
+Полный операционный снимок: [current-state.md](current-state.md).
+
 ## Предыдущие контракты
 
+- Previous BankQueue v1.2:
+  `kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y`, paused, `locked=0`.
+- Previous DuelEscrow v1.2:
+  `kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP`, paused, `locked=0`.
 - Earlier BANK:
   `kQC1zcM8cxIDn3mFR0RV_PS_y2PzNkFttJ8NfAPHTyHrmc4l`, paused, recorded
   `locked=0.99 GRAM`, owner-only position `2207202601`.

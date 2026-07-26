@@ -101,7 +101,8 @@ Browser и API не могут выполнить admin действие без 
 - Все основные API responses проверяются Zod-схемами.
 - GET/auth запросы повторяются на `408/425/429/502/503/504`; мутации автоматически не
   повторяются.
-- Transaction builder требует network `-3`, canonical context и ожидаемые quote fields.
+- Transaction builder допускает только network `-3` или `-239`, требует точного совпадения
+  network/contract/context с ответом API и ожидаемые quote fields.
 - Browser mock включается только compile-time флагом и не умеет broadcast.
 
 ### Важные frontend-файлы
@@ -312,8 +313,10 @@ position_id)`, `(network, contract, query_id)` и event identity уникаль�
 | infrastructure | PostgreSQL, Redis, domain, ACME                   |
 | web build      | API base, manifest URL, compile-time mock flag    |
 
-Production validator требует HTTPS, сильные secrets, два адреса/хеша контрактов, owner wallet,
-совпадающую Ed25519 key pair и network `-3`.
+Production validator требует HTTPS, один exact CORS origin, сильные secrets, два адреса/хеша
+контрактов, owner wallet и совпадающую Ed25519 key pair. Network `-3` работает как текущий
+режим; network `-239` дополнительно требует mainnet flag, audited commit/report, canary и
+ограниченные launch caps.
 
 ## Security boundaries
 

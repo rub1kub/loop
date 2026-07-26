@@ -148,6 +148,15 @@ acton test tests/duel_contract.test.tolk --mutate --mutate-contract DuelEscrow \
   --mutation-diff branch --mutation-levels critical,major
 ```
 
+Полный mainnet-oriented профиль обоих контрактов:
+
+```bash
+make contracts-mainnet-technical
+```
+
+Он запускает forked-mainnet tests, coverage thresholds, gas regression, отдельные BANK/DUEL
+critical и major mutation thresholds, focused API security tests и TON message tests.
+
 Не запускать live broadcast из обычного теста или release CLI.
 
 ## Локальный release gate
@@ -207,6 +216,16 @@ Telegram webhook, public endpoints и точный hashed frontend asset.
 
 Обычный release не deploy-ит contracts. Contract broadcast имеет отдельный явный
 `ALLOW_TESTNET_DEPLOY=1` gate.
+
+Детерминированный secret-free пакет для независимого аудитора строится только из clean worktree:
+
+```bash
+make contracts-audit-pack
+```
+
+ZIP содержит allowlisted source/tests/docs, hashes каждого файла, toolchain versions, compiled
+code hashes и точный Git commit. `build/` не публикуется в Git; сам пакет передаётся аудитору
+отдельно.
 
 ## Health и monitoring
 
@@ -302,6 +321,7 @@ CLI diagnostics после локальной настройки:
 
 ## Актуальное production-состояние
 
+- Проверенный runtime commit на снимке 2026-07-26: `fc9f786d4954ab538bf095c0518064ac5dc57516`.
 - Production delivery выполняется напрямую через `scripts/deploy-vps.sh`, без GitHub Actions.
 - Активные адреса и проверяемые данные находятся только в `deployments/<network>/`.
 - Release и web release должны указывать на один Git SHA после полного выпуска.
@@ -309,6 +329,8 @@ CLI diagnostics после локальной настройки:
   самим release CLI.
 - Не полагайся на сохранённый SHA или старый скриншот: перед операцией выполни
   `npm run deploy:vps:status`, `make contracts-inspect` и `make contracts-verify`.
+
+Изменяемые live-значения и mainnet blockers вынесены в [current-state.md](current-state.md).
 
 ## Инцидентные подсказки
 

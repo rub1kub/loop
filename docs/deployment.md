@@ -120,9 +120,9 @@ make contracts-mainnet-technical
 make contracts-mainnet-preflight
 ```
 
-The technical gate requires 98% line coverage, 75% branch coverage, a stable gas snapshot, at
-least 95% critical and 75% major DUEL mutation scores, API security tests and TON message tests.
-The preflight additionally binds the release to the audited commit/report, mainnet owner,
+The technical gate requires 98% line coverage, 75% branch coverage, a stable gas snapshot,
+separate BANK/DUEL critical and major mutation thresholds, API security tests and TON message
+tests. The preflight additionally binds the release to the audited commit/report, mainnet owner,
 treasury, invite signer and conservative limits.
 
 Contracts deploy paused and only through the explicit real-funds consent gate:

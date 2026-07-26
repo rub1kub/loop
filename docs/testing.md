@@ -34,7 +34,7 @@ make chain-smoke-test
 ```
 
 The complete mainnet technical profile runs forked coverage, gas regression, separate
-critical/major DUEL mutation thresholds and focused API/web security checks:
+critical/major BANK and DUEL mutation thresholds and focused API/web security checks:
 
 ```bash
 make contracts-mainnet-technical
@@ -50,7 +50,7 @@ make contracts-mainnet-verify
 ## Current v1.3 evidence
 
 - 19 BANK and 48 DUEL contract tests;
-- 99.7% contract line coverage and 83.5% branch coverage;
+- 99.66% contract line coverage and 86.67% branch coverage;
 - BANK mutation scores: 93.5% critical and 82.4% major;
 - DUEL mutation scores: 99.1% critical and 90.0% major;
 - 64 consecutive DUEL settlements without an active-offer or locked-value leak;

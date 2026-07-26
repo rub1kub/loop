@@ -104,7 +104,7 @@ Mini App или /control ─► внешний кошелёк ─► Тесто�
 
 Обычный браузер получает только лендинг и не запускает Telegram, TON Connect или API продукта. PostgreSQL хранит данные приложения и подтверждённую историю, Redis — временные блокировки и ограничения частоты запросов. BANK и DUEL разделены на уровне API, таблиц, событий и контрактов.
 
-Подробнее: [устройство продукта](docs/product.md), [архитектура](docs/architecture.md), [BANK](docs/bank.md), [DUEL](docs/duel.md), [рейтинг](docs/rating.md) и [контракты](docs/contracts.md).
+Подробнее: [полная база знаний](docs/agents/README.md), [актуальное состояние](docs/agents/current-state.md), [устройство продукта](docs/product.md), [архитектура](docs/architecture.md), [BANK](docs/bank.md), [DUEL](docs/duel.md), [рейтинг](docs/rating.md) и [контракты](docs/contracts.md).
 
 ## Технологии
 
@@ -224,7 +224,10 @@ npm run deploy:vps:web
 
 ## Документация
 
-- [База знаний проекта](docs/agents/README.md)
+- [Полная база знаний проекта](docs/agents/README.md)
+- [Актуальное production и mainnet-состояние](docs/agents/current-state.md)
+- [Продуктовые решения, полномочия и риски](docs/agents/decisions-and-risks.md)
+- [Конфигурация](docs/agents/configuration.md)
 - [Настройка окружения](docs/setup.md)
 - [Telegram Mini App и бот](docs/telegram.md)
 - [Работа с TON](docs/ton.md)

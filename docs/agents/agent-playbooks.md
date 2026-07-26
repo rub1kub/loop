@@ -221,22 +221,17 @@ Wrappers обновляются штатной Acton-командой при и�
 
 ## Известные долги на снимке
 
-1. `contracts-verify` неверно сравнивает live mutable `locked` с начальным manifest value.
-2. V1.2 manifests пока не содержат отдельные `verified_smoke` evidence.
-3. В DUEL на снимке остался просроченный direct offer с `0.5 GRAM locked`; требуется повторная
-   проверка и permissionless expiry.
-4. UI DUEL сообщает предварительный минимум `0.25 GRAM`, а effective equal-stake minimum —
-   `0.5 GRAM`.
-5. Profile referral reward `100` и monthly rating referral score `25` имеют одинаковое
-   пользовательское название.
-6. Referral qualification вызывается только после DUEL settlement, не после BANK payout.
-7. No-reveal `ExpireDuel` помечает offers как refunded, но worker сейчас не переводит
-   соответствующий `Duel.state` из `revealing`; это может оставить ложный overdue projection.
-8. Consumer browser identity отсутствует; пользовательское приложение по-прежнему требует
-   Telegram.
-9. Mainnet выключен, внешнего профессионального аудита нет.
-10. PLUSH BRICK discount выключен.
-11. Старый BANK имеет recorded owner-only position и не должен считаться свободным surplus.
+Канонический полный список находится в [current-state.md](current-state.md). Кратко:
+
+1. testnet BANK имеет действующее обязательство `0.73 GRAM` после двухкошелькового smoke;
+2. profile reward `100` и monthly rating referral score `25` выглядят как одна метрика;
+3. referral qualification вызывается после DUEL settlement, но не после BANK payout;
+4. no-reveal `ExpireDuel` подтверждает refunds offers, но `Duel.state` может остаться
+   `revealing`;
+5. пользовательской browser-версии игры нет: без Telegram доступен только лендинг;
+6. PLUSH BRICK discount/buyback описаны как целевая модель, но ещё не исполняются;
+7. mainnet выключен, независимого аудита и deployments нет;
+8. direct-invite signer immutable и меняется только новым deployment.
 
 Не исправляй эти пункты попутно в несвязанной задаче. Если задача касается пункта — сначала
 повтори фактическую проверку.

@@ -5,19 +5,19 @@
 репозитория. Детали разнесены по связанным разделам, чтобы не восстанавливать контекст из
 истории чата.
 
-| Поле                         | Значение                                     |
-| ---------------------------- | -------------------------------------------- |
-| Статус базы знаний           | активная                                     |
-| Последняя сверка             | 2026-07-26 10:20 UTC                         |
-| Проверенная runtime baseline | `21e604ceedb061ac15da9122a927f81557194534`   |
-| Основная ветка               | `main`                                       |
-| Публичный лендинг            | <https://app.tonsuite.org>                   |
-| Telegram Mini App            | <https://t.me/getloopbot?startapp>           |
-| Управление владельца         | <https://app.tonsuite.org/control>           |
-| Telegram                     | [@getloopbot](https://t.me/getloopbot)       |
-| Финансовая сеть              | TON testnet, global ID `-3`                  |
-| Контракты                    | `BankQueue 1.3.0`, `DuelEscrow 1.3.0`        |
-| Ограничение                  | mainnet подготовлен, но заблокирован аудитом |
+| Поле                         | Значение                                      |
+| ---------------------------- | --------------------------------------------- |
+| Статус базы знаний           | активная                                      |
+| Последняя полная сверка      | 2026-07-26 16:32 UTC                          |
+| Проверенный runtime baseline | `fc9f786d4954ab538bf095c0518064ac5dc57516`    |
+| Основная ветка               | `main`                                        |
+| Публичный лендинг            | <https://app.tonsuite.org>                    |
+| Telegram Mini App            | <https://t.me/getloopbot?startapp>            |
+| Управление владельца         | <https://app.tonsuite.org/control>            |
+| Telegram                     | [@getloopbot](https://t.me/getloopbot)        |
+| Финансовая сеть              | TON testnet, global ID `-3`                   |
+| Контракты                    | `BankQueue 1.3.0`, `DuelEscrow 1.3.0`         |
+| Mainnet                      | готов к аудиту, не готов к реальным средствам |
 
 Дата и хеш — это снимок, а не вечная истина. Перед эксплуатационным действием повторно проверь
 ветку, публичные health endpoints, живое состояние контрактов и манифесты.
@@ -118,6 +118,23 @@ Telegram Mini App                         Browser /control
 
 Полный путь запроса, API и таблицы: [architecture-and-data.md](architecture-and-data.md).
 
+## Состав базы знаний
+
+| Документ                                             | Что считать каноническим                                      |
+| ---------------------------------------------------- | ------------------------------------------------------------- |
+| [current-state.md](current-state.md)                 | runtime, сеть, тесты, mainnet gates и актуальные долги        |
+| [product-and-ux.md](product-and-ux.md)               | смысл продукта, сценарии, тексты и интерфейсные инварианты    |
+| [architecture-and-data.md](architecture-and-data.md) | компоненты, API, модели, проекции и failure model             |
+| [blockchain.md](blockchain.md)                       | точные правила, storage, opcodes и deployments контрактов     |
+| [configuration.md](configuration.md)                 | полный безопасный справочник environment и validators         |
+| [operations.md](operations.md)                       | тесты, release, rollback, monitoring и диагностика            |
+| [decisions-and-risks.md](decisions-and-risks.md)     | решения, owner powers, риски и mainnet GO/NO-GO               |
+| [agent-playbooks.md](agent-playbooks.md)             | карта файлов и минимальные проверки для конкретного изменения |
+
+Профильные `docs/*.md` остаются пользовательской и операторской документацией. База
+`docs/agents/` связывает их с фактическими call sites и описывает нюансы, которые легко потерять
+при передаче проекта другому агенту.
+
 ## Куда идти по типу задачи
 
 | Задача                                  | Сначала прочитать                                                        |
@@ -132,6 +149,9 @@ Telegram Mini App                         Browser /control
 | Tolk/Acton/контракт                     | [blockchain.md](blockchain.md), `docs/contracts.md`                      |
 | Панель владельца                        | [architecture-and-data.md](architecture-and-data.md), `docs/security.md` |
 | Тесты, CI, релиз, диагностика           | [operations.md](operations.md)                                           |
+| Конфигурация и environment              | [configuration.md](configuration.md)                                     |
+| Текущий production/mainnet status       | [current-state.md](current-state.md)                                     |
+| Риск, полномочия owner, спорное решение | [decisions-and-risks.md](decisions-and-risks.md)                         |
 | Найти точку изменения и набор проверок  | [agent-playbooks.md](agent-playbooks.md)                                 |
 
 ## Иерархия источников истины
@@ -151,18 +171,15 @@ treasury и fee могут меняться; не считай их живыми
 
 ## Текущий проверенный снимок
 
-- Runtime v1.3 сверено на baseline `21e604ceedb061ac15da9122a927f81557194534`.
-- Новый BANK: address `kQCq…50Il3`, очередь пуста, `completedPositions=0`,
-  `principalLimit=5 GRAM`, `lockedFunding=0`.
-- Новый DUEL: address `kQD7…w4lg3M`, active offers/duels пусты, `locked=0`.
-- `make contracts-verify` подтверждает оба code hash, initial data hash, getter-конфигурацию,
-  retained reserve, smoke и двухкошельковый boost/settlement canary.
-- Проверки v1.3: 58 контрактных, 82 API, 57 web, 13 security, свежая миграция и четыре
-  viewport/keyboard stress-сценария.
+- Production API/web/bot работают на runtime commit `fc9f786…`; пять сервисов healthy.
+- BANK имеет одну завершённую позицию и `0.73 GRAM locked` во второй позиции testnet canary.
+- DUEL имеет `locked=0`; smoke и двухкошельковый boost/settlement canary подтверждены.
+- Проверки: `67` контрактных, `97` API и `62` web; contract lines `99.66%`.
+- Mainnet release gates реализованы fail-closed, но внешнего аудита и mainnet deployments нет.
 - GitHub Actions не являются частью выпуска; прод загружается на VPS напрямую.
 
-Подробности и команды проверки: [blockchain.md](blockchain.md) и
-[operations.md](operations.md).
+Точные значения, доказательства и список оставшихся ограничений:
+[current-state.md](current-state.md).
 
 ## Термины
 
