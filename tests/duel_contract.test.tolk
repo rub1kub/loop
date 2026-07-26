@@ -3008,7 +3008,7 @@ fun openPairWithExemptA(contract: DuelEscrow, playerA: Treasury, playerB: Treasu
 }
 
 get fun `test exempt sole winner receives the full pool without a fee message`() {
-    val (contract, _, feeCollector, playerA, playerB) = setupTest();
+    val (contract, _, _feeCollector, playerA, playerB) = setupTest();
     openPairWithExemptA(contract, playerA, playerB);
     advancePastBoost(contract, OFFER_B_ID);
 
@@ -3076,7 +3076,7 @@ get fun `test opponent exemption does not waive the fee of a non-exempt winner`(
 }
 
 get fun `test both exempt players settle the full pool on weighted reveal`() {
-    val (contract, _, feeCollector, playerA, playerB) = setupTest();
+    val (contract, _, _feeCollector, playerA, playerB) = setupTest();
     val expiresAt: uint32 = testing.getNow() + 900;
     val first = contract.sendOpenOffer(
         playerA.address,
@@ -3217,7 +3217,7 @@ get fun `test holder permit boundaries fail closed before locking value`() {
 }
 
 get fun `test direct acceptance carries the acceptor holder exemption on chain`() {
-    val (contract, _, feeCollector, playerA, playerB) = setupTest();
+    val (contract, _, _feeCollector, playerA, playerB) = setupTest();
     val expiresAt: uint32 = testing.getNow() + 900;
     val inviteId: uint256 = 0x77;
     val opened = contract.sendOpenDirectOffer(

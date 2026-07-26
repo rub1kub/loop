@@ -623,8 +623,11 @@ async def verify_contract(
         if bool(stack_number(stack[6])) != bool(configuration["paused"]):
             raise ValueError(f"{contract}: pause state mismatch")
         live_locked = stack_number(stack[7])
-        if duel_holder_fee and stack_number(stack[8]) != 1:
+        # TVM returns -1 for true.
+        if duel_holder_fee and stack_number(stack[8]) not in {-1, 1}:
             raise ValueError(f"{contract}: holder fee support flag mismatch")
+        if duel_holder_fee and not bool(configuration.get("holder_fee_supported")):
+            raise ValueError(f"{contract}: manifest does not declare holder fee support")
     else:
         if bool(stack_number(stack[3])) != bool(configuration["paused"]):
             raise ValueError(f"{contract}: pause state mismatch")
