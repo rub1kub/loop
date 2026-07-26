@@ -233,10 +233,10 @@ async def create_offer_quote(
         # payout. A provider outage fails open to the normal fee: the player
         # keeps the exact terms shown, never better on screen than on chain.
         try:
-            plush = await request.app.state.plush_ton_client.get_jetton_wallet(
+            balance = await request.app.state.plush_ton_client.verified_jetton_balance(
                 wallet.address, settings.plush_brick_master
             )
-            fee_exempt = plush.balance_nano >= settings.holder_min_balance_nano
+            fee_exempt = balance >= settings.holder_min_balance_nano
         except TonProviderError:
             fee_exempt = False
     payout = total_pool if fee_exempt else payout_after_fee(total_pool, fee_bps)
@@ -341,7 +341,11 @@ async def create_offer_quote(
             direct_counter_offer_id=(counter.onchain_offer_id if invitation and counter else 0),
             direct_valid_until=direct_valid_until,
             direct_signature_hex=direct_signature_hex,
-            holder_fee_supported=settings.duel_holder_fee_enabled,
+            holder_fee_supported=getattr(
+                request.app.state,
+                "duel_holder_fee_supported",
+                settings.duel_holder_fee_enabled,
+            ),
             holder_valid_until=holder_valid_until,
             holder_signature_hex=holder_signature_hex,
         ),

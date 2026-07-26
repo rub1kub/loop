@@ -163,6 +163,37 @@ class TonClient:
     async def get_holder_balance(self, owner_address: str, jetton_master: str) -> int:
         return (await self.get_jetton_wallet(owner_address, jetton_master)).balance_nano
 
+    async def verified_jetton_balance(self, owner_address: str, jetton_master: str) -> int:
+        """Jetton balance proven against the master, for financial decisions.
+
+        The indexer row alone is not proof: it reports what a contract claims
+        about itself, so any contract answering `get_wallet_data` with the real
+        master address would pass. The canonical check asks the master which
+        wallet address it derives for this owner and requires the indexed
+        wallet to be exactly that one.
+
+        Display paths deliberately keep using the cheaper indexed lookup; this
+        one costs an extra getter call and belongs where value is at stake.
+        """
+        state = await self.get_jetton_wallet(owner_address, jetton_master)
+        if state.wallet_address is None or state.balance_nano <= 0:
+            return 0
+        owner_cell = Cell()
+        owner_cell.bits.write_address(Address(owner_address))
+        payload = base64.b64encode(owner_cell.to_boc(False)).decode()
+        stack = await self._run_get_method(
+            jetton_master,
+            "get_wallet_address",
+            [["tvm.Slice", payload]],
+        )
+        try:
+            derived = _stack_address(stack[0])
+        except (IndexError, TonProviderError) as exc:
+            raise TonProviderError("Jetton master did not derive a wallet address") from exc
+        if derived != state.wallet_address:
+            raise TonProviderError("Jetton wallet is not derived from the declared master")
+        return state.balance_nano
+
     async def get_contract_state(self, address: str) -> ContractState:
         response = await self.http.get(
             f"{self.base_url}/api/v3/accountStates",
@@ -210,11 +241,16 @@ class TonClient:
     async def get_contract_code_hash(self, address: str) -> str:
         return (await self.get_contract_state(address)).code_hash
 
-    async def _run_get_method(self, address: str, method: str) -> list[Any]:
+    async def _run_get_method(
+        self,
+        address: str,
+        method: str,
+        stack: list[Any] | None = None,
+    ) -> list[Any]:
         response = await self.http.post(
             f"{self.base_url}/api/v2/runGetMethod",
             headers=self.headers,
-            json={"address": address, "method": method, "stack": []},
+            json={"address": address, "method": method, "stack": stack or []},
         )
         if response.status_code != 200:
             raise TonProviderError("TON provider rejected contract getter")

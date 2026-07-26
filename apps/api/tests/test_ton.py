@@ -311,3 +311,47 @@ async def test_duel_canary_requires_matching_reveal_and_payout_proof() -> None:
         assert proof.masterchain_seqno == 56
         with pytest.raises(TonProviderError, match="requested DUEL settlement"):
             await client.verify_duel_settlement(tx_hash, account, duel_id + 1)
+
+
+@pytest.mark.asyncio
+async def test_verified_jetton_balance_requires_the_master_to_derive_the_wallet() -> None:
+    owner = "0:" + "aa" * 32
+    master = "0:" + "bb" * 32
+    real_wallet = "0:" + "cc" * 32
+    counterfeit = "0:" + "dd" * 32
+
+    def handler_for(derived: str):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/jetton/wallets"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "jetton_wallets": [
+                            {
+                                "address": counterfeit,
+                                "owner": owner,
+                                "jetton": master,
+                                "balance": "5000",
+                            }
+                        ]
+                    },
+                )
+            # The master is the only authority on which wallet belongs to an owner.
+            return httpx.Response(
+                200,
+                json={"ok": True, "result": {"exit_code": 0, "stack": [address_stack(derived)]}},
+            )
+
+        return handler
+
+    settings = get_settings()
+    # A contract that merely claims the right master is not proof of holding:
+    # the indexed wallet must be the one the master derives.
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler_for(real_wallet))) as http:
+        client = TonClient(http, settings)
+        with pytest.raises(TonProviderError, match="not derived"):
+            await client.verified_jetton_balance(owner, master)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler_for(counterfeit))) as http:
+        client = TonClient(http, settings)
+        assert await client.verified_jetton_balance(owner, master) == 5000

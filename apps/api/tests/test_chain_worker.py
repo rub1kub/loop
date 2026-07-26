@@ -18,6 +18,7 @@ from app.chain_worker import (
     DUEL_REVEAL,
     ProjectionResult,
     apply_transaction,
+    contract_control,
     decode_body,
 )
 from app.config import get_settings
@@ -1038,3 +1039,116 @@ async def test_funding_without_permit_clears_a_stale_local_exemption(app) -> Non
         await db.refresh(offer)
         assert offer.fee_exempt is False
         assert offer.payout_nano == 1_950_000_000
+
+
+@pytest.mark.asyncio
+async def test_worker_refuses_a_permit_outside_the_contract_expiry_window(app) -> None:
+    settings = get_settings()
+    expires = datetime.fromtimestamp(1_800_000_900, UTC)
+    async with app.state.session_factory() as db:
+        user = User(telegram_id=2204, first_name="Expired")
+        db.add(user)
+        await db.flush()
+        wallet = Wallet(
+            user_id=user.id,
+            network=-3,
+            address="0:" + "a1" * 32,
+            public_key="a2" * 32,
+        )
+        db.add(wallet)
+        await db.flush()
+        offer = DuelOffer(
+            onchain_offer_id=940,
+            query_id=940,
+            user_id=user.id,
+            wallet_id=wallet.id,
+            owner_wallet=wallet.address,
+            network=-3,
+            contract_address=settings.effective_duel_contract_address,
+            chance_bps=5000,
+            total_pool_nano=2_000_000_000,
+            stake_nano=1_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+            fee_bps=250,
+            payout_nano=1_950_000_000,
+            commitment_hex="e1" * 32,
+            expires_at=expires,
+        )
+        db.add(offer)
+        await db.commit()
+
+        # Correctly signed, but long expired at the transaction's chain time.
+        # The contract would never accept it, so a projection that did would be
+        # trusting the transaction verdict instead of proving the exemption.
+        for valid_until in (1_700_000_000, 1_800_000_000 + 7_200):
+            signature = sign_holder_fee_permit(
+                settings.duel_invite_signing_key.get_secret_value(),
+                network=-3,
+                contract_address=settings.effective_duel_contract_address,
+                offer_id=940,
+                owner_address=wallet.address,
+                valid_until=valid_until,
+            )
+            tx = transaction(
+                settings.effective_duel_contract_address,
+                wallet.address,
+                70 + (valid_until % 7),
+                duel_open_body_with_holder(offer, valid_until, signature),
+                1_050_000_000,
+            )
+            assert await apply_transaction(db, settings, tx, "duel") == ProjectionResult.RETRY
+
+
+@pytest.mark.asyncio
+async def test_funding_projects_the_observed_contract_fee_not_the_quote(app) -> None:
+    settings = get_settings()
+    expires = datetime.fromtimestamp(1_800_000_900, UTC)
+    async with app.state.session_factory() as db:
+        control = await contract_control(db, settings, "duel")
+        control.fee_bps = 500
+        user = User(telegram_id=2205, first_name="Stale")
+        db.add(user)
+        await db.flush()
+        wallet = Wallet(
+            user_id=user.id,
+            network=-3,
+            address="0:" + "a3" * 32,
+            public_key="a4" * 32,
+        )
+        db.add(wallet)
+        await db.flush()
+        offer = DuelOffer(
+            onchain_offer_id=941,
+            query_id=941,
+            user_id=user.id,
+            wallet_id=wallet.id,
+            owner_wallet=wallet.address,
+            network=-3,
+            contract_address=settings.effective_duel_contract_address,
+            chance_bps=5000,
+            total_pool_nano=2_000_000_000,
+            stake_nano=1_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+            # The quote was priced before the owner raised the fee on chain.
+            fee_bps=250,
+            payout_nano=1_950_000_000,
+            commitment_hex="e2" * 32,
+            expires_at=expires,
+        )
+        db.add(offer)
+        await db.commit()
+
+        tx = transaction(
+            settings.effective_duel_contract_address,
+            wallet.address,
+            80,
+            duel_open_body(offer),
+            1_050_000_000,
+        )
+        assert await apply_transaction(db, settings, tx, "duel") == ProjectionResult.APPLIED
+        await db.commit()
+        await db.refresh(offer)
+        # Projecting the stale 250 bps would promise 1.95 and then retry the
+        # settlement forever, because the contract pays 1.90.
+        assert offer.fee_bps == 500
+        assert offer.payout_nano == 1_900_000_000

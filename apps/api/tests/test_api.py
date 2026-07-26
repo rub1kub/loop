@@ -429,15 +429,9 @@ async def test_holder_quote_issues_a_verifiable_fee_permit(client, app, monkeypa
     get_settings.cache_clear()
 
     class HolderPlushClient:
-        async def get_jetton_wallet(
-            self, owner_address: str, jetton_master: str
-        ) -> JettonWalletState:
-            return JettonWalletState(
-                owner_address=owner_address,
-                jetton_master=jetton_master,
-                wallet_address="0:" + "5" * 64,
-                balance_nano=1,
-            )
+        async def verified_jetton_balance(self, owner_address: str, jetton_master: str) -> int:
+            del owner_address, jetton_master
+            return 1
 
     app.state.plush_ton_client = HolderPlushClient()
     headers = await authenticate(client)
@@ -481,15 +475,9 @@ async def test_non_holder_quote_keeps_the_fee_and_issues_no_permit(
     get_settings.cache_clear()
 
     class EmptyPlushClient:
-        async def get_jetton_wallet(
-            self, owner_address: str, jetton_master: str
-        ) -> JettonWalletState:
-            return JettonWalletState(
-                owner_address=owner_address,
-                jetton_master=jetton_master,
-                wallet_address=None,
-                balance_nano=0,
-            )
+        async def verified_jetton_balance(self, owner_address: str, jetton_master: str) -> int:
+            del owner_address, jetton_master
+            return 0
 
     app.state.plush_ton_client = EmptyPlushClient()
     headers = await authenticate(client)
@@ -536,3 +524,29 @@ async def test_disabled_holder_fee_never_promises_a_discount(client, app) -> Non
     tx = result["transaction"]
     assert tx["holder_fee_supported"] is False
     assert tx["holder_signature_hex"] is None
+
+
+@pytest.mark.asyncio
+async def test_wire_layout_follows_the_contract_not_the_feature_flag(client, app) -> None:
+    # Disabling the exemption must not change the open-message layout: the
+    # deployed contract still expects the trailing maybe-bit, and emitting the
+    # old body against it aborts every DUEL open while the API looks healthy.
+    app.state.duel_holder_fee_supported = True
+    headers = await authenticate(client)
+    await add_wallet(app, 777000111)
+    quote = await client.post(
+        "/api/v1/duels/offers/quote",
+        headers=headers,
+        json={
+            "offer_id": 54324,
+            "chance_bps": 5000,
+            "stake_nano": 1_000_000_000,
+            "commitment_hex": "da" * 32,
+            "mode": "afk",
+        },
+    )
+    assert quote.status_code == 201, quote.text
+    transaction = quote.json()["transaction"]
+    assert transaction["holder_fee_supported"] is True
+    assert transaction["holder_signature_hex"] is None
+    assert quote.json()["offer"]["fee_exempt"] is False

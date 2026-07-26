@@ -95,6 +95,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 "holder fee exemption is enabled but the live DUEL contract "
                 "does not support holder permits"
             )
+        # The open-message wire layout belongs to the contract, not to the
+        # feature flag: a v1.4 deployment expects the trailing maybe-bit even
+        # when we issue no permits. Deriving it from the flag would turn
+        # disabling the feature into a total DUEL outage.
+        app.state.duel_holder_fee_supported = duel_domain.holder_fee_supported
     app.state.bot = None
     app.state.dispatcher = None
     if settings.auto_create_schema:

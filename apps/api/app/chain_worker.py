@@ -81,6 +81,9 @@ BANK_ADMIN_WITHDRAWAL = 0x4C424E13
 
 DUEL_SET_PAUSED = 0x4C4F4F07
 
+# Mirrors MAX_EXPIRY_DELAY in contracts/duel/DuelEscrow.tolk.
+DUEL_MAX_EXPIRY_DELAY = 3_600
+
 BANK_ADMIN_OPCODES = {
     BANK_SET_PAUSED,
     BANK_FUND_RESERVE,
@@ -716,15 +719,26 @@ async def apply_duel_transaction(
         # The contract accepted this transaction, so any attached holder
         # permit was already signature-checked on chain. The worker still
         # re-verifies with the configured public key: a projection must never
-        # trust a fee exemption the backend cannot prove itself.
-        fee_exempt = "holder_signature" in decoded and verify_holder_fee_permit(
-            settings.duel_invite_public_key,
-            f"{decoded['holder_signature']:0128x}",
-            network=settings.ton_network_id,
-            contract_address=account,
-            offer_id=decoded["offer_id"],
-            owner_address=source,
-            valid_until=decoded.get("holder_valid_until", 0),
+        # trust a fee exemption the backend cannot prove itself. That means
+        # repeating the contract's expiry window too, not only the signature,
+        # so a misconfigured contract or a wrong success verdict cannot slip an
+        # expired exemption into the projection.
+        holder_valid_until = decoded.get("holder_valid_until", 0)
+        chain_now = int(transaction.get("now") or 0)
+        fee_exempt = (
+            "holder_signature" in decoded
+            and chain_now > 0
+            and holder_valid_until >= chain_now
+            and holder_valid_until <= chain_now + DUEL_MAX_EXPIRY_DELAY
+            and verify_holder_fee_permit(
+                settings.duel_invite_public_key,
+                f"{decoded['holder_signature']:0128x}",
+                network=settings.ton_network_id,
+                contract_address=account,
+                offer_id=decoded["offer_id"],
+                owner_address=source,
+                valid_until=holder_valid_until,
+            )
         )
         if "holder_signature" in decoded and not fee_exempt:
             return ProjectionResult.RETRY
@@ -794,12 +808,17 @@ async def apply_duel_transaction(
             offer.expires_at = datetime.fromtimestamp(decoded["expires_at"], UTC)
         # The chain is authoritative for the exemption in both directions: a
         # verified permit sets it, and a funding message without one clears a
-        # stale local promise, so the payout is recomputed either way.
+        # stale local promise, so the payout is recomputed either way. The fee
+        # comes from the observed contract configuration rather than the quote:
+        # an owner fee change between quote and funding would otherwise project
+        # a payout the contract will not send, and the settlement cross-check
+        # would then retry that duel forever.
         offer.fee_exempt = fee_exempt
+        offer.fee_bps = control.fee_bps
         offer.payout_nano = (
             offer.total_pool_nano
             if fee_exempt
-            else offer.total_pool_nano - offer.total_pool_nano * offer.fee_bps // 10_000
+            else offer.total_pool_nano - offer.total_pool_nano * control.fee_bps // 10_000
         )
         offer.state = OfferState.OPEN.value
         offer.funding_tx_hash = tx_hash
