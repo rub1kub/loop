@@ -122,6 +122,13 @@ class BankPositionPreviewResponse(BaseModel):
     network: int
 
 
+class BankLimitView(BaseModel):
+    completed_positions: int
+    principal_limit_nano: int
+    next_limit_nano: int | None
+    completions_until_next: int | None
+
+
 class BankContractCall(BaseModel):
     operation: str
     query_id: int
@@ -228,6 +235,16 @@ class OfferQuoteResponse(BaseModel):
     transaction: ContractCall
 
 
+class DuelBoostView(BaseModel):
+    revision: int
+    side: str
+    amount_nano: int
+    chance_bps: int
+    tx_hash: str
+    proof_url: str
+    created_at: datetime
+
+
 class DuelView(BaseModel):
     id: str
     onchain_duel_id: int
@@ -239,10 +256,34 @@ class DuelView(BaseModel):
     opponent_stake_nano: int
     total_pool_nano: int
     payout_nano: int
+    boost_deadline: datetime | None
+    hard_deadline: datetime | None
+    boost_revision: int
     reveal_deadline: datetime
+    boost_events: list[DuelBoostView]
     winner_wallet: str | None
     settled_tx_hash: str | None
     settlement_proof_url: str | None
+
+
+class DuelBoostRequest(BaseModel):
+    amount_nano: int = Field(ge=100_000_000, le=100_000_000_000)
+    expected_revision: int = Field(ge=0, le=65_535)
+    min_chance_bps: int = Field(ge=1_000, le=9_000)
+
+
+class DuelBoostIntent(BaseModel):
+    operation: str
+    query_id: int
+    offer_id: int
+    duel_id: int
+    contract_address: str
+    amount_nano: str
+    boost_nano: str
+    expected_revision: int
+    min_chance_bps: int
+    valid_until: int
+    network: int
 
 
 class ContractStateView(BaseModel):

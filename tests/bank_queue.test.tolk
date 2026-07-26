@@ -43,6 +43,7 @@ get fun `test first position keeps all distributable value in the user cycle`() 
     expect(position.fundedAmount).toEqual(ton("10"));
     expect(position.status).toEqual(BANK_POSITION_PARTIALLY_FUNDED);
     expect(contract.queueData().openPositions).toEqual(1);
+    expect(contract.activePosition(first.address)).toEqual(POSITION_A);
     expect(contract.contractConfig().lockedFunding).toEqual(ton("10"));
 }
 
@@ -183,6 +184,46 @@ get fun `test invalid multiplier and underfunded messages cannot mutate queue`()
     expect(contract.queueData().openPositions).toEqual(0);
 }
 
+get fun `test early BANK stages reject oversized positions and expand only after completions`() {
+    val (early, _, _, first, second) = setupBankAtCompleted(0, 0);
+    expect(early.queueData().principalLimit).toEqual(ton("5"));
+    expect(
+        openPosition(early, first, POSITION_A, ton("5"), 12_500),
+    ).toHaveSuccessfulTx<CreatePosition>();
+    expect(
+        openPosition(early, second, POSITION_B, ton("5.000000001"), 12_500),
+    ).toHaveFailedTx({ exitCode: BankErrors.InvalidPrincipal });
+
+    val (secondStage, _, _, third, _) = setupBankAtCompleted(0, 25);
+    expect(secondStage.queueData().principalLimit).toEqual(ton("10"));
+    expect(
+        openPosition(secondStage, third, POSITION_C, ton("10"), 12_500),
+    ).toHaveSuccessfulTx<CreatePosition>();
+
+    val (middleSecondStage, _, _, _, _) = setupBankAtCompleted(0, 50);
+    expect(middleSecondStage.queueData().principalLimit).toEqual(ton("10"));
+
+    val (thirdStage, _, _, fourth, _) = setupBankAtCompleted(0, 100);
+    expect(thirdStage.queueData().principalLimit).toEqual(ton("15"));
+    expect(
+        openPosition(thirdStage, fourth, POSITION_D, ton("15"), 12_500),
+    ).toHaveSuccessfulTx<CreatePosition>();
+}
+
+get fun `test mature BANK limit grows by five GRAM every 250 completions and stays capped`() {
+    val (beforeExpansion, _, _, _, _) = setupBankAtCompleted(0, 300);
+    expect(beforeExpansion.queueData().principalLimit).toEqual(ton("15"));
+
+    val (expanded, _, _, first, _) = setupBankAtCompleted(0, 350);
+    expect(expanded.queueData().principalLimit).toEqual(ton("20"));
+    expect(
+        openPosition(expanded, first, POSITION_A, ton("20"), 12_500),
+    ).toHaveSuccessfulTx<CreatePosition>();
+
+    val (capped, _, _, _, _) = setupBankAtCompleted(0, 10_000);
+    expect(capped.queueData().principalLimit).toEqual(ton("100"));
+}
+
 get fun `test owner can fund reserve and withdraw only free balance while paused`() {
     val (contract, owner, treasury, _, _) = setupBank(100);
     expect(
@@ -210,6 +251,14 @@ get fun `test owner can fund reserve and withdraw only free balance while paused
             { value: ton("0.02") },
         ),
     ).toHaveSuccessfulTx<SetBankPaused>();
+    expect(
+        contract.sendBankWithdrawSurplus(
+            owner.address,
+            2_003,
+            ton("0.1"),
+            { value: ton("0.049999999") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InsufficientValue });
     val withdrawal = contract.sendBankWithdrawSurplus(
         owner.address,
         2_004,
@@ -283,6 +332,14 @@ get fun `test BANK configuration changes require the paused owner`() {
         contract.sendBankSetTreasury(
             owner.address,
             2_205,
+            contract.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InvalidTreasury });
+    expect(
+        contract.sendBankSetTreasury(
+            owner.address,
+            2_206,
             second.address,
             { value: ton("0.02") },
         ),
@@ -290,7 +347,7 @@ get fun `test BANK configuration changes require the paused owner`() {
     expect(
         contract.sendBankSetFee(
             owner.address,
-            2_206,
+            2_207,
             200,
             { value: ton("0.02") },
         ),
@@ -298,7 +355,7 @@ get fun `test BANK configuration changes require the paused owner`() {
     expect(
         contract.sendBankSetOwner(
             owner.address,
-            2_207,
+            2_208,
             first.address,
             { value: ton("0.02") },
         ),
@@ -310,7 +367,7 @@ get fun `test BANK configuration changes require the paused owner`() {
     expect(
         contract.sendSetBankPaused(
             owner.address,
-            2_208,
+            2_209,
             false,
             { value: ton("0.02") },
         ),
@@ -318,7 +375,7 @@ get fun `test BANK configuration changes require the paused owner`() {
     expect(
         contract.sendSetBankPaused(
             first.address,
-            2_209,
+            2_210,
             false,
             { value: ton("0.02") },
         ),
@@ -326,6 +383,13 @@ get fun `test BANK configuration changes require the paused owner`() {
 }
 
 fun setupBank(feeBps: uint16): (BankQueue, Treasury, Treasury, Treasury, Treasury) {
+    return setupBankAtCompleted(feeBps, 100);
+}
+
+fun setupBankAtCompleted(
+    feeBps: uint16,
+    completedPositions: uint64,
+): (BankQueue, Treasury, Treasury, Treasury, Treasury) {
     val owner = testing.treasury("bank-owner");
     val feeCollector = testing.treasury("bank-fee");
     val first = testing.treasury("bank-first");
@@ -337,6 +401,7 @@ fun setupBank(feeBps: uint16): (BankQueue, Treasury, Treasury, Treasury, Treasur
         paused: false,
         headQueueIndex: 0,
         nextQueueIndex: 0,
+        completedPositions,
         lockedFunding: 0,
         positions: ([] as PositionMap),
         queue: ([] as QueueMap),

@@ -52,6 +52,20 @@ def test_canary_can_parse_acton_proof_from_stderr(
     assert RUNNER.PROOF_PATTERN.search(output)
 
 
+def test_canary_waits_until_confirmed_boost_deadline() -> None:
+    output = "DUEL_CANARY_BOOST duel_id=42 boost_deadline=1060 revision=1 chance_a=5454"
+
+    assert RUNNER.boost_wait_seconds(output, 42, 1_000) == 62
+
+
+def test_canary_rejects_wrong_duel_or_unbounded_boost_deadline() -> None:
+    output = "DUEL_CANARY_BOOST duel_id=42 boost_deadline=2000 revision=1 chance_a=5454"
+    with pytest.raises(SystemExit, match="parseable boost"):
+        RUNNER.boost_wait_seconds(output, 43, 1_000)
+    with pytest.raises(SystemExit, match="hard cap"):
+        RUNNER.boost_wait_seconds(output, 42, 1_000)
+
+
 def mainnet_wallets(first_balance: int, second_balance: int) -> dict[str, dict[str, Any]]:
     return {
         "loop-mainnet-canary-a": {"address": "a", "balance": first_balance},

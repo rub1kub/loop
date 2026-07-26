@@ -6,8 +6,10 @@ import type {
   BankPosition,
   BankPreview,
   BankQuote,
+  BankLimit,
   ContractState,
   Duel,
+  DuelBoostIntent,
   Invite,
   Offer,
   OfferQuote,
@@ -270,6 +272,10 @@ export const api = {
     });
   },
 
+  async bankLimits(): Promise<BankLimit> {
+    return await request('/bank/limits');
+  },
+
   async contractState(mode: 'bank' | 'duel'): Promise<ContractState> {
     return await request(`/onchain/contracts/${mode}`);
   },
@@ -298,6 +304,20 @@ export const api = {
 
   async revealIntent(duelId: number): Promise<ActionIntent> {
     return await request(`/duels/${duelId}/reveal-intent`, { method: 'POST', body: '{}' });
+  },
+
+  async boostDuelIntent(
+    duelId: number,
+    input: {
+      amount_nano: number;
+      expected_revision: number;
+      min_chance_bps: number;
+    },
+  ): Promise<DuelBoostIntent> {
+    return await request(`/duels/${duelId}/boost-intent`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
   },
 
   async cancelOfferIntent(offerId: number): Promise<ActionIntent> {

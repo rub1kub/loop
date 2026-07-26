@@ -134,8 +134,8 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
     'border-bottom-width',
     '0px',
   );
-  await expect(page.getByText(/Оба открыли числа — исход 50\/50/i)).toBeVisible();
-  await expect(page.getByText(/Открыл только один за 5 минут — он победил/i)).toBeVisible();
+  await expect(page.getByText(/Старт 50\/50/i)).toBeVisible();
+  await expect(page.getByText(/минута, чтобы усилить/i)).toBeVisible();
   expect(
     await page
       .locator('.duel-deadline-rule')
@@ -154,6 +154,16 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await expect(page.getByText('ПОИСК СОПЕРНИКА')).toBeVisible();
   await expect(page.getByText('ДО ИСТЕЧЕНИЯ')).toBeVisible();
   await expect(page.getByRole('button', { name: 'ОСТАНОВИТЬ ПОИСК' })).toBeVisible();
+
+  await page.goto('/?screen=duel-boost');
+  await emulateFullscreenControls();
+  await expect(page.getByText('Соперник найден. Теперь можно изменить перевес.')).toBeVisible();
+  await expect(page.getByText('ТЫ 60%')).toBeVisible();
+  await expect(page.getByText('СОПЕРНИК 40%')).toBeVisible();
+  await expect(page.getByLabel('Сумма усиления в GRAM')).toBeVisible();
+  await expect(page.getByText(/После подтверждения:/)).toContainText('66.7%');
+  await expect(page.getByRole('button', { name: 'УСИЛИТЬ' })).toBeVisible();
+  await expect(page.getByText(/\+0[,.]5 GRAM · 60[,.]0%/)).toBeVisible();
 
   await page.goto('/?screen=rating');
   await emulateFullscreenControls();

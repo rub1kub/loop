@@ -8,6 +8,7 @@ from ...dependencies import Config, CurrentUser, Db
 from ...models import Wallet
 from ...schemas import (
     BankContractCall,
+    BankLimitView,
     BankPositionPreviewRequest,
     BankPositionPreviewResponse,
     BankPositionQuoteRequest,
@@ -15,7 +16,7 @@ from ...schemas import (
     BankPositionView,
 )
 from ...ton import explorer_transaction_url
-from .models import BankPosition, BankPositionStatus
+from .models import BankPayout, BankPosition, BankPositionStatus
 
 router = APIRouter(prefix="/bank", tags=["BANK"])
 
@@ -26,6 +27,53 @@ ACTIVE_POSITION_STATES = [
     BankPositionStatus.PARTIALLY_FUNDED.value,
     BankPositionStatus.COMPLETED.value,
 ]
+
+GRAM = 1_000_000_000
+
+
+def maturity_limit(completed_positions: int) -> tuple[int, int | None, int | None]:
+    if completed_positions < 25:
+        return 5 * GRAM, 10 * GRAM, 25 - completed_positions
+    if completed_positions < 100:
+        return 10 * GRAM, 15 * GRAM, 100 - completed_positions
+    stage = (completed_positions - 100) // 250
+    current = min(15 + stage * 5, 100) * GRAM
+    if current >= 100 * GRAM:
+        return current, None, None
+    next_boundary = 100 + (stage + 1) * 250
+    return current, current + 5 * GRAM, next_boundary - completed_positions
+
+
+async def bank_limit(db: Db, settings: Config) -> BankLimitView:
+    completed = int(
+        await db.scalar(
+            select(func.count(BankPayout.id))
+            .join(BankPosition, BankPayout.position_id == BankPosition.id)
+            .where(
+                BankPosition.network == settings.ton_network_id,
+                BankPosition.contract_address == settings.bank_contract_address,
+            )
+        )
+        or 0
+    )
+    current, next_limit, remaining = maturity_limit(completed)
+    return BankLimitView(
+        completed_positions=completed,
+        principal_limit_nano=current,
+        next_limit_nano=next_limit,
+        completions_until_next=remaining,
+    )
+
+
+async def validate_principal(db: Db, settings: Config, principal_nano: int) -> BankLimitView:
+    limit = await bank_limit(db, settings)
+    maximum = min(settings.bank_max_principal_nano, limit.principal_limit_nano)
+    if not settings.bank_min_principal_nano <= principal_nano <= maximum:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"Сейчас можно внести от 1 до {maximum // GRAM} GRAM",
+        )
+    return limit
 
 
 async def position_view(db: Db, position: BankPosition) -> BankPositionView:
@@ -96,12 +144,7 @@ async def preview_position(
         )
     if not settings.bank_contract_address:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "BANK contract is not configured")
-    if (
-        not settings.bank_min_principal_nano
-        <= body.principal_nano
-        <= settings.bank_max_principal_nano
-    ):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "principal is outside limits")
+    await validate_principal(db, settings, body.principal_nano)
     await active_wallet(db, user.id, settings.ton_network_id)
     fee_bps = await effective_contract_fee(
         db,
@@ -141,12 +184,7 @@ async def quote_position(
         )
     if not settings.bank_contract_address:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "BANK contract is not configured")
-    if (
-        not settings.bank_min_principal_nano
-        <= body.principal_nano
-        <= settings.bank_max_principal_nano
-    ):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "principal is outside limits")
+    await validate_principal(db, settings, body.principal_nano)
     wallet = await active_wallet(db, user.id, settings.ton_network_id)
     await db.execute(
         update(BankPosition)
@@ -229,6 +267,11 @@ async def quote_position(
             fee_nano=str(fee),
         ),
     )
+
+
+@router.get("/limits", response_model=BankLimitView)
+async def limits(db: Db, settings: Config) -> BankLimitView:
+    return await bank_limit(db, settings)
 
 
 @router.get("/positions/current", response_model=BankPositionView | None)

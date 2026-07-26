@@ -2,6 +2,7 @@ import "@acton/crypto"
 import "@acton/env"
 import "@acton/io"
 import "@acton/emulation/network"
+import "@acton/emulation/testing"
 import "@acton/testing/expect"
 import "@acton/types/big_array"
 import "@acton/types/transaction"
@@ -25,6 +26,7 @@ enum CanaryErrors {
     WrongBinding = 955
     UnsupportedNetwork = 956
     CanaryStateBusy = 957
+    InvalidPhase = 958
 }
 
 fun transactionAt(trace: SendResultList, account: address): TlbTransaction? {
@@ -77,7 +79,36 @@ fun canaryPermit(
     return crypto.rawSign(signerSeed, hash) as bits512;
 }
 
-fun runCanary(
+fun requireCanaryContract(
+    duelAddress: address,
+    networkId: int32,
+): uint256 {
+    val signerSeed = env<int>("LOOP_DUEL_CANARY_SIGNING_SEED");
+    println("DUEL_CANARY_SIGNER_READY present={}", signerSeed != null);
+    assert (signerSeed != null) throw CanaryErrors.MissingSigner;
+    assert (
+        networkId == TESTNET_NETWORK_ID || networkId == MAINNET_NETWORK_ID
+    ) throw CanaryErrors.UnsupportedNetwork;
+
+    val duel = DuelEscrow.fromAddress(duelAddress);
+    val config = duel.contractConfig();
+    val signer = crypto.seedToKeyPair(signerSeed!);
+    println(
+        "DUEL_CANARY_BINDING network={} address={} signer={} active={}",
+        config.networkId == networkId,
+        config.contractAddress == duelAddress,
+        config.inviteSignerPublicKey == signer.publicKey,
+        !config.paused,
+    );
+    assert (
+        config.networkId == networkId && config.contractAddress == duelAddress &&
+        config.inviteSignerPublicKey == signer.publicKey &&
+        !config.paused
+    ) throw CanaryErrors.WrongContract;
+    return signerSeed!;
+}
+
+fun runCanaryOpenAndBoost(
     duelAddress: address,
     networkId: int32,
     firstOfferId: uint64,
@@ -92,35 +123,15 @@ fun runCanary(
         firstOfferId,
         secondOfferId,
     );
-    val signerSeed = env<int>("LOOP_DUEL_CANARY_SIGNING_SEED");
-    println("DUEL_CANARY_SIGNER_READY present={}", signerSeed != null);
-    assert (signerSeed != null) throw CanaryErrors.MissingSigner;
-    assert (
-        networkId == TESTNET_NETWORK_ID || networkId == MAINNET_NETWORK_ID
-    ) throw CanaryErrors.UnsupportedNetwork;
     assert (firstWallet != secondWallet) throw CanaryErrors.SameWallet;
     assert (firstOfferId < secondOfferId) throw CanaryErrors.WrongContract;
 
     val duel = DuelEscrow.fromAddress(duelAddress);
-    val before = duel.contractConfig();
-    val signer = crypto.seedToKeyPair(signerSeed!);
-    println(
-        "DUEL_CANARY_BINDING network={} address={} signer={} active={}",
-        before.networkId == networkId,
-        before.contractAddress == duelAddress,
-        before.inviteSignerPublicKey == signer.publicKey,
-        !before.paused,
-    );
-    assert (
-        before.networkId == networkId && before.contractAddress == duelAddress &&
-        before.inviteSignerPublicKey == signer.publicKey &&
-        !before.paused
-    ) throw CanaryErrors.WrongContract;
+    val signerSeed = requireCanaryContract(duelAddress, networkId);
     // Acton 1.0.0 remote scripts silently stop when `activeOffer` reads a
     // missing dictionary entry. Interrupted runs are recovered explicitly
     // with cancel/expire scripts using the offer IDs printed above.
     println("DUEL_CANARY_STATE_READY");
-    val lockedBefore = duel.contractConfig().locked;
     val inviteId = beginCell()
         .storeUint(0x43414E59, 32)
         .storeAddress(duelAddress)
@@ -168,7 +179,7 @@ fun runCanary(
             counterOfferId: firstOfferId,
             validUntil: expiresAt,
             signature: canaryPermit(
-                signerSeed!,
+                signerSeed,
                 networkId,
                 duelAddress,
                 inviteId,
@@ -187,6 +198,54 @@ fun runCanary(
         duel.directOfferData(firstOfferId).opponent! == secondWallet &&
         duel.directOfferData(secondOfferId).opponent! == firstWallet
     ) throw CanaryErrors.WrongBinding;
+
+    val initial = duel.duelBoostData(secondOfferId);
+    val boosted = duel.sendBoostDuel(
+        firstWallet,
+        firstOfferId + 10,
+        secondOfferId,
+        firstOfferId,
+        ton("0.1"),
+        0,
+        5_400,
+        initial.hardDeadline,
+        { value: ton("0.15") },
+    );
+    val boostTrace = boosted.waitForTrace();
+    assert (boostTrace != null) throw CanaryErrors.WrongContract;
+    expect(boostTrace!).toHaveAllSuccessfulTxs();
+    assert (transactionAt(boostTrace!, duelAddress) != null) throw CanaryErrors.WrongContract;
+    val boost = duel.duelBoostData(secondOfferId);
+    assert (
+        boost.stakeA == ton("0.6") && boost.stakeB == ton("0.5") && boost.chanceABps == 5_454 &&
+        boost.chanceBBps == 4_546 &&
+        boost.boostRevision == 1
+    ) throw CanaryErrors.WrongBinding;
+    println(
+        "DUEL_CANARY_BOOST duel_id={} boost_deadline={} revision={} chance_a={}",
+        secondOfferId,
+        boost.boostDeadline,
+        boost.boostRevision,
+        boost.chanceABps,
+    );
+}
+
+fun runCanarySettle(
+    duelAddress: address,
+    networkId: int32,
+    firstOfferId: uint64,
+    secondOfferId: uint64,
+    firstWallet: address,
+    secondWallet: address,
+) {
+    assert (firstWallet != secondWallet) throw CanaryErrors.SameWallet;
+    val duel = DuelEscrow.fromAddress(duelAddress);
+    requireCanaryContract(duelAddress, networkId);
+    val boost = duel.duelBoostData(secondOfferId);
+    assert (
+        boost.boostRevision == 1 && boost.chanceABps == 5_454 && boost.chanceBBps == 4_546
+    ) throw CanaryErrors.WrongBinding;
+    val lockedBeforeSettlement = duel.contractConfig().locked;
 
     val firstReveal = duel.sendReveal(
         firstWallet,
@@ -216,11 +275,45 @@ fun runCanary(
     expect(settlementTrace!).toHaveAllSuccessfulTxs();
     val settlement = transactionAt(settlementTrace!, duelAddress);
     assert (settlement != null) throw CanaryErrors.MissingSettlement;
-    assert (duel.contractConfig().locked == lockedBefore) throw CanaryErrors.UnexpectedLockedValue;
+    assert (
+        duel.contractConfig().locked == lockedBeforeSettlement - ton("1.1")
+    ) throw CanaryErrors.UnexpectedLockedValue;
 
     println(
         "DUEL_CANARY_PROOF duel_id={} settlement_hash={:x}",
         secondOfferId,
         settlement!.toCell().hash(),
     );
+}
+
+fun runCanary(
+    duelAddress: address,
+    networkId: int32,
+    firstOfferId: uint64,
+    secondOfferId: uint64,
+    expiresAt: uint32,
+    firstWallet: address,
+    secondWallet: address,
+) {
+    val lockedBefore = DuelEscrow.fromAddress(duelAddress).contractConfig().locked;
+    runCanaryOpenAndBoost(
+        duelAddress,
+        networkId,
+        firstOfferId,
+        secondOfferId,
+        expiresAt,
+        firstWallet,
+        secondWallet,
+    );
+    val duel = DuelEscrow.fromAddress(duelAddress);
+    testing.setNow(duel.duelBoostData(secondOfferId).boostDeadline + 1);
+    runCanarySettle(
+        duelAddress,
+        networkId,
+        firstOfferId,
+        secondOfferId,
+        firstWallet,
+        secondWallet,
+    );
+    assert (duel.contractConfig().locked == lockedBefore) throw CanaryErrors.UnexpectedLockedValue;
 }

@@ -204,8 +204,10 @@ async def _live_contract(
         request.app.state.ton_client.get_contract_state(address),
         request.app.state.ton_client.get_contract_admin_state(mode, address),
     )
-    return chain, admin, secrets.compare_digest(
-        chain.code_hash, expected_hash.removeprefix("0x").upper()
+    return (
+        chain,
+        admin,
+        secrets.compare_digest(chain.code_hash, expected_hash.removeprefix("0x").upper()),
     )
 
 
@@ -237,8 +239,7 @@ async def _contract_view(
                 treasury=admin.treasury,
                 fee_bps=admin.fee_bps,
                 paused=admin.paused,
-                owner_matches_session=normalize_address(admin.owner)
-                == normalize_address(wallet),
+                owner_matches_session=normalize_address(admin.owner) == normalize_address(wallet),
                 extended_controls=admin.extended_controls,
                 last_transaction_hash=chain.last_transaction_hash,
             ),
@@ -422,7 +423,7 @@ async def control_overview(
         await db.scalar(
             select(func.count())
             .select_from(Duel)
-            .where(Duel.state.in_([DuelState.REVEALING.value]))
+            .where(Duel.state.in_([DuelState.BOOSTING.value, DuelState.REVEALING.value]))
         )
         or 0
     )
@@ -499,9 +500,7 @@ async def prepare_control_transaction(
 ) -> ControlTransactionView:
     address, _ = _contract_settings(body.mode, settings)
     try:
-        chain, admin, code_hash_matches = await _live_contract(
-            request, settings, wallet, body.mode
-        )
+        chain, admin, code_hash_matches = await _live_contract(request, settings, wallet, body.mode)
     except TonProviderError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
     if not code_hash_matches:

@@ -1435,6 +1435,125 @@ details[open] > summary .disclosure-indicator svg {
   line-height: 1.45;
 }
 
+.duel-boost-panel {
+  display: grid;
+  width: min(100%, 360px);
+  gap: 10px;
+  margin-top: 16px;
+  text-align: left;
+}
+
+.duel-chance-labels {
+  display: flex;
+  justify-content: space-between;
+  color: #a2a2a8;
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.1em;
+}
+
+.duel-chance-track {
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: #323236;
+}
+
+.duel-chance-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #fff;
+  transition: width 500ms var(--ease-apple);
+}
+
+.boost-input {
+  display: grid;
+  gap: 5px;
+}
+
+.boost-input > span {
+  color: #8b8b91;
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.13em;
+}
+
+.boost-input > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  padding: 9px 12px;
+  border: 1px solid #3c3c40;
+  border-radius: 14px;
+  background: #0e0e10;
+}
+
+.boost-input input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 27px;
+  font-weight: 640;
+}
+
+.boost-input b {
+  color: #8b8b91;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+.boost-quick-values {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.boost-quick-values button {
+  min-height: 34px;
+  border: 1px solid #303034;
+  border-radius: 11px;
+  background: #0b0b0d;
+  color: #99999e;
+  font-weight: 650;
+}
+
+.boost-quick-values button.active {
+  border-color: #fff;
+  background: #fff;
+  color: #000;
+}
+
+.duel-boost-panel > p {
+  margin: 0;
+  color: #98989d;
+  font-size: 11px;
+  text-align: center;
+}
+
+.duel-boost-events {
+  display: grid;
+  gap: 6px;
+  margin: 1px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.duel-boost-events li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #8f8f94;
+  font-size: 10px;
+}
+
+.duel-boost-events strong {
+  color: #d8d8dc;
+  font-weight: 620;
+}
+
 .duel-result h2 {
   margin: 10px 0 0;
   font-size: 52px;

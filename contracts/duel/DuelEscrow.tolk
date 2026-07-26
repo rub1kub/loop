@@ -12,6 +12,12 @@ const MIN_CONTRACT_RESERVE = 200_000_000
 const MIN_EXPIRY_DELAY = 30
 const MAX_EXPIRY_DELAY = 3_600
 const REVEAL_WINDOW = 300
+const BOOST_WINDOW = 60
+const BOOST_EXTENSION = 20
+const BOOST_HARD_WINDOW = 180
+const MIN_BOOST = 100_000_000
+const MAX_CHANCE_BPS = 9_000
+const MIN_CHANCE_BPS = 1_000
 const COMMITMENT_DOMAIN = 0x4C4F4F60
 const OUTCOME_DOMAIN = 0x4C4F4F61
 const DIRECT_ACCEPT_DOMAIN = 0x4C4F4F62
@@ -24,8 +30,8 @@ const REASON_NO_REVEALS = 5
 
 contract DuelEscrow {
     author: "LOOP"
-    version: "1.2.0"
-    description: "Address-bound TON escrow with weighted two-party commit-reveal"
+    version: "1.3.0"
+    description: "Address-bound TON escrow with a bounded boost phase and commit-reveal"
     storage: Storage
     incomingMessages: AllowedMessage
 }
@@ -45,6 +51,7 @@ type AllowedMessage =
     | DuelSetFee
     | DuelSetTreasury
     | DuelSetOwner
+    | BoostDuel
 
 fun validChance(chanceBps: uint16): bool {
     return chanceBps == 2_500 || chanceBps == 5_000 || chanceBps == 7_500;
@@ -181,7 +188,10 @@ fun Storage.matchOpenOffers(
             DuelData {
                 offerAId,
                 offerBId,
-                revealDeadline: blockchain.now() + REVEAL_WINDOW,
+                boostDeadline: blockchain.now() + BOOST_WINDOW,
+                hardDeadline: blockchain.now() + BOOST_HARD_WINDOW,
+                revealDeadline: blockchain.now() + BOOST_WINDOW + REVEAL_WINDOW,
+                boostRevision: 0,
                 secretA: 0,
                 secretB: 0,
                 revealedMask: 0,
@@ -322,6 +332,73 @@ fun Storage.settleRevealed(mutate self, queryId: uint64, duelId: uint64, duel: D
     );
 }
 
+fun Storage.boostDuel(
+    mutate self,
+    sender: address,
+    valueCoins: coins,
+    duelId: uint64,
+    offerId: uint64,
+    amount: coins,
+    expectedRevision: uint16,
+    minChanceBps: uint16,
+    validUntil: uint32,
+): void {
+    assert (!self.paused) throw Errors.Paused;
+    var duel = self.loadDuel(duelId);
+    assert (
+        blockchain.now() <= duel.boostDeadline && blockchain.now() <= duel.hardDeadline
+    ) throw Errors.BoostClosed;
+    assert (
+        blockchain.now() <= validUntil && validUntil <= duel.hardDeadline
+    ) throw Errors.InvalidExpiry;
+    assert (duel.boostRevision == expectedRevision) throw Errors.StaleBoost;
+    assert (amount >= MIN_BOOST) throw Errors.InvalidBoost;
+    assert (valueCoins >= amount + OPEN_GAS_BUFFER) throw Errors.InsufficientValue;
+    assert (offerId == duel.offerAId || offerId == duel.offerBId) throw Errors.IncompatibleOffers;
+
+    var offerA = self.loadOffer(duel.offerAId);
+    var offerB = self.loadOffer(duel.offerBId);
+    assert (
+        offerA.state == OFFER_MATCHED && offerB.state == OFFER_MATCHED
+    ) throw Errors.OfferNotOpen;
+    val boostedOffer = offerId == duel.offerAId ? offerA : offerB;
+    assert (boostedOffer.owner == sender) throw Errors.NotOwner;
+
+    if (offerId == duel.offerAId) {
+        offerA.stake += amount;
+    } else {
+        offerB.stake += amount;
+    }
+    val totalPool = offerA.stake + offerB.stake;
+    assert (totalPool <= MAX_POOL) throw Errors.InvalidPool;
+    val chanceA = mulDivFloor(offerA.stake, BASIS_POINTS, totalPool);
+    val chanceB = BASIS_POINTS - chanceA;
+    assert (
+        chanceA >= MIN_CHANCE_BPS && chanceA <= MAX_CHANCE_BPS && chanceB >= MIN_CHANCE_BPS &&
+        chanceB <= MAX_CHANCE_BPS
+    ) throw Errors.InvalidBoost;
+    val boostedChance = offerId == duel.offerAId ? chanceA : chanceB;
+    assert (boostedChance >= minChanceBps) throw Errors.InvalidBoost;
+
+    offerA.chanceBps = chanceA;
+    offerB.chanceBps = chanceB;
+    offerA.totalPool = totalPool;
+    offerB.totalPool = totalPool;
+    self.offers.set(duel.offerAId, offerA.toCell());
+    self.offers.set(duel.offerBId, offerB.toCell());
+    self.locked += amount;
+
+    val extendedDeadline = blockchain.now() + BOOST_EXTENSION;
+    if (extendedDeadline > duel.boostDeadline) {
+        duel.boostDeadline = extendedDeadline < duel.hardDeadline
+            ? extendedDeadline
+            : duel.hardDeadline;
+        duel.revealDeadline = duel.boostDeadline + REVEAL_WINDOW;
+    }
+    duel.boostRevision += 1;
+    self.duels.set(duelId, duel.toCell());
+}
+
 fun onInternalMessage(in: InMessage) {
     val msg = lazy AllowedMessage.fromSlice(in.body);
 
@@ -439,6 +516,7 @@ fun onInternalMessage(in: InMessage) {
             assert (in.valueCoins >= MIN_CALL_GAS) throw Errors.InsufficientValue;
             var storage = Storage.load();
             var duel = storage.loadDuel(msg.duelId);
+            assert (blockchain.now() > duel.boostDeadline) throw Errors.RevealNotOpen;
             assert (blockchain.now() <= duel.revealDeadline) throw Errors.RevealClosed;
             assert (
                 msg.offerId == duel.offerAId || msg.offerId == duel.offerBId
@@ -466,6 +544,20 @@ fun onInternalMessage(in: InMessage) {
                 storage.duels.set(msg.duelId, duel.toCell());
                 storage.save();
             }
+        }
+        BoostDuel => {
+            var storage = Storage.load();
+            storage.boostDuel(
+                in.senderAddress,
+                in.valueCoins,
+                msg.duelId,
+                msg.offerId,
+                msg.amount,
+                msg.expectedRevision,
+                msg.minChanceBps,
+                msg.validUntil,
+            );
+            storage.save();
         }
         ExpireOffer => {
             assert (in.valueCoins >= MIN_CALL_GAS) throw Errors.InsufficientValue;
@@ -535,9 +627,7 @@ fun onInternalMessage(in: InMessage) {
             val storage = Storage.load();
             storage.requireOwner(in.senderAddress);
             assert (msg.amount > 0) throw Errors.InvalidAdminAmount;
-            assert (
-                in.valueCoins >= msg.amount + MIN_CALL_GAS
-            ) throw Errors.InsufficientValue;
+            assert (in.valueCoins >= msg.amount + MIN_CALL_GAS) throw Errors.InsufficientValue;
         }
         DuelWithdrawSurplus => {
             assert (in.valueCoins >= WITHDRAW_GAS_BUFFER) throw Errors.InsufficientValue;
@@ -572,9 +662,7 @@ fun onInternalMessage(in: InMessage) {
             var storage = Storage.load();
             storage.requireOwner(in.senderAddress);
             assert (storage.paused) throw Errors.MustBePaused;
-            assert (
-                msg.treasury != contract.getAddress()
-            ) throw Errors.InvalidTreasury;
+            assert (msg.treasury != contract.getAddress()) throw Errors.InvalidTreasury;
             storage.treasury = msg.treasury;
             storage.save();
         }
@@ -619,6 +707,23 @@ get fun offerData(offerId: uint64): OfferData {
 get fun duelData(duelId: uint64): DuelData {
     val storage = Storage.load();
     return storage.loadDuel(duelId);
+}
+
+get fun duelBoostData(duelId: uint64): DuelBoostView {
+    val storage = Storage.load();
+    val duel = storage.loadDuel(duelId);
+    val offerA = storage.loadOffer(duel.offerAId);
+    val offerB = storage.loadOffer(duel.offerBId);
+    return {
+        stakeA: offerA.stake,
+        stakeB: offerB.stake,
+        chanceABps: offerA.chanceBps,
+        chanceBBps: offerB.chanceBps,
+        boostDeadline: duel.boostDeadline,
+        hardDeadline: duel.hardDeadline,
+        revealDeadline: duel.revealDeadline,
+        boostRevision: duel.boostRevision,
+    };
 }
 
 get fun directOfferData(offerId: uint64): DirectOfferData {

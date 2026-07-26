@@ -14,6 +14,10 @@ from typing import Any
 PROOF_PATTERN = re.compile(
     r"DUEL_CANARY_PROOF duel_id=(?P<duel_id>\d+) settlement_hash=(?P<hash>[0-9a-fA-F]{1,64})"
 )
+BOOST_PATTERN = re.compile(
+    r"DUEL_CANARY_BOOST duel_id=(?P<duel_id>\d+) "
+    r"boost_deadline=(?P<deadline>\d+) revision=1 chance_a=5454"
+)
 NETWORK_IDS = {"testnet": -3, "mainnet": -239}
 TONCENTER_URLS = {
     "testnet": "https://testnet.toncenter.com",
@@ -28,6 +32,7 @@ FUNDING_POLL_ATTEMPTS = 12
 FUNDING_POLL_INTERVAL_SECONDS = 5
 FINALITY_POLL_ATTEMPTS = 12
 FINALITY_POLL_INTERVAL_SECONDS = 5
+MAX_BOOST_WAIT_SECONDS = 190
 
 
 def run(
@@ -168,6 +173,16 @@ def canary_evidence(
     }
 
 
+def boost_wait_seconds(output: str, expected_duel_id: int, now: int) -> int:
+    boost = BOOST_PATTERN.search(output)
+    if not boost or int(boost.group("duel_id")) != expected_duel_id:
+        raise SystemExit("canary completed without a parseable boost proof")
+    wait_seconds = max(0, int(boost.group("deadline")) - now + 2)
+    if wait_seconds > MAX_BOOST_WAIT_SECONDS:
+        raise SystemExit("canary boost deadline exceeds the audited hard cap")
+    return wait_seconds
+
+
 def fetch_settlement_finality(
     network: str,
     transaction_hash: str,
@@ -187,7 +202,7 @@ def fetch_settlement_finality(
             provider_url,
             headers={
                 "User-Agent": "loop-canary/1.0",
-                **({"X-API-Key": api_key} if use_api_key else {}),
+                **({"X-API-Key": api_key or ""} if use_api_key else {}),
             },
         )
         try:
@@ -342,6 +357,33 @@ def main() -> None:
         ["acton", "script", "--fork-net", args.network, *script_args],
         environment,
     )
+    live_script_path = (
+        "scripts/canary-duel-two-wallet-live.tolk"
+        if args.network == "testnet"
+        else "scripts/canary-duel-two-wallet-live-mainnet.tolk"
+    )
+    live_script_args = [
+        live_script_path,
+        args.contract,
+        str(first_offer_id),
+        str(second_offer_id),
+        str(expires_at),
+    ]
+    boost_output = run(
+        [
+            "acton",
+            "script",
+            "--net",
+            args.network,
+            "--explorer",
+            "tonviewer",
+            *live_script_args,
+            "1",
+        ],
+        environment,
+        include_stderr=True,
+    )
+    time.sleep(boost_wait_seconds(boost_output, second_offer_id, int(time.time())))
     live_output = run(
         [
             "acton",
@@ -350,7 +392,8 @@ def main() -> None:
             args.network,
             "--explorer",
             "tonviewer",
-            *script_args,
+            *live_script_args,
+            "2",
         ],
         environment,
         include_stderr=True,

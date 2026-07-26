@@ -36,6 +36,7 @@ class OfferState(enum.StrEnum):
 
 
 class DuelState(enum.StrEnum):
+    BOOSTING = "boosting"
     REVEALING = "revealing"
     SETTLED = "settled"
     REFUNDED = "refunded"
@@ -105,11 +106,12 @@ class Duel(Base):
     network: Mapped[int] = mapped_column(Integer, nullable=False)
     offer_a_id: Mapped[str] = mapped_column(ForeignKey("duel_offers.id"), nullable=False)
     offer_b_id: Mapped[str] = mapped_column(ForeignKey("duel_offers.id"), nullable=False)
-    state: Mapped[str] = mapped_column(
-        String(24), default=DuelState.REVEALING.value, nullable=False
-    )
+    state: Mapped[str] = mapped_column(String(24), default=DuelState.BOOSTING.value, nullable=False)
     winner_wallet: Mapped[str | None] = mapped_column(String(68))
+    boost_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    hard_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reveal_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    boost_revision: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     settled_tx_hash: Mapped[str | None] = mapped_column(String(96))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -142,6 +144,26 @@ class DuelReveal(Base):
     duel_id: Mapped[str] = mapped_column(ForeignKey("duels.id"), nullable=False, index=True)
     offer_id: Mapped[str] = mapped_column(ForeignKey("duel_offers.id"), nullable=False)
     tx_hash: Mapped[str] = mapped_column(String(96), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class DuelBoost(Base):
+    __tablename__ = "duel_boosts"
+    __table_args__ = (
+        UniqueConstraint("network", "tx_hash", name="duel_boost_chain_id"),
+        UniqueConstraint("duel_id", "revision", name="duel_boost_revision"),
+        Index("ix_duel_boosts_duel_created", "duel_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    duel_id: Mapped[str] = mapped_column(ForeignKey("duels.id"), nullable=False, index=True)
+    offer_id: Mapped[str] = mapped_column(ForeignKey("duel_offers.id"), nullable=False)
+    network: Mapped[int] = mapped_column(Integer, nullable=False)
+    query_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    chance_a_bps: Mapped[int] = mapped_column(Integer, nullable=False)
+    chance_b_bps: Mapped[int] = mapped_column(Integer, nullable=False)
+    tx_hash: Mapped[str] = mapped_column(String(96), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 

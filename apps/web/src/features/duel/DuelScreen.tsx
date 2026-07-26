@@ -16,6 +16,7 @@ import { DisclosureIndicator } from '../../components/DisclosureIndicator';
 import { haptic, isMockTelegram, readDuelSecret, storeDuelSecret, telegram } from '../../telegram';
 import {
   buildActionTransaction,
+  buildBoostTransaction,
   buildOpenOfferTransaction,
   commitmentForOffer,
   assertOpenOfferQuoteContext,
@@ -60,6 +61,7 @@ export function DuelScreen({
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
   const [stake, setStake] = useState(() => (invite ? formatGram(invite.stake_nano, 3) : '1'));
+  const [boostAmount, setBoostAmount] = useState('0.5');
   const chance = invite?.chance_bps ?? DEFAULT_CHANCE_BPS;
   const [mode, setMode] = useState<'afk' | 'direct'>(invite ? 'direct' : 'afk');
   const [busy, setBusy] = useState(false);
@@ -68,6 +70,7 @@ export function DuelScreen({
   const [message, setMessage] = useState(invite ? `${invite.creator_name} бросил тебе вызов.` : '');
   const [now, setNow] = useState(() => Date.now());
   const locked = useRef(false);
+  const lastBoostRevision = useRef<number | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -79,12 +82,42 @@ export function DuelScreen({
   );
   const activeDuel = activeOffer
     ? duels.find(
-        (duel) => duel.offer_id === activeOffer.onchain_offer_id && duel.state === 'revealing',
+        (duel) =>
+          duel.offer_id === activeOffer.onchain_offer_id &&
+          ['boosting', 'revealing'].includes(duel.state),
       )
     : undefined;
   const latestDuel = duels[0];
   const offerExpired = activeOffer ? Date.parse(activeOffer.expires_at) <= now : false;
   const duelExpired = activeDuel ? Date.parse(activeDuel.reveal_deadline) <= now : false;
+  const boostDeadline = activeDuel?.boost_deadline ? Date.parse(activeDuel.boost_deadline) : null;
+  const duelBoosting = Boolean(
+    activeDuel && activeDuel.state === 'boosting' && boostDeadline && boostDeadline >= now,
+  );
+
+  useEffect(() => {
+    if (!activeDuel) {
+      lastBoostRevision.current = null;
+      return;
+    }
+    if (lastBoostRevision.current === null) {
+      lastBoostRevision.current = activeDuel.boost_revision;
+      return;
+    }
+    if (activeDuel.boost_revision <= lastBoostRevision.current) return;
+    lastBoostRevision.current = activeDuel.boost_revision;
+    const latest = activeDuel.boost_events.at(-1);
+    if (!latest) return;
+    const notification = window.setTimeout(() => {
+      setMessage(
+        latest.side === 'you'
+          ? `Твоё усиление подтверждено: ${(activeDuel.chance_bps / 100).toFixed(1)}%`
+          : `Соперник усилился. Твой шанс: ${(activeDuel.chance_bps / 100).toFixed(1)}%`,
+      );
+      haptic(latest.side === 'you' ? 'success' : 'warning');
+    }, 0);
+    return () => window.clearTimeout(notification);
+  }, [activeDuel]);
 
   const requestedStake = useMemo(() => {
     try {
@@ -97,6 +130,18 @@ export function DuelScreen({
   const feeNano = (terms.totalPool * profile.plush_brick.duel_fee_bps) / 10_000;
   const payoutNano = terms.totalPool - feeNano;
   const profitNano = payoutNano - terms.stake;
+  const boostNano = useMemo(() => {
+    try {
+      return parseGram(boostAmount);
+    } catch {
+      return 0;
+    }
+  }, [boostAmount]);
+  const boostedChanceBps = activeDuel
+    ? Math.floor(
+        ((activeDuel.stake_nano + boostNano) * 10_000) / (activeDuel.total_pool_nano + boostNano),
+      )
+    : 0;
 
   const status =
     activeOffer?.state === 'matched'
@@ -217,6 +262,7 @@ export function DuelScreen({
       let secret: string | undefined;
       if (activeOffer.state === 'matched') {
         if (!activeDuel) throw new Error('Обновляем состояние DUEL');
+        if (duelBoosting) throw new Error('Сначала дождись конца усиления');
         if (duelExpired) intent = await api.expireDuelIntent(activeDuel.onchain_duel_id);
         else {
           if (activeDuel.own_revealed) return;
@@ -243,7 +289,78 @@ export function DuelScreen({
       locked.current = false;
       setBusy(false);
     }
-  }, [activeDuel, activeOffer, duelExpired, offerExpired, onRefresh, tonConnectUI, wallet]);
+  }, [
+    activeDuel,
+    activeOffer,
+    duelBoosting,
+    duelExpired,
+    offerExpired,
+    onRefresh,
+    tonConnectUI,
+    wallet,
+  ]);
+
+  const boostDuel = useCallback(async () => {
+    if (locked.current || !activeDuel || !activeOffer || !duelBoosting) return;
+    if (boostNano < 100_000_000) {
+      setMessage('Минимальное усиление — 0,1 GRAM');
+      haptic('warning');
+      return;
+    }
+    if (boostedChanceBps > 9_000) {
+      setMessage('Максимальный перевес — 90%');
+      haptic('warning');
+      return;
+    }
+    if (!wallet) {
+      await tonConnectUI.openModal();
+      return;
+    }
+    locked.current = true;
+    setBusy(true);
+    try {
+      if (!isSupportedTonNetwork(wallet.account.chain)) {
+        throw new Error('Этот кошелёк сейчас не поддерживается');
+      }
+      const contract = await api.contractState('duel');
+      if (contract.status !== 'active' || !contract.code_hash_matches) {
+        throw new Error('DUEL временно недоступен');
+      }
+      const intent = await api.boostDuelIntent(activeDuel.onchain_duel_id, {
+        amount_nano: boostNano,
+        expected_revision: activeDuel.boost_revision,
+        min_chance_bps: boostedChanceBps,
+      });
+      await tonConnectUI.sendTransaction(
+        buildBoostTransaction(intent, wallet.account.address, wallet.account.chain, {
+          duelId: activeDuel.onchain_duel_id,
+          offerId: activeOffer.onchain_offer_id,
+          amountNano: boostNano,
+          revision: activeDuel.boost_revision,
+          minChanceBps: boostedChanceBps,
+          contractAddress: contract.address,
+        }),
+      );
+      setMessage('Усиление отправлено. Шанс изменится после подтверждения.');
+      await onRefresh();
+      haptic('success');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Не удалось усилить DUEL');
+      haptic('error');
+    } finally {
+      locked.current = false;
+      setBusy(false);
+    }
+  }, [
+    activeDuel,
+    activeOffer,
+    boostNano,
+    boostedChanceBps,
+    duelBoosting,
+    onRefresh,
+    tonConnectUI,
+    wallet,
+  ]);
 
   function inviteToTelegram() {
     if (!activeOffer || activeOffer.state !== 'open') {
@@ -264,7 +381,7 @@ export function DuelScreen({
     ? activeOffer.state === 'matched'
       ? duelExpired
         ? 'ЗАВЕРШИТЬ ПО ТАЙМАУТУ'
-        : activeDuel?.own_revealed
+        : duelBoosting || activeDuel?.own_revealed
           ? null
           : 'ОТКРЫТЬ РЕЗУЛЬТАТ'
       : activeOffer.state === 'open' || activeOffer.state === 'reserved'
@@ -277,7 +394,9 @@ export function DuelScreen({
       : null;
   const activeDeadline =
     status === 'matched' && activeDuel
-      ? Date.parse(activeDuel.reveal_deadline)
+      ? duelBoosting && activeDuel.boost_deadline
+        ? Date.parse(activeDuel.boost_deadline)
+        : Date.parse(activeDuel.reveal_deadline)
       : activeOffer
         ? Date.parse(activeOffer.expires_at)
         : mockExpiresAt;
@@ -351,7 +470,7 @@ export function DuelScreen({
           </dl>
           <p className="duel-deadline-rule">
             <ShieldCheck aria-hidden="true" />
-            Оба открыли числа — исход 50/50. Открыл только один за 5 минут — он победил.
+            Старт 50/50. После пары будет минута, чтобы усилить свою сторону.
           </p>
           <details className="technical-details duel-breakdown">
             <summary>
@@ -381,19 +500,87 @@ export function DuelScreen({
           </p>
           <strong>
             {status === 'matched'
-              ? 'Соперник найден. Открой результат.'
+              ? duelBoosting
+                ? 'Соперник найден. Теперь можно изменить перевес.'
+                : 'Усиление закрыто. Открой результат.'
               : 'Ищем игрока с такой же ставкой. Можно закрыть приложение.'}
           </strong>
           <div className="duel-live-numbers">
             <span>
-              <b>{formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM</b>
-              <small>ТВОЯ СТАВКА</small>
+              <b>
+                {status === 'matched' && activeDuel
+                  ? `${(activeDuel.chance_bps / 100).toFixed(1)}%`
+                  : `${formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM`}
+              </b>
+              <small>{status === 'matched' ? 'ТВОЙ ШАНС' : 'ТВОЯ СТАВКА'}</small>
             </span>
             <span>
               <b>{timeLeft(activeDeadline, now)}</b>
-              <small>{status === 'matched' ? 'НА РАСКРЫТИЕ' : 'ДО ИСТЕЧЕНИЯ'}</small>
+              <small>
+                {status === 'matched'
+                  ? duelBoosting
+                    ? 'НА УСИЛЕНИЕ'
+                    : 'НА РАСКРЫТИЕ'
+                  : 'ДО ИСТЕЧЕНИЯ'}
+              </small>
             </span>
           </div>
+          {status === 'matched' && activeDuel && duelBoosting && (
+            <div className="duel-boost-panel">
+              <div className="duel-chance-labels">
+                <span>ТЫ {Math.round(activeDuel.chance_bps / 100)}%</span>
+                <span>СОПЕРНИК {Math.round((10_000 - activeDuel.chance_bps) / 100)}%</span>
+              </div>
+              <div className="duel-chance-track" aria-label="Текущие шансы">
+                <span style={{ width: `${activeDuel.chance_bps / 100}%` }} />
+              </div>
+              <label className="boost-input">
+                <span>УСИЛИТЬ НА</span>
+                <div>
+                  <input
+                    inputMode="decimal"
+                    value={boostAmount}
+                    onChange={(event) => setBoostAmount(event.target.value)}
+                    aria-label="Сумма усиления в GRAM"
+                  />
+                  <b>GRAM</b>
+                </div>
+              </label>
+              <div className="boost-quick-values">
+                {['0.1', '0.5', '1'].map((value) => (
+                  <button
+                    key={value}
+                    className={boostAmount === value ? 'active' : ''}
+                    onClick={() => setBoostAmount(value)}
+                  >
+                    +{value}
+                  </button>
+                ))}
+              </div>
+              <p>
+                После подтверждения: <strong>{(boostedChanceBps / 100).toFixed(1)}%</strong>
+              </p>
+              <button className="primary-button" disabled={busy} onClick={() => void boostDuel()}>
+                {busy ? 'ПОДТВЕРЖДАЕМ…' : 'УСИЛИТЬ'}
+              </button>
+              {activeDuel.boost_events.length > 0 && (
+                <ol className="duel-boost-events" aria-label="Подтверждённые усиления">
+                  {activeDuel.boost_events
+                    .slice(-4)
+                    .reverse()
+                    .map((event) => (
+                      <li key={event.tx_hash}>
+                        <span>{event.side === 'you' ? 'Ты' : 'Соперник'}</span>
+                        <strong>
+                          +{formatGram(event.amount_nano, 3)} GRAM ·{' '}
+                          {(event.chance_bps / 100).toFixed(1)}%
+                        </strong>
+                      </li>
+                    ))}
+                </ol>
+              )}
+            </div>
+          )}
           {status === 'searching' && (
             <p className="duel-live-help">
               Остановить поиск можно в любой момент. Возврат нужно подтвердить в кошельке.

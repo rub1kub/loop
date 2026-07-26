@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DuelScreen } from '../features/duel/DuelScreen';
-import type { Invite, Profile } from '../types';
+import type { Duel, Invite, Offer, Profile } from '../types';
 
 const tonConnect = vi.hoisted(() => ({
   openModal: vi.fn(() => new Promise<void>(() => undefined)),
@@ -81,8 +81,8 @@ describe('DuelScreen', () => {
     expect(screen.getByText('1 + 1 GRAM')).toBeInTheDocument();
     expect(screen.getByText('Победитель получит')).toBeInTheDocument();
     expect(screen.getByText('0,05 GRAM')).toBeInTheDocument();
-    expect(screen.getByText(/Оба открыли числа — исход 50\/50/)).toBeVisible();
-    expect(screen.getByText(/Открыл только один за 5 минут — он победил/)).toBeVisible();
+    expect(screen.getByText(/Старт 50\/50/)).toBeVisible();
+    expect(screen.getByText(/минута, чтобы усилить/)).toBeVisible();
     expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
     expect(screen.queryByText('Твоя ставка')).not.toBeInTheDocument();
@@ -103,5 +103,60 @@ describe('DuelScreen', () => {
     expect(screen.getByText('1 + 1 GRAM')).toBeInTheDocument();
     expect(screen.getByText('0,05 GRAM')).toBeInTheDocument();
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
+  });
+
+  it('shows only confirmed live chance and a clear boost input during the boost window', () => {
+    const offer: Offer = {
+      id: 'offer',
+      onchain_offer_id: 701,
+      chance_bps: 5_000,
+      total_pool_nano: 2_000_000_000,
+      stake_nano: 1_000_000_000,
+      opponent_stake_nano: 1_000_000_000,
+      fee_bps: 250,
+      payout_nano: 1_950_000_000,
+      net_profit_nano: 950_000_000,
+      mode: 'afk',
+      direct_opponent_wallet: null,
+      state: 'matched',
+      expires_at: new Date(Date.now() + 600_000).toISOString(),
+      funding_tx_hash: 'funding',
+      funding_proof_url: null,
+    };
+    const duel: Duel = {
+      id: 'duel',
+      onchain_duel_id: 702,
+      state: 'boosting',
+      offer_id: 701,
+      own_revealed: false,
+      chance_bps: 5_000,
+      stake_nano: 1_000_000_000,
+      opponent_stake_nano: 1_000_000_000,
+      total_pool_nano: 2_000_000_000,
+      payout_nano: 1_950_000_000,
+      boost_deadline: new Date(Date.now() + 60_000).toISOString(),
+      hard_deadline: new Date(Date.now() + 180_000).toISOString(),
+      boost_revision: 0,
+      reveal_deadline: new Date(Date.now() + 360_000).toISOString(),
+      boost_events: [],
+      winner_wallet: null,
+      settled_tx_hash: null,
+      settlement_proof_url: null,
+    };
+    render(
+      <DuelScreen
+        profile={profile}
+        offers={[offer]}
+        duels={[duel]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Соперник найден. Теперь можно изменить перевес.')).toBeVisible();
+    expect(screen.getByLabelText('Сумма усиления в GRAM')).toHaveValue('0.5');
+    expect(screen.getByText('После подтверждения:')).toHaveTextContent('60.0%');
+    expect(screen.getByRole('button', { name: 'УСИЛИТЬ' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).not.toBeInTheDocument();
   });
 });

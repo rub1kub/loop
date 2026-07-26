@@ -97,6 +97,18 @@ struct (0x4C4F4F0E) DuelSetOwner {
     owner: address
 }
 
+/// Adds a verified amount to one side of a matched duel while its boost window is open.
+/// `expectedRevision` and `minChanceBps` protect wallet transactions from stale ordering.
+struct (0x4C4F4F0F) BoostDuel {
+    queryId: uint64
+    duelId: uint64
+    offerId: uint64
+    amount: coins
+    expectedRevision: uint16
+    minChanceBps: uint16
+    validUntil: uint32
+}
+
 /// Attached to every terminal winner transfer so indexers can project the result.
 struct (0x4C4F4F11) DuelPayout {
     queryId: uint64

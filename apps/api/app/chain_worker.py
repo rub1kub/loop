@@ -27,6 +27,7 @@ from .modules.bank.models import BankChainEvent, BankPayout, BankPosition, BankP
 from .modules.duel.models import (
     ChallengeState,
     Duel,
+    DuelBoost,
     DuelChainEvent,
     DuelChallenge,
     DuelCommit,
@@ -54,6 +55,7 @@ DUEL_WITHDRAW_SURPLUS = 0x4C4F4F0B
 DUEL_SET_FEE = 0x4C4F4F0C
 DUEL_SET_TREASURY = 0x4C4F4F0D
 DUEL_SET_OWNER = 0x4C4F4F0E
+DUEL_BOOST = 0x4C4F4F0F
 DUEL_PAYOUT = 0x4C4F4F11
 DUEL_REFUND = 0x4C4F4F12
 DUEL_PROTOCOL_FEE = 0x4C4F4F13
@@ -136,6 +138,10 @@ def message_value(message: dict[str, Any]) -> int | None:
         return None
 
 
+def as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
 def decode_body(body_b64: str) -> dict[str, Any]:
     cells = Cell.one_from_boc(base64.b64decode(body_b64))
     cell = cells[0] if isinstance(cells, list) else cells
@@ -174,6 +180,15 @@ def decode_body(body_b64: str) -> dict[str, Any]:
             duel_id=parser.read_uint(64),
             offer_id=parser.read_uint(64),
             secret=parser.read_uint(256),
+        )
+    elif opcode == DUEL_BOOST:
+        result.update(
+            duel_id=parser.read_uint(64),
+            offer_id=parser.read_uint(64),
+            amount_nano=parser.read_coins(),
+            expected_revision=parser.read_uint(16),
+            min_chance_bps=parser.read_uint(16),
+            valid_until=parser.read_uint(32),
         )
     elif opcode == DUEL_EXPIRE_DUEL:
         result["duel_id"] = parser.read_uint(64)
@@ -216,9 +231,7 @@ def decode_body(body_b64: str) -> dict[str, Any]:
         result["fee_bps"] = parser.read_uint(16)
     elif opcode in {BANK_SET_TREASURY, DUEL_SET_TREASURY}:
         treasury = parser.read_msg_addr()
-        result["treasury"] = normalize_address(
-            treasury.to_string(is_user_friendly=False)
-        )
+        result["treasury"] = normalize_address(treasury.to_string(is_user_friendly=False))
     elif opcode in {BANK_SET_OWNER, DUEL_SET_OWNER}:
         owner = parser.read_msg_addr()
         result["owner"] = normalize_address(owner.to_string(is_user_friendly=False))
@@ -342,8 +355,11 @@ async def create_duel_projection(
             network=settings.ton_network_id,
             offer_a_id=ordered[0].id,
             offer_b_id=ordered[1].id,
-            reveal_deadline=chain_time.replace(microsecond=0)
-            + timedelta(seconds=settings.reveal_ttl_seconds),
+            state=DuelState.BOOSTING.value,
+            boost_deadline=chain_time.replace(microsecond=0) + timedelta(seconds=60),
+            hard_deadline=chain_time.replace(microsecond=0) + timedelta(seconds=180),
+            reveal_deadline=chain_time.replace(microsecond=0) + timedelta(seconds=360),
+            boost_revision=0,
         )
         db.add(duel)
         await db.flush()
@@ -408,9 +424,7 @@ async def apply_bank_transaction(
                 tx_hash=tx_hash,
                 event_index=0,
                 opcode=opcode,
-                payload_json=json.dumps(
-                    {"in": decoded, "out": outgoing}, separators=(",", ":")
-                ),
+                payload_json=json.dumps({"in": decoded, "out": outgoing}, separators=(",", ":")),
                 applied=True,
             )
         )
@@ -680,16 +694,10 @@ async def apply_duel_transaction(
                 payout_nano=payout,
                 commitment_hex=f"{decoded['commitment']:064x}",
                 invite_id_hex=(
-                    f"{decoded['invite_id']:064x}"
-                    if opcode == DUEL_OPEN_DIRECT_OFFER
-                    else None
+                    f"{decoded['invite_id']:064x}" if opcode == DUEL_OPEN_DIRECT_OFFER else None
                 ),
                 counter_offer_id=decoded["counter_offer_id"],
-                mode=(
-                    "external"
-                    if opcode == DUEL_OPEN_OFFER
-                    else "external_direct"
-                ),
+                mode=("external" if opcode == DUEL_OPEN_OFFER else "external_direct"),
                 expires_at=datetime.fromtimestamp(decoded["expires_at"], UTC),
             )
             db.add(offer)
@@ -745,7 +753,8 @@ async def apply_duel_transaction(
             if (
                 counter is None
                 or not counter.invite_id_hex
-                or counter.state not in {
+                or counter.state
+                not in {
                     OfferState.OPEN.value,
                     OfferState.RESERVED.value,
                 }
@@ -816,6 +825,96 @@ async def apply_duel_transaction(
         offer.state = (
             OfferState.CANCELLED.value if opcode == DUEL_CANCEL_OFFER else OfferState.EXPIRED.value
         )
+    elif opcode == DUEL_BOOST:
+        duel = await db.scalar(
+            select(Duel).where(
+                Duel.network == settings.ton_network_id,
+                Duel.onchain_duel_id == decoded["duel_id"],
+            )
+        )
+        offer = await db.scalar(
+            select(MatchmakingOffer).where(
+                MatchmakingOffer.network == settings.ton_network_id,
+                MatchmakingOffer.onchain_offer_id == decoded["offer_id"],
+            )
+        )
+        if (
+            duel is None
+            or offer is None
+            or source is None
+            or value is None
+            or source != normalize_address(offer.owner_wallet)
+            or offer.id not in {duel.offer_a_id, duel.offer_b_id}
+            or duel.state != DuelState.BOOSTING.value
+            or duel.boost_deadline is None
+            or duel.hard_deadline is None
+        ):
+            return ProjectionResult.RETRY
+        chain_time = datetime.fromtimestamp(int(transaction["now"]), UTC).replace(microsecond=0)
+        if (
+            chain_time > as_utc(duel.boost_deadline)
+            or chain_time > as_utc(duel.hard_deadline)
+            or chain_time.timestamp() > decoded["valid_until"]
+            or decoded["valid_until"] > int(as_utc(duel.hard_deadline).timestamp())
+            or decoded["expected_revision"] != duel.boost_revision
+            or decoded["amount_nano"] < 100_000_000
+            or value < decoded["amount_nano"] + 50_000_000
+        ):
+            return ProjectionResult.RETRY
+        first = await db.get(MatchmakingOffer, duel.offer_a_id)
+        second = await db.get(MatchmakingOffer, duel.offer_b_id)
+        if first is None or second is None:
+            return ProjectionResult.RETRY
+        if offer.id == first.id:
+            first.stake_nano += decoded["amount_nano"]
+        else:
+            second.stake_nano += decoded["amount_nano"]
+        total_pool = first.stake_nano + second.stake_nano
+        chance_a = first.stake_nano * 10_000 // total_pool
+        chance_b = 10_000 - chance_a
+        boosted_chance = chance_a if offer.id == first.id else chance_b
+        if (
+            total_pool > 100_000_000_000
+            or chance_a < 1_000
+            or chance_a > 9_000
+            or chance_b < 1_000
+            or chance_b > 9_000
+            or boosted_chance < decoded["min_chance_bps"]
+        ):
+            return ProjectionResult.RETRY
+        payout = total_pool - total_pool * first.fee_bps // 10_000
+        first.chance_bps = chance_a
+        first.total_pool_nano = total_pool
+        first.opponent_stake_nano = second.stake_nano
+        first.payout_nano = payout
+        second.chance_bps = chance_b
+        second.total_pool_nano = total_pool
+        second.opponent_stake_nano = first.stake_nano
+        second.payout_nano = payout
+        duel.boost_revision += 1
+        extended_deadline = chain_time + timedelta(seconds=20)
+        if extended_deadline > as_utc(duel.boost_deadline):
+            duel.boost_deadline = min(extended_deadline, as_utc(duel.hard_deadline))
+            duel.reveal_deadline = duel.boost_deadline + timedelta(seconds=300)
+        players = (await db.scalars(select(DuelPlayer).where(DuelPlayer.duel_id == duel.id))).all()
+        for player in players:
+            projected = first if player.offer_id == first.id else second
+            player.chance_bps = projected.chance_bps
+            player.stake_nano = projected.stake_nano
+        db.add(
+            DuelBoost(
+                duel_id=duel.id,
+                offer_id=offer.id,
+                network=settings.ton_network_id,
+                query_id=decoded["query_id"],
+                revision=duel.boost_revision,
+                amount_nano=decoded["amount_nano"],
+                chance_a_bps=chance_a,
+                chance_b_bps=chance_b,
+                tx_hash=tx_hash,
+                created_at=chain_time,
+            )
+        )
     elif opcode == DUEL_REVEAL:
         offer = await db.scalar(
             select(MatchmakingOffer).where(
@@ -825,18 +924,22 @@ async def apply_duel_transaction(
         )
         if offer is None or source != normalize_address(offer.owner_wallet):
             return ProjectionResult.IGNORED
-        offer.revealed = True
         duel = await db.scalar(
             select(Duel).where(
                 Duel.network == settings.ton_network_id,
                 Duel.onchain_duel_id == decoded["duel_id"],
             )
         )
+        chain_time = datetime.fromtimestamp(int(transaction["now"]), UTC)
         if (
-            duel
-            and await db.scalar(select(DuelReveal.id).where(DuelReveal.offer_id == offer.id))
-            is None
+            duel is None
+            or offer.id not in {duel.offer_a_id, duel.offer_b_id}
+            or (duel.boost_deadline is not None and chain_time <= as_utc(duel.boost_deadline))
         ):
+            return ProjectionResult.RETRY
+        offer.revealed = True
+        if await db.scalar(select(DuelReveal.id).where(DuelReveal.offer_id == offer.id)) is None:
+            duel.state = DuelState.REVEALING.value
             db.add(DuelReveal(duel_id=duel.id, offer_id=offer.id, tx_hash=tx_hash))
 
     payouts = [item for item in outgoing if item["opcode"] == DUEL_PAYOUT]

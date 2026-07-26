@@ -30,6 +30,7 @@ fun main(networkId: int32, startPaused: bool) {
         paused: startPaused,
         headQueueIndex: 0,
         nextQueueIndex: 0,
+        completedPositions: 0,
         lockedFunding: 0,
         positions: [],
         queue: [],

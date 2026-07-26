@@ -9,6 +9,7 @@ from app.chain_worker import (
     BANK_CREATE_POSITION,
     BANK_PAYOUT,
     DUEL_ACCEPT_DIRECT_OFFER,
+    DUEL_BOOST,
     DUEL_OPEN_DIRECT_OFFER,
     DUEL_OPEN_OFFER,
     DUEL_PAYOUT,
@@ -23,6 +24,7 @@ from app.modules.bank.models import BankChainEvent, BankPosition, BankPositionSt
 from app.modules.duel.models import (
     ChallengeState,
     Duel,
+    DuelBoost,
     DuelChainEvent,
     DuelInvitation,
     DuelOffer,
@@ -53,12 +55,13 @@ def transaction(
     *,
     outputs: list[tuple[str, str, int]] | None = None,
     finalized: bool = True,
+    now: int = 1_800_000_000,
 ) -> dict[str, object]:
     return {
         "account": account,
         "lt": str(lt),
         "hash": f"tx-{lt}",
-        "now": 1_800_000_000,
+        "now": now,
         "emulated": False,
         "mc_block_seqno": 12_345 if finalized else 0,
         "description": {
@@ -141,6 +144,27 @@ def duel_direct_accept_body(offer: DuelOffer, signature_hex: str, valid_until: i
 
 def duel_reveal_body(duel_id: int, offer_id: int) -> str:
     return body_b64(DUEL_REVEAL, [(64, duel_id), (64, offer_id), (256, 777)])
+
+
+def duel_boost_body(
+    duel_id: int,
+    offer_id: int,
+    amount_nano: int,
+    revision: int,
+    min_chance_bps: int,
+    valid_until: int,
+) -> str:
+    return body_b64(
+        DUEL_BOOST,
+        [
+            (64, duel_id),
+            (64, offer_id),
+            (0, amount_nano),
+            (16, revision),
+            (16, min_chance_bps),
+            (32, valid_until),
+        ],
+    )
 
 
 def duel_payout_body(duel_id: int, offer_id: int) -> str:
@@ -445,20 +469,49 @@ async def test_duel_projection_validates_funding_and_terminal_payout(app) -> Non
         assert duel is not None and duel.onchain_duel_id == 900
         assert counter.state == OfferState.MATCHED.value
         assert newcomer.state == OfferState.MATCHED.value
+        assert duel.state == DuelState.BOOSTING.value
+
+        boosted = transaction(
+            settings.effective_duel_contract_address,
+            second_wallet.address,
+            21,
+            duel_boost_body(900, 100, 1_000_000_000, 0, 4_000, 1_800_000_180),
+            1_050_000_000,
+            now=1_800_000_055,
+        )
+        assert await apply_transaction(db, settings, boosted, "duel") == ProjectionResult.APPLIED
+        await db.commit()
+        await db.refresh(duel)
+        await db.refresh(counter)
+        await db.refresh(newcomer)
+        assert duel.boost_revision == 1
+        assert duel.boost_deadline is not None
+        boost_deadline = (
+            duel.boost_deadline
+            if duel.boost_deadline.tzinfo
+            else duel.boost_deadline.replace(tzinfo=UTC)
+        )
+        assert int(boost_deadline.timestamp()) == 1_800_000_075
+        assert newcomer.stake_nano == 2_000_000_000
+        assert newcomer.chance_bps == 4_000
+        assert counter.chance_bps == 6_000
+        assert newcomer.total_pool_nano == 5_000_000_000
+        assert await db.scalar(select(func.count()).select_from(DuelBoost)) == 1
 
         settled = transaction(
             settings.effective_duel_contract_address,
             second_wallet.address,
-            21,
+            22,
             duel_reveal_body(900, 100),
             30_000_000,
             outputs=[
                 (
                     second_wallet.address,
                     duel_payout_body(900, 100),
-                    3_900_000_000,
+                    4_875_000_000,
                 )
             ],
+            now=1_800_000_076,
         )
         assert await apply_transaction(db, settings, settled, "duel") == ProjectionResult.APPLIED
         await db.commit()

@@ -309,6 +309,35 @@ fun DuelEscrow.sendDuelSetOwner(
     return net.send(from, genericMsg);
 }
 
+fun DuelEscrow.sendBoostDuel(
+    self,
+    from: address,
+    queryId: uint64,
+    duelId: uint64,
+    offerId: uint64,
+    amount: coins,
+    expectedRevision: uint16,
+    minChanceBps: uint16,
+    validUntil: uint32,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: BoostDuel {
+            queryId,
+            duelId,
+            offerId,
+            amount,
+            expectedRevision,
+            minChanceBps,
+            validUntil,
+        },
+    });
+    return net.send(from, genericMsg);
+}
+
 /// Send message to the contract with a custom body cell
 fun DuelEscrow.sendAny(self, from: address, body: cell, config: SendParams = {}): SendResultList {
     val genericMsg = createMessage({
@@ -330,6 +359,10 @@ fun DuelEscrow.offerData(self, offerId: uint64): OfferData {
 
 fun DuelEscrow.duelData(self, duelId: uint64): DuelData {
     return net.runGetMethod(self.address, "duelData", [duelId]);
+}
+
+fun DuelEscrow.duelBoostData(self, duelId: uint64): DuelBoostView {
+    return net.runGetMethod(self.address, "duelBoostData", [duelId]);
 }
 
 fun DuelEscrow.directOfferData(self, offerId: uint64): DirectOfferData {

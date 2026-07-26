@@ -5,7 +5,8 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - LOOP is not a wallet and has no internal spendable balance. TON Connect is limited to external wallet ownership proofs, transaction confirmation, payouts, and asset checks.
 - BANK is a FIFO queue represented by a jar. Later deposits fund the oldest unfinished positions;
   progress comes only from verified contract allocation and can stop indefinitely.
-- DUEL is an equal 50/50 person-to-person challenge. The product rejects probability controls and casino language.
+- DUEL starts as an equal 50/50 person-to-person challenge. Once matched, both players get the
+  same bounded window to increase their locked stake and chance.
 - RATING is a monthly proof-backed reputation layer. Score never uses stake size, profit,
   balance, wins or losses.
 - AFK matchmaking and direct Telegram invitations are separate paths. A direct challenge binds to one funded offer and cannot enter the generic pool.
@@ -44,3 +45,21 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Added a dedicated mock route (`?screen=onboarding-plush`) for repeatable visual QA.
 - Targeted tests cover the fourth story, all three market URLs, and Telegram-native navigation;
   the 430 × 720 visual pass fits without overlap or new console errors.
+
+## Active goal: dynamic DUEL and BANK maturity limits
+
+- DUEL v1.3 opens a 60-second boost window after matching. Confirmed top-ups change each
+  player's chance in direct proportion to their locked stake, use a 20-second anti-sniping
+  extension, stop after 180 seconds, and never exceed a 90/10 split.
+- Reveals are rejected until the boost window closes. Boost transactions bind revision,
+  minimum acceptable resulting chance, sender, duel, offer, amount, and expiry.
+- BANK v1.3 starts with a 5 GRAM principal limit, unlocks 10 GRAM after 25 completed
+  positions, 15 GRAM after 100, then grows by 5 GRAM per 250 completions up to 100 GRAM.
+- Contract verification passes 13 BANK and 45 DUEL tests. Contract coverage is 99.7% for
+  lines and 83.5% for branches; critical/major mutation scores are 88.2% for BANK and 96.7%
+  for DUEL.
+- A finalized two-wallet testnet canary created a direct pair, confirmed a 0.1 GRAM boost,
+  observed the 54.54/45.46 split, waited for the real deadline, revealed both secrets, and
+  settled without leaving locked value.
+- API (82), web (57), security (13), fresh migration, and four repeated viewport/keyboard
+  stress modes pass.

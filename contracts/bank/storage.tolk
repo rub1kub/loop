@@ -31,6 +31,7 @@ struct BankStorage {
     paused: bool
     headQueueIndex: uint64
     nextQueueIndex: uint64
+    completedPositions: uint64 = 0
     lockedFunding: coins
     positions: PositionMap
     queue: QueueMap
@@ -45,6 +46,8 @@ struct BankContractConfigView {
     paused: bool
     headQueueIndex: uint64
     nextQueueIndex: uint64
+    completedPositions: uint64
+    principalLimit: coins
     lockedFunding: coins
 }
 
@@ -52,6 +55,8 @@ struct BankQueueView {
     headQueueIndex: uint64
     nextQueueIndex: uint64
     openPositions: uint64
+    completedPositions: uint64
+    principalLimit: coins
 }
 
 struct BankAdminStateView {
@@ -59,6 +64,8 @@ struct BankAdminStateView {
     treasury: address
     feeBps: uint16
     paused: bool
+    completedPositions: uint64
+    principalLimit: coins
     lockedFunding: coins
 }
 

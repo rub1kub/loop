@@ -10,7 +10,8 @@ import pytest
 from sqlalchemy import select
 
 from app.models import User, Wallet
-from app.modules.duel.models import Duel, DuelOffer, OfferState
+from app.modules.bank.router import GRAM, maturity_limit
+from app.modules.duel.models import Duel, DuelOffer, DuelState, OfferState
 from app.ton import ContractState, JettonWalletState
 
 
@@ -97,11 +98,7 @@ async def test_avatar_is_proxied_through_authenticated_same_origin_api(
 async def test_avatar_proxy_rejects_untrusted_photo_host(client, app, monkeypatch) -> None:
     auth = await client.post(
         "/api/v1/auth/telegram",
-        json={
-            "init_data": signed_init_data(
-                777000113, photo_url="https://example.com/avatar.jpg"
-            )
-        },
+        json={"init_data": signed_init_data(777000113, photo_url="https://example.com/avatar.jpg")},
     )
     headers = {"Authorization": f"Bearer {auth.json()['access_token']}"}
     get = AsyncMock()
@@ -159,6 +156,49 @@ async def test_bank_quote_is_testnet_only_and_requires_verified_wallet(client, a
     assert (await client.get("/api/v1/bank/positions/current", headers=headers)).json()[
         "position_id"
     ] == 1001
+
+
+@pytest.mark.parametrize(
+    ("completed", "current", "next_limit", "remaining"),
+    [
+        (0, 5, 10, 25),
+        (24, 5, 10, 1),
+        (25, 10, 15, 75),
+        (99, 10, 15, 1),
+        (100, 15, 20, 250),
+        (350, 20, 25, 250),
+        (10_000, 100, None, None),
+    ],
+)
+def test_bank_api_limit_schedule_matches_contract(
+    completed: int,
+    current: int,
+    next_limit: int | None,
+    remaining: int | None,
+) -> None:
+    assert maturity_limit(completed) == (
+        current * GRAM,
+        next_limit * GRAM if next_limit is not None else None,
+        remaining,
+    )
+
+
+@pytest.mark.asyncio
+async def test_early_bank_rejects_oversized_position_before_wallet_confirmation(
+    client, app
+) -> None:
+    headers = await authenticate(client)
+    await add_wallet(app, 777000111)
+    limits = await client.get("/api/v1/bank/limits", headers=headers)
+    assert limits.status_code == 200
+    assert limits.json()["principal_limit_nano"] == 5_000_000_000
+    denied = await client.post(
+        "/api/v1/bank/positions/preview",
+        headers=headers,
+        json={"principal_nano": 5_000_000_001, "multiplier_bps": 12_500},
+    )
+    assert denied.status_code == 422
+    assert denied.json()["detail"] == "Сейчас можно внести от 1 до 5 GRAM"
 
 
 @pytest.mark.asyncio
@@ -235,6 +275,7 @@ async def test_duel_views_and_intents_never_expose_commit_reveal_secret(client, 
                 network=-3,
                 offer_a_id=own_offer.id,
                 offer_b_id=other_offer.id,
+                state=DuelState.REVEALING.value,
                 reveal_deadline=datetime.now(UTC) + timedelta(minutes=5),
             )
         )
@@ -247,6 +288,99 @@ async def test_duel_views_and_intents_never_expose_commit_reveal_secret(client, 
     assert intent.status_code == 200, intent.text
     assert intent.json()["offer_id"] == 701
     assert "secret" not in intent.json()
+
+
+@pytest.mark.asyncio
+async def test_duel_boost_intent_is_revision_and_probability_bound(client, app) -> None:
+    headers = await authenticate(client)
+    own_wallet = await add_wallet(app, 777000111)
+    await authenticate(client, 777000222)
+    other_wallet = await add_wallet(app, 777000222, "4")
+    now = datetime.now(UTC)
+    async with app.state.session_factory() as db:
+        own_user = await db.scalar(select(User).where(User.telegram_id == 777000111))
+        other_user = await db.scalar(select(User).where(User.telegram_id == 777000222))
+        assert own_user is not None and other_user is not None
+        common = {
+            "network": -3,
+            "contract_address": "0:" + "1" * 64,
+            "chance_bps": 5_000,
+            "total_pool_nano": 2_000_000_000,
+            "stake_nano": 1_000_000_000,
+            "opponent_stake_nano": 1_000_000_000,
+            "fee_bps": 250,
+            "payout_nano": 1_950_000_000,
+            "state": OfferState.MATCHED.value,
+            "expires_at": now + timedelta(minutes=15),
+        }
+        own_offer = DuelOffer(
+            **common,
+            onchain_offer_id=801,
+            query_id=801,
+            user_id=own_user.id,
+            wallet_id=own_wallet.id,
+            owner_wallet=own_wallet.address,
+            commitment_hex="ca" * 32,
+        )
+        other_offer = DuelOffer(
+            **common,
+            onchain_offer_id=802,
+            query_id=802,
+            user_id=other_user.id,
+            wallet_id=other_wallet.id,
+            owner_wallet=other_wallet.address,
+            commitment_hex="cb" * 32,
+        )
+        db.add_all([own_offer, other_offer])
+        await db.flush()
+        db.add(
+            Duel(
+                onchain_duel_id=802,
+                network=-3,
+                offer_a_id=own_offer.id,
+                offer_b_id=other_offer.id,
+                state=DuelState.BOOSTING.value,
+                boost_deadline=now + timedelta(seconds=60),
+                hard_deadline=now + timedelta(seconds=180),
+                reveal_deadline=now + timedelta(seconds=360),
+            )
+        )
+        await db.commit()
+
+    intent = await client.post(
+        "/api/v1/duels/802/boost-intent",
+        headers=headers,
+        json={
+            "amount_nano": 500_000_000,
+            "expected_revision": 0,
+            "min_chance_bps": 6_000,
+        },
+    )
+    assert intent.status_code == 200, intent.text
+    assert intent.json()["amount_nano"] == "550000000"
+    assert intent.json()["boost_nano"] == "500000000"
+    assert intent.json()["min_chance_bps"] == 6_000
+
+    stale = await client.post(
+        "/api/v1/duels/802/boost-intent",
+        headers=headers,
+        json={
+            "amount_nano": 500_000_000,
+            "expected_revision": 1,
+            "min_chance_bps": 6_000,
+        },
+    )
+    assert stale.status_code == 409
+    over_cap = await client.post(
+        "/api/v1/duels/802/boost-intent",
+        headers=headers,
+        json={
+            "amount_nano": 10_000_000_000,
+            "expected_revision": 0,
+            "min_chance_bps": 9_000,
+        },
+    )
+    assert over_cap.status_code == 422
 
 
 @pytest.mark.asyncio

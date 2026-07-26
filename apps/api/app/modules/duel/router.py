@@ -11,6 +11,9 @@ from ...models import Wallet
 from ...schemas import (
     ActionIntent,
     ContractCall,
+    DuelBoostIntent,
+    DuelBoostRequest,
+    DuelBoostView,
     DuelView,
     OfferQuoteRequest,
     OfferQuoteResponse,
@@ -18,10 +21,20 @@ from ...schemas import (
 )
 from ...ton import explorer_transaction_url, sign_direct_accept_permit
 from .math import canonical_duel_terms, payout_after_fee
-from .models import ChallengeState, Duel, DuelInvitation, DuelOffer, DuelState, OfferState
+from .models import (
+    ChallengeState,
+    Duel,
+    DuelBoost,
+    DuelInvitation,
+    DuelOffer,
+    DuelState,
+    OfferState,
+)
 
 router = APIRouter(prefix="/duels", tags=["DUEL"])
 ACTION_GAS_NANO = 30_000_000
+BOOST_GAS_NANO = 50_000_000
+MAX_DUEL_CHANCE_BPS = 9_000
 
 
 def as_utc(value: datetime) -> datetime:
@@ -332,9 +345,38 @@ async def list_duels(user: CurrentUser, db: Db, settings: Config) -> list[DuelVi
             .limit(50)
         )
     ).all()
+    duel_ids = [duel.id for duel, _, _ in rows]
+    boosts = (
+        (
+            await db.scalars(
+                select(DuelBoost)
+                .where(DuelBoost.duel_id.in_(duel_ids))
+                .order_by(DuelBoost.created_at)
+            )
+        ).all()
+        if duel_ids
+        else []
+    )
+    boosts_by_duel: dict[str, list[DuelBoost]] = {}
+    for boost in boosts:
+        boosts_by_duel.setdefault(boost.duel_id, []).append(boost)
     result: list[DuelView] = []
     for duel, first, second in rows:
         own_offer = first if first.user_id == user.id else second
+        boost_views = []
+        for boost in boosts_by_duel.get(duel.id, []):
+            boost_is_first = boost.offer_id == first.id
+            boost_views.append(
+                DuelBoostView(
+                    revision=boost.revision,
+                    side="you" if boost.offer_id == own_offer.id else "opponent",
+                    amount_nano=boost.amount_nano,
+                    chance_bps=boost.chance_a_bps if boost_is_first else boost.chance_b_bps,
+                    tx_hash=boost.tx_hash,
+                    proof_url=explorer_transaction_url(duel.network, boost.tx_hash),
+                    created_at=boost.created_at,
+                )
+            )
         result.append(
             DuelView(
                 id=duel.id,
@@ -347,7 +389,11 @@ async def list_duels(user: CurrentUser, db: Db, settings: Config) -> list[DuelVi
                 opponent_stake_nano=own_offer.opponent_stake_nano,
                 total_pool_nano=own_offer.total_pool_nano,
                 payout_nano=own_offer.payout_nano,
+                boost_deadline=duel.boost_deadline,
+                hard_deadline=duel.hard_deadline,
+                boost_revision=duel.boost_revision,
                 reveal_deadline=duel.reveal_deadline,
+                boost_events=boost_views,
                 winner_wallet=duel.winner_wallet,
                 settled_tx_hash=duel.settled_tx_hash,
                 settlement_proof_url=(
@@ -379,6 +425,60 @@ async def owned_offer_for_duel(
     return duel, own_offer
 
 
+@router.post("/{duel_id}/boost-intent", response_model=DuelBoostIntent)
+async def boost_intent(
+    duel_id: int,
+    body: DuelBoostRequest,
+    user: CurrentUser,
+    db: Db,
+    settings: Config,
+) -> DuelBoostIntent:
+    duel, offer = await owned_offer_for_duel(db, duel_id, user.id, settings.ton_network_id)
+    now = datetime.now(UTC)
+    if (
+        duel.state != DuelState.BOOSTING.value
+        or duel.boost_deadline is None
+        or duel.hard_deadline is None
+        or as_utc(duel.boost_deadline) < now
+        or as_utc(duel.hard_deadline) < now
+    ):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Время усиления закончилось")
+    if duel.boost_revision != body.expected_revision:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Состояние изменилось. Обнови DUEL")
+
+    first = await db.get(DuelOffer, duel.offer_a_id)
+    second = await db.get(DuelOffer, duel.offer_b_id)
+    if first is None or second is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "DUEL ещё не подтверждён")
+    boosted_stake = offer.stake_nano + body.amount_nano
+    total_pool = first.stake_nano + second.stake_nano + body.amount_nano
+    chance_bps = boosted_stake * 10_000 // total_pool
+    if chance_bps > MAX_DUEL_CHANCE_BPS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Максимальный перевес — 90%")
+    if chance_bps < body.min_chance_bps:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Сумма уже изменилась. Проверь новый шанс")
+
+    valid_until = min(
+        int(as_utc(duel.hard_deadline).timestamp()),
+        int((now + timedelta(seconds=45)).timestamp()),
+    )
+    if valid_until <= int(now.timestamp()):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Время усиления закончилось")
+    return DuelBoostIntent(
+        operation="boost_duel",
+        query_id=secrets.randbelow(9_007_199_254_740_990) + 1,
+        offer_id=offer.onchain_offer_id,
+        duel_id=duel.onchain_duel_id,
+        contract_address=offer.contract_address,
+        amount_nano=str(body.amount_nano + BOOST_GAS_NANO),
+        boost_nano=str(body.amount_nano),
+        expected_revision=body.expected_revision,
+        min_chance_bps=body.min_chance_bps,
+        valid_until=valid_until,
+        network=offer.network,
+    )
+
+
 @router.post("/{duel_id}/reveal-intent", response_model=ActionIntent)
 async def reveal_intent(
     duel_id: int,
@@ -387,9 +487,16 @@ async def reveal_intent(
     settings: Config,
 ) -> ActionIntent:
     duel, offer = await owned_offer_for_duel(db, duel_id, user.id, settings.ton_network_id)
-    if duel.state != DuelState.REVEALING.value or offer.revealed:
+    now = datetime.now(UTC)
+    boost_finished = duel.boost_deadline is None or as_utc(duel.boost_deadline) < now
+    if (
+        duel.state not in {DuelState.BOOSTING.value, DuelState.REVEALING.value}
+        or not boost_finished
+    ):
+        raise HTTPException(status.HTTP_409_CONFLICT, "DUEL ещё можно усилить")
+    if offer.revealed:
         raise HTTPException(status.HTTP_409_CONFLICT, "DUEL cannot be revealed")
-    if as_utc(duel.reveal_deadline) <= datetime.now(UTC):
+    if as_utc(duel.reveal_deadline) <= now:
         raise HTTPException(status.HTTP_409_CONFLICT, "reveal deadline passed")
     return action_intent(
         "reveal",

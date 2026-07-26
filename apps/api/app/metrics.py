@@ -66,13 +66,15 @@ async def refresh_duel_metrics(session_factory: Any, redis_client: Any) -> None:
         for mode, state, count in rows:
             DUEL_OFFERS.labels(mode=str(mode), state=str(state)).set(int(count))
         revealing = await db.scalar(
-            select(func.count()).select_from(Duel).where(Duel.state == DuelState.REVEALING.value)
+            select(func.count())
+            .select_from(Duel)
+            .where(Duel.state.in_([DuelState.BOOSTING.value, DuelState.REVEALING.value]))
         )
         overdue = await db.scalar(
             select(func.count())
             .select_from(Duel)
             .where(
-                Duel.state == DuelState.REVEALING.value,
+                Duel.state.in_([DuelState.BOOSTING.value, DuelState.REVEALING.value]),
                 Duel.reveal_deadline < now,
             )
         )

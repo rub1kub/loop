@@ -5,6 +5,13 @@ import "storage"
 const BANK_BASIS_POINTS = 10_000
 const BANK_MIN_PRINCIPAL = 1_000_000_000
 const BANK_MAX_PRINCIPAL = 100_000_000_000
+const BANK_INITIAL_PRINCIPAL_LIMIT = 5_000_000_000
+const BANK_SECOND_PRINCIPAL_LIMIT = 10_000_000_000
+const BANK_THIRD_PRINCIPAL_LIMIT = 15_000_000_000
+const BANK_LIMIT_STEP = 5_000_000_000
+const BANK_SECOND_STAGE_COMPLETIONS = 25
+const BANK_THIRD_STAGE_COMPLETIONS = 100
+const BANK_EXPANSION_COMPLETIONS = 250
 const BANK_OPEN_GAS_BUFFER = 80_000_000
 const BANK_MIN_ADMIN_GAS = 20_000_000
 const BANK_WITHDRAW_GAS_BUFFER = 50_000_000
@@ -15,8 +22,8 @@ const BANK_MAX_ALLOCATION_STEPS = 81
 
 contract BankQueue {
     author: "LOOP"
-    version: "1.2.0"
-    description: "FIFO payout cycle for LOOP BANK"
+    version: "1.3.0"
+    description: "FIFO payout cycle for LOOP BANK with maturity-based principal limits"
     storage: BankStorage
     incomingMessages: BankAllowedMessage
 }
@@ -32,6 +39,22 @@ type BankAllowedMessage =
 
 fun validMultiplier(multiplierBps: uint16): bool {
     return multiplierBps == 12_500 || multiplierBps == 15_000 || multiplierBps == 20_000;
+}
+
+fun completedExpansionStages(completedPositions: uint64): int {
+    return (completedPositions - BANK_THIRD_STAGE_COMPLETIONS) / BANK_EXPANSION_COMPLETIONS;
+}
+
+fun BankStorage.principalLimit(self): coins {
+    if (self.completedPositions < BANK_SECOND_STAGE_COMPLETIONS) {
+        return BANK_INITIAL_PRINCIPAL_LIMIT;
+    }
+    if (self.completedPositions < BANK_THIRD_STAGE_COMPLETIONS) {
+        return BANK_SECOND_PRINCIPAL_LIMIT;
+    }
+    val extraStages = completedExpansionStages(self.completedPositions);
+    val expanded = BANK_THIRD_PRINCIPAL_LIMIT + extraStages * BANK_LIMIT_STEP;
+    return expanded < BANK_MAX_PRINCIPAL ? expanded : BANK_MAX_PRINCIPAL;
 }
 
 fun sendBankPayout(
@@ -117,6 +140,7 @@ fun BankStorage.allocateDeposit(mutate self, queryId: uint64, available: coins):
             self.positions.set(positionId, position.toCell());
             self.queue.delete(self.headQueueIndex);
             self.headQueueIndex += 1;
+            self.completedPositions += 1;
             sendBankPayout(queryId, positionId, position);
         } else {
             position.status = BANK_POSITION_PARTIALLY_FUNDED;
@@ -146,7 +170,7 @@ fun onInternalMessage(in: InMessage) {
                 !storage.activePositions.exists(in.senderAddress)
             ) throw BankErrors.OwnerAlreadyActive;
             assert (
-                msg.principal >= BANK_MIN_PRINCIPAL && msg.principal <= BANK_MAX_PRINCIPAL
+                msg.principal >= BANK_MIN_PRINCIPAL && msg.principal <= storage.principalLimit()
             ) throw BankErrors.InvalidPrincipal;
             assert (validMultiplier(msg.multiplierBps)) throw BankErrors.InvalidMultiplier;
             assert (
@@ -202,9 +226,7 @@ fun onInternalMessage(in: InMessage) {
             ) throw BankErrors.InsufficientValue;
         }
         BankWithdrawSurplus => {
-            assert (
-                in.valueCoins >= BANK_WITHDRAW_GAS_BUFFER
-            ) throw BankErrors.InsufficientValue;
+            assert (in.valueCoins >= BANK_WITHDRAW_GAS_BUFFER) throw BankErrors.InsufficientValue;
             val originalBalance = contract.getOriginalBalance();
             assert (originalBalance >= in.valueCoins) throw BankErrors.InsufficientValue;
             val storage = BankStorage.load();
@@ -235,9 +257,7 @@ fun onInternalMessage(in: InMessage) {
             var storage = BankStorage.load();
             storage.requireOwner(in.senderAddress);
             assert (storage.paused) throw BankErrors.MustBePaused;
-            assert (
-                msg.treasury != contract.getAddress()
-            ) throw BankErrors.InvalidTreasury;
+            assert (msg.treasury != contract.getAddress()) throw BankErrors.InvalidTreasury;
             storage.treasury = msg.treasury;
             storage.save();
         }
@@ -269,6 +289,8 @@ get fun contractConfig(): BankContractConfigView {
         paused: storage.paused,
         headQueueIndex: storage.headQueueIndex,
         nextQueueIndex: storage.nextQueueIndex,
+        completedPositions: storage.completedPositions,
+        principalLimit: storage.principalLimit(),
         lockedFunding: storage.lockedFunding,
     };
 }
@@ -279,6 +301,8 @@ get fun queueData(): BankQueueView {
         headQueueIndex: storage.headQueueIndex,
         nextQueueIndex: storage.nextQueueIndex,
         openPositions: storage.nextQueueIndex - storage.headQueueIndex,
+        completedPositions: storage.completedPositions,
+        principalLimit: storage.principalLimit(),
     };
 }
 
@@ -299,6 +323,8 @@ get fun adminState(): BankAdminStateView {
         treasury: storage.treasury,
         feeBps: storage.feeBps,
         paused: storage.paused,
+        completedPositions: storage.completedPositions,
+        principalLimit: storage.principalLimit(),
         lockedFunding: storage.lockedFunding,
     };
 }

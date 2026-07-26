@@ -17,7 +17,7 @@ from .database import create_database
 from .ton import TonProviderError, normalize_address
 
 ACTIVE_OFFER_STATES = ("pending_funding", "open", "reserved", "matched")
-ACTIVE_DUEL_STATES = ("revealing",)
+ACTIVE_DUEL_STATES = ("boosting", "revealing")
 ACTIVE_INVITATION_STATES = ("accepted", "funding", "matched")
 
 

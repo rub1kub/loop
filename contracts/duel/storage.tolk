@@ -33,7 +33,10 @@ struct OfferData {
 struct DuelData {
     offerAId: uint64
     offerBId: uint64
+    boostDeadline: uint32
+    hardDeadline: uint32
     revealDeadline: uint32
+    boostRevision: uint16
     secretA: uint256
     secretB: uint256
     revealedMask: uint8
@@ -70,6 +73,17 @@ struct DuelAdminStateView {
     feeBps: uint16
     paused: bool
     locked: coins
+}
+
+struct DuelBoostView {
+    stakeA: coins
+    stakeB: coins
+    chanceABps: uint16
+    chanceBBps: uint16
+    boostDeadline: uint32
+    hardDeadline: uint32
+    revealDeadline: uint32
+    boostRevision: uint16
 }
 
 fun Storage.load(): Storage {

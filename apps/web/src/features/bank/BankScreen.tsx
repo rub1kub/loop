@@ -14,7 +14,7 @@ import {
   newOfferId,
   parseGram,
 } from '../../ton';
-import type { BankPosition, BankPreview, Profile, RatingPulse } from '../../types';
+import type { BankLimit, BankPosition, BankPreview, Profile, RatingPulse } from '../../types';
 
 type WizardStep = 'amount' | 'multiplier' | 'confirm' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
@@ -48,6 +48,16 @@ export function BankScreen({
   const [amount, setAmount] = useState('2');
   const [multiplier, setMultiplier] = useState<(typeof multipliers)[number]>(15000);
   const [preview, setPreview] = useState<BankPreview | null>(null);
+  const [limit, setLimit] = useState<BankLimit | null>(
+    isMockTelegram()
+      ? {
+          completed_positions: 0,
+          principal_limit_nano: 5_000_000_000,
+          next_limit_nano: 10_000_000_000,
+          completions_until_next: 25,
+        }
+      : null,
+  );
   const [message, setMessage] = useState('');
   const locked = useRef(false);
 
@@ -67,6 +77,29 @@ export function BankScreen({
       else if (wizard === 'confirm') setWizard('multiplier');
     });
   }, [wizard]);
+
+  useEffect(() => {
+    if (isMockTelegram()) return;
+    void api
+      .bankLimits()
+      .then(setLimit)
+      .catch(() => undefined);
+  }, []);
+
+  function continueFromAmount() {
+    if (principalNano < 1_000_000_000) {
+      setMessage('Минимальная сумма — 1 GRAM');
+      haptic('warning');
+      return;
+    }
+    if (limit && principalNano > limit.principal_limit_nano) {
+      setMessage(`Сейчас максимум — ${formatGram(limit.principal_limit_nano, 0)} GRAM`);
+      haptic('warning');
+      return;
+    }
+    setMessage('');
+    setWizard('multiplier');
+  }
 
   async function showConfirmation() {
     if (principalNano < 1_000_000_000) {
@@ -211,8 +244,12 @@ export function BankScreen({
                   />
                   <span>GRAM</span>
                 </label>
-                <p className="form-note">Это твой вклад в позицию. Минимум 1 GRAM.</p>
-                <button className="primary-button" onClick={() => setWizard('multiplier')}>
+                <p className="form-note">
+                  От 1 до {formatGram(limit?.principal_limit_nano ?? 5_000_000_000, 0)} GRAM. Лимит
+                  растёт вместе с завершёнными позициями.
+                </p>
+                {message && <p className="form-note is-error">{message}</p>}
+                <button className="primary-button" onClick={continueFromAmount}>
                   ДАЛЬШЕ
                   <ArrowRight aria-hidden="true" />
                 </button>

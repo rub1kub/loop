@@ -28,5 +28,9 @@ enum Errors {
     InvalidTreasury = 126
     InvalidOwner = 127
     ActiveValueLocked = 129
+    BoostClosed = 130
+    InvalidBoost = 131
+    StaleBoost = 132
+    RevealNotOpen = 133
     InvalidMessage = 0xFFFF
 }

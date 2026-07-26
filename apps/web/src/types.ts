@@ -144,10 +144,17 @@ export interface BankPreview {
   network: number;
 }
 
+export interface BankLimit {
+  completed_positions: number;
+  principal_limit_nano: number;
+  next_limit_nano: number | null;
+  completions_until_next: number | null;
+}
+
 export interface Offer {
   id: string;
   onchain_offer_id: number;
-  chance_bps: 2500 | 5000 | 7500;
+  chance_bps: number;
   total_pool_nano: number;
   stake_nano: number;
   opponent_stake_nano: number;
@@ -212,10 +219,38 @@ export interface Duel {
   opponent_stake_nano: number;
   total_pool_nano: number;
   payout_nano: number;
+  boost_deadline: string | null;
+  hard_deadline: string | null;
+  boost_revision: number;
   reveal_deadline: string;
+  boost_events: DuelBoost[];
   winner_wallet: string | null;
   settled_tx_hash: string | null;
   settlement_proof_url: string | null;
+}
+
+export interface DuelBoost {
+  revision: number;
+  side: 'you' | 'opponent';
+  amount_nano: number;
+  chance_bps: number;
+  tx_hash: string;
+  proof_url: string;
+  created_at: string;
+}
+
+export interface DuelBoostIntent {
+  operation: 'boost_duel';
+  query_id: number;
+  offer_id: number;
+  duel_id: number;
+  contract_address: string;
+  amount_nano: string;
+  boost_nano: string;
+  expected_revision: number;
+  min_chance_bps: number;
+  valid_until: number;
+  network: number;
 }
 
 export interface ActionIntent {

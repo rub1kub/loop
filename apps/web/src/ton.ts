@@ -1,7 +1,7 @@
 import { Address, beginCell } from '@ton/core';
 import type { SendTransactionRequest } from '@tonconnect/ui-react';
 
-import type { ActionIntent, BankQuote, OfferQuote } from './types';
+import type { ActionIntent, BankQuote, DuelBoostIntent, OfferQuote } from './types';
 
 export const BANK_CREATE_POSITION_OPCODE = 0x4c424e01;
 export const OPEN_OFFER_OPCODE = 0x4c4f4f01;
@@ -11,8 +11,10 @@ export const EXPIRE_OFFER_OPCODE = 0x4c4f4f05;
 export const EXPIRE_DUEL_OPCODE = 0x4c4f4f06;
 export const OPEN_DIRECT_OFFER_OPCODE = 0x4c4f4f08;
 export const ACCEPT_DIRECT_OFFER_OPCODE = 0x4c4f4f09;
+export const BOOST_DUEL_OPCODE = 0x4c4f4f0f;
 export const COMMITMENT_DOMAIN = 0x4c4f4f60;
 export const DUEL_OPEN_GAS_NANO = 50_000_000n;
+export const DUEL_BOOST_GAS_NANO = 50_000_000n;
 
 export function newOfferId(random = crypto.getRandomValues(new Uint32Array(2))): number {
   const high = random[0] & 0x1fffff;
@@ -221,6 +223,60 @@ export function buildActionTransaction(
         payload: body.endCell().toBoc().toString('base64'),
       },
     ],
+  };
+}
+
+export function buildBoostTransaction(
+  intent: DuelBoostIntent,
+  from: string,
+  network: string,
+  expected: {
+    duelId: number;
+    offerId: number;
+    amountNano: number;
+    revision: number;
+    minChanceBps: number;
+    contractAddress: string;
+  },
+): SendTransactionRequest {
+  requireSupportedNetwork(network);
+  const addressMatches = (() => {
+    try {
+      return Address.parse(intent.contract_address).equals(Address.parse(expected.contractAddress));
+    } catch {
+      return false;
+    }
+  })();
+  if (
+    intent.operation !== 'boost_duel' ||
+    intent.network !== Number(network) ||
+    intent.duel_id !== expected.duelId ||
+    intent.offer_id !== expected.offerId ||
+    BigInt(intent.boost_nano) !== BigInt(expected.amountNano) ||
+    BigInt(intent.amount_nano) !== BigInt(expected.amountNano) + DUEL_BOOST_GAS_NANO ||
+    intent.expected_revision !== expected.revision ||
+    intent.min_chance_bps !== expected.minChanceBps ||
+    !addressMatches
+  ) {
+    throw new Error('Состояние DUEL изменилось. Обнови экран.');
+  }
+  const payload = beginCell()
+    .storeUint(BOOST_DUEL_OPCODE, 32)
+    .storeUint(intent.query_id, 64)
+    .storeUint(intent.duel_id, 64)
+    .storeUint(intent.offer_id, 64)
+    .storeCoins(BigInt(intent.boost_nano))
+    .storeUint(intent.expected_revision, 16)
+    .storeUint(intent.min_chance_bps, 16)
+    .storeUint(intent.valid_until, 32)
+    .endCell()
+    .toBoc()
+    .toString('base64');
+  return {
+    validUntil: intent.valid_until,
+    network,
+    from,
+    messages: [{ address: intent.contract_address, amount: intent.amount_nano, payload }],
   };
 }
 

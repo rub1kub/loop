@@ -1,14 +1,16 @@
 import { Address, beginCell, Cell } from '@ton/core';
 import { describe, expect, it } from 'vitest';
 
-import type { ActionIntent, BankQuote, OfferQuote } from './types';
+import type { ActionIntent, BankQuote, DuelBoostIntent, OfferQuote } from './types';
 import {
   ACCEPT_DIRECT_OFFER_OPCODE,
   assertOpenOfferQuoteContext,
   buildActionTransaction,
   buildBankPositionTransaction,
+  buildBoostTransaction,
   buildOpenOfferTransaction,
   COMMITMENT_DOMAIN,
+  BOOST_DUEL_OPCODE,
   commitmentForOffer,
   newOfferId,
   OPEN_DIRECT_OFFER_OPCODE,
@@ -169,6 +171,52 @@ describe('TON duel encoding', () => {
     expect(slice.loadUintBig(64)).toBe(88n);
     expect(slice.loadUintBig(64)).toBe(77n);
     expect(slice.loadUintBig(256)).toBe(42n);
+  });
+
+  it('binds a boost to duel, offer, revision, chance floor and amount', () => {
+    const contractAddress = `0:${'22'.repeat(32)}`;
+    const intent: DuelBoostIntent = {
+      operation: 'boost_duel',
+      query_id: 11,
+      duel_id: 88,
+      offer_id: 77,
+      contract_address: contractAddress,
+      amount_nano: '550000000',
+      boost_nano: '500000000',
+      expected_revision: 3,
+      min_chance_bps: 6_000,
+      valid_until: 2_000_000_000,
+      network: -3,
+    };
+    const request = buildBoostTransaction(intent, `0:${'11'.repeat(32)}`, '-3', {
+      duelId: 88,
+      offerId: 77,
+      amountNano: 500_000_000,
+      revision: 3,
+      minChanceBps: 6_000,
+      contractAddress,
+    });
+    const payload = request.messages?.[0]?.payload;
+    if (!payload) throw new Error('missing boost payload');
+    const slice = Cell.fromBoc(Buffer.from(payload, 'base64'))[0].beginParse();
+    expect(slice.loadUint(32)).toBe(BOOST_DUEL_OPCODE);
+    expect(slice.loadUintBig(64)).toBe(11n);
+    expect(slice.loadUintBig(64)).toBe(88n);
+    expect(slice.loadUintBig(64)).toBe(77n);
+    expect(slice.loadCoins()).toBe(500_000_000n);
+    expect(slice.loadUint(16)).toBe(3);
+    expect(slice.loadUint(16)).toBe(6_000);
+    expect(slice.loadUint(32)).toBe(2_000_000_000);
+    expect(() =>
+      buildBoostTransaction({ ...intent, expected_revision: 4 }, `0:${'11'.repeat(32)}`, '-3', {
+        duelId: 88,
+        offerId: 77,
+        amountNano: 500_000_000,
+        revision: 3,
+        minChanceBps: 6_000,
+        contractAddress,
+      }),
+    ).toThrow('Состояние DUEL изменилось');
   });
 
   it('accepts mainnet only when the signed quote uses the same network', () => {

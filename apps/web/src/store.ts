@@ -57,16 +57,17 @@ const demoBank: BankPosition = {
 const demoOffer: Offer = {
   id: 'duel-offer-demo',
   onchain_offer_id: 5107,
-  chance_bps: 5000,
-  total_pool_nano: 2_000_000_000,
-  stake_nano: 1_000_000_000,
+  chance_bps: mockScreen === 'duel-boost' ? 6000 : 5000,
+  total_pool_nano: mockScreen === 'duel-boost' ? 2_500_000_000 : 2_000_000_000,
+  stake_nano: mockScreen === 'duel-boost' ? 1_500_000_000 : 1_000_000_000,
   opponent_stake_nano: 1_000_000_000,
   fee_bps: 250,
-  payout_nano: 1_950_000_000,
-  net_profit_nano: 950_000_000,
+  payout_nano: mockScreen === 'duel-boost' ? 2_437_500_000 : 1_950_000_000,
+  net_profit_nano: mockScreen === 'duel-boost' ? 937_500_000 : 950_000_000,
   mode: 'afk',
   direct_opponent_wallet: null,
-  state: mockScreen === 'duel-result' ? 'settled' : 'open',
+  state:
+    mockScreen === 'duel-result' ? 'settled' : mockScreen === 'duel-boost' ? 'matched' : 'open',
   expires_at: new Date(now + 10 * 60_000).toISOString(),
   funding_tx_hash: 'demo-duel-funding',
   funding_proof_url: 'https://testnet.tonviewer.com/transaction/demo-duel-funding',
@@ -75,18 +76,41 @@ const demoOffer: Offer = {
 const demoDuel: Duel = {
   id: 'duel-demo',
   onchain_duel_id: 5108,
-  state: 'settled',
+  state: mockScreen === 'duel-boost' ? 'boosting' : 'settled',
   offer_id: demoOffer.onchain_offer_id,
   own_revealed: true,
-  chance_bps: 5000,
-  stake_nano: 1_000_000_000,
+  chance_bps: mockScreen === 'duel-boost' ? 6000 : 5000,
+  stake_nano: mockScreen === 'duel-boost' ? 1_500_000_000 : 1_000_000_000,
   opponent_stake_nano: 1_000_000_000,
-  total_pool_nano: 2_000_000_000,
-  payout_nano: 1_950_000_000,
-  reveal_deadline: new Date(now - 60_000).toISOString(),
-  winner_wallet: demoProfile.wallet!.address,
-  settled_tx_hash: 'demo-duel-settlement',
-  settlement_proof_url: 'https://testnet.tonviewer.com/transaction/demo-duel-settlement',
+  total_pool_nano: mockScreen === 'duel-boost' ? 2_500_000_000 : 2_000_000_000,
+  payout_nano: mockScreen === 'duel-boost' ? 2_437_500_000 : 1_950_000_000,
+  boost_deadline: mockScreen === 'duel-boost' ? new Date(now + 55_000).toISOString() : null,
+  hard_deadline: mockScreen === 'duel-boost' ? new Date(now + 175_000).toISOString() : null,
+  boost_revision: mockScreen === 'duel-boost' ? 1 : 0,
+  reveal_deadline:
+    mockScreen === 'duel-boost'
+      ? new Date(now + 355_000).toISOString()
+      : new Date(now - 60_000).toISOString(),
+  boost_events:
+    mockScreen === 'duel-boost'
+      ? [
+          {
+            revision: 1,
+            side: 'you',
+            amount_nano: 500_000_000,
+            chance_bps: 6000,
+            tx_hash: 'demo-duel-boost',
+            proof_url: 'https://testnet.tonviewer.com/transaction/demo-duel-boost',
+            created_at: new Date(now - 5_000).toISOString(),
+          },
+        ]
+      : [],
+  winner_wallet: mockScreen === 'duel-boost' ? null : demoProfile.wallet!.address,
+  settled_tx_hash: mockScreen === 'duel-boost' ? null : 'demo-duel-settlement',
+  settlement_proof_url:
+    mockScreen === 'duel-boost'
+      ? null
+      : 'https://testnet.tonviewer.com/transaction/demo-duel-settlement',
 };
 
 const demoInvite: Invite = {
@@ -246,8 +270,12 @@ export const useLoopStore = create<LoopState>((set, get) => ({
           bankPosition: empty ? null : demoBank,
           bankHistory: empty ? [] : [demoBank],
           offers:
-            mockScreen === 'duel-matchmaking' || mockScreen === 'duel-result' ? [demoOffer] : [],
-          duels: mockScreen === 'duel-result' ? [demoDuel] : [],
+            mockScreen === 'duel-matchmaking' ||
+            mockScreen === 'duel-result' ||
+            mockScreen === 'duel-boost'
+              ? [demoOffer]
+              : [],
+          duels: mockScreen === 'duel-result' || mockScreen === 'duel-boost' ? [demoDuel] : [],
           invite: mockScreen === 'duel-invite' ? demoInvite : null,
           rating: demoRating,
           loading: false,

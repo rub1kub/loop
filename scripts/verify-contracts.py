@@ -34,6 +34,7 @@ BANK_PROTOCOL_FEE = 0x4C424E12
 DUEL_OPEN_OFFER = 0x4C4F4F01
 DUEL_CANCEL_OFFER = 0x4C4F4F02
 DUEL_REVEAL = 0x4C4F4F04
+DUEL_BOOST = 0x4C4F4F0F
 DUEL_OFFER_REFUND = 0x4C4F4F12
 DUEL_PAYOUT = 0x4C4F4F11
 
@@ -85,7 +86,9 @@ def validate_live_balance(
     min_reserve: int,
 ) -> None:
     if live_locked < 0 or min_reserve < 0 or live_balance < live_locked + min_reserve:
-        raise ValueError(f"{contract}: live balance does not cover locked value and reserve")
+        raise ValueError(
+            f"{contract}: live balance does not cover locked value and reserve"
+        )
 
 
 def body_parser(message: dict[str, Any]) -> Any:
@@ -126,7 +129,9 @@ async def verify_bank_smoke(
     transaction = transactions[0]
     if not successful_transaction(transaction):
         raise ValueError("BankQueue: smoke transaction was not successful")
-    if raw_address(str(transaction.get("account", ""))) != raw_address(manifest["address"]):
+    if raw_address(str(transaction.get("account", ""))) != raw_address(
+        manifest["address"]
+    ):
         raise ValueError("BankQueue: smoke transaction account mismatch")
     if int(transaction.get("lt", 0)) != int(smoke["transaction_lt"]):
         raise ValueError("BankQueue: smoke transaction logical time mismatch")
@@ -205,7 +210,9 @@ async def duel_smoke_transaction(
     transaction = transactions[0]
     if not successful_transaction(transaction):
         raise ValueError("DuelEscrow: smoke transaction was not successful")
-    if raw_address(str(transaction.get("account", ""))) != raw_address(manifest["address"]):
+    if raw_address(str(transaction.get("account", ""))) != raw_address(
+        manifest["address"]
+    ):
         raise ValueError("DuelEscrow: smoke transaction account mismatch")
     if int(transaction.get("lt", 0)) != transaction_lt:
         raise ValueError("DuelEscrow: smoke transaction logical time mismatch")
@@ -321,6 +328,43 @@ async def verify_duel_canary(
     duel_id = int(canary["duel_id"])
     if not 0 < duel_id < 2**64:
         raise ValueError("DuelEscrow: canary duel id is invalid")
+    if manifest["configuration"].get("version") == "1.3.0":
+        boost_transaction = await duel_smoke_transaction(
+            client,
+            manifest,
+            str(canary["boost_transaction"]),
+            int(canary["boost_transaction_lt"]),
+            int(canary["boost_masterchain_seqno"]),
+        )
+        boost_message = boost_transaction.get("in_msg") or {}
+        if raw_address(str(boost_message.get("source", ""))) != first_wallet:
+            raise ValueError("DuelEscrow: canary boost sender mismatch")
+        boost_parser = body_parser(boost_message)
+        decoded_boost = {
+            "opcode": boost_parser.read_uint(32),
+            "query_id": boost_parser.read_uint(64),
+            "duel_id": boost_parser.read_uint(64),
+            "offer_id": boost_parser.read_uint(64),
+            "amount_nano": boost_parser.read_coins(),
+            "expected_revision": boost_parser.read_uint(16),
+            "min_chance_bps": boost_parser.read_uint(16),
+            "valid_until": boost_parser.read_uint(32),
+        }
+        if decoded_boost != {
+            "opcode": DUEL_BOOST,
+            "query_id": int(canary["boost_query_id"]),
+            "duel_id": duel_id,
+            "offer_id": int(canary["first_offer_id"]),
+            "amount_nano": int(canary["boost_nano"]),
+            "expected_revision": 0,
+            "min_chance_bps": int(canary["min_chance_bps"]),
+            "valid_until": int(canary["boost_valid_until"]),
+        }:
+            raise ValueError("DuelEscrow: canary boost input mismatch")
+        if int(boost_message.get("value", 0)) != int(canary["boost_nano"]) + int(
+            canary["boost_gas_nano"]
+        ):
+            raise ValueError("DuelEscrow: canary boost value mismatch")
     transaction = await duel_smoke_transaction(
         client,
         manifest,
@@ -356,13 +400,18 @@ async def verify_duel_canary(
             payouts.append(message)
     if len(payouts) != 1:
         raise ValueError("DuelEscrow: canary payout proof is missing or ambiguous")
-    if raw_address(str(payouts[0].get("destination", ""))) not in {
-        first_wallet,
-        second_wallet,
-    } or int(payouts[0].get("value", 0)) <= 0:
+    if (
+        raw_address(str(payouts[0].get("destination", "")))
+        not in {
+            first_wallet,
+            second_wallet,
+        }
+        or int(payouts[0].get("value", 0)) <= 0
+    ):
         raise ValueError("DuelEscrow: canary payout destination or value mismatch")
     return {
         "duel_id": duel_id,
+        "boost_transaction": canary.get("boost_transaction"),
         "settlement_transaction": str(canary["settlement_transaction"]),
         "masterchain_seqno": int(canary["masterchain_seqno"]),
         "verified": True,
@@ -444,8 +493,18 @@ async def verify_contract(
     result = getter.get("result") or {}
     stack = result.get("stack") or []
     configuration = manifest["configuration"]
+    version = str(configuration.get("version", ""))
     duel_address_bound = contract == "DuelEscrow" and "network_id" in configuration
-    expected_stack_size = 8 if duel_address_bound else 7 if contract == "BankQueue" else 5
+    bank_v13 = contract == "BankQueue" and version == "1.3.0"
+    expected_stack_size = (
+        8
+        if duel_address_bound
+        else 9
+        if bank_v13
+        else 7
+        if contract == "BankQueue"
+        else 5
+    )
     if (
         not getter.get("ok")
         or result.get("exit_code") != 0
@@ -462,9 +521,10 @@ async def verify_contract(
         configured_network_id = int(configuration["network_id"])
         if configured_network_id != network_id or stack_number(stack[3]) != network_id:
             raise ValueError(f"{contract}: network domain mismatch")
-        if f"{stack_number(stack[4]):064x}" != str(
-            configuration["invite_signer_public_key"]
-        ).lower():
+        if (
+            f"{stack_number(stack[4]):064x}"
+            != str(configuration["invite_signer_public_key"]).lower()
+        ):
             raise ValueError(f"{contract}: invite signer mismatch")
         if stack_address(stack[5]) != raw_address(address):
             raise ValueError(f"{contract}: self address mismatch")
@@ -474,7 +534,15 @@ async def verify_contract(
     else:
         if bool(stack_number(stack[3])) != bool(configuration["paused"]):
             raise ValueError(f"{contract}: pause state mismatch")
-        if contract == "BankQueue" and "locked_nano" in configuration:
+        if bank_v13:
+            completed_positions = stack_number(stack[6])
+            principal_limit = stack_number(stack[7])
+            live_locked = stack_number(stack[8])
+            if completed_positions != int(configuration["completed_positions"]):
+                raise ValueError("BankQueue: completed position count mismatch")
+            if principal_limit != int(configuration["principal_limit_nano"]):
+                raise ValueError("BankQueue: principal limit mismatch")
+        elif contract == "BankQueue" and "locked_nano" in configuration:
             live_locked = stack_number(stack[6])
         else:
             live_locked = 0
@@ -488,7 +556,7 @@ async def verify_contract(
         min_reserve=min_reserve,
     )
 
-    if configuration.get("version") == "1.2.0":
+    if version in {"1.2.0", "1.3.0"}:
         admin_response = await provider_post(
             client,
             "/api/v2/runGetMethod",
@@ -497,19 +565,33 @@ async def verify_contract(
         admin_getter = admin_response.json()
         admin_result = admin_getter.get("result") or {}
         admin_stack = admin_result.get("stack") or []
+        expected_admin_size = 7 if bank_v13 else 5
         if (
             not admin_getter.get("ok")
             or admin_result.get("exit_code") != 0
-            or len(admin_stack) != 5
+            or len(admin_stack) != expected_admin_size
         ):
             raise ValueError(f"{contract}: adminState getter failed")
-        if (
+        common_admin_mismatch = (
             stack_address(admin_stack[0]) != raw_address(str(configuration["owner"]))
             or stack_address(admin_stack[1])
             != raw_address(str(configuration["treasury"]))
             or stack_number(admin_stack[2]) != int(configuration["fee_bps"])
             or bool(stack_number(admin_stack[3])) != bool(configuration["paused"])
-            or stack_number(admin_stack[4]) != live_locked
+        )
+        bank_admin_mismatch = bank_v13 and (
+            stack_number(admin_stack[4]) != int(configuration["completed_positions"])
+            or stack_number(admin_stack[5])
+            != int(configuration["principal_limit_nano"])
+            or stack_number(admin_stack[6]) != live_locked
+        )
+        duel_or_legacy_admin_mismatch = (
+            not bank_v13 and stack_number(admin_stack[4]) != live_locked
+        )
+        if (
+            common_admin_mismatch
+            or bank_admin_mismatch
+            or duel_or_legacy_admin_mismatch
         ):
             raise ValueError(f"{contract}: adminState mismatch")
 
@@ -538,7 +620,11 @@ async def verify_contract(
         result["canary"] = await verify_duel_canary(client, manifest)
     if require_smoke and result.get("smoke") is None:
         raise ValueError(f"{contract}: finalized smoke proof is required")
-    if network == "mainnet" and contract == "DuelEscrow" and result.get("canary") is None:
+    if (
+        network == "mainnet"
+        and contract == "DuelEscrow"
+        and result.get("canary") is None
+    ):
         raise ValueError("DuelEscrow: finalized two-wallet canary proof is required")
     return result
 
@@ -589,7 +675,7 @@ async def run(selected: list[str], network: str, require_smoke: bool) -> int:
                     client,
                     manifest_dir / f"{name}.json",
                     network=network,
-                    network_id=int(network_config["id"]),
+                    network_id=int(str(network_config["id"])),
                     require_smoke=require_smoke,
                 )
                 for name in selected
