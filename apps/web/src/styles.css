@@ -808,8 +808,8 @@ summary:focus-visible .disclosure-indicator {
   top: calc(var(--safe-top) + 10px);
   right: max(20px, calc(var(--safe-right) + 14px));
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 1px solid #303030;
   border-radius: 50%;
@@ -921,6 +921,8 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .result-proof {
+  min-height: 44px;
+  justify-content: center;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1736,6 +1738,9 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .duel-result a {
+  min-height: 44px;
+  justify-content: center;
+  padding: 0 12px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1769,10 +1774,27 @@ details[open] > summary .disclosure-indicator svg {
 
 .duel-actions {
   display: grid;
+  /* The rail no longer absorbs the screen's free space; the body band does.
+     On the result state it renders empty, so it removes itself entirely
+     instead of pinning a 14px phantom bar to the bottom. */
+  flex: 0 0 auto;
   width: 100%;
   gap: 8px;
-  margin-top: auto;
   padding-top: 14px;
+}
+
+.duel-actions:not(:has(*)) {
+  display: none;
+  padding: 0;
+}
+
+/* The body band owns the screen's free space instead of one gap above the
+   rail, so a short state is centred rather than stranded under the header. */
+.duel-form,
+.duel-live-state,
+.duel-result {
+  flex: 1 1 auto;
+  align-content: center;
 }
 
 .duel-actions svg {
@@ -2966,5 +2988,45 @@ details[open] > summary .disclosure-indicator svg {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Touch and small-screen corrections found by measuring at 320-430px.
+   None of these change the visual language: they restore the 44px finger
+   target where a control was smaller than it looked, and stop unbreakable
+   uppercase labels from crossing their own dividers on narrow phones. */
+.rating-pulse span,
+.rating-proof-line span,
+.profile-summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  letter-spacing: 0.02em;
+}
+
+.rating-list article > div small {
+  overflow: hidden;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-bar {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.profile-identity {
+  grid-template-columns: 58px minmax(0, 1fr) 44px;
+}
+
+@media (max-width: 360px) {
+  .rating-pulse span {
+    font-size: 8px;
+  }
+}
+
+@media (max-width: 350px), (max-height: 720px) {
+  .duel-breakdown summary,
+  .duel-direct-action {
+    min-height: 44px;
   }
 }

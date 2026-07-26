@@ -111,8 +111,8 @@ export function DuelScreen({
     const notification = window.setTimeout(() => {
       setMessage(
         latest.side === 'you'
-          ? `Твоё усиление подтверждено: ${(activeDuel.chance_bps / 100).toFixed(1)}%`
-          : `Соперник усилился. Твой шанс: ${(activeDuel.chance_bps / 100).toFixed(1)}%`,
+          ? `Твоё усиление подтверждено: ${(activeDuel.chance_bps / 100).toFixed(1).replace('.', ',')}%`
+          : `Соперник усилился. Твой шанс: ${(activeDuel.chance_bps / 100).toFixed(1).replace('.', ',')}%`,
       );
       haptic(latest.side === 'you' ? 'success' : 'warning');
     }, 0);
@@ -482,7 +482,9 @@ export function DuelScreen({
               <DisclosureIndicator />
             </summary>
             <p>
-              После ставки изменить тайное число нельзя. Если не откроет никто, обе ставки вернутся.
+              После ставки своё число изменить нельзя. Результат нужно открыть самому, и на это есть
+              несколько минут после конца усиления. Откроют оба — забирает победитель. Откроет
+              только соперник — он забирает весь пул. Не откроет никто — обе ставки вернутся.
             </p>
             <dl className="detail-list">
               <Term label="Общая сумма" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
@@ -507,13 +509,18 @@ export function DuelScreen({
               ? duelBoosting
                 ? 'Соперник найден. Теперь можно изменить перевес.'
                 : 'Усиление закрыто. Открой результат.'
-              : 'Ищем игрока с такой же ставкой. Можно закрыть приложение.'}
+              : // Telling the player to close the app is only true while the
+                // offer is unmatched. Once a match lands there is no push
+                // notification, the secret lives on this device, and a player
+                // who does not reveal in time hands the whole pool to the
+                // opponent who did.
+                'Ищем соперника с такой же ставкой. Ставка уже списана. Как только соперник найдётся, вернись сюда и открой результат — иначе его заберёт соперник.'}
           </strong>
           <div className="duel-live-numbers">
             <span>
               <b>
                 {status === 'matched' && activeDuel
-                  ? `${(activeDuel.chance_bps / 100).toFixed(1)}%`
+                  ? `${(activeDuel.chance_bps / 100).toFixed(1).replace('.', ',')}%`
                   : `${formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM`}
               </b>
               <small>{status === 'matched' ? 'ТВОЙ ШАНС' : 'ТВОЯ СТАВКА'}</small>
@@ -562,7 +569,8 @@ export function DuelScreen({
                 ))}
               </div>
               <p>
-                После подтверждения: <strong>{(boostedChanceBps / 100).toFixed(1)}%</strong>
+                После подтверждения:{' '}
+                <strong>{(boostedChanceBps / 100).toFixed(1).replace('.', ',')}%</strong>
               </p>
               <button className="primary-button" disabled={busy} onClick={() => void boostDuel()}>
                 {busy ? 'ПОДТВЕРЖДАЕМ…' : 'УСИЛИТЬ'}

@@ -142,7 +142,7 @@ export function ProfileScreen({
         </article>
         <article>
           <strong>{profile.bank.completed}</strong>
-          <span>ВЫПЛАТ BANK</span>
+          <span>BANK · ВЫПЛАЧЕНО</span>
           <small>{profile.bank.active ? `${profile.bank.active} активно` : 'нет активных'}</small>
         </article>
         <article>
@@ -157,7 +157,7 @@ export function ProfileScreen({
             different counters. Showing both as "ОЧКОВ" next to СЧЁТ LOOP read
             as one metric, so friends are reported as friends. */}
         <span>ТВОИ ДРУЗЬЯ</span>
-        <small>{referral?.qualified ?? 0} ПОДТВЕРДИЛИ</small>
+        <small>ПОДТВЕРЖДЕНО: {referral?.qualified ?? 0}</small>
       </div>
       <button className="profile-row" onClick={() => void shareReferral()} disabled={!referral}>
         <span className="row-icon">

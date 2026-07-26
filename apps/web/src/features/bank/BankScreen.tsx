@@ -269,7 +269,7 @@ export function BankScreen({
                         haptic('selection');
                       }}
                     >
-                      <span>×{value / 10_000}</span>
+                      <span>×{String(value / 10_000).replace('.', ',')}</span>
                       <strong>{formatGram((principalNano * value) / 10_000, 3)} GRAM</strong>
                       {multiplier === value && <Check aria-hidden="true" />}
                     </button>
@@ -367,7 +367,7 @@ export function BankScreen({
         onClick={() => (position ? setDetails(true) : setWizard('amount'))}
         aria-label={
           position
-            ? `Открыть позицию BANK, собрано ${Math.round(progressPercent)} процентов`
+            ? `Открыть позицию BANK, собрано ${Math.round(progressPercent)}%`
             : 'Создать позицию BANK'
         }
       >
@@ -400,7 +400,7 @@ export function BankScreen({
               value={position.queue_position ? `#${position.queue_position}` : '—'}
               label="ТВОЁ МЕСТО"
             />
-            <CycleMetric value={pulse?.active_bank ?? '—'} label="ПОЗИЦИЙ В ОЧЕРЕДИ" />
+            <CycleMetric value={pulse?.active_bank ?? '—'} label="В ОЧЕРЕДИ" />
           </div>
           <button className="primary-button" onClick={() => setDetails(true)}>
             СМОТРЕТЬ ПОЗИЦИЮ
@@ -411,8 +411,8 @@ export function BankScreen({
           <h2>Войди в очередь.</h2>
           <p className="bank-risk">Каждая новая позиция двигает цикл дальше.</p>
           <div className="bank-cycle-metrics is-empty">
-            <CycleMetric value={pulse?.active_bank ?? '—'} label="ПОЗИЦИЙ В ОЧЕРЕДИ" />
-            <CycleMetric value={pulse?.active_participants ?? '—'} label="УЧАСТНИКОВ СЕЙЧАС" />
+            <CycleMetric value={pulse?.active_bank ?? '—'} label="В ОЧЕРЕДИ" />
+            <CycleMetric value={pulse?.active_participants ?? '—'} label="СЕЙЧАС В LOOP" />
           </div>
           <button className="primary-button" onClick={() => setWizard('amount')}>
             СОЗДАТЬ ПОЗИЦИЮ

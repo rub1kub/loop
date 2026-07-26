@@ -148,7 +148,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
         <div className="rating-proof-line" aria-label="Надёжность рейтинга">
           <div>
             <strong>{rating.me.proofs}</strong>
-            <span>ПОДТВЕРЖДЁННЫХ ДЕЙСТВИЙ</span>
+            <span>ЗАСЧИТАНО</span>
           </div>
           <div>
             <strong>{Math.round(rating.me.reliability_bps / 100)}%</strong>
@@ -172,10 +172,10 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
         </dl>
         <p className="rating-pulse-label">СЕЙЧАС В LOOP</p>
         <div className="rating-pulse">
-          <Metric value={rating.pulse.active_participants} label="УЧАСТНИКОВ" />
+          <Metric value={rating.pulse.active_participants} label="В LOOP" />
           <Metric value={rating.pulse.active_bank} label="В BANK" />
           <Metric value={rating.pulse.active_duels} label="В DUEL" />
-          <Metric value={rating.pulse.proofs_24h} label="ДЕЙСТВИЙ · 24Ч" />
+          <Metric value={rating.pulse.proofs_24h} label="ЗА 24Ч" />
         </div>
       </details>
     </section>
@@ -205,7 +205,7 @@ function RatingRow({ entry }: { entry: RatingEntry }) {
       <div>
         <strong>{entry.is_me ? 'ТЫ' : entry.first_name}</strong>
         <small>
-          УРОВЕНЬ {levelLabels[entry.level]} · {entry.proofs} ПОДТВЕРЖДЕНИЙ
+          УРОВЕНЬ {levelLabels[entry.level]} · ЗАСЧИТАНО: {entry.proofs}
         </small>
       </div>
       <b>{entry.score}</b>

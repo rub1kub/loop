@@ -92,7 +92,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await emulateFullscreenControls();
   await expect(
     page.getByRole('button', {
-      name: 'Открыть позицию BANK, собрано 62 процентов',
+      name: 'Открыть позицию BANK, собрано 62%',
       exact: true,
     }),
   ).toBeVisible();
@@ -161,7 +161,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await expect(page.getByText('ТЫ 60%')).toBeVisible();
   await expect(page.getByText('СОПЕРНИК 40%')).toBeVisible();
   await expect(page.getByLabel('Сумма усиления в GRAM')).toBeVisible();
-  await expect(page.getByText(/После подтверждения:/)).toContainText('66.7%');
+  await expect(page.getByText(/После подтверждения:/)).toContainText('66,7%');
   await expect(page.getByRole('button', { name: 'УСИЛИТЬ' })).toBeVisible();
   await expect(page.getByText(/\+0[,.]5 GRAM · 60[,.]0%/)).toBeVisible();
 

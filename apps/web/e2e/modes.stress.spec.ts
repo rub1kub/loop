@@ -74,7 +74,7 @@ for (const mode of modes) {
     await findOpponent.click();
     await expect(page.getByText('ПОИСК СОПЕРНИКА')).toBeVisible();
     await expect(
-      page.getByText('Ищем игрока с такой же ставкой. Можно закрыть приложение.'),
+      page.getByText(/Ищем соперника с такой же ставкой\. Ставка уже списана\./),
     ).toBeVisible();
     await expect(page.getByText('ДО ИСТЕЧЕНИЯ')).toBeVisible();
     await expect(page.getByRole('button', { name: 'ОСТАНОВИТЬ ПОИСК' })).toBeVisible();

@@ -93,7 +93,7 @@ describe('BankScreen', () => {
     expect(screen.getByText(/Собрано 1[,.]11 из 3 GRAM/)).toBeVisible();
     expect(screen.getByTestId('bank-sand-level').style.getPropertyValue('--bank-fill')).toBe('37%');
 
-    fireEvent.click(screen.getByRole('button', { name: /собрано 37 процентов/i }));
+    fireEvent.click(screen.getByRole('button', { name: /собрано 37%/i }));
     expect(
       screen.getByText(/сколько новых вкладов уже направлено в твою позицию/i),
     ).toBeInTheDocument();

@@ -87,7 +87,11 @@ describe('DuelScreen', () => {
     expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
     expect(screen.queryByText('Твоя ставка')).not.toBeInTheDocument();
-    expect(screen.queryByText(/После ставки изменить тайное число нельзя/)).not.toBeVisible();
+    expect(screen.queryByText(/После ставки своё число изменить нельзя/)).not.toBeVisible();
+    // The sole-revealer rule takes the whole pool, so the interface must never
+    // go back to implying that doing nothing merely forfeits a refund.
+    expect(screen.getByText(/Откроет только соперник — он забирает весь пул/)).toBeInTheDocument();
+    expect(screen.queryByText(/Можно закрыть приложение/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeInTheDocument();
     expect(screen.queryByText(/Одинаковая ставка/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /25%/ })).not.toBeInTheDocument();
@@ -158,7 +162,8 @@ describe('DuelScreen', () => {
 
     expect(screen.getByText('Соперник найден. Теперь можно изменить перевес.')).toBeVisible();
     expect(screen.getByLabelText('Сумма усиления в GRAM')).toHaveValue('0.5');
-    expect(screen.getByText('После подтверждения:')).toHaveTextContent('60.0%');
+    // ru-RU throughout: a dot here sat next to comma-formatted GRAM.
+    expect(screen.getByText('После подтверждения:')).toHaveTextContent('60,0%');
     expect(screen.getByRole('button', { name: 'УСИЛИТЬ' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).not.toBeInTheDocument();
   });
