@@ -1,6 +1,14 @@
 :root {
-  color: #f5f5f7;
-  background: #000;
+  --bg: #000;
+  --surface: #0d0d0d;
+  --surface-active: #171717;
+  --line: #292929;
+  --edge: #646464;
+  --ink: #f5f5f7;
+  --muted: #a1a1a6;
+  --dim: #777;
+  color: var(--ink);
+  background: var(--bg);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -28,9 +36,6 @@
     var(--tg-content-safe-area-inset-left, 0px),
     var(--loop-safe-area-inset-left, 0px)
   );
-  --line: #252525;
-  --muted: #a1a1a6;
-  --surface: #101010;
   --motion-fast: 140ms;
   --motion-base: 240ms;
   --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
@@ -51,7 +56,7 @@ body,
   width: 100%;
   height: 100%;
   margin: 0;
-  background: #000;
+  background: var(--bg);
   touch-action: pan-y;
 }
 
@@ -81,17 +86,14 @@ button:focus-visible,
 input:focus-visible,
 a:focus-visible,
 summary:focus-visible {
-  outline: 2px solid #fff;
+  border-radius: 10px;
+  outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
 
-summary:focus-visible {
-  border-radius: 10px;
-}
-
 summary:focus-visible .disclosure-indicator {
-  border-color: #fff;
-  color: #fff;
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 .loader,
@@ -104,7 +106,7 @@ summary:focus-visible .disclosure-indicator {
   min-width: 0;
   height: min(var(--loop-stable-height, var(--tg-viewport-stable-height, 100dvh)), 932px);
   max-height: 932px;
-  background: #000;
+  background: var(--bg);
 }
 
 .loader {
@@ -142,7 +144,7 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .onboarding-brand {
-  color: #fff;
+  color: var(--ink);
   font-size: 11px;
   font-weight: 760;
   letter-spacing: 0.18em;
@@ -179,7 +181,7 @@ summary:focus-visible .disclosure-indicator {
   width: min(42vw, 168px);
   aspect-ratio: 1;
   margin-bottom: 26px;
-  border: 1px solid #252525;
+  border: 1px solid var(--line);
   border-radius: 32px;
   filter: grayscale(1) contrast(1.06);
   object-fit: cover;
@@ -211,7 +213,7 @@ summary:focus-visible .disclosure-indicator {
 .story-detail {
   max-width: 310px;
   margin: 18px 0 0;
-  color: #9a9a9f;
+  color: var(--muted);
   font-size: 13px;
   line-height: 1.48;
   text-align: center;
@@ -235,10 +237,10 @@ summary:focus-visible .disclosure-indicator {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  border: 1px solid #343434;
+  border: 1px solid var(--edge);
   border-radius: 14px;
-  background: #0b0b0b;
-  color: #f4f4f4;
+  background: var(--surface);
+  color: var(--ink);
   font-size: 10px;
   font-weight: 720;
   letter-spacing: 0.02em;
@@ -250,13 +252,13 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .story-market-links a:active {
-  border-color: #666;
-  background: #151515;
+  border-color: var(--dim);
+  background: var(--surface-active);
   transform: scale(0.96);
 }
 
 .story-market-links small {
-  color: #717176;
+  color: var(--dim);
   font-size: 7px;
   font-weight: 760;
   letter-spacing: 0.14em;
@@ -276,7 +278,7 @@ summary:focus-visible .disclosure-indicator {
   width: 5px;
   height: 5px;
   border-radius: 999px;
-  background: #393939;
+  background: var(--edge);
   transition:
     width 220ms ease,
     background 220ms ease;
@@ -284,7 +286,7 @@ summary:focus-visible .disclosure-indicator {
 
 .story-dots span.active {
   width: 24px;
-  background: #fff;
+  background: var(--ink);
 }
 
 .primary-button,
@@ -311,16 +313,16 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .primary-button {
-  border: 1px solid #fff;
-  background: #fff;
+  border: 1px solid var(--ink);
+  background: var(--ink);
   box-shadow: 0 1px 0 rgb(255 255 255 / 30%);
-  color: #050505;
+  color: var(--surface);
 }
 
 .secondary-button {
-  border: 1px solid #333;
-  background: #0b0b0b;
-  color: #ddd;
+  border: 1px solid var(--edge);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .primary-button:active,
@@ -412,7 +414,7 @@ summary:focus-visible .disclosure-indicator {
   height: calc(var(--safe-bottom) + 70px);
   grid-template-columns: repeat(4, 1fr);
   padding: 8px 14px var(--safe-bottom);
-  border-top: 1px solid #1e1e1e;
+  border-top: 1px solid var(--line);
   background: rgb(0 0 0 / 96%);
   backdrop-filter: blur(24px);
   transition:
@@ -446,7 +448,7 @@ summary:focus-visible .disclosure-indicator {
   gap: 3px;
   border: 0;
   background: transparent;
-  color: #565656;
+  color: var(--dim);
   cursor: pointer;
   font-size: 10px;
   font-weight: 780;
@@ -462,15 +464,15 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .tab-bar button svg {
-  opacity: 0.68;
+  opacity: 1;
 }
 
 .tab-bar button span {
-  opacity: 0.78;
+  opacity: 1;
 }
 
 .tab-bar button.active {
-  color: #fff;
+  color: var(--ink);
 }
 
 .tab-bar button.active svg {
@@ -657,7 +659,7 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .bank-empty-state .bank-risk strong {
-  color: #f5f5f5;
+  color: var(--ink);
   font-weight: 650;
 }
 
@@ -666,8 +668,8 @@ summary:focus-visible .disclosure-indicator {
   width: min(100%, 330px);
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 13px;
-  border-top: 1px solid #292929;
-  border-bottom: 1px solid #292929;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .bank-cycle-metrics > span {
@@ -678,11 +680,11 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .bank-cycle-metrics > span + span {
-  border-left: 1px solid #292929;
+  border-left: 1px solid var(--line);
 }
 
 .bank-cycle-metrics b {
-  color: #eee;
+  color: var(--ink);
   font-size: 15px;
   font-weight: 620;
 }
@@ -701,7 +703,7 @@ summary:focus-visible .disclosure-indicator {
 .bank-details-intro {
   max-width: 310px;
   margin: -4px 0 16px;
-  color: #9a9a9f;
+  color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -709,7 +711,7 @@ summary:focus-visible .disclosure-indicator {
 .bank-flow-screen {
   display: flex;
   flex-direction: column;
-  background: #000;
+  background: var(--bg);
 }
 
 .bank-flow-screen .sheet-title-row {
@@ -746,10 +748,10 @@ summary:focus-visible .disclosure-indicator {
   overflow-y: auto;
   padding: 20px max(21px, calc(var(--safe-right) + 16px)) calc(var(--safe-bottom) + 24px)
     max(21px, calc(var(--safe-left) + 16px));
-  border: 1px solid #292929;
+  border: 1px solid var(--line);
   border-bottom: 0;
   border-radius: 28px 28px 0 0;
-  background: #111;
+  background: var(--surface);
   scrollbar-width: none;
 }
 
@@ -779,7 +781,7 @@ summary:focus-visible .disclosure-indicator {
   display: grid;
   overflow: hidden;
   place-items: center;
-  background: #000;
+  background: var(--bg);
 }
 
 .result-sheet {
@@ -794,7 +796,7 @@ summary:focus-visible .disclosure-indicator {
   overflow-y: auto;
   padding: calc(var(--safe-top) + 54px) max(22px, calc(var(--safe-right) + 16px))
     calc(var(--safe-bottom) + 22px) max(22px, calc(var(--safe-left) + 16px));
-  background: #000;
+  background: var(--bg);
   scrollbar-width: none;
 }
 
@@ -811,10 +813,10 @@ summary:focus-visible .disclosure-indicator {
   width: 44px;
   height: 44px;
   place-items: center;
-  border: 1px solid #303030;
+  border: 1px solid var(--edge);
   border-radius: 50%;
-  background: #101010;
-  color: #aaa;
+  background: var(--surface);
+  color: var(--muted);
 }
 
 .result-close svg {
@@ -827,9 +829,9 @@ summary:focus-visible .disclosure-indicator {
   width: min(70vw, 292px);
   max-width: 100%;
   aspect-ratio: 4 / 5;
-  border: 1px solid #222;
+  border: 1px solid var(--line);
   border-radius: 24px;
-  background: #050505;
+  background: var(--surface);
   box-shadow: 0 24px 70px rgb(255 255 255 / 5%);
   object-fit: cover;
 }
@@ -852,7 +854,7 @@ summary:focus-visible .disclosure-indicator {
 
 .result-card-demo > i {
   align-self: end;
-  color: #ddd;
+  color: var(--ink);
   font-family: Georgia, serif;
   font-size: 88px;
   font-style: normal;
@@ -877,7 +879,7 @@ summary:focus-visible .disclosure-indicator {
 
 .result-card-demo > small {
   margin-top: 7px;
-  color: #777;
+  color: var(--dim);
   font-size: 8px;
   font-weight: 760;
   letter-spacing: 0.16em;
@@ -929,7 +931,7 @@ summary:focus-visible .disclosure-indicator {
   padding: 4px 10px;
   border: 0;
   background: transparent;
-  color: #8d8d92;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.15em;
@@ -946,10 +948,10 @@ summary:focus-visible .disclosure-indicator {
   height: 44px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid #303030;
+  border: 1px solid var(--edge);
   border-radius: 50%;
-  background: #101010;
-  color: #aaa;
+  background: var(--surface);
+  color: var(--muted);
   cursor: pointer;
   transition:
     color var(--motion-fast) ease,
@@ -965,7 +967,7 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .round-icon-button:active {
-  background: #171717;
+  background: var(--surface-active);
   transform: scale(0.9);
   transition-duration: 70ms;
 }
@@ -985,14 +987,14 @@ summary:focus-visible .disclosure-indicator {
   height: 4px;
   overflow: hidden;
   border-radius: 99px;
-  background: #333;
+  background: var(--line);
 }
 
 .progress-track span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #fff;
+  background: var(--ink);
   transition: width 900ms var(--ease-apple);
 }
 
@@ -1008,7 +1010,7 @@ summary:focus-visible .disclosure-indicator {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  border-top: 1px solid #292929;
+  border-top: 1px solid var(--line);
 }
 
 .detail-list dt,
@@ -1050,14 +1052,14 @@ summary:focus-visible .disclosure-indicator {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   margin: 18px 0 10px;
-  border-bottom: 1px solid #4a4a4a;
+  border-bottom: 1px solid var(--edge);
   transition:
     border-color var(--motion-base) var(--ease-apple),
     box-shadow var(--motion-base) var(--ease-apple);
 }
 
 .amount-input:focus-within {
-  border-color: #fff;
+  border-color: var(--ink);
   box-shadow: 0 1px 0 rgb(255 255 255 / 18%);
 }
 
@@ -1067,14 +1069,14 @@ summary:focus-visible .disclosure-indicator {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #fff;
+  color: var(--ink);
   font-size: 62px;
   font-weight: 610;
   letter-spacing: -0.07em;
 }
 
 .amount-input span {
-  color: #777;
+  color: var(--dim);
   font-size: 11px;
   font-weight: 760;
   letter-spacing: 0.15em;
@@ -1082,7 +1084,7 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .amount-input:focus-within span {
-  color: #fff;
+  color: var(--ink);
 }
 
 .form-note {
@@ -1095,16 +1097,16 @@ summary:focus-visible .disclosure-indicator {
 
 .form-note.is-error {
   padding-left: 11px;
-  border-left: 2px solid #f5f5f7;
-  color: #f5f5f7;
+  border-left: 2px solid var(--ink);
+  color: var(--ink);
   font-weight: 560;
 }
 
 .contract-truth {
   padding: 15px 16px;
-  border: 1px solid #383838;
+  border: 1px solid var(--edge);
   border-radius: 16px;
-  background: #0d0d0d;
+  background: var(--surface);
 }
 
 .contract-truth strong {
@@ -1114,7 +1116,7 @@ summary:focus-visible .disclosure-indicator {
 
 .contract-truth p {
   margin: 7px 0 0;
-  color: #a0a0a5;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -1125,8 +1127,8 @@ summary:focus-visible .disclosure-indicator {
 
 .technical-details {
   margin-top: 12px;
-  border-top: 1px solid #292929;
-  border-bottom: 1px solid #292929;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .technical-details summary,
@@ -1147,7 +1149,7 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .technical-details summary {
-  color: #a0a0a5;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.12em;
@@ -1160,9 +1162,9 @@ summary:focus-visible .disclosure-indicator {
   gap: 6px;
   margin-left: auto;
   padding: 0 9px;
-  border: 1px solid #343434;
+  border: 1px solid var(--edge);
   border-radius: 999px;
-  color: #b8b8bd;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.11em;
@@ -1198,8 +1200,8 @@ details[open] > summary .disclosure-indicator svg {
 .technical-details summary:active .disclosure-indicator,
 .profile-proof-details summary:active .disclosure-indicator,
 .rating-details summary:active .disclosure-indicator {
-  border-color: #666;
-  background: #171717;
+  border-color: var(--dim);
+  background: var(--surface-active);
 }
 
 .technical-details .detail-list {
@@ -1235,10 +1237,10 @@ details[open] > summary .disclosure-indicator svg {
   grid-template-columns: 62px minmax(0, 1fr) 20px;
   align-items: center;
   padding: 0 16px;
-  border: 1px solid #2e2e2e;
+  border: 1px solid var(--edge);
   border-radius: 17px;
-  background: #0b0b0b;
-  color: #777;
+  background: var(--surface);
+  color: var(--dim);
   text-align: left;
   cursor: pointer;
   transition:
@@ -1249,9 +1251,9 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .choice-list button.active {
-  border-color: #fff;
-  background: #111;
-  color: #fff;
+  border-color: var(--ink);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .choice-list button:active {
@@ -1277,7 +1279,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .waiting-step p {
   max-width: 310px;
-  color: #777;
+  color: var(--dim);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -1285,8 +1287,8 @@ details[open] > summary .disclosure-indicator svg {
 .waiting-ring {
   width: 48px;
   height: 48px;
-  border: 1px solid #333;
-  border-top-color: #fff;
+  border: 1px solid var(--line);
+  border-top-color: var(--ink);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -1316,9 +1318,9 @@ details[open] > summary .disclosure-indicator svg {
   width: 82px;
   height: 82px;
   place-items: center;
-  border: 1px solid #3a3a3a;
+  border: 1px solid var(--edge);
   border-radius: 50%;
-  background: #0b0b0b;
+  background: var(--surface);
 }
 
 .player-node svg {
@@ -1327,13 +1329,13 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .player-node.opponent {
-  color: #5f5f5f;
+  color: var(--dim);
 }
 
 .duel-stage.is-searching .player-node:first-child,
 .duel-stage.is-matched .player-node,
 .duel-stage.is-result .player-node {
-  border-color: #eee;
+  border-color: var(--ink);
 }
 
 .duel-link {
@@ -1341,7 +1343,7 @@ details[open] > summary .disclosure-indicator svg {
   display: grid;
   height: 50px;
   place-items: center;
-  color: #6a6a6a;
+  color: var(--dim);
 }
 
 .duel-link::before,
@@ -1349,7 +1351,7 @@ details[open] > summary .disclosure-indicator svg {
   position: absolute;
   width: calc(50% - 18px);
   height: 1px;
-  background: #343434;
+  background: var(--edge);
   content: '';
 }
 
@@ -1389,7 +1391,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .stake-edit-cue {
-  color: #aaaab0;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.12em;
@@ -1401,9 +1403,9 @@ details[open] > summary .disclosure-indicator svg {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   padding: 10px 14px;
-  border: 1px solid #444;
+  border: 1px solid var(--edge);
   border-radius: 16px;
-  background: #0d0d0d;
+  background: var(--surface);
   cursor: text;
   transition:
     border-color var(--motion-base) var(--ease-apple),
@@ -1412,13 +1414,13 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .stake-input > div:focus-within {
-  border-color: #f4f4f4;
-  background: #121212;
+  border-color: var(--ink);
+  background: var(--surface-active);
   box-shadow: 0 0 0 3px rgb(255 255 255 / 10%);
 }
 
 .stake-input:focus-within .stake-edit-cue {
-  color: #fff;
+  color: var(--ink);
 }
 
 .stake-input input {
@@ -1427,7 +1429,7 @@ details[open] > summary .disclosure-indicator svg {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #fff;
+  color: var(--ink);
   font-size: 42px;
   font-weight: 620;
   letter-spacing: -0.06em;
@@ -1454,7 +1456,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .duel-equal-rule span {
-  color: #b0b0b5;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.15em;
@@ -1516,7 +1518,7 @@ details[open] > summary .disclosure-indicator svg {
   align-items: flex-start;
   gap: 8px;
   margin: 13px 0 0;
-  color: #c2c2c7;
+  color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -1538,13 +1540,13 @@ details[open] > summary .disclosure-indicator svg {
   padding: 0 14px;
   border: 0;
   border-radius: 16px;
-  background: #0d0d0d;
+  background: var(--surface);
 }
 
 .invite-banner {
   padding: 14px 0 16px;
-  border-top: 1px solid #292929;
-  border-bottom: 1px solid #292929;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .invite-banner strong {
@@ -1583,12 +1585,12 @@ details[open] > summary .disclosure-indicator svg {
   place-content: center;
   gap: 4px;
   padding: 8px 10px;
-  border: 1px solid #303030;
+  border: 1px solid var(--edge);
   border-radius: 15px;
 }
 
 .duel-live-numbers b {
-  color: #eee;
+  color: var(--ink);
   font-size: 14px;
   font-weight: 620;
 }
@@ -1619,7 +1621,7 @@ details[open] > summary .disclosure-indicator svg {
 .duel-chance-labels {
   display: flex;
   justify-content: space-between;
-  color: #a2a2a8;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.1em;
@@ -1629,14 +1631,14 @@ details[open] > summary .disclosure-indicator svg {
   overflow: hidden;
   height: 6px;
   border-radius: 999px;
-  background: #323236;
+  background: var(--line);
 }
 
 .duel-chance-track span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #fff;
+  background: var(--ink);
   transition: width 500ms var(--ease-apple);
 }
 
@@ -1646,7 +1648,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .boost-input > span {
-  color: #8b8b91;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.13em;
@@ -1657,9 +1659,9 @@ details[open] > summary .disclosure-indicator svg {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   padding: 9px 12px;
-  border: 1px solid #3c3c40;
+  border: 1px solid var(--edge);
   border-radius: 14px;
-  background: #0e0e10;
+  background: var(--surface);
 }
 
 .boost-input input {
@@ -1667,13 +1669,13 @@ details[open] > summary .disclosure-indicator svg {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #fff;
+  color: var(--ink);
   font-size: 27px;
   font-weight: 640;
 }
 
 .boost-input b {
-  color: #8b8b91;
+  color: var(--muted);
   font-size: 9px;
   letter-spacing: 0.12em;
 }
@@ -1686,22 +1688,22 @@ details[open] > summary .disclosure-indicator svg {
 
 .boost-quick-values button {
   min-height: 34px;
-  border: 1px solid #303034;
+  border: 1px solid var(--edge);
   border-radius: 11px;
-  background: #0b0b0d;
-  color: #99999e;
+  background: var(--surface);
+  color: var(--muted);
   font-weight: 650;
 }
 
 .boost-quick-values button.active {
-  border-color: #fff;
-  background: #fff;
-  color: #000;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--surface);
 }
 
 .duel-boost-panel > p {
   margin: 0;
-  color: #98989d;
+  color: var(--muted);
   font-size: 11px;
   text-align: center;
 }
@@ -1718,12 +1720,12 @@ details[open] > summary .disclosure-indicator svg {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: #8f8f94;
+  color: var(--muted);
   font-size: 10px;
 }
 
 .duel-boost-events strong {
-  color: #d8d8dc;
+  color: var(--ink);
   font-weight: 620;
 }
 
@@ -1758,7 +1760,7 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
   gap: 6px;
   margin-top: 17px;
-  color: #aaa;
+  color: var(--muted);
   font-size: 10px;
 }
 
@@ -1773,7 +1775,7 @@ details[open] > summary .disclosure-indicator svg {
   justify-content: center;
   gap: 6px;
   margin: 15px 12px 0;
-  color: #96969b;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.45;
   text-align: center;
@@ -1781,9 +1783,9 @@ details[open] > summary .disclosure-indicator svg {
 
 .duel-message.is-error {
   padding: 9px 12px;
-  border: 1px solid #f5f5f7;
+  border: 1px solid var(--ink);
   border-radius: 11px;
-  color: #f5f5f7;
+  color: var(--ink);
   font-weight: 560;
 }
 
@@ -1826,14 +1828,14 @@ details[open] > summary .disclosure-indicator svg {
   gap: 8px;
   border: 0;
   background: transparent;
-  color: #aaaab0;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.15em;
 }
 
 .duel-direct-action:active {
-  color: #fff;
+  color: var(--ink);
 }
 
 .duel-direct-action:disabled {
@@ -1873,27 +1875,20 @@ details[open] > summary .disclosure-indicator svg {
   height: 58px;
   object-fit: cover;
   place-items: center;
-  border: 1px solid #3a3a3a;
+  border: 1px solid var(--edge);
   border-radius: 50%;
-  background: #f3f3f3;
-  color: #050505;
+  background: var(--ink);
+  color: var(--surface);
   font-size: 22px;
   font-weight: 680;
-}
-
-.mode-stats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  margin-top: 25px;
 }
 
 .profile-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 25px;
-  border-top: 1px solid #292929;
-  border-bottom: 1px solid #292929;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .profile-summary article {
@@ -1906,7 +1901,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .profile-summary article + article {
-  border-left: 1px solid #292929;
+  border-left: 1px solid var(--line);
 }
 
 .profile-summary strong {
@@ -1916,45 +1911,15 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .profile-summary span {
-  color: #a0a0a5;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.08em;
 }
 
 .profile-summary small {
-  color: #747479;
+  color: var(--dim);
   font-size: 10px;
-}
-
-.mode-stats article {
-  display: grid;
-  min-height: 126px;
-  align-content: start;
-  padding: 15px;
-  border: 1px solid #292929;
-  border-radius: 18px;
-  background: #0b0b0b;
-}
-
-.mode-stats strong {
-  margin-top: 10px;
-  font-size: 33px;
-  font-weight: 620;
-  line-height: 1;
-}
-
-.mode-stats article > span {
-  margin-top: 4px;
-  color: #888;
-  font-size: 8px;
-  letter-spacing: 0.14em;
-}
-
-.mode-stats small {
-  margin-top: auto;
-  color: #555;
-  font-size: 9px;
 }
 
 .section-label {
@@ -1965,14 +1930,14 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .section-label > span {
-  color: #929297;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.18em;
 }
 
 .section-label small {
-  color: #77777c;
+  color: var(--dim);
   font-size: 9px;
 }
 
@@ -1984,9 +1949,9 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
   gap: 12px;
   padding: 10px 13px 10px 10px;
-  border: 1px solid #292929;
+  border: 1px solid var(--line);
   border-radius: 17px;
-  background: #0d0d0d;
+  background: var(--surface);
   cursor: pointer;
   text-align: left;
   transition:
@@ -2040,7 +2005,7 @@ details[open] > summary .disclosure-indicator svg {
 .profile-row > svg {
   width: 17px;
   height: 17px;
-  color: #777;
+  color: var(--dim);
 }
 
 .row-icon {
@@ -2048,9 +2013,9 @@ details[open] > summary .disclosure-indicator svg {
   width: 40px;
   height: 40px;
   place-items: center;
-  border: 1px solid #363636;
+  border: 1px solid var(--edge);
   border-radius: 12px;
-  color: #fff;
+  color: var(--ink);
 }
 
 .row-icon svg {
@@ -2060,8 +2025,8 @@ details[open] > summary .disclosure-indicator svg {
 
 .profile-proof-details {
   margin-top: 22px;
-  border-top: 1px solid #292929;
-  border-bottom: 1px solid #292929;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .profile-proof-details summary > span,
@@ -2069,7 +2034,7 @@ details[open] > summary .disclosure-indicator svg {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #b0b0b5;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.11em;
@@ -2133,9 +2098,9 @@ details[open] > summary .disclosure-indicator svg {
 
 .rating-badges span {
   padding: 6px 9px;
-  border: 1px solid #343434;
+  border: 1px solid var(--edge);
   border-radius: 99px;
-  color: #b0b0b5;
+  color: var(--muted);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.13em;
@@ -2147,14 +2112,14 @@ details[open] > summary .disclosure-indicator svg {
   height: 3px;
   margin-top: 18px;
   border-radius: 99px;
-  background: #252525;
+  background: var(--line);
 }
 
 .rating-progress > span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #f5f5f5;
+  background: var(--ink);
   transition: width 900ms var(--ease-apple);
 }
 
@@ -2178,8 +2143,8 @@ details[open] > summary .disclosure-indicator svg {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 22px;
-  border-top: 1px solid #292929;
-  border-bottom: 1px solid #292929;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .rating-proof-line > div {
@@ -2191,7 +2156,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .rating-proof-line > div + div {
-  border-left: 1px solid #292929;
+  border-left: 1px solid var(--line);
 }
 
 .rating-proof-line strong {
@@ -2209,8 +2174,8 @@ details[open] > summary .disclosure-indicator svg {
 .rating-pulse {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid #292929;
-  border-bottom: 1px solid #292929;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .rating-pulse > div {
@@ -2222,7 +2187,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .rating-pulse > div + div {
-  border-left: 1px solid #292929;
+  border-left: 1px solid var(--line);
 }
 
 .rating-pulse strong {
@@ -2243,9 +2208,9 @@ details[open] > summary .disclosure-indicator svg {
   gap: 4px;
   margin-top: 22px;
   padding: 4px;
-  border: 1px solid #292929;
+  border: 1px solid var(--line);
   border-radius: 14px;
-  background: #090909;
+  background: var(--surface);
 }
 
 .rating-list-switch button {
@@ -2257,7 +2222,7 @@ details[open] > summary .disclosure-indicator svg {
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #666;
+  color: var(--dim);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.14em;
@@ -2269,8 +2234,8 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .rating-list-switch button.active {
-  background: #f5f5f5;
-  color: #050505;
+  background: var(--ink);
+  color: var(--surface);
 }
 
 .rating-list-switch button:active {
@@ -2286,7 +2251,7 @@ details[open] > summary .disclosure-indicator svg {
 .rating-list {
   overflow: hidden;
   margin-top: 9px;
-  border-top: 1px solid #292929;
+  border-top: 1px solid var(--line);
 }
 
 .rating-list article {
@@ -2296,16 +2261,16 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
   gap: 10px;
   padding: 8px 10px 8px 7px;
-  border-bottom: 1px solid #292929;
+  border-bottom: 1px solid var(--line);
 }
 
 .rating-list article.is-me {
-  background: #f3f3f3;
-  color: #050505;
+  background: var(--ink);
+  color: var(--surface);
 }
 
 .rating-rank {
-  color: #666;
+  color: var(--dim);
   font-size: 10px;
   text-align: center;
 }
@@ -2317,18 +2282,18 @@ details[open] > summary .disclosure-indicator svg {
   height: 36px;
   object-fit: cover;
   place-items: center;
-  border: 1px solid #373737;
+  border: 1px solid var(--edge);
   border-radius: 50%;
-  background: #111;
-  color: #eee;
+  background: var(--surface);
+  color: var(--ink);
   font-size: 12px;
   font-weight: 650;
 }
 
 .rating-list article.is-me .rating-avatar {
-  border-color: #222;
-  background: #050505;
-  color: #fff;
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .rating-list article > div {
@@ -2345,7 +2310,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .rating-list article > div small {
-  color: #808085;
+  color: var(--dim);
   font-size: 10px;
   letter-spacing: 0.09em;
 }
@@ -2373,7 +2338,7 @@ details[open] > summary .disclosure-indicator svg {
 .rating-circle-empty svg {
   width: 28px;
   height: 28px;
-  color: #777;
+  color: var(--dim);
 }
 
 .rating-circle-empty strong,
@@ -2397,8 +2362,8 @@ details[open] > summary .disclosure-indicator svg {
 
 .rating-formula {
   margin: 21px 0 10px;
-  border-top: 1px solid #292929;
-  border-bottom: 1px solid #292929;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .rating-formula > p {
@@ -2409,7 +2374,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .rating-formula .rating-driver {
-  color: #d0d0d2;
+  color: var(--ink);
 }
 
 .rating-formula .rating-explainer {
@@ -2434,14 +2399,14 @@ details[open] > summary .disclosure-indicator svg {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  border-top: 1px solid #202020;
+  border-top: 1px solid var(--line);
 }
 
 .rating-formula dt {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #a0a0a5;
+  color: var(--muted);
   font-size: 11px;
 }
 
@@ -2459,8 +2424,8 @@ details[open] > summary .disclosure-indicator svg {
 
 .rating-details {
   margin: 14px 0 0;
-  border-top: 1px solid #292929;
-  border-bottom: 1px solid #292929;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .rating-details + .rating-details {
@@ -2478,9 +2443,9 @@ details[open] > summary .disclosure-indicator svg {
 
 .proof-history {
   overflow: hidden;
-  border: 1px solid #292929;
+  border: 1px solid var(--line);
   border-radius: 17px;
-  background: #0b0b0b;
+  background: var(--surface);
 }
 
 .proof-history > a,
@@ -2498,13 +2463,13 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .proof-history > a:active {
-  background: #121212;
+  background: var(--surface-active);
   transform: scale(0.985);
   transition-duration: 70ms;
 }
 
 .proof-history > * + * {
-  border-top: 1px solid #292929;
+  border-top: 1px solid var(--line);
 }
 
 .proof-history span {
@@ -2524,7 +2489,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .proof-history svg {
   width: 16px;
-  color: #777;
+  color: var(--dim);
 }
 
 .settings-row,
@@ -2535,7 +2500,7 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
   justify-content: space-between;
   border: 0;
-  border-top: 1px solid #292929;
+  border-top: 1px solid var(--line);
   background: transparent;
   color: inherit;
   font-size: 11px;
@@ -2574,9 +2539,9 @@ details[open] > summary .disclosure-indicator svg {
   height: 24px;
   flex: 0 0 auto;
   appearance: none;
-  border: 1px solid #444;
+  border: 1px solid var(--edge);
   border-radius: 999px;
-  background: #171717;
+  background: var(--surface-active);
   cursor: pointer;
   transition:
     border-color var(--motion-base) var(--ease-apple),
@@ -2591,7 +2556,7 @@ details[open] > summary .disclosure-indicator svg {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #888;
+  background: var(--muted);
   content: '';
   transition:
     transform var(--motion-base) var(--ease-apple-spring),
@@ -2599,12 +2564,12 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .settings-toggle input:checked {
-  border-color: #fff;
-  background: #fff;
+  border-color: var(--ink);
+  background: var(--ink);
 }
 
 .settings-toggle input:checked::after {
-  background: #000;
+  background: var(--bg);
   transform: translateX(18px);
 }
 
@@ -2618,13 +2583,13 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .settings-toggle input:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
 
 .settings-sheet > p {
   margin: 22px 0 0;
-  color: #77777c;
+  color: var(--dim);
   font-size: 10px;
   letter-spacing: 0.15em;
   text-align: center;
@@ -2638,9 +2603,9 @@ details[open] > summary .disclosure-indicator svg {
   left: 20px;
   min-height: 48px;
   padding: 10px 16px;
-  border: 1px solid #3a3a3a;
+  border: 1px solid var(--edge);
   border-radius: 14px;
-  background: #171717;
+  background: var(--surface-active);
   box-shadow: 0 12px 40px #000;
   font-size: 10px;
 }
@@ -2666,14 +2631,22 @@ details[open] > summary .disclosure-indicator svg {
 
 .fatal-screen p {
   margin: 0 0 30px;
-  color: #777;
+  color: var(--dim);
   font-size: 12px;
 }
 
 .inline-preview {
+  --bg: #d7d7d7;
+  --surface: var(--surface);
+  --surface-active: #ececec;
+  --line: var(--line);
+  --edge: var(--edge);
+  --ink: #080808;
+  --dim: var(--dim);
+
   overflow: hidden;
-  background: #d7d7d7;
-  color: #080808;
+  background: var(--bg);
+  color: var(--ink);
 }
 
 .telegram-header {
@@ -2683,8 +2656,8 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
   gap: 10px;
   padding: 14px 16px 10px;
-  border-bottom: 1px solid #d0d0d0;
-  background: #f8f8f8;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
 }
 
 .telegram-header > svg {
@@ -2698,8 +2671,8 @@ details[open] > summary .disclosure-indicator svg {
   height: 42px;
   place-items: center;
   border-radius: 50%;
-  background: #050505;
-  color: #fff;
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .telegram-avatar svg {
@@ -2714,7 +2687,7 @@ details[open] > summary .disclosure-indicator svg {
   font-size: 14px;
 }
 .telegram-header small {
-  color: #717171;
+  color: var(--dim);
   font-size: 10px;
 }
 
@@ -2730,9 +2703,9 @@ details[open] > summary .disclosure-indicator svg {
 .inline-duel-card {
   width: min(326px, calc(100vw - 24px));
   padding: 22px 18px 10px;
-  border: 1px solid #c8c8c8;
+  border: 1px solid var(--edge);
   border-radius: 23px 23px 23px 7px;
-  background: #fff;
+  background: var(--ink);
 }
 
 .inline-duel-card h1 {
@@ -2747,8 +2720,8 @@ details[open] > summary .disclosure-indicator svg {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   margin: 0;
-  border-top: 1px solid #dedede;
-  border-bottom: 1px solid #dedede;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .inline-duel-card dl div {
@@ -2759,11 +2732,11 @@ details[open] > summary .disclosure-indicator svg {
 
 .inline-duel-card dl div + div {
   padding-left: 16px;
-  border-left: 1px solid #dedede;
+  border-left: 1px solid var(--line);
 }
 
 .inline-duel-card dt {
-  color: #797979;
+  color: var(--dim);
   font-size: 8px;
   font-weight: 760;
   letter-spacing: 0.18em;
@@ -2780,7 +2753,7 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
   gap: 7px;
   margin: 14px 0 17px;
-  color: #666;
+  color: var(--dim);
   font-size: 9px;
 }
 
@@ -2794,8 +2767,8 @@ details[open] > summary .disclosure-indicator svg {
   min-height: 48px;
   border: 0;
   border-radius: 14px;
-  background: #050505;
-  color: #fff;
+  background: var(--surface);
+  color: var(--ink);
   font-size: 11px;
   font-weight: 780;
   letter-spacing: 0.16em;
@@ -2803,7 +2776,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .telegram-chat > time {
   margin: 7px 0 0 9px;
-  color: #737373;
+  color: var(--dim);
   font-size: 9px;
 }
 
@@ -2820,19 +2793,19 @@ details[open] > summary .disclosure-indicator svg {
   .secondary-button:hover:not(:disabled),
   .profile-row:hover:not(:disabled),
   .proof-history > a:hover {
-    border-color: #464646;
-    background: #121212;
+    border-color: var(--dim);
+    background: var(--surface-active);
   }
 
   .choice-list button:hover:not(.active) {
-    border-color: #464646;
-    background: #121212;
+    border-color: var(--dim);
+    background: var(--surface-active);
   }
 
   .round-icon-button:hover {
-    border-color: #555;
-    background: #171717;
-    color: #fff;
+    border-color: var(--edge);
+    background: var(--surface-active);
+    color: var(--ink);
   }
 
   .bank-object:hover:not(:active) .bank-vessel {
@@ -2846,7 +2819,7 @@ details[open] > summary .disclosure-indicator svg {
   }
 
   .settings-row:hover {
-    color: #fff;
+    color: var(--ink);
   }
 }
 

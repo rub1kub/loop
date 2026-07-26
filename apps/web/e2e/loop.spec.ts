@@ -119,7 +119,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await stakeInput.fill('1');
   await expect(page.locator('.stake-input > div')).toHaveCSS(
     'border-top-color',
-    'rgb(244, 244, 244)',
+    'rgb(245, 245, 247)',
   );
   await expect(page.locator('.tab-bar')).toHaveCSS('visibility', 'hidden');
   const initialViewport = page.viewportSize()!;
@@ -147,7 +147,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await expect(page.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeVisible();
   const duelDisclosure = page.locator('.duel-breakdown summary');
   await duelDisclosure.focus();
-  await expect(duelDisclosure).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
+  await expect(duelDisclosure).toHaveCSS('outline-color', 'rgb(245, 245, 247)');
   await page.getByText('ВОЗВРАТ И ПРАВИЛА').click();
   await expect(page.locator('.duel-breakdown .disclosure-close-label')).toBeVisible();
   await expect(page.getByText('Общая сумма')).toBeVisible();
