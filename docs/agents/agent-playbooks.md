@@ -226,7 +226,8 @@ Wrappers обновляются штатной Acton-командой при и�
 1. testnet BANK имеет действующее обязательство `0.73 GRAM` после двухкошелькового smoke;
 2. profile reward `100` и monthly rating referral score `25` остаются разными счётчиками;
 3. пользовательской browser-версии игры нет: без Telegram доступен только лендинг;
-4. PLUSH BRICK discount/buyback ещё не исполняются; тексты называют это планом;
+4. PLUSH BRICK fee-free обещан текстами как mainnet-модель (решение владельца); исполняет
+   DuelEscrow v1.4, buyback остаётся ручным намерением;
 5. mainnet выключен, независимого аудита и deployments нет;
 6. direct-invite signer immutable и меняется только новым deployment.
 

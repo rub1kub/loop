@@ -40,11 +40,8 @@ describe('Onboarding', () => {
     const onDone = vi.fn();
     render(<Onboarding initialPage={3} onDone={onDone} />);
 
-    expect(
-      screen.getByRole('heading', { name: 'Отдельный токен сообщества.' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/не меняет комиссию, очередь BANK и шанс в DUEL/)).toBeInTheDocument();
-    expect(screen.queryByText(/нужен для режима без комиссии/)).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Кирпич замыкает цикл.' })).toBeInTheDocument();
+    expect(screen.getByText(/нужен для режима без комиссии/)).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Анимированный логотип PLUSH BRICK' })).toHaveAttribute(
       'src',
       'https://tonsuite.org/assets/plush-brick-video.gif',

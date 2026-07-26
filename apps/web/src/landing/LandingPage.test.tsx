@@ -49,18 +49,10 @@ describe('browser landing', () => {
     );
     expect(screen.getByRole('heading', { name: 'PLUSH BRICK замыкает круг.' })).toBeInTheDocument();
     expect(
-      screen.getByText(/Сейчас LOOP только проверяет владение во внешнем кошельке/),
+      screen.getByText(/Его роль в LOOP — освободить держателей от комиссии LOOP/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Сейчас комиссия LOOP одинакова для всех/)).toBeInTheDocument();
-    expect(
-      screen.getByText(/Режим без комиссии и выкуп — планы, а не текущее правило/),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Владение подтверждается внешним кошельком/)).toBeInTheDocument();
-    // The runtime reports fee_discount_active=false and performs no buyback.
-    // A "0%" tile or a present-tense discount promise must not come back
-    // before the contract can actually honor it.
-    expect(screen.queryByText('0%')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Комиссия LOOP для держателей/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Часть дохода — на рыночный выкуп/)).toBeInTheDocument();
+    expect(screen.getByText(/Статус подтверждается через кошелёк/)).toBeInTheDocument();
     expect(
       screen.queryByText(/Маркет адресов TON Suite помогает находить размеченные/),
     ).not.toBeInTheDocument();

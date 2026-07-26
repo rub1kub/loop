@@ -14,10 +14,11 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
-- Described PLUSH BRICK fee-free mode and buyback as stated plans instead of active mechanics,
-  matching the runtime that reports `fee_discount_active=false`.
 - Reported confirmed friends in the profile instead of referral reward points, which read as the
   monthly LOOP score.
+- Recorded the owner decision that PLUSH BRICK zero fee for holders is the committed mainnet
+  model, to be executed by DuelEscrow v1.4 holder permits; buyback remains a stated manual
+  intent.
 
 - Replaced the activity-cycle BANK with an independent FIFO position queue.
 - Split BANK and DUEL into separate contracts, backend modules, tables, events and screens.
