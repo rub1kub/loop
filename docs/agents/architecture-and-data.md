@@ -277,6 +277,9 @@ position_id)`, `(network, contract, query_id)` и event identity уникаль�
 - Неполные authoritative данные дают `RETRY` и блокируют продвижение данного контракта.
 - Неуспешные или посторонние транзакции дают `IGNORED`.
 - Permissionless on-chain entity без app user должна индексироваться безопасно.
+- Терминальные события закрывают и проекцию верхнего уровня: no-reveal `ExpireDuel` переводит
+  `Duel.state` в `refunded`, иначе дуэль навсегда остаётся overdue в мониторинге. Settlement-строка
+  при возврате не создаётся: возврат не является завершённым дуэлем и не даёт очков рейтинга.
 
 ## Failure model
 

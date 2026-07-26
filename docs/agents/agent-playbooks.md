@@ -224,14 +224,11 @@ Wrappers обновляются штатной Acton-командой при и�
 Канонический полный список находится в [current-state.md](current-state.md). Кратко:
 
 1. testnet BANK имеет действующее обязательство `0.73 GRAM` после двухкошелькового smoke;
-2. profile reward `100` и monthly rating referral score `25` выглядят как одна метрика;
-3. referral qualification вызывается после DUEL settlement, но не после BANK payout;
-4. no-reveal `ExpireDuel` подтверждает refunds offers, но `Duel.state` может остаться
-   `revealing`;
-5. пользовательской browser-версии игры нет: без Telegram доступен только лендинг;
-6. PLUSH BRICK discount/buyback описаны как целевая модель, но ещё не исполняются;
-7. mainnet выключен, независимого аудита и deployments нет;
-8. direct-invite signer immutable и меняется только новым deployment.
+2. profile reward `100` и monthly rating referral score `25` остаются разными счётчиками;
+3. пользовательской browser-версии игры нет: без Telegram доступен только лендинг;
+4. PLUSH BRICK discount/buyback ещё не исполняются; тексты называют это планом;
+5. mainnet выключен, независимого аудита и deployments нет;
+6. direct-invite signer immutable и меняется только новым deployment.
 
 Не исправляй эти пункты попутно в несвязанной задаче. Если задача касается пункта — сначала
 повтори фактическую проверку.

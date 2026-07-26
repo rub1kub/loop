@@ -562,6 +562,13 @@ async def apply_bank_transaction(
                 contributed_nano=earlier.principal_nano,
                 tx_hash=tx_hash,
             )
+            await qualify_referral(
+                db,
+                user_id=earlier.user_id,
+                owner_wallet=earlier.owner_wallet,
+                cause=f"bank:{earlier.position_id}",
+                tx_hash=tx_hash,
+            )
         else:
             earlier.current_status = BankPositionStatus.PARTIALLY_FUNDED.value
 
@@ -596,12 +603,20 @@ async def apply_bank_transaction(
     return ProjectionResult.APPLIED
 
 
-async def qualify_referral(db: Any, offer: MatchmakingOffer, duel: Duel, tx_hash: str) -> None:
-    if offer.user_id is None:
+async def qualify_referral(
+    db: Any,
+    *,
+    user_id: str | None,
+    owner_wallet: str,
+    cause: str,
+    tx_hash: str,
+) -> None:
+    """Qualify an invitee after any confirmed BANK or DUEL completion."""
+    if user_id is None:
         return
     attribution = await db.scalar(
         select(ReferralAttribution).where(
-            ReferralAttribution.invitee_user_id == offer.user_id,
+            ReferralAttribution.invitee_user_id == user_id,
             ReferralAttribution.status == "pending",
         )
     )
@@ -613,9 +628,7 @@ async def qualify_referral(db: Any, offer: MatchmakingOffer, duel: Duel, tx_hash
             Wallet.active.is_(True),
         )
     )
-    if inviter_wallet and normalize_address(inviter_wallet) == normalize_address(
-        offer.owner_wallet
-    ):
+    if inviter_wallet and normalize_address(inviter_wallet) == normalize_address(owner_wallet):
         attribution.status = "rejected"
         return
     attribution.status = "qualified"
@@ -624,14 +637,14 @@ async def qualify_referral(db: Any, offer: MatchmakingOffer, duel: Duel, tx_hash
     existing = await db.scalar(
         select(ReferralReward.id).where(
             ReferralReward.attribution_id == attribution.id,
-            ReferralReward.cause == f"duel:{duel.onchain_duel_id}",
+            ReferralReward.cause == cause,
         )
     )
     if existing is None:
         db.add(
             ReferralReward(
                 attribution_id=attribution.id,
-                cause=f"duel:{duel.onchain_duel_id}",
+                cause=cause,
                 reward_points=100,
             )
         )
@@ -971,6 +984,21 @@ async def apply_duel_transaction(
         ):
             return ProjectionResult.RETRY
         offer.state = OfferState.REFUNDED.value
+    if opcode == DUEL_EXPIRE_DUEL and refunds and not payouts:
+        # A no-reveal ExpireDuel refunds both stakes and is terminal on chain.
+        # Leaving the duel in `revealing` would keep it forever overdue in
+        # monitoring. No DuelSettlement row is written: a refund is not a
+        # completed duel and must not earn the settlement rating points.
+        duel = await db.scalar(
+            select(Duel).where(
+                Duel.network == settings.ton_network_id,
+                Duel.onchain_duel_id == decoded["duel_id"],
+            )
+        )
+        if duel is not None:
+            duel.state = DuelState.REFUNDED.value
+            duel.settled_tx_hash = tx_hash
+            duel.settled_at = datetime.fromtimestamp(int(transaction["now"]), UTC)
     for payout in payouts:
         duel = await db.scalar(
             select(Duel).where(
@@ -1026,8 +1054,14 @@ async def apply_duel_transaction(
             contributed_nano=winner.stake_nano,
             tx_hash=tx_hash,
         )
-        await qualify_referral(db, first, duel, tx_hash)
-        await qualify_referral(db, second, duel, tx_hash)
+        for player in (first, second):
+            await qualify_referral(
+                db,
+                user_id=player.user_id,
+                owner_wallet=player.owner_wallet,
+                cause=f"duel:{duel.onchain_duel_id}",
+                tx_hash=tx_hash,
+            )
 
     event = DuelChainEvent(
         network=settings.ton_network_id,

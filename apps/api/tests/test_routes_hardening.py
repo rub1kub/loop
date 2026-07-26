@@ -1,7 +1,9 @@
 import hashlib
 import hmac
 import json
+import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from urllib.parse import urlencode
 
 import pytest
@@ -355,3 +357,32 @@ async def test_non_business_endpoints_are_fail_closed(client) -> None:
     assert (await client.get("/metrics")).status_code == 200
     webhook = await client.post("/api/internal/telegram/webhook", json={})
     assert webhook.status_code == 403
+
+
+def test_public_security_headers_use_values_browsers_honor() -> None:
+    # A misspelled directive value is silently ignored by every browser, so the
+    # snippet keeps looking hardened while the protection is off. Pin the exact
+    # tokens instead of only checking that the header name is present.
+    snippet = (
+        Path(__file__).resolve().parents[3] / "deploy" / "nginx" / "loop-security-headers.conf"
+    ).read_text()
+    directives: dict[str, str] = {}
+    for line in snippet.splitlines():
+        match = re.fullmatch(r'\s*add_header\s+(\S+)\s+(".*"|\S+)\s+always;\s*', line)
+        if match:
+            directives[match.group(1)] = match.group(2).strip('"')
+
+    assert directives["X-Content-Type-Options"] == "nosniff"
+    assert directives["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert directives["Strict-Transport-Security"].startswith("max-age=31536000")
+    assert "includeSubDomains" in directives["Strict-Transport-Security"]
+
+    parts = [item.strip() for item in directives["Content-Security-Policy"].split(";")]
+    policy = {
+        part.split(" ", 1)[0]: part.split(" ", 1)[-1] for part in parts if part
+    }
+    assert policy["default-src"] == "'self'"
+    assert policy["object-src"] == "'none'"
+    assert policy["base-uri"] == "'none'"
+    assert policy["frame-ancestors"] == "https://web.telegram.org https://*.telegram.org"
+    assert "'unsafe-eval'" not in directives["Content-Security-Policy"]

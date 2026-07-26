@@ -10,16 +10,26 @@ from app.chain_worker import (
     BANK_PAYOUT,
     DUEL_ACCEPT_DIRECT_OFFER,
     DUEL_BOOST,
+    DUEL_EXPIRE_DUEL,
     DUEL_OPEN_DIRECT_OFFER,
     DUEL_OPEN_OFFER,
     DUEL_PAYOUT,
+    DUEL_REFUND,
     DUEL_REVEAL,
     ProjectionResult,
     apply_transaction,
     decode_body,
 )
 from app.config import get_settings
-from app.models import NotificationOutbox, ResultCard, User, Wallet
+from app.models import (
+    NotificationOutbox,
+    ReferralAttribution,
+    ReferralCode,
+    ReferralReward,
+    ResultCard,
+    User,
+    Wallet,
+)
 from app.modules.bank.models import BankChainEvent, BankPosition, BankPositionStatus
 from app.modules.duel.models import (
     ChallengeState,
@@ -28,6 +38,7 @@ from app.modules.duel.models import (
     DuelChainEvent,
     DuelInvitation,
     DuelOffer,
+    DuelSettlement,
     DuelState,
     OfferState,
 )
@@ -169,6 +180,14 @@ def duel_boost_body(
 
 def duel_payout_body(duel_id: int, offer_id: int) -> str:
     return body_b64(DUEL_PAYOUT, [(64, duel_id), (64, offer_id), (8, 1)])
+
+
+def duel_expire_duel_body(duel_id: int) -> str:
+    return body_b64(DUEL_EXPIRE_DUEL, [(64, duel_id)])
+
+
+def duel_refund_body(offer_id: int, reason: int) -> str:
+    return body_b64(DUEL_REFUND, [(64, offer_id), (8, reason)])
 
 
 def test_decodes_independent_bank_and_duel_layouts() -> None:
@@ -647,3 +666,189 @@ async def test_duel_projection_requires_address_bound_direct_permit(app) -> None
         assert invited_offer.direct_opponent_wallet == creator_wallet.address
         assert creator_offer.state == invited_offer.state == OfferState.MATCHED.value
         assert await db.scalar(select(func.count()).select_from(DuelChainEvent)) == 2
+
+
+@pytest.mark.asyncio
+async def test_no_reveal_expire_duel_is_terminal_and_not_a_settlement(app) -> None:
+    settings = get_settings()
+    expires = datetime.fromtimestamp(1_800_000_900, UTC)
+    async with app.state.session_factory() as db:
+        first_user = User(telegram_id=2101, first_name="Silent")
+        second_user = User(telegram_id=2102, first_name="Quiet")
+        db.add_all([first_user, second_user])
+        await db.flush()
+        first_wallet = Wallet(
+            user_id=first_user.id,
+            network=-3,
+            address="0:" + "5a" * 32,
+            public_key="6a" * 32,
+        )
+        second_wallet = Wallet(
+            user_id=second_user.id,
+            network=-3,
+            address="0:" + "5b" * 32,
+            public_key="6b" * 32,
+        )
+        db.add_all([first_wallet, second_wallet])
+        await db.flush()
+        offers = [
+            DuelOffer(
+                onchain_offer_id=offer_id,
+                query_id=offer_id,
+                user_id=user.id,
+                wallet_id=wallet.id,
+                owner_wallet=wallet.address,
+                network=-3,
+                contract_address=settings.effective_duel_contract_address,
+                chance_bps=5000,
+                total_pool_nano=2_000_000_000,
+                stake_nano=1_000_000_000,
+                opponent_stake_nano=1_000_000_000,
+                fee_bps=250,
+                payout_nano=1_950_000_000,
+                commitment_hex=commitment * 32,
+                state=OfferState.MATCHED.value,
+                expires_at=expires,
+            )
+            for offer_id, user, wallet, commitment in (
+                (920, first_user, first_wallet, "c1"),
+                (921, second_user, second_wallet, "c2"),
+            )
+        ]
+        db.add_all(offers)
+        await db.flush()
+        duel = Duel(
+            onchain_duel_id=921,
+            network=-3,
+            offer_a_id=offers[0].id,
+            offer_b_id=offers[1].id,
+            state=DuelState.REVEALING.value,
+            boost_deadline=datetime.fromtimestamp(1_800_000_060, UTC),
+            hard_deadline=datetime.fromtimestamp(1_800_000_180, UTC),
+            reveal_deadline=datetime.fromtimestamp(1_800_000_360, UTC),
+        )
+        db.add(duel)
+        await db.commit()
+
+        expired = transaction(
+            settings.effective_duel_contract_address,
+            first_wallet.address,
+            40,
+            duel_expire_duel_body(921),
+            30_000_000,
+            outputs=[
+                (first_wallet.address, duel_refund_body(920, 5), 1_000_000_000),
+                (second_wallet.address, duel_refund_body(921, 5), 1_000_000_000),
+            ],
+            now=1_800_000_400,
+        )
+        assert await apply_transaction(db, settings, expired, "duel") == ProjectionResult.APPLIED
+        await db.commit()
+        await db.refresh(duel)
+        for offer in offers:
+            await db.refresh(offer)
+            assert offer.state == OfferState.REFUNDED.value
+        assert duel.state == DuelState.REFUNDED.value
+        assert duel.settled_tx_hash == "tx-40"
+        assert duel.settled_at is not None
+        # A refund is not a completed duel: no settlement row, no rating points,
+        # no shareable result card.
+        assert await db.scalar(select(func.count()).select_from(DuelSettlement)) == 0
+        assert await db.scalar(select(func.count()).select_from(ResultCard)) == 0
+
+
+@pytest.mark.asyncio
+async def test_confirmed_bank_payout_qualifies_the_referred_friend(app) -> None:
+    settings = get_settings()
+    async with app.state.session_factory() as db:
+        inviter = User(telegram_id=3001, first_name="Inviter")
+        invitee = User(telegram_id=3002, first_name="Invitee")
+        funder = User(telegram_id=3003, first_name="Funder")
+        db.add_all([inviter, invitee, funder])
+        await db.flush()
+        inviter_wallet = Wallet(
+            user_id=inviter.id,
+            network=-3,
+            address="0:" + "7a" * 32,
+            public_key="8a" * 32,
+            active=True,
+        )
+        invitee_wallet = Wallet(
+            user_id=invitee.id,
+            network=-3,
+            address="0:" + "7b" * 32,
+            public_key="8b" * 32,
+            active=True,
+        )
+        funder_wallet = Wallet(
+            user_id=funder.id,
+            network=-3,
+            address="0:" + "7c" * 32,
+            public_key="8c" * 32,
+            active=True,
+        )
+        db.add_all([inviter_wallet, invitee_wallet, funder_wallet])
+        db.add(ReferralCode(code="bankrefcode", owner_user_id=inviter.id))
+        await db.flush()
+        db.add(
+            ReferralAttribution(
+                inviter_user_id=inviter.id,
+                invitee_user_id=invitee.id,
+                code="bankrefcode",
+            )
+        )
+        older = BankPosition(
+            position_id=300,
+            query_id=300,
+            user_id=invitee.id,
+            wallet_id=invitee_wallet.id,
+            owner_wallet=invitee_wallet.address,
+            network=-3,
+            contract_address=settings.bank_contract_address,
+            principal_nano=1_000_000_000,
+            multiplier_bps=12_500,
+            target_payout_nano=1_250_000_000,
+            funded_amount_nano=250_000_000,
+            remaining_amount_nano=1_000_000_000,
+            queue_index=0,
+            current_status=BankPositionStatus.PARTIALLY_FUNDED.value,
+        )
+        newer = BankPosition(
+            position_id=301,
+            query_id=301,
+            user_id=funder.id,
+            wallet_id=funder_wallet.id,
+            owner_wallet=funder_wallet.address,
+            network=-3,
+            contract_address=settings.bank_contract_address,
+            principal_nano=2_000_000_000,
+            multiplier_bps=15_000,
+            target_payout_nano=3_000_000_000,
+            remaining_amount_nano=3_000_000_000,
+        )
+        db.add_all([older, newer])
+        await db.commit()
+
+        tx = transaction(
+            settings.bank_contract_address,
+            funder_wallet.address,
+            50,
+            bank_create_body(301, 2_000_000_000, 15_000),
+            2_080_000_000,
+            outputs=[
+                (
+                    invitee_wallet.address,
+                    bank_payout_body(300, 1_000_000_000, 1_250_000_000),
+                    1_250_000_000,
+                )
+            ],
+        )
+        assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.APPLIED
+        await db.commit()
+        attribution = await db.scalar(select(ReferralAttribution))
+        assert attribution is not None
+        assert attribution.status == "qualified"
+        assert attribution.qualified_tx_hash == "tx-50"
+        reward = await db.scalar(select(ReferralReward))
+        assert reward is not None
+        assert reward.cause == "bank:300"

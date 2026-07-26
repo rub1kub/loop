@@ -153,8 +153,11 @@ export function ProfileScreen({
       </div>
 
       <div className="section-label">
+        {/* The referral reward history and the monthly LOOP score are two
+            different counters. Showing both as "ОЧКОВ" next to СЧЁТ LOOP read
+            as one metric, so friends are reported as friends. */}
         <span>ТВОИ ДРУЗЬЯ</span>
-        <small>{referral?.reward_points ?? 0} ОЧКОВ</small>
+        <small>{referral?.qualified ?? 0} ПОДТВЕРДИЛИ</small>
       </div>
       <button className="profile-row" onClick={() => void shareReferral()} disabled={!referral}>
         <span className="row-icon">

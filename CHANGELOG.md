@@ -4,7 +4,20 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored the `nosniff` value of the public `X-Content-Type-Options` header and pinned every
+  published security-header value in an automated test.
+- Made a no-reveal `ExpireDuel` terminal in the projection so monitoring no longer reports a
+  permanently overdue duel.
+- Qualified referred friends after a confirmed BANK payout, not only after a DUEL settlement.
+
 ### Changed
+
+- Described PLUSH BRICK fee-free mode and buyback as stated plans instead of active mechanics,
+  matching the runtime that reports `fee_discount_active=false`.
+- Reported confirmed friends in the profile instead of referral reward points, which read as the
+  monthly LOOP score.
 
 - Replaced the activity-cycle BANK with an independent FIFO position queue.
 - Split BANK and DUEL into separate contracts, backend modules, tables, events and screens.
