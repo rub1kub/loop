@@ -587,12 +587,14 @@ async def verify_contract(
     duel_address_bound = contract == "DuelEscrow" and "network_id" in configuration
     # v1.4 appends `holderFeeSupported` to the DUEL contractConfig view.
     duel_holder_fee = duel_address_bound and not version.startswith("1.3")
-    bank_v13 = contract == "BankQueue" and version == "1.3.0"
+    # The extended BANK contractConfig view has been stable since 1.3.0;
+    # pinning the exact string made every later version fail the shape check.
+    bank_extended = contract == "BankQueue" and version not in {"", "1.0.0", "1.1.0", "1.2.0"}
     expected_stack_size = (
         (9 if duel_holder_fee else 8)
         if duel_address_bound
         else 9
-        if bank_v13
+        if bank_extended
         else 7
         if contract == "BankQueue"
         else 5
@@ -631,7 +633,7 @@ async def verify_contract(
     else:
         if bool(stack_number(stack[3])) != bool(configuration["paused"]):
             raise ValueError(f"{contract}: pause state mismatch")
-        if bank_v13:
+        if bank_extended:
             head_queue_index = stack_number(stack[4])
             next_queue_index = stack_number(stack[5])
             completed_positions = stack_number(stack[6])
@@ -674,7 +676,7 @@ async def verify_contract(
         admin_getter = admin_response.json()
         admin_result = admin_getter.get("result") or {}
         admin_stack = admin_result.get("stack") or []
-        expected_admin_size = 7 if bank_v13 else 5
+        expected_admin_size = 7 if bank_extended else 5
         if (
             not admin_getter.get("ok")
             or admin_result.get("exit_code") != 0
@@ -688,14 +690,14 @@ async def verify_contract(
             or stack_number(admin_stack[2]) != int(configuration["fee_bps"])
             or bool(stack_number(admin_stack[3])) != bool(configuration["paused"])
         )
-        bank_admin_mismatch = bank_v13 and (
+        bank_admin_mismatch = bank_extended and (
             stack_number(admin_stack[4]) != int(configuration["completed_positions"])
             or stack_number(admin_stack[5])
             != int(configuration["principal_limit_nano"])
             or stack_number(admin_stack[6]) != live_locked
         )
         duel_or_legacy_admin_mismatch = (
-            not bank_v13 and stack_number(admin_stack[4]) != live_locked
+            not bank_extended and stack_number(admin_stack[4]) != live_locked
         )
         if (
             common_admin_mismatch

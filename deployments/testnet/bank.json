@@ -1,18 +1,18 @@
 {
   "contract": "BankQueue",
-  "address": "kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3",
+  "address": "kQDy0JOVjIjeH-ZmyCv1LLjmJHBJVOicPo0T3atxn5BLNL_q",
   "network": "testnet",
   "workchain": 0,
-  "deployed_at": "2026-07-26T10:13:20Z",
-  "deploy_transaction": "DTLUspR+QXk1EkdPFcz+AtYsCxdHTpimGu8uavhe1WI=",
-  "deploy_transaction_lt": 85649707000003,
-  "code_hash": "BA0A33E5D7A39358732E89720981EA421374A453AAF5B44C552569C5C71FB3E2",
-  "data_hash": "55C177BD7833F04BCD9E678A59F6043E96DFBFDFF8A109BCFF44D5E92AF2B6E2",
-  "source_commit": "21e604ceedb061ac15da9122a927f81557194534",
+  "deployed_at": "2026-07-26T23:05:00Z",
+  "deploy_transaction": "GYMAC4LNmBxJb6vWodz76wG2Y6McA3xsf3i4j/NFPlA=",
+  "deploy_transaction_lt": 85756772000003,
+  "code_hash": "0FF2E5136C4186BEA8269D426E31FAA9E7D4B8BEBF5BAEFB13B3118F677560ED",
+  "data_hash": "576BA6F598A03C2C9D818DA2361211030F12929F5A4FA64B7C61CA30F8A58CCB",
+  "source_commit": "cb5b5a4821181739b250689e86f5b905f70201a6",
   "compiler_version": "Tolk 1.4.0",
   "acton_version": "1.0.0",
   "configuration": {
-    "version": "1.3.0",
+    "version": "1.4.0",
     "owner": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
     "treasury": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
     "fee_bps": 100,
@@ -24,13 +24,26 @@
     "min_principal_nano": 1000000000,
     "max_principal_nano": 100000000000,
     "maturity_limits": [
-      { "completed_positions": 0, "principal_limit_nano": 5000000000 },
-      { "completed_positions": 25, "principal_limit_nano": 10000000000 },
-      { "completed_positions": 100, "principal_limit_nano": 15000000000 }
+      {
+        "completed_positions": 0,
+        "principal_limit_nano": 5000000000
+      },
+      {
+        "completed_positions": 25,
+        "principal_limit_nano": 10000000000
+      },
+      {
+        "completed_positions": 100,
+        "principal_limit_nano": 15000000000
+      }
     ],
     "expansion_every_completions": 250,
     "expansion_step_nano": 5000000000,
-    "multipliers_bps": [12500, 15000, 20000]
+    "multipliers_bps": [12500, 15000, 20000],
+    "settled_positions_pruned": true,
+    "worst_case_cascade_gas": 861439,
+    "head_queue_index": 1,
+    "next_queue_index": 2
   },
   "supported_opcodes": [
     1279413761, 1279413762, 1279413763, 1279413764, 1279413765, 1279413766, 1279413767, 1279413777,
@@ -38,47 +51,39 @@
   ],
   "getters": ["contractConfig", "queueData", "positionData", "activePosition", "adminState"],
   "verified_smoke": {
-    "contract_address": "kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3",
-    "treasury": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
+    "contract_address": "kQDy0JOVjIjeH-ZmyCv1LLjmJHBJVOicPo0T3atxn5BLNL_q",
     "first_wallet": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
-    "second_wallet": "kQB1ZzhdiHeiNNd3YkA7h-FgGDKniMG-r9xqp3R6g_bIiTUj",
-    "position_id": 2607263001,
+    "position_id": 2707270401,
     "principal_nano": 1000000000,
     "multiplier_bps": 12500,
     "gas_nano": 80000000,
     "fee_nano": 10000000,
-    "first_transaction": "b9d0cf9f0f6e841b435f98d2014f39a17a3099d10d14665ffef61b77a36478cb",
-    "first_transaction_lt": 85699349000003,
-    "first_masterchain_seqno": 74049410,
-    "funding_position_id": 2607263002,
+    "funded_nano": 990000000,
+    "target_payout_nano": 1250000000,
+    "first_transaction": "63c119021f14e8c8e8ab18ce1a3daf201f4163914822c2e5b8a0d6b35e90931e",
+    "first_transaction_lt": 85756826000003,
+    "first_masterchain_seqno": 74104646,
+    "second_wallet": "kQB1ZzhdiHeiNNd3YkA7h-FgGDKniMG-r9xqp3R6g_bIiTUj",
+    "funding_position_id": 2707270402,
     "funding_principal_nano": 1000000000,
     "funding_multiplier_bps": 12500,
     "funding_gas_nano": 80000000,
     "funding_fee_nano": 10000000,
-    "funding_transaction": "53fcc59783f2fd059f9e6e4a048ef31cb699dca129e8008bd7427e7070d8a321",
-    "funding_transaction_lt": 85699363000003,
-    "funding_masterchain_seqno": 74049424,
     "payout_nano": 1250000000,
-    "remaining_funding_nano": 730000000
-  },
-  "verified_limit_smoke": {
-    "contract_address": "kQCN-hU-uBcu_TLd0p74hyW32CdTNAIVP_A9ttHhKNB9N_MW",
-    "position_id": 2607261301,
-    "principal_nano": 5000000000,
-    "principal_limit_nano": 5000000000,
-    "transaction": "tFh/JPyLhJLroTFZDnyDm7wYm6wE4bZGVHdMx7MGtrA=",
-    "transaction_lt": 85649576000003,
-    "masterchain_seqno": 74001550
+    "remaining_funding_nano": 730000000,
+    "funding_transaction": "95c310931b4ab6c0f2c33daf2f4394628c9131d7ea712dd63b9de178c07649c1",
+    "funding_transaction_lt": 85757163000003,
+    "funding_masterchain_seqno": 74104968,
+    "treasury": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6",
+    "payout_wallet": "kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6"
   },
   "previous_contract": {
-    "address": "kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y",
-    "paused": true,
+    "address": "kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3",
+    "version": "1.3.0",
     "locked_nano": 0,
-    "open_positions": 0,
-    "paused_at": "2026-07-26T10:39:26Z",
-    "pause_transaction": "AmVLYb+IAuMWTlDW0J14+hiqn0HIDlQynb4EGOfbN+Y=",
-    "pause_transaction_lt": 85653644000003,
-    "pause_masterchain_seqno": 74005463
+    "settled_by": "two owner deposits that paid every waiting position in full",
+    "settlement_note": "The queue does not empty on its own: each deposit's remainder seeds the next position. It was driven to zero deliberately by preparing the head's need so one later deposit covered it exactly, leaving no remainder. Both waiting positions were paid their full target before retirement."
   },
-  "explorer_url": "https://testnet.tonviewer.com/kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3"
+  "explorer_url": "https://testnet.tonviewer.com/kQDy0JOVjIjeH-ZmyCv1LLjmJHBJVOicPo0T3atxn5BLNL_q",
+  "deploy_masterchain_seqno": 74104596
 }
