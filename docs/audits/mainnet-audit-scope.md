@@ -7,7 +7,7 @@ guarantee.
 ## In scope
 
 - `BankQueue` v1.3 Tolk source, storage, messages and generated code hash.
-- `DuelEscrow` v1.3 Tolk source, storage, messages and generated code hash.
+- `DuelEscrow` v1.4 Tolk source, storage, messages and generated code hash.
 - Deployment initialization, network/address domain separation and direct-invite permits.
 - Every value-moving path: deposits, FIFO allocation, boosts, payouts, fees, refunds, reserve
   funding and surplus withdrawal.
@@ -42,6 +42,10 @@ sessions and chain-projection idempotency are included.
 6. Recovery remains available while paused.
 7. Locked stake and the 0.2 GRAM reserve are never withdrawable.
 8. The initial production pool cap is at most 2 GRAM.
+9. A holder fee permit is domain-separated and bound to the network, contract, offer id,
+   owner wallet and expiry; it cannot be replayed or transferred, an invalid or expired
+   permit rejects the whole open, and the exemption only removes the winner's protocol
+   fee — it never changes chance, boosts, refunds or locked accounting.
 
 ## Evidence expected from the release candidate
 
