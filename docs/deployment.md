@@ -135,24 +135,40 @@ LOOP_DUEL_INVITE_PUBLIC_KEY=<64-hex-public-key> \
   make contracts-deploy-mainnet
 ```
 
-Publish source verification, execute finalized BANK/DUEL smoke tests and run the direct
-two-wallet mainnet canary in `--evidence-only` mode before switching the application. Put the
-printed `DUEL_CANARY_EVIDENCE` object in `deployments/mainnet/duel.json`, then run:
+Publish source verification, complete the BANK shadow payout cycle and run the direct two-wallet
+DUEL mainnet canary in `--evidence-only` mode before switching the application. Put the finalized
+evidence in the contract manifests, then run:
 
 ```bash
 make contracts-mainnet-verify
 ```
 
-The application environment must repeat the exact audited commit and report SHA-256, point at a
-non-testnet provider and explicitly enable both mainnet and the canary monitor. Release activation
-refuses the switch while the source network has live obligations.
+The application environment must repeat the exact audited commit, report SHA-256 and launch caps,
+point at a non-testnet provider and explicitly enable both mainnet and the canary monitor. Release
+activation refuses the switch while the source network has live obligations or either production
+contract is not paused and empty.
 
-For a newly deployed, empty BANK contract, emulate the one-time genesis funding smoke against a testnet fork before broadcasting the same arguments. The script fails if the queue is not empty or the resulting funding, fee, target and queue state differ from the contract formula.
+Do not run a payout cycle on the production BANK address: a real FIFO cycle necessarily leaves the
+last contributor in the queue. Deploy the same audited code to a separate shadow address, rehearse
+the exact two-wallet cycle on a fork and only then broadcast it to the shadow contract. The verifier
+checks both inbound messages, distinct wallets, both fees, the payout body/value and finality, and
+also proves that the shadow code hash equals the production manifest.
 
 ```bash
-acton script --fork-net testnet scripts/smoke-bank-genesis.tolk <address> <position-id> 1000000000 12500
-acton script --net testnet scripts/smoke-bank-genesis.tolk <address> <position-id> 1000000000 12500
+LOOP_ALLOW_MAINNET_CANARY=1 \
+  .venv/bin/python scripts/run-bank-canary.py \
+  --network mainnet \
+  --contract <shadow-address> \
+  --production-contract <production-address> \
+  --treasury <shadow-treasury> \
+  --first-wallet loop-mainnet-canary-a \
+  --second-wallet loop-mainnet-canary-b \
+  --broadcast
 ```
+
+Record the two finalized transaction hashes, logical times and masterchain blocks in
+`deployments/mainnet/bank.json`. Deploy the final BANK separately, paused and empty. The post-deploy
+gate rejects evidence that points at that production address.
 
 The DUEL canary service refuses to start unless both configured Acton aliases already exist and
 resolve to distinct addresses. They are dedicated low-value operator wallets, never user wallets.

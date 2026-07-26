@@ -6,6 +6,7 @@ PIP := .venv/bin/pip
 	test-security contracts-build contracts-test contracts-deploy-testnet \
 	contracts-deploy-duel-testnet \
 	contracts-verify contracts-inspect contracts-mainnet-technical \
+	contracts-audit-pack \
 	contracts-mainnet-preflight contracts-deploy-mainnet contracts-mainnet-verify \
 	chain-smoke-test screenshots docker-up \
 	docker-down deploy deploy-vps deploy-status deploy-restart smoke-test
@@ -75,16 +76,24 @@ contracts-mainnet-technical: ## Run deterministic, fork, coverage, mutation and 
 	$(PYTHON) scripts/check-contract-coverage.py coverage.lcov \
 		--minimum-lines 98 --minimum-branches 75
 	acton test --baseline-snapshot contracts/gas-baseline.json --fail-on-diff
+	acton test tests/bank_queue.test.tolk --mutate --mutate-contract BankQueue \
+		--mutation-levels critical --mutation-minimum-percent 90
+	acton test tests/bank_queue.test.tolk --mutate --mutate-contract BankQueue \
+		--mutation-levels major --mutation-minimum-percent 75
 	acton test tests/duel_contract.test.tolk --mutate --mutate-contract DuelEscrow \
 		--mutation-levels critical --mutation-minimum-percent 95
 	acton test tests/duel_contract.test.tolk --mutate --mutate-contract DuelEscrow \
 		--mutation-levels major --mutation-minimum-percent 75
 	$(PYTHON) -m pytest apps/api/tests/test_config.py \
+		apps/api/tests/test_bank_canary_runner.py \
 		apps/api/tests/test_duel_canary_operations.py \
 		apps/api/tests/test_mainnet_readiness.py \
 		apps/api/tests/test_network_switch_preflight.py apps/api/tests/test_security.py \
 		apps/api/tests/test_routes_hardening.py -q
 	npm --workspace @loop/web run test -- --run src/ton.test.ts
+
+contracts-audit-pack: contracts-build ## Build a deterministic secret-free auditor archive
+	$(PYTHON) scripts/build-mainnet-audit-pack.py
 
 contracts-mainnet-preflight: contracts-mainnet-technical ## Require external audit and release evidence
 	$(PYTHON) scripts/check-mainnet-readiness.py --phase pre-deploy

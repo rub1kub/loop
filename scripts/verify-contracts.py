@@ -30,6 +30,7 @@ NETWORKS = {
     },
 }
 BANK_CREATE_POSITION = 0x4C424E01
+BANK_PAYOUT = 0x4C424E11
 BANK_PROTOCOL_FEE = 0x4C424E12
 DUEL_OPEN_OFFER = 0x4C4F4F01
 DUEL_CANCEL_OFFER = 0x4C4F4F02
@@ -118,76 +119,165 @@ async def verify_bank_smoke(
     smoke = manifest.get("verified_smoke")
     if not isinstance(smoke, dict):
         return None
-    response = await provider_get(
+    smoke_address = str(smoke.get("contract_address", manifest["address"]))
+    state_response = await provider_get(
         client,
-        "/api/v3/transactions",
-        {"hash": smoke["transaction"], "limit": 2},
+        "/api/v3/accountStates",
+        {"address": smoke_address, "include_boc": "false"},
     )
-    transactions = response.json().get("transactions", [])
-    if len(transactions) != 1:
-        raise ValueError("BankQueue: smoke transaction is missing or ambiguous")
-    transaction = transactions[0]
-    if not successful_transaction(transaction):
-        raise ValueError("BankQueue: smoke transaction was not successful")
-    if raw_address(str(transaction.get("account", ""))) != raw_address(
-        manifest["address"]
+    accounts = state_response.json().get("accounts", [])
+    if len(accounts) != 1 or accounts[0].get("status") != "active":
+        raise ValueError("BankQueue: smoke contract is not active")
+    if normalize_hash(str(accounts[0].get("code_hash", ""))) != normalize_hash(
+        str(manifest["code_hash"])
     ):
-        raise ValueError("BankQueue: smoke transaction account mismatch")
-    if int(transaction.get("lt", 0)) != int(smoke["transaction_lt"]):
-        raise ValueError("BankQueue: smoke transaction logical time mismatch")
-    if int(transaction.get("mc_block_seqno", 0)) != int(smoke["masterchain_seqno"]):
-        raise ValueError("BankQueue: smoke transaction finality mismatch")
+        raise ValueError("BankQueue: smoke contract code hash mismatch")
 
-    incoming = transaction.get("in_msg") or {}
-    if raw_address(str(incoming.get("source", ""))) != raw_address(
-        manifest["configuration"]["owner"]
-    ):
-        raise ValueError("BankQueue: smoke transaction sender mismatch")
-    if int(incoming.get("value", 0)) != int(smoke["principal_nano"]) + int(
-        smoke["gas_nano"]
-    ):
-        raise ValueError("BankQueue: smoke transaction value mismatch")
-    parser = body_parser(incoming)
-    decoded = {
-        "opcode": parser.read_uint(32),
-        "query_id": parser.read_uint(64),
-        "position_id": parser.read_uint(64),
-        "principal_nano": parser.read_coins(),
-        "multiplier_bps": parser.read_uint(16),
+    async def transaction_for(
+        hash_value: str, logical_time: int, masterchain_seqno: int
+    ) -> dict[str, Any]:
+        response = await provider_get(
+            client,
+            "/api/v3/transactions",
+            {"hash": hash_value, "limit": 2},
+        )
+        transactions = response.json().get("transactions", [])
+        if len(transactions) != 1:
+            raise ValueError("BankQueue: smoke transaction is missing or ambiguous")
+        transaction = transactions[0]
+        if not successful_transaction(transaction):
+            raise ValueError("BankQueue: smoke transaction was not successful")
+        if raw_address(str(transaction.get("account", ""))) != raw_address(
+            smoke_address
+        ):
+            raise ValueError("BankQueue: smoke transaction account mismatch")
+        if int(transaction.get("lt", 0)) != logical_time:
+            raise ValueError("BankQueue: smoke transaction logical time mismatch")
+        if int(transaction.get("mc_block_seqno", 0)) != masterchain_seqno:
+            raise ValueError("BankQueue: smoke transaction finality mismatch")
+        return transaction
+
+    first_transaction = await transaction_for(
+        str(smoke["first_transaction"]),
+        int(smoke["first_transaction_lt"]),
+        int(smoke["first_masterchain_seqno"]),
+    )
+    funding_transaction = await transaction_for(
+        str(smoke["funding_transaction"]),
+        int(smoke["funding_transaction_lt"]),
+        int(smoke["funding_masterchain_seqno"]),
+    )
+
+    expected_positions = (
+        (
+            first_transaction,
+            "first_wallet",
+            "position_id",
+            "principal_nano",
+            "multiplier_bps",
+            "gas_nano",
+            "fee_nano",
+        ),
+        (
+            funding_transaction,
+            "second_wallet",
+            "funding_position_id",
+            "funding_principal_nano",
+            "funding_multiplier_bps",
+            "funding_gas_nano",
+            "funding_fee_nano",
+        ),
+    )
+    wallets = {
+        raw_address(str(smoke["first_wallet"])),
+        raw_address(str(smoke["second_wallet"])),
     }
-    if decoded != {
-        "opcode": BANK_CREATE_POSITION,
-        "query_id": int(smoke["position_id"]),
-        "position_id": int(smoke["position_id"]),
-        "principal_nano": int(smoke["principal_nano"]),
-        "multiplier_bps": int(smoke["multiplier_bps"]),
-    }:
-        raise ValueError("BankQueue: smoke transaction body mismatch")
+    if len(wallets) != 2:
+        raise ValueError("BankQueue: smoke wallets must be distinct")
+    for (
+        transaction,
+        wallet_key,
+        position_key,
+        principal_key,
+        multiplier_key,
+        gas_key,
+        fee_key,
+    ) in expected_positions:
+        incoming = transaction.get("in_msg") or {}
+        if raw_address(str(incoming.get("source", ""))) != raw_address(
+            str(smoke[wallet_key])
+        ):
+            raise ValueError("BankQueue: smoke transaction sender mismatch")
+        if int(incoming.get("value", 0)) != int(smoke[principal_key]) + int(
+            smoke[gas_key]
+        ):
+            raise ValueError("BankQueue: smoke transaction value mismatch")
+        parser = body_parser(incoming)
+        decoded = {
+            "opcode": parser.read_uint(32),
+            "query_id": parser.read_uint(64),
+            "position_id": parser.read_uint(64),
+            "principal_nano": parser.read_coins(),
+            "multiplier_bps": parser.read_uint(16),
+        }
+        if decoded != {
+            "opcode": BANK_CREATE_POSITION,
+            "query_id": int(smoke[position_key]),
+            "position_id": int(smoke[position_key]),
+            "principal_nano": int(smoke[principal_key]),
+            "multiplier_bps": int(smoke[multiplier_key]),
+        }:
+            raise ValueError("BankQueue: smoke transaction body mismatch")
+        fees = [
+            message
+            for message in transaction.get("out_msgs", [])
+            if str(message.get("opcode", "")).lower()
+            == f"0x{BANK_PROTOCOL_FEE:08x}"
+        ]
+        if len(fees) != 1:
+            raise ValueError("BankQueue: smoke fee message is missing or ambiguous")
+        fee = fees[0]
+        if raw_address(str(fee.get("destination", ""))) != raw_address(
+            str(smoke["treasury"])
+        ) or int(fee.get("value", 0)) != int(smoke[fee_key]):
+            raise ValueError("BankQueue: smoke fee message mismatch")
+        fee_parser = body_parser(fee)
+        if (
+            fee_parser.read_uint(32) != BANK_PROTOCOL_FEE
+            or fee_parser.read_uint(64) != int(smoke[position_key])
+            or fee_parser.read_uint(64) != int(smoke[position_key])
+        ):
+            raise ValueError("BankQueue: smoke fee body mismatch")
 
-    fees = [
+    payouts = [
         message
-        for message in transaction.get("out_msgs", [])
-        if str(message.get("opcode", "")).lower() == f"0x{BANK_PROTOCOL_FEE:08x}"
+        for message in funding_transaction.get("out_msgs", [])
+        if str(message.get("opcode", "")).lower() == f"0x{BANK_PAYOUT:08x}"
     ]
-    if len(fees) != 1:
-        raise ValueError("BankQueue: smoke fee message is missing or ambiguous")
-    fee = fees[0]
-    if raw_address(str(fee.get("destination", ""))) != raw_address(
-        manifest["configuration"]["treasury"]
-    ) or int(fee.get("value", 0)) != int(smoke["fee_nano"]):
-        raise ValueError("BankQueue: smoke fee message mismatch")
-    fee_parser = body_parser(fee)
+    if len(payouts) != 1:
+        raise ValueError("BankQueue: smoke payout is missing or ambiguous")
+    payout = payouts[0]
+    if raw_address(str(payout.get("destination", ""))) != raw_address(
+        str(smoke["first_wallet"])
+    ) or int(payout.get("value", 0)) != int(smoke["payout_nano"]):
+        raise ValueError("BankQueue: smoke payout destination or value mismatch")
+    payout_parser = body_parser(payout)
     if (
-        fee_parser.read_uint(32) != BANK_PROTOCOL_FEE
-        or fee_parser.read_uint(64) != int(smoke["position_id"])
-        or fee_parser.read_uint(64) != int(smoke["position_id"])
+        payout_parser.read_uint(32) != BANK_PAYOUT
+        or payout_parser.read_uint(64) != int(smoke["funding_position_id"])
+        or payout_parser.read_uint(64) != int(smoke["position_id"])
+        or payout_parser.read_coins() != int(smoke["principal_nano"])
+        or payout_parser.read_coins() != int(smoke["payout_nano"])
     ):
-        raise ValueError("BankQueue: smoke fee body mismatch")
+        raise ValueError("BankQueue: smoke payout body mismatch")
     return {
-        "transaction": str(smoke["transaction"]),
-        "transaction_lt": int(smoke["transaction_lt"]),
-        "masterchain_seqno": int(smoke["masterchain_seqno"]),
+        "contract_address": smoke_address,
+        "first_transaction": str(smoke["first_transaction"]),
+        "funding_transaction": str(smoke["funding_transaction"]),
+        "funding_masterchain_seqno": int(smoke["funding_masterchain_seqno"]),
         "position_id": int(smoke["position_id"]),
+        "funding_position_id": int(smoke["funding_position_id"]),
+        "payout_nano": int(smoke["payout_nano"]),
         "verified": True,
     }
 
@@ -535,9 +625,21 @@ async def verify_contract(
         if bool(stack_number(stack[3])) != bool(configuration["paused"]):
             raise ValueError(f"{contract}: pause state mismatch")
         if bank_v13:
+            head_queue_index = stack_number(stack[4])
+            next_queue_index = stack_number(stack[5])
             completed_positions = stack_number(stack[6])
             principal_limit = stack_number(stack[7])
             live_locked = stack_number(stack[8])
+            if (
+                "head_queue_index" in configuration
+                and head_queue_index != int(configuration["head_queue_index"])
+            ):
+                raise ValueError("BankQueue: head queue index mismatch")
+            if (
+                "next_queue_index" in configuration
+                and next_queue_index != int(configuration["next_queue_index"])
+            ):
+                raise ValueError("BankQueue: next queue index mismatch")
             if completed_positions != int(configuration["completed_positions"]):
                 raise ValueError("BankQueue: completed position count mismatch")
             if principal_limit != int(configuration["principal_limit_nano"]):

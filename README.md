@@ -168,6 +168,22 @@ make contracts-test
 make contracts-mainnet-technical
 ```
 
+Пакет исходников и доказательств для независимого аудита:
+
+```bash
+make contracts-audit-pack
+```
+
+После получения отчёта, заполнения `deployments/mainnet/release.json` и
+подготовки mainnet-контрактов:
+
+```bash
+make contracts-mainnet-preflight
+```
+
+Preflight работает по принципу fail-closed: без проверяемого отчёта аудита,
+совпадающего коммита, лимитов и сетевых доказательств выпуск не разрешается.
+
 Проверка кода и состояния опубликованных контрактов:
 
 ```bash

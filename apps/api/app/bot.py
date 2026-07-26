@@ -22,13 +22,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .config import Settings
-from .models import ReferralCode, ResultCard, User
+from .models import ResultCard, User
 from .modules.duel.models import (
     ChallengeState,
     DuelChallenge,
     MatchmakingOffer,
     OfferState,
 )
+from .referrals import get_or_create_referral_code
 from .result_cards import build_result_inline
 
 INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
@@ -208,9 +209,7 @@ def create_dispatcher(
                         ResultCard.user_id == creator.id,
                     )
                 )
-                referral = await db.scalar(
-                    select(ReferralCode).where(ReferralCode.owner_user_id == creator.id)
-                )
+                referral = await get_or_create_referral_code(db, creator.id)
             if card is None:
                 await query.answer([], cache_time=1, is_personal=True)
                 return
@@ -219,7 +218,7 @@ def create_dispatcher(
                     build_result_inline(
                         card,
                         settings,
-                        referral.code if referral else None,
+                        referral.code,
                     )
                 ],
                 cache_time=30,

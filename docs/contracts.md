@@ -28,9 +28,15 @@ make contracts-inspect
 - the deployment transaction succeeded at the recorded logical time;
 - the transaction has masterchain finality.
 - when a manifest contains `verified_smoke`, the recorded BANK or DUEL smoke has the expected
-  sender, value, message body, transfers and masterchain block;
+  distinct senders, values, message bodies, fees, payouts and masterchain finality;
 - BANK v1.3 reports the finalized completion counter and current principal limit;
 - DUEL v1.3 reports the pinned network global ID, self-address and invite signer public key.
+
+The BANK manifest now contains a finalized two-wallet deposit → payout proof: both create messages,
+both protocol fees, the 1.25 GRAM payout and the remaining second position are independently
+checked. For mainnet this cycle must run on a separate shadow contract with identical code, because
+a successful FIFO cycle necessarily leaves the last contributor's position in the queue. The final
+production BANK is instead activated paused and empty.
 
 The DUEL manifest contains masterchain-finalized open/cancel/refund, boost and two-wallet settlement
 proofs. The boost proof binds sender, amount, duel, offer, revision, minimum chance and expiry.

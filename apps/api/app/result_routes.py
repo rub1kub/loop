@@ -6,7 +6,8 @@ from sqlalchemy import select
 from starlette.concurrency import run_in_threadpool
 
 from .dependencies import Config, CurrentUser, Db
-from .models import ReferralCode, ResultCard
+from .models import ResultCard
+from .referrals import get_or_create_referral_code
 from .result_cards import CardFacts, build_result_inline, render_result_card
 from .schemas import PreparedResultShareView, ResultCardView
 
@@ -108,16 +109,20 @@ async def prepare_result_share(
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Telegram sharing is unavailable"
         )
-    referral = await db.scalar(
-        select(ReferralCode).where(ReferralCode.owner_user_id == user.id)
-    )
+    try:
+        referral = await get_or_create_referral_code(db, user.id)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Telegram sharing is temporarily unavailable",
+        ) from exc
     try:
         prepared = await bot.save_prepared_inline_message(
             user_id=user.telegram_id,
             result=build_result_inline(
                 card,
                 settings,
-                referral.code if referral else None,
+                referral.code,
             ),
             allow_user_chats=True,
             allow_bot_chats=False,

@@ -40,6 +40,16 @@ def test_production_testnet_remains_enabled_without_mainnet_gate() -> None:
     assert not settings.mainnet_enabled
 
 
+def test_production_cors_is_pinned_to_the_public_origin() -> None:
+    with pytest.raises(ValidationError, match="CORS"):
+        Settings(
+            _env_file=None,
+            **production_settings(
+                cors_origins="https://loop.example,https://attacker.example"
+            ),
+        )
+
+
 def test_mainnet_is_fail_closed_without_release_evidence() -> None:
     with pytest.raises(ValidationError, match="LOOP_MAINNET_ENABLED"):
         Settings(
@@ -79,6 +89,8 @@ def test_mainnet_accepts_only_the_exact_audited_commit() -> None:
             mainnet_audited_commit=commit,
             mainnet_audit_report_sha256="b" * 64,
             require_duel_canary=True,
+            bank_max_principal_nano=5_000_000_000,
+            max_pool_nano=2_000_000_000,
         ),
     )
     assert settings.ton_transactions_enabled
@@ -94,5 +106,35 @@ def test_mainnet_accepts_only_the_exact_audited_commit() -> None:
                 mainnet_audited_commit="c" * 40,
                 mainnet_audit_report_sha256="b" * 64,
                 require_duel_canary=True,
+            ),
+        )
+
+
+def test_mainnet_rejects_launch_limits_above_ten_gram() -> None:
+    commit = "a" * 40
+    evidence = {
+        "ton_network_id": MAINNET_NETWORK_ID,
+        "toncenter_url": "https://toncenter.com",
+        "mainnet_enabled": True,
+        "mainnet_release_commit": commit,
+        "mainnet_audited_commit": commit,
+        "mainnet_audit_report_sha256": "b" * 64,
+        "require_duel_canary": True,
+    }
+    with pytest.raises(ValidationError, match="BANK launch limit"):
+        Settings(
+            _env_file=None,
+            **production_settings(
+                **evidence,
+                bank_max_principal_nano=10_000_000_001,
+            ),
+        )
+    with pytest.raises(ValidationError, match="DUEL launch limit"):
+        Settings(
+            _env_file=None,
+            **production_settings(
+                **evidence,
+                bank_max_principal_nano=5_000_000_000,
+                max_pool_nano=10_000_000_001,
             ),
         )

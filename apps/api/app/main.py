@@ -199,7 +199,11 @@ def create_app() -> FastAPI:
         authorization: str | None = Header(default=None),
     ) -> Response:
         token = settings.metrics_token.get_secret_value()
-        if token and authorization != f"Bearer {token}":
+        expected = f"Bearer {token}"
+        if token and (
+            authorization is None
+            or not secrets.compare_digest(authorization, expected)
+        ):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "authentication required")
         await refresh_duel_metrics(request.app.state.session_factory, request.app.state.redis)
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
@@ -211,7 +215,12 @@ def create_app() -> FastAPI:
         authorization: str | None = Header(default=None),
     ) -> dict[str, str | int]:
         token = settings.metrics_token.get_secret_value()
-        if not token or authorization != f"Bearer {token}":
+        expected = f"Bearer {token}"
+        if (
+            not token
+            or authorization is None
+            or not secrets.compare_digest(authorization, expected)
+        ):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "authentication required")
         try:
             configured_contract = normalize_address(settings.effective_duel_contract_address)
@@ -261,7 +270,11 @@ def create_app() -> FastAPI:
         secret: str | None = Header(default=None, alias="X-Telegram-Bot-Api-Secret-Token"),
     ) -> dict[str, bool]:
         expected = settings.telegram_webhook_secret.get_secret_value()
-        if not expected or secret != expected:
+        if (
+            not expected
+            or secret is None
+            or not secrets.compare_digest(secret, expected)
+        ):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "webhook secret rejected")
         if request.app.state.bot is None or request.app.state.dispatcher is None:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "bot unavailable")

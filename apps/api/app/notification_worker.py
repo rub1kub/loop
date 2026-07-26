@@ -15,7 +15,8 @@ from sqlalchemy import select, update
 
 from .config import Settings, get_settings
 from .database import create_database
-from .models import NotificationOutbox, ReferralCode, ResultCard, User
+from .models import NotificationOutbox, ResultCard, User
+from .referrals import get_or_create_referral_code
 from .result_cards import (
     notification_markup,
     result_caption,
@@ -119,13 +120,7 @@ async def deliver_one(
             return
         card = await db.get(ResultCard, outbox.result_card_id)
         user = await db.get(User, outbox.user_id)
-        referral = (
-            await db.scalar(
-                select(ReferralCode).where(ReferralCode.owner_user_id == outbox.user_id)
-            )
-            if user
-            else None
-        )
+        referral = await get_or_create_referral_code(db, outbox.user_id) if user else None
     if card is None or user is None:
         await update_delivery(
             session_factory, outbox_id, state="failed", error="result_or_user_missing"

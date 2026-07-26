@@ -122,6 +122,51 @@ def validate_release_evidence(release: dict[str, Any], release_file: Path) -> st
     return head
 
 
+def require_environment_value(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise ReadinessError(f"{name} is required for the mainnet application release")
+    return value
+
+
+def validate_runtime_environment(
+    release: dict[str, Any],
+    audited_commit: str,
+) -> None:
+    if require_environment_value("LOOP_TON_NETWORK_ID") != "-239":
+        raise ReadinessError("runtime TON network must be mainnet")
+    if require_environment_value("LOOP_MAINNET_ENABLED").lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        raise ReadinessError("runtime mainnet flag must be enabled")
+    if require_environment_value("LOOP_REQUIRE_DUEL_CANARY").lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        raise ReadinessError("runtime two-wallet DUEL canary must be required")
+    if "testnet" in require_environment_value("LOOP_TONCENTER_URL").lower():
+        raise ReadinessError("runtime TON provider must not target testnet")
+
+    expected_report_hash = str(release["external_audit"]["report_sha256"]).lower()
+    expected_values = {
+        "LOOP_MAINNET_RELEASE_COMMIT": audited_commit.lower(),
+        "LOOP_MAINNET_AUDITED_COMMIT": audited_commit.lower(),
+        "LOOP_MAINNET_AUDIT_REPORT_SHA256": expected_report_hash,
+        "LOOP_BANK_MAX_PRINCIPAL_NANO": str(
+            release["initial_limits"]["bank_max_principal_nano"]
+        ),
+        "LOOP_MAX_POOL_NANO": str(release["initial_limits"]["duel_max_pool_nano"]),
+    }
+    for name, expected in expected_values.items():
+        if require_environment_value(name).lower() != expected:
+            raise ReadinessError(f"{name} does not match the audited release")
+
+
 def validate_manifest(
     path: Path,
     *,
@@ -147,9 +192,72 @@ def validate_manifest(
         raise ReadinessError(f"{contract}: treasury mismatch")
     if contract == "DuelEscrow" and int(configuration.get("network_id", 0)) != -239:
         raise ReadinessError("DuelEscrow: mainnet domain is missing")
-    if not isinstance(manifest.get("verified_smoke"), dict):
+    if configuration.get("paused") is not True:
+        raise ReadinessError(f"{contract}: contract must remain paused at application activation")
+    if int(configuration.get("locked_nano", -1)) != 0:
+        raise ReadinessError(f"{contract}: locked value must be zero at application activation")
+    limits = release["initial_limits"]
+    if contract == "BankQueue" and int(configuration.get("principal_limit_nano", 0)) < int(
+        limits["bank_max_principal_nano"]
+    ):
+        raise ReadinessError("BankQueue: application limit exceeds the contract limit")
+    if contract == "BankQueue" and any(
+        int(configuration.get(name, -1)) != 0
+        for name in (
+            "completed_positions",
+            "head_queue_index",
+            "next_queue_index",
+        )
+    ):
+        raise ReadinessError("BankQueue: production queue must start pristine")
+    if contract == "DuelEscrow" and int(configuration.get("max_pool_nano", 0)) < int(
+        limits["duel_max_pool_nano"]
+    ):
+        raise ReadinessError("DuelEscrow: application limit exceeds the contract limit")
+    smoke = manifest.get("verified_smoke")
+    if not isinstance(smoke, dict):
         raise ReadinessError(f"{contract}: finalized smoke proof is missing")
-    if contract == "DuelEscrow":
+    if contract == "BankQueue":
+        production_address = require_mainnet_address(
+            manifest.get("address"), "BANK production contract"
+        )
+        shadow_address = require_mainnet_address(
+            smoke.get("contract_address"), "BANK shadow smoke contract"
+        )
+        if shadow_address == production_address:
+            raise ReadinessError(
+                "BankQueue: payout smoke must run on a separate shadow contract"
+            )
+        first_wallet = require_mainnet_address(
+            smoke.get("first_wallet"), "BANK smoke first wallet"
+        )
+        second_wallet = require_mainnet_address(
+            smoke.get("second_wallet"), "BANK smoke second wallet"
+        )
+        require_mainnet_address(smoke.get("treasury"), "BANK smoke treasury")
+        if first_wallet == second_wallet:
+            raise ReadinessError("BankQueue: smoke wallets must be distinct")
+        required_positive_integers = (
+            "position_id",
+            "first_transaction_lt",
+            "first_masterchain_seqno",
+            "funding_position_id",
+            "funding_transaction_lt",
+            "funding_masterchain_seqno",
+            "principal_nano",
+            "funding_principal_nano",
+            "payout_nano",
+        )
+        if (
+            not str(smoke.get("first_transaction", "")).strip()
+            or not str(smoke.get("funding_transaction", "")).strip()
+            or any(
+                not isinstance(smoke.get(name), int) or int(smoke[name]) <= 0
+                for name in required_positive_integers
+            )
+        ):
+            raise ReadinessError("BankQueue: shadow smoke finality evidence is invalid")
+    elif contract == "DuelEscrow":
         canary = manifest.get("verified_canary")
         if not isinstance(canary, dict):
             raise ReadinessError("DuelEscrow: finalized two-wallet canary proof is missing")
@@ -190,6 +298,7 @@ def main() -> int:
         release = read_object(release_file)
         audited_commit = validate_release_evidence(release, release_file)
         if args.phase == "post-deploy":
+            validate_runtime_environment(release, audited_commit)
             validate_manifest(
                 release_file.parent / "bank.json",
                 contract="BankQueue",

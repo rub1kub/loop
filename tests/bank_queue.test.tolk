@@ -104,6 +104,57 @@ get fun `test one deposit cascades across multiple older positions`() {
     expect(contract.queueData().headQueueIndex).toEqual(3);
 }
 
+get fun `test allocation step cap rejects corrupted oversized queue work`() {
+    val owner = testing.treasury("bank-cap-owner");
+    val treasury = testing.treasury("bank-cap-treasury");
+    val legacyOwner = testing.treasury("bank-cap-legacy");
+    val depositor = testing.treasury("bank-cap-depositor");
+    var positions = [] as PositionMap;
+    var queue = [] as QueueMap;
+    var used = [] as UsedPositionMap;
+    var index: uint64 = 0;
+    repeat (82) {
+        val positionId: uint64 = 5_000 + index;
+        positions.set(
+            positionId,
+            BankPositionData {
+                owner: legacyOwner.address,
+                principal: 1,
+                multiplierBps: 12_500,
+                targetPayout: 1,
+                fundedAmount: 0,
+                queueIndex: index,
+                createdAt: 1,
+                completedAt: 0,
+                status: BANK_POSITION_QUEUED,
+            }.toCell(),
+        );
+        queue.set(index, positionId);
+        used.set(positionId, true);
+        index += 1;
+    }
+    val contract = BankQueue.fromStorage({
+        owner: owner.address,
+        treasury: treasury.address,
+        feeBps: 0,
+        paused: false,
+        headQueueIndex: 0,
+        nextQueueIndex: 82,
+        completedPositions: 10_000,
+        lockedFunding: 0,
+        positions,
+        queue,
+        activePositions: ([] as ActivePositionMap),
+        usedPositionIds: used,
+    });
+    expect(
+        contract.deploy(owner.address, { value: ton("1") }),
+    ).toHaveSuccessfulDeploy({ to: contract.address });
+    expect(
+        openPosition(contract, depositor, POSITION_A, ton("100"), 12_500),
+    ).toHaveFailedTx({ exitCode: BankErrors.AllocationLimit });
+}
+
 get fun `test BANK fee is separate and deterministic`() {
     val (contract, _, feeCollector, first, _) = setupBank(100);
     val result = openPosition(contract, first, POSITION_A, ton("10"), 20_000);
@@ -184,6 +235,43 @@ get fun `test invalid multiplier and underfunded messages cannot mutate queue`()
     expect(contract.queueData().openPositions).toEqual(0);
 }
 
+get fun `test create-position guards fail before queue mutation`() {
+    val (contract, owner, _, first, _) = setupBank(0);
+    expect(
+        contract.sendSetBankPaused(
+            owner.address,
+            1_101,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+    expect(
+        openPosition(contract, first, POSITION_A, ton("1"), 12_500),
+    ).toHaveFailedTx({ exitCode: BankErrors.Paused });
+    expect(
+        contract.sendSetBankPaused(
+            owner.address,
+            1_102,
+            false,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+    expect(
+        openPosition(contract, first, 0, ton("1"), 12_500),
+    ).toHaveFailedTx({ exitCode: BankErrors.PositionAlreadyUsed });
+    expect(contract.queueData().openPositions).toEqual(0);
+}
+
+get fun `test zero fee emits no protocol transfer`() {
+    val (contract, _, treasury, first, _) = setupBank(0);
+    val opened = openPosition(contract, first, POSITION_A, ton("1"), 12_500);
+    expect(opened).toHaveSuccessfulTx<CreatePosition>();
+    expect(opened).toNotHaveTx<BankProtocolFee>({
+        from: contract.address,
+        to: treasury.address,
+    });
+}
+
 get fun `test early BANK stages reject oversized positions and expand only after completions`() {
     val (early, _, _, first, second) = setupBankAtCompleted(0, 0);
     expect(early.queueData().principalLimit).toEqual(ton("5"));
@@ -200,8 +288,17 @@ get fun `test early BANK stages reject oversized positions and expand only after
         openPosition(secondStage, third, POSITION_C, ton("10"), 12_500),
     ).toHaveSuccessfulTx<CreatePosition>();
 
-    val (middleSecondStage, _, _, _, _) = setupBankAtCompleted(0, 50);
+    val (middleSecondStage, _, _, middlePlayer, _) = setupBankAtCompleted(0, 50);
     expect(middleSecondStage.queueData().principalLimit).toEqual(ton("10"));
+    expect(
+        openPosition(
+            middleSecondStage,
+            middlePlayer,
+            POSITION_D,
+            ton("10.000000001"),
+            12_500,
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InvalidPrincipal });
 
     val (thirdStage, _, _, fourth, _) = setupBankAtCompleted(0, 100);
     expect(thirdStage.queueData().principalLimit).toEqual(ton("15"));
@@ -222,6 +319,15 @@ get fun `test mature BANK limit grows by five GRAM every 250 completions and sta
 
     val (capped, _, _, _, _) = setupBankAtCompleted(0, 10_000);
     expect(capped.queueData().principalLimit).toEqual(ton("100"));
+}
+
+get fun `test second maturity stage stays capped through completion ninety-nine`() {
+    val (contract, _, _, player, _) = setupBankAtCompleted(0, 99);
+    expect(contract.contractConfig().principalLimit).toEqual(ton("10"));
+    expect(
+        openPosition(contract, player, POSITION_A, ton("15"), 12_500),
+    ).toHaveFailedTx({ exitCode: BankErrors.InvalidPrincipal });
+    expect(contract.queueData().openPositions).toEqual(0);
 }
 
 get fun `test owner can fund reserve and withdraw only free balance while paused`() {
@@ -292,6 +398,52 @@ get fun `test BANK surplus withdrawal cannot touch position funding`() {
     );
     expect(excessive).toHaveFailedTx({ exitCode: BankErrors.InsufficientSurplus });
     expect(contract.contractConfig().lockedFunding).toEqual(ton("1"));
+}
+
+get fun `test BANK withdrawal boundary excludes locked value and inbound gas`() {
+    val (lockedContract, owner, _, first, _) = setupBank(0);
+    openPosition(lockedContract, first, POSITION_A, ton("1"), 20_000);
+    expect(
+        lockedContract.sendSetBankPaused(
+            owner.address,
+            2_111,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+    val lockedBalance = testing.getAccountBalance(lockedContract.address);
+    val lockedFree = lockedBalance - ton("1") - ton("0.2");
+    expect(
+        lockedContract.sendBankWithdrawSurplus(
+            owner.address,
+            2_112,
+            lockedFree + 1,
+            { value: ton("0.05") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InsufficientSurplus });
+
+    val (exactContract, exactOwner, exactTreasury, _, _) = setupBankAtCompleted(100, 101);
+    expect(
+        exactContract.sendSetBankPaused(
+            exactOwner.address,
+            2_113,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+    val exactFree = testing.getAccountBalance(exactContract.address) - ton("0.2");
+    expect(
+        exactContract.sendBankWithdrawSurplus(
+            exactOwner.address,
+            2_114,
+            exactFree,
+            { value: ton("0.05") },
+        ),
+    ).toHaveSuccessfulTx<BankAdminWithdrawal>({
+        from: exactContract.address,
+        to: exactTreasury.address,
+        value: exactFree,
+    });
 }
 
 get fun `test BANK configuration changes require the paused owner`() {
@@ -380,6 +532,112 @@ get fun `test BANK configuration changes require the paused owner`() {
             { value: ton("0.02") },
         ),
     ).toHaveSuccessfulTx<SetBankPaused>();
+}
+
+get fun `test every BANK admin boundary fails closed`() {
+    val (contract, owner, _, first, second) = setupBank(100);
+    expect(
+        contract.sendSetBankPaused(
+            owner.address,
+            2_301,
+            true,
+            { value: ton("0.019999999") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InsufficientValue });
+    expect(
+        contract.sendBankFundReserve(
+            owner.address,
+            2_302,
+            0,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InvalidAdminAmount });
+    expect(
+        contract.sendBankFundReserve(
+            owner.address,
+            2_303,
+            ton("1"),
+            { value: ton("1.019999999") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InsufficientValue });
+    expect(
+        contract.sendBankSetTreasury(
+            owner.address,
+            2_304,
+            second.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.MustBePaused });
+    expect(
+        contract.sendBankSetOwner(
+            owner.address,
+            2_305,
+            first.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.MustBePaused });
+    expect(
+        contract.sendSetBankPaused(
+            owner.address,
+            2_306,
+            true,
+            { value: ton("0.02") },
+        ),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+    expect(
+        contract.sendBankWithdrawSurplus(
+            owner.address,
+            2_307,
+            0,
+            { value: ton("0.05") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InvalidAdminAmount });
+    expect(
+        contract.sendBankSetFee(
+            owner.address,
+            2_308,
+            200,
+            { value: ton("0.019999999") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InsufficientValue });
+    expect(
+        contract.sendBankSetTreasury(
+            owner.address,
+            2_309,
+            second.address,
+            { value: ton("0.019999999") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InsufficientValue });
+    expect(
+        contract.sendBankSetOwner(
+            owner.address,
+            2_310,
+            first.address,
+            { value: ton("0.019999999") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InsufficientValue });
+    expect(
+        contract.sendBankSetOwner(
+            owner.address,
+            2_311,
+            owner.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InvalidOwner });
+    expect(
+        contract.sendBankSetOwner(
+            owner.address,
+            2_312,
+            contract.address,
+            { value: ton("0.02") },
+        ),
+    ).toHaveFailedTx({ exitCode: BankErrors.InvalidOwner });
+    val malformed = contract.sendAny(
+        first.address,
+        beginCell().storeUint(0xDEADBEEF, 32).endCell(),
+        { value: ton("0.02") },
+    );
+    expect(malformed).toHaveFailedTx({ exitCode: BankErrors.InvalidMessage });
 }
 
 fun setupBank(feeBps: uint16): (BankQueue, Treasury, Treasury, Treasury, Treasury) {

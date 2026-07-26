@@ -11,7 +11,7 @@ from PIL import Image
 from sqlalchemy import select
 
 from app.config import get_settings
-from app.models import NotificationOutbox, ResultCard, User
+from app.models import NotificationOutbox, ReferralCode, ResultCard, User
 from app.notification_worker import claim_due, deliver_one
 from app.result_cards import CardFacts, create_result_card, render_result_card
 
@@ -146,6 +146,13 @@ async def test_result_prepare_and_seen_use_native_telegram_share(client, app) ->
     assert bot.calls[0]["allow_user_chats"] is True
     assert bot.calls[0]["allow_group_chats"] is True
     assert bot.calls[0]["result"].photo_url.endswith(f"/{card.public_id}.jpg")
+    async with app.state.session_factory() as db:
+        referral = await db.scalar(
+            select(ReferralCode).where(ReferralCode.owner_user_id == card.user_id)
+        )
+        assert referral is not None
+        share_buttons = bot.calls[0]["result"].reply_markup.inline_keyboard[0]
+        assert share_buttons[0].url.endswith(f"?startapp=ref_{referral.code}")
 
     seen = await client.post(f"/api/v1/results/{card.id}/seen", headers=headers, json={})
     assert seen.status_code == 200
@@ -188,6 +195,13 @@ async def test_notification_outbox_sends_once_and_honours_user_setting(app) -> N
     assert len(claimed) == 1
     await deliver_one(bot, app.state.session_factory, settings, claimed[0])  # type: ignore[arg-type]
     assert len(bot.calls) == 1
+    async with app.state.session_factory() as db:
+        referral = await db.scalar(
+            select(ReferralCode).where(ReferralCode.owner_user_id == user.id)
+        )
+        assert referral is not None
+        notification_buttons = bot.calls[0]["reply_markup"].inline_keyboard[1]
+        assert notification_buttons[0].url.endswith(f"?startapp=ref_{referral.code}")
 
     async with app.state.session_factory() as db:
         current_user = await db.get(User, user.id)

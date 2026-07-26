@@ -11,6 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 TESTNET_NETWORK_ID = -3
 MAINNET_NETWORK_ID = -239
 SUPPORTED_TON_NETWORK_IDS = frozenset({TESTNET_NETWORK_ID, MAINNET_NETWORK_ID})
+INITIAL_MAINNET_VALUE_CAP_NANO = 10_000_000_000
 
 
 class Settings(BaseSettings):
@@ -121,6 +122,8 @@ class Settings(BaseSettings):
             raise ValueError(f"missing production settings: {', '.join(missing)}")
         if not self.public_origin.startswith("https://"):
             raise ValueError("production public origin must use HTTPS")
+        if self.cors_origin_list != [self.public_origin]:
+            raise ValueError("production CORS must contain only the public origin")
         if self.session_secret.get_secret_value() == "development-only-change-me":
             raise ValueError("production session secret is unsafe")
         if (
@@ -178,6 +181,14 @@ class Settings(BaseSettings):
                 or set(self.mainnet_audit_report_sha256.lower()) == {"0"}
             ):
                 raise ValueError("mainnet requires a SHA-256 audit report fingerprint")
+            if (
+                not self.bank_min_principal_nano
+                <= self.bank_max_principal_nano
+                <= INITIAL_MAINNET_VALUE_CAP_NANO
+            ):
+                raise ValueError("mainnet BANK launch limit must be within 10 GRAM")
+            if not self.min_pool_nano <= self.max_pool_nano <= INITIAL_MAINNET_VALUE_CAP_NANO:
+                raise ValueError("mainnet DUEL launch limit must be within 10 GRAM")
         return self
 
 
