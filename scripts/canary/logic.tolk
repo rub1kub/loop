@@ -79,6 +79,34 @@ fun canaryPermit(
     return crypto.rawSign(signerSeed, hash) as bits512;
 }
 
+const CANARY_HOLDER_FEE_DOMAIN = 0x4C4F4F63
+
+/// Signs a PLUSH BRICK holder fee exemption for one canary offer. This proves
+/// the contract path only: whether the owner really holds the jetton is the
+/// backend's check, covered by API tests, and is deliberately not repeated
+/// here.
+fun canaryHolderPermit(
+    signerSeed: uint256,
+    networkId: int32,
+    duelAddress: address,
+    offerId: uint64,
+    owner: address,
+    validUntil: uint32,
+): Cell<HolderFeePermit> {
+    val hash = beginCell()
+        .storeUint(CANARY_HOLDER_FEE_DOMAIN, 32)
+        .storeInt(networkId, 32)
+        .storeAddress(duelAddress)
+        .storeUint(offerId, 64)
+        .storeAddress(owner)
+        .storeUint(validUntil, 32)
+        .hash();
+    return HolderFeePermit {
+        validUntil,
+        signature: crypto.rawSign(signerSeed, hash) as bits512,
+    }.toCell();
+}
+
 fun requireCanaryContract(
     duelAddress: address,
     networkId: int32,
@@ -116,6 +144,7 @@ fun runCanaryOpenAndBoost(
     expiresAt: uint32,
     firstWallet: address,
     secondWallet: address,
+    holderFee: bool = false,
 ) {
     println(
         "DUEL_CANARY_ENTRY network={} first_offer={} second_offer={}",
@@ -154,7 +183,16 @@ fun runCanaryOpenAndBoost(
         ton("1"),
         expiresAt,
         inviteId,
-        null,
+        holderFee
+            ? canaryHolderPermit(
+                signerSeed,
+                networkId,
+                duelAddress,
+                firstOfferId,
+                firstWallet,
+                expiresAt,
+            )
+            : null,
         { value: ton("0.55") },
     );
     val openTrace = opened.waitForTrace();
@@ -189,7 +227,16 @@ fun runCanaryOpenAndBoost(
                 expiresAt,
             ),
         },
-        null,
+        holderFee
+            ? canaryHolderPermit(
+                signerSeed,
+                networkId,
+                duelAddress,
+                secondOfferId,
+                secondWallet,
+                expiresAt,
+            )
+            : null,
         { value: ton("0.55") },
     );
     val acceptTrace = accepted.waitForTrace();
@@ -223,6 +270,12 @@ fun runCanaryOpenAndBoost(
         boost.chanceBBps == 4_546 &&
         boost.boostRevision == 1
     ) throw CanaryErrors.WrongBinding;
+    println(
+        "DUEL_CANARY_HOLDER_FEE requested={} offer_a={} offer_b={}",
+        holderFee,
+        duel.offerData(firstOfferId).feeExempt,
+        duel.offerData(secondOfferId).feeExempt,
+    );
     println(
         "DUEL_CANARY_BOOST duel_id={} boost_deadline={} revision={} chance_a={}",
         secondOfferId,

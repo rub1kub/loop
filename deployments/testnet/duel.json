@@ -102,6 +102,24 @@
     "protocol_fee_nano": 27500000,
     "holder_permit_attached": false
   },
+  "verified_holder_fee": {
+    "description": "Both offers carried a signed holder permit, so the zero-fee settlement is independent of which secret won.",
+    "first_wallet": "kQB1ZzhdiHeiNNd3YkA7h-FgGDKniMG-r9xqp3R6g_bIiTUj",
+    "second_wallet": "kQDltLIHMHTicOAHZmqgNp1iL7PF5rrKBHDtFp-nZ0HG135k",
+    "first_offer_id": 8500180000093930,
+    "duel_id": 8500180000093931,
+    "both_offers_fee_exempt_on_chain": true,
+    "boost_nano": 100000000,
+    "resulting_chance_bps": 5454,
+    "settled_pool_nano": 1100000000,
+    "payout_nano": 1100000000,
+    "protocol_fee_nano": 0,
+    "protocol_fee_messages": 0,
+    "settlement_transaction": "14c29b0d1293fbaa8826bcf3eae1a93ef5269d20c67e74e3cdbff5fc9083d8c5",
+    "settlement_transaction_lt": 85733257000003,
+    "masterchain_seqno": 74082040,
+    "holder_ownership_checked_by": "backend jetton getter, not repeated on chain"
+  },
   "previous_contract": {
     "address": "kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M",
     "version": "1.3.0",

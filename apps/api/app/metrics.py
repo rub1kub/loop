@@ -50,6 +50,14 @@ DUEL_CANARY_MIN_WALLET_BALANCE = Gauge(
     "loop_duel_canary_min_wallet_balance_nano",
     "Lowest reported balance across the two DUEL canary wallets.",
 )
+DUEL_FEE_EXEMPT_SETTLEMENTS = Gauge(
+    "loop_duel_fee_exempt_settlements",
+    "Settled offers that waived the protocol fee with a PLUSH BRICK holder permit.",
+)
+DUEL_FEE_EXEMPT_OPEN = Gauge(
+    "loop_duel_fee_exempt_open",
+    "Offers currently holding a fee exemption that has not settled yet.",
+)
 
 
 async def refresh_duel_metrics(session_factory: Any, redis_client: Any) -> None:
@@ -95,6 +103,32 @@ async def refresh_duel_metrics(session_factory: Any, redis_client: Any) -> None:
                 DuelOffer.direct_opponent_wallet.is_(None),
             )
         )
+        # The invite signer also authorises fee exemptions, so a leaked key
+        # shows up as exempt settlements nobody sold. Volume is the detection
+        # signal for a risk whose ceiling is lost protocol revenue.
+        exempt_settled = await db.scalar(
+            select(func.count())
+            .select_from(DuelOffer)
+            .where(
+                DuelOffer.fee_exempt.is_(True),
+                DuelOffer.state == OfferState.SETTLED.value,
+            )
+        )
+        exempt_open = await db.scalar(
+            select(func.count())
+            .select_from(DuelOffer)
+            .where(
+                DuelOffer.fee_exempt.is_(True),
+                DuelOffer.state.in_(
+                    [
+                        OfferState.PENDING_FUNDING.value,
+                        OfferState.OPEN.value,
+                        OfferState.RESERVED.value,
+                        OfferState.MATCHED.value,
+                    ]
+                ),
+            )
+        )
         heartbeat = await db.scalar(
             select(func.max(ChainCheckpoint.heartbeat_at)).where(ChainCheckpoint.key.like("duel:%"))
         )
@@ -103,6 +137,8 @@ async def refresh_duel_metrics(session_factory: Any, redis_client: Any) -> None:
     DUEL_OVERDUE_REVEALS.set(int(overdue or 0))
     DUEL_STALE_FUNDING.set(int(stale_funding or 0))
     DUEL_UNBOUND_DIRECT.set(int(unbound_direct or 0))
+    DUEL_FEE_EXEMPT_SETTLEMENTS.set(int(exempt_settled or 0))
+    DUEL_FEE_EXEMPT_OPEN.set(int(exempt_open or 0))
     if heartbeat:
         if heartbeat.tzinfo is None:
             heartbeat = heartbeat.replace(tzinfo=UTC)
