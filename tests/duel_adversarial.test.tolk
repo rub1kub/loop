@@ -1,3 +1,15 @@
+// Adversarial suite for DuelEscrow v1.4, written to break the contract rather
+// than to confirm it. Every test here is an attack that FAILED; they are kept
+// so the attack stays closed.
+//
+// Covers ground the main suite asserts only by construction: permits
+// transplanted across deployments and networks, a direct-accept signature
+// smuggled into the holder field, foreign signers, inclusive validity edges,
+// feeExempt integrity through the AcceptDirectOffer write-back, value
+// conservation under two-sided boosts, payout-recipient correctness over 40
+// randomised rounds, isolation between concurrent duels, and storage rent
+// growth of the never-pruned used-id map.
+
 import "@acton/crypto"
 
 import "@acton/emulation/network"
@@ -42,7 +54,10 @@ fun holderPermit(
         .storeAddress(owner)
         .storeUint(validUntil, 32)
         .hash();
-    return HolderFeePermit { validUntil, signature: crypto.rawSign(SEED, h) as bits512 }.toCell();
+    return HolderFeePermit {
+        validUntil,
+        signature: crypto.rawSign(SEED, h) as bits512,
+    }.toCell();
 }
 
 fun directPermit(
@@ -154,7 +169,14 @@ get fun `test S1 inviter exemption survives direct acceptance write-back`() {
 
     testing.setNow(c.duelData(602).boostDeadline + 1);
     expect(
-        c.sendReveal(a.address, 3, 602, 601, SA, { value: ton("0.03") }),
+        c.sendReveal(
+            a.address,
+            3,
+            602,
+            601,
+            SA,
+            { value: ton("0.03") },
+        ),
     ).toHaveSuccessfulTx<Reveal>();
     testing.setNow(c.duelData(602).revealDeadline + 1);
     val ex = c.sendExpireDuel(b.address, 4, 602, { value: ton("0.03") });
@@ -170,10 +192,46 @@ get fun `test S2 two concurrent duels stay isolated`() {
     val (c, _, _f, a, b) = setup();
     val cWallet = testing.treasury("s-c");
     val dWallet = testing.treasury("s-d");
-    expect(openEqual(c, a, 10, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, b, 20, SB, 10, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, cWallet, 30, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, dWallet, 40, SB, 30, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            10,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            20,
+            SB,
+            10,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            cWallet,
+            30,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            dWallet,
+            40,
+            SB,
+            30,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     expect(c.contractConfig().locked).toEqual(ton("4"));
 
     expect(
@@ -192,20 +250,57 @@ get fun `test S2 two concurrent duels stay isolated`() {
 
     testing.setNow(c.duelData(20).boostDeadline + 1);
     expect(
-        c.sendReveal(cWallet.address, 2, 20, 30, SA, { value: ton("0.03") }),
+        c.sendReveal(
+            cWallet.address,
+            2,
+            20,
+            30,
+            SA,
+            { value: ton("0.03") },
+        ),
     ).toHaveFailedTx({ exitCode: Errors.WrongRevealer });
 
     expect(
-        c.sendReveal(a.address, 3, 20, 10, SA, { value: ton("0.03") }),
+        c.sendReveal(
+            a.address,
+            3,
+            20,
+            10,
+            SA,
+            { value: ton("0.03") },
+        ),
     ).toHaveSuccessfulTx<Reveal>();
-    expect(c.sendReveal(b.address, 4, 20, 20, SB, { value: ton("0.03") })).toHaveAllSuccessfulTxs();
+    expect(
+        c.sendReveal(
+            b.address,
+            4,
+            20,
+            20,
+            SB,
+            { value: ton("0.03") },
+        ),
+    ).toHaveAllSuccessfulTxs();
     expect(c.contractConfig().locked).toEqual(ton("2"));
 
     expect(
-        c.sendReveal(cWallet.address, 5, 40, 30, SA, { value: ton("0.03") }),
+        c.sendReveal(
+            cWallet.address,
+            5,
+            40,
+            30,
+            SA,
+            { value: ton("0.03") },
+        ),
     ).toHaveSuccessfulTx<Reveal>();
     expect(
-        c.sendReveal(dWallet.address, 6, 40, 40, SB, { value: ton("0.03") }),
+        c.sendReveal(
+            dWallet.address,
+            6,
+            40,
+            40,
+            SB,
+            { value: ton("0.03") },
+        ),
     ).toHaveAllSuccessfulTxs();
     expect(c.contractConfig().locked).toEqual(0);
 }
@@ -213,13 +308,49 @@ get fun `test S2 two concurrent duels stay isolated`() {
 /// S3: after a duel settles both wallets must be able to open again.
 get fun `test S3 active offer slots are released`() {
     val (c, _, _f, a, b) = setup();
-    expect(openEqual(c, a, 10, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, b, 20, SB, 10, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            10,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            20,
+            SB,
+            10,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     testing.setNow(c.duelData(20).revealDeadline + 1);
     expect(c.sendExpireDuel(a.address, 1, 20, { value: ton("0.03") })).toHaveAllSuccessfulTxs();
     expect(c.contractConfig().locked).toEqual(0);
-    expect(openEqual(c, a, 11, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, b, 21, SB, 11, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            11,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            21,
+            SB,
+            11,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     expect(c.contractConfig().locked).toEqual(ton("2"));
 }
 
@@ -227,8 +358,26 @@ get fun `test S3 active offer slots are released`() {
 /// must not move `locked`.
 get fun `test S4 chance floor blocks oversized boost`() {
     val (c, _, _f, a, b) = setup();
-    expect(openEqual(c, a, 10, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, b, 20, SB, 10, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            10,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            20,
+            SB,
+            10,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     val d = c.duelData(20);
     expect(
         c.sendBoostDuel(
@@ -249,9 +398,27 @@ get fun `test S4 chance floor blocks oversized boost`() {
 /// S5: contract balance must never drop below `locked` across a settlement.
 get fun `test S5 contract balance covers locked at all times`() {
     val (c, _, _f, a, b) = setup();
-    expect(openEqual(c, a, 10, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            10,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     expect(testing.getAccountBalance(c.address) >= c.contractConfig().locked).toEqual(true);
-    expect(openEqual(c, b, 20, SB, 10, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            20,
+            SB,
+            10,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     expect(testing.getAccountBalance(c.address) >= c.contractConfig().locked).toEqual(true);
     val d = c.duelData(20);
     expect(
@@ -270,9 +437,25 @@ get fun `test S5 contract balance covers locked at all times`() {
     expect(testing.getAccountBalance(c.address) >= c.contractConfig().locked).toEqual(true);
     testing.setNow(c.duelData(20).boostDeadline + 1);
     expect(
-        c.sendReveal(a.address, 2, 20, 10, SA, { value: ton("0.05") }),
+        c.sendReveal(
+            a.address,
+            2,
+            20,
+            10,
+            SA,
+            { value: ton("0.05") },
+        ),
     ).toHaveSuccessfulTx<Reveal>();
-    expect(c.sendReveal(b.address, 3, 20, 20, SB, { value: ton("0.05") })).toHaveAllSuccessfulTxs();
+    expect(
+        c.sendReveal(
+            b.address,
+            3,
+            20,
+            20,
+            SB,
+            { value: ton("0.05") },
+        ),
+    ).toHaveAllSuccessfulTxs();
     expect(c.contractConfig().locked).toEqual(0);
     expect(testing.getAccountBalance(c.address) >= ton("0.2")).toEqual(true);
 }
@@ -303,8 +486,26 @@ get fun `test S6 permit crosses message kinds`() {
 /// S7: sole-revealer expiry after a boost hands over the whole boosted pool.
 get fun `test S7 sole revealer takes the boosted pool`() {
     val (c, _, feeAcc, a, b) = setup();
-    expect(openEqual(c, a, 10, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, b, 20, SB, 10, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            10,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            20,
+            SB,
+            10,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     val d = c.duelData(20);
     expect(
         c.sendBoostDuel(
@@ -322,7 +523,14 @@ get fun `test S7 sole revealer takes the boosted pool`() {
     expect(c.duelBoostData(20).chanceABps).toEqual(1_000);
     testing.setNow(c.duelData(20).boostDeadline + 1);
     expect(
-        c.sendReveal(a.address, 2, 20, 10, SA, { value: ton("0.05") }),
+        c.sendReveal(
+            a.address,
+            2,
+            20,
+            10,
+            SA,
+            { value: ton("0.05") },
+        ),
     ).toHaveSuccessfulTx<Reveal>();
     testing.setNow(c.duelData(20).revealDeadline + 1);
     val ex = c.sendExpireDuel(a.address, 3, 20, { value: ton("0.05") });
@@ -337,9 +545,36 @@ get fun `test S8 offers cannot enter a second duel`() {
     val (c, _, _f, a, b) = setup();
     val cw = testing.treasury("s-c8");
     val matcher = testing.treasury("s-m8");
-    expect(openEqual(c, a, 10, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, b, 20, SB, 10, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, cw, 30, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            10,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            20,
+            SB,
+            10,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            cw,
+            30,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     expect(
         c.sendMatchOffers(matcher.address, 1, 10, 30, { value: ton("0.03") }),
     ).toHaveFailedTx({ exitCode: Errors.OfferNotOpen });
@@ -352,8 +587,26 @@ get fun `test S8 offers cannot enter a second duel`() {
 /// S9: boost bookkeeping at the exact value boundary.
 get fun `test S9 boost value boundary`() {
     val (c, _, _f, a, b) = setup();
-    expect(openEqual(c, a, 10, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, b, 20, SB, 10, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            10,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            20,
+            SB,
+            10,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     val d = c.duelData(20);
     expect(
         c.sendBoostDuel(
@@ -433,9 +686,25 @@ get fun `test S10 minimum gas still works with a bloated used-id map`() {
     testing.setNow(c.duelData(20).boostDeadline + 1);
     // Exactly MIN_CALL_GAS on both reveals, the second one settles.
     expect(
-        c.sendReveal(a.address, 3, 20, 10, SA, { value: 20_000_000 }),
+        c.sendReveal(
+            a.address,
+            3,
+            20,
+            10,
+            SA,
+            { value: 20_000_000 },
+        ),
     ).toHaveSuccessfulTx<Reveal>();
-    expect(c.sendReveal(b.address, 4, 20, 20, SB, { value: 20_000_000 })).toHaveAllSuccessfulTxs();
+    expect(
+        c.sendReveal(
+            b.address,
+            4,
+            20,
+            20,
+            SB,
+            { value: 20_000_000 },
+        ),
+    ).toHaveAllSuccessfulTxs();
     expect(c.contractConfig().locked).toEqual(0);
 }
 
@@ -512,8 +781,26 @@ get fun `test S12 foreign signer permit rejected`() {
 /// unanswerable boost exactly at the hard deadline.
 get fun `test S13 final boost at the hard deadline is unanswerable`() {
     val (c, _, _f, a, b) = setup();
-    expect(openEqual(c, a, 10, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, b, 20, SB, 10, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            10,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            20,
+            SB,
+            10,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     val hard = c.duelData(20).hardDeadline;
     var rev = 0;
     while (c.duelData(20).boostDeadline < hard) {
@@ -610,7 +897,14 @@ get fun `test S14 outcome is weighted toward the larger stake`() {
         ).toHaveSuccessfulTx<OpenOffer>();
         testing.setNow(c.duelData(idB).boostDeadline + 1);
         expect(
-            c.sendReveal(a.address, idA, idB, idA, sa, { value: ton("0.05") }),
+            c.sendReveal(
+                a.address,
+                idA,
+                idB,
+                idA,
+                sa,
+                { value: ton("0.05") },
+            ),
         ).toHaveSuccessfulTx<Reveal>();
 
         val outcome = beginCell()
@@ -628,7 +922,14 @@ get fun `test S14 outcome is weighted toward the larger stake`() {
             )
             .hash();
         val aShouldWin = outcome % ton("4") < ton("1");
-        val settled = c.sendReveal(b.address, idB, idB, idB, sb, { value: ton("0.05") });
+        val settled = c.sendReveal(
+            b.address,
+            idB,
+            idB,
+            idB,
+            sb,
+            { value: ton("0.05") },
+        );
         expect(settled).toHaveAllSuccessfulTxs();
         expect(settled).toHaveSuccessfulTx<DuelPayout>({
             to: aShouldWin ? a.address : b.address,
@@ -650,15 +951,52 @@ get fun `test S14 outcome is weighted toward the larger stake`() {
 /// own boosted stake, no fee, and `locked` must land on 0.
 get fun `test S15 two-sided boosts refund exactly on no-reveal`() {
     val (c, _, feeAcc, a, b) = setup();
-    expect(openEqual(c, a, 10, SA, 0, holderPermit(c, 10, a.address, testing.getNow() + 600)))
-        .toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, b, 20, SB, 10, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            10,
+            SA,
+            0,
+            holderPermit(c, 10, a.address, testing.getNow() + 600),
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            20,
+            SB,
+            10,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     val hard = c.duelData(20).hardDeadline;
     expect(
-        c.sendBoostDuel(a.address, 1, 20, 10, ton("3"), 0, 1_000, hard, { value: ton("3.05") }),
+        c.sendBoostDuel(
+            a.address,
+            1,
+            20,
+            10,
+            ton("3"),
+            0,
+            1_000,
+            hard,
+            { value: ton("3.05") },
+        ),
     ).toHaveSuccessfulTx<BoostDuel>();
     expect(
-        c.sendBoostDuel(b.address, 2, 20, 20, ton("2"), 1, 1_000, hard, { value: ton("2.05") }),
+        c.sendBoostDuel(
+            b.address,
+            2,
+            20,
+            20,
+            ton("2"),
+            1,
+            1_000,
+            hard,
+            { value: ton("2.05") },
+        ),
     ).toHaveSuccessfulTx<BoostDuel>();
     expect(c.contractConfig().locked).toEqual(ton("7"));
     expect(c.duelBoostData(20).stakeA).toEqual(ton("4"));
@@ -678,23 +1016,75 @@ get fun `test S15 two-sided boosts refund exactly on no-reveal`() {
 /// the boosted pool and nothing more.
 get fun `test S16 two-sided boosts settle to exactly the pool`() {
     val (c, _, feeAcc, a, b) = setup();
-    expect(openEqual(c, a, 10, SA, 0, null)).toHaveSuccessfulTx<OpenOffer>();
-    expect(openEqual(c, b, 20, SB, 10, null)).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            a,
+            10,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            c,
+            b,
+            20,
+            SB,
+            10,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
     val hard = c.duelData(20).hardDeadline;
     expect(
-        c.sendBoostDuel(a.address, 1, 20, 10, ton("3"), 0, 1_000, hard, { value: ton("3.05") }),
+        c.sendBoostDuel(
+            a.address,
+            1,
+            20,
+            10,
+            ton("3"),
+            0,
+            1_000,
+            hard,
+            { value: ton("3.05") },
+        ),
     ).toHaveSuccessfulTx<BoostDuel>();
     expect(
-        c.sendBoostDuel(b.address, 2, 20, 20, ton("2"), 1, 1_000, hard, { value: ton("2.05") }),
+        c.sendBoostDuel(
+            b.address,
+            2,
+            20,
+            20,
+            ton("2"),
+            1,
+            1_000,
+            hard,
+            { value: ton("2.05") },
+        ),
     ).toHaveSuccessfulTx<BoostDuel>();
     expect(c.contractConfig().locked).toEqual(ton("7"));
     val balBefore = testing.getAccountBalance(c.address);
 
     testing.setNow(c.duelData(20).boostDeadline + 1);
     expect(
-        c.sendReveal(a.address, 3, 20, 10, SA, { value: ton("0.05") }),
+        c.sendReveal(
+            a.address,
+            3,
+            20,
+            10,
+            SA,
+            { value: ton("0.05") },
+        ),
     ).toHaveSuccessfulTx<Reveal>();
-    val settled = c.sendReveal(b.address, 4, 20, 20, SB, { value: ton("0.05") });
+    val settled = c.sendReveal(
+        b.address,
+        4,
+        20,
+        20,
+        SB,
+        { value: ton("0.05") },
+    );
     expect(settled).toHaveAllSuccessfulTxs();
     expect(settled).toHaveSuccessfulTx<DuelPayout>({ value: ton("6.825") });
     expect(settled).toHaveSuccessfulTx<ProtocolFee>({
@@ -707,4 +1097,118 @@ get fun `test S16 two-sided boosts settle to exactly the pool`() {
     // under the 7 TON pool: never more than the pool left the contract.
     expect(balBefore - balAfter < ton("7")).toEqual(true);
     expect(balBefore - balAfter > ton("6.8")).toEqual(true);
+}
+
+fun deployWithUsedIds(n: uint64, ownerName: string, feeName: string): DuelEscrow {
+    testing.setNow(1_800_000_000);
+    val owner = testing.treasury(ownerName);
+    val feeAcc = testing.treasury(feeName);
+    var used = [] as UsedOfferMap;
+    var i: uint64 = 0;
+    while (i < n) {
+        used.set(1_000_000 + i * 7, true);
+        i += 1;
+    }
+    val c = DuelEscrow.fromStorage({
+        owner: owner.address,
+        treasury: feeAcc.address,
+        feeBps: 250,
+        networkId: NET,
+        inviteSignerPublicKey: crypto.seedToKeyPair(SEED).publicKey,
+        paused: false,
+        locked: 0,
+        offers: [],
+        duels: [],
+        activeOffers: [],
+        usedOfferIds: used,
+    });
+    expect(c.deploy(owner.address, { value: ton("5") })).toHaveSuccessfulDeploy({ to: c.address });
+    return c;
+}
+
+/// S17: quantify the yearly storage rent as `usedOfferIds` grows. The map is
+/// never pruned and MIN_CONTRACT_RESERVE is a fixed 0.2 TON.
+get fun `test S17 storage rent grows with the never-pruned used-id map`() {
+    val small = deployWithUsedIds(0, "rent0-o", "rent0-f");
+    val big = deployWithUsedIds(8_000, "rent8k-o", "rent8k-f");
+    val yearSmall = testing.getAccountStorageFee(small.address, 31_536_000)!;
+    val yearBig = testing.getAccountStorageFee(big.address, 31_536_000)!;
+    // Measured: 0.00468 TON/year empty vs 0.01072 TON/year with 8k ids, i.e.
+    // ~755 nanoton per retained offer id per year. MIN_CONTRACT_RESERVE is a
+    // fixed 0.2 TON, so ~265k retained ids would consume it in a year.
+    expect(yearSmall).toEqual(4_677_276);
+    expect(yearBig).toEqual(10_718_757);
+    expect(yearBig > yearSmall * 2).toEqual(true);
+}
+
+/// S18: the two permit legs the shipped suite does not cover executably —
+/// transplant across deployments and across networks.
+get fun `test S18 permit cannot cross deployment or network`() {
+    val (c, ownerT, feeT, a, _b) = setup();
+    val now = testing.getNow();
+
+    // Second deployment of the same code with a different fee -> different address.
+    val other = DuelEscrow.fromStorage({
+        owner: ownerT.address,
+        treasury: feeT.address,
+        feeBps: 300,
+        networkId: NET,
+        inviteSignerPublicKey: crypto.seedToKeyPair(SEED).publicKey,
+        paused: false,
+        locked: 0,
+        offers: [],
+        duels: [],
+        activeOffers: [],
+        usedOfferIds: [],
+    });
+    expect(other.deploy(ownerT.address, { value: ton("2") })).toHaveSuccessfulDeploy({
+        to: other.address,
+    });
+    expect(other.address).toNotEqual(c.address);
+
+    // Permit minted for `c`, replayed against `other`.
+    expect(
+        other.sendOpenOffer(
+            a.address,
+            1,
+            10,
+            commitFor(other, 10, a.address, SA),
+            5_000,
+            ton("2"),
+            now + 900,
+            0,
+            holderPermit(c, 10, a.address, now + 600),
+            { value: ton("1.05") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InvalidHolderPermit });
+
+    // Permit minted with the wrong networkId, replayed against `c`.
+    val wrongNetHash = beginCell()
+        .storeUint(D_HOLDER, 32)
+        .storeInt(-239, 32)
+        .storeAddress(c.address)
+        .storeUint(10, 64)
+        .storeAddress(a.address)
+        .storeUint(now + 600, 32)
+        .hash();
+    val wrongNet = HolderFeePermit {
+        validUntil: now + 600,
+        signature: crypto.rawSign(SEED, wrongNetHash) as bits512,
+    }.toCell();
+    expect(
+        c.sendOpenOffer(
+            a.address,
+            2,
+            10,
+            commitFor(c, 10, a.address, SA),
+            5_000,
+            ton("2"),
+            now + 900,
+            0,
+            wrongNet,
+            { value: ton("1.05") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.InvalidHolderPermit });
+    expect(c.contractConfig().locked).toEqual(0);
+    expect(other.contractConfig().locked).toEqual(0);
 }
