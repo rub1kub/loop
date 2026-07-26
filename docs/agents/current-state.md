@@ -7,8 +7,8 @@ TON от намерений, примеров и будущего mainnet-рел
 
 | Поле                    | Значение                                   |
 | ----------------------- | ------------------------------------------ |
-| Проверено               | 2026-07-26 19:10 UTC                       |
-| Активный runtime commit | `689bab9e369b9cdfd46afd66b10a5737521e57d8` |
+| Проверено               | 2026-07-26 20:38 UTC                       |
+| Активный runtime commit | `14760d475c3689013365044382ee7b5ab7f4a037` |
 | Активная ветка          | `main`                                     |
 | Пользовательская сеть   | TON testnet, global ID `-3`                |
 | Публичный домен         | <https://app.tonsuite.org>                 |
@@ -24,7 +24,7 @@ TON от намерений, примеров и будущего mainnet-рел
 На момент проверки:
 
 - `/live` и `/ready` отвечают успешно;
-- release и web release указывают на один commit `689bab9e…`;
+- release и web release указывают на один commit `14760d47…`;
 - `api`, `worker`, `notifier`, `db` и `redis` имеют состояние `healthy`;
 - бот отвечает как `@getloopbot`;
 - inline mode и webhook включены;
