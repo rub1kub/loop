@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -15,7 +16,13 @@ from sqlalchemy import select, update
 
 from .config import Settings, get_settings
 from .database import create_database
+from .duel_notifications import (
+    KIND_DUEL_MATCHED,
+    match_notification_markup,
+    match_notification_text,
+)
 from .models import NotificationOutbox, ResultCard, User
+from .modules.duel.models import Duel, DuelState
 from .referrals import get_or_create_referral_code
 from .result_cards import (
     notification_markup,
@@ -108,6 +115,70 @@ async def update_delivery(
         await db.commit()
 
 
+async def deliver_match_alert(
+    bot: Bot,
+    session_factory: Any,
+    settings: Settings,
+    outbox_id: str,
+    user: User | None,
+    duel: Duel | None,
+    payload: dict[str, Any],
+) -> None:
+    if user is None or duel is None:
+        await update_delivery(
+            session_factory, outbox_id, state="failed", error="duel_or_user_missing"
+        )
+        return
+    if duel.state not in {DuelState.BOOSTING.value, DuelState.REVEALING.value}:
+        await update_delivery(session_factory, outbox_id, state="blocked", error="duel_closed")
+        return
+    now = datetime.now(UTC)
+    deadline = duel.reveal_deadline
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=UTC)
+    if now >= deadline:
+        await update_delivery(session_factory, outbox_id, state="blocked", error="deadline_passed")
+        return
+
+    try:
+        message = await bot.send_message(
+            chat_id=user.telegram_id,
+            text=match_notification_text({**payload, "reveal_deadline": deadline.isoformat()}, now),
+            reply_markup=match_notification_markup(settings),
+        )
+    except TelegramRetryAfter as exc:
+        await update_delivery(
+            session_factory,
+            outbox_id,
+            state="retry",
+            error="telegram_rate_limit",
+            retry_after=exc.retry_after,
+        )
+    except TelegramForbiddenError:
+        await update_delivery(
+            session_factory, outbox_id, state="blocked", error="telegram_forbidden"
+        )
+    except TelegramBadRequest:
+        await update_delivery(
+            session_factory, outbox_id, state="failed", error="telegram_bad_request"
+        )
+    except TelegramAPIError:
+        await update_delivery(
+            session_factory,
+            outbox_id,
+            state="retry",
+            error="delivery_uncertain",
+            retry_after=5,
+        )
+    else:
+        await update_delivery(
+            session_factory,
+            outbox_id,
+            state="sent",
+            message_id=message.message_id,
+        )
+
+
 async def deliver_one(
     bot: Bot,
     session_factory: Any,
@@ -118,9 +189,18 @@ async def deliver_one(
         outbox = await db.get(NotificationOutbox, outbox_id)
         if outbox is None or outbox.state != "processing":
             return
-        card = await db.get(ResultCard, outbox.result_card_id)
-        user = await db.get(User, outbox.user_id)
-        referral = await get_or_create_referral_code(db, outbox.user_id) if user else None
+        if outbox.kind == KIND_DUEL_MATCHED:
+            payload = json.loads(outbox.payload_json)
+            player = await db.get(User, outbox.user_id)
+            duel = await db.get(Duel, payload["duel_id"])
+        else:
+            payload = None
+            card = await db.get(ResultCard, outbox.result_card_id)
+            user = await db.get(User, outbox.user_id)
+            referral = await get_or_create_referral_code(db, outbox.user_id) if user else None
+    if payload is not None:
+        await deliver_match_alert(bot, session_factory, settings, outbox_id, player, duel, payload)
+        return
     if card is None or user is None:
         await update_delivery(
             session_factory, outbox_id, state="failed", error="result_or_user_missing"

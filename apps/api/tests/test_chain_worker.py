@@ -550,7 +550,22 @@ async def test_duel_projection_validates_funding_and_terminal_payout(app) -> Non
         assert card.mode == "duel"
         assert card.user_id == second_user.id
         assert card.result_nano == 2_875_000_000
-        assert await db.scalar(select(func.count()).select_from(NotificationOutbox)) == 1
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(NotificationOutbox)
+                .where(NotificationOutbox.kind == "result")
+            )
+            == 1
+        )
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(NotificationOutbox)
+                .where(NotificationOutbox.kind == "duel_matched")
+            )
+            == 2
+        )
 
 
 @pytest.mark.asyncio

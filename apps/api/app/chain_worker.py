@@ -15,10 +15,12 @@ from tonsdk.boc import Cell  # type: ignore[import-untyped]
 from .config import get_settings
 from .control_state import contract_control_key
 from .database import create_database
+from .duel_notifications import KIND_DUEL_MATCHED
 from .models import (
     AdminAuditEvent,
     ChainCheckpoint,
     ContractControl,
+    NotificationOutbox,
     ReferralAttribution,
     ReferralReward,
     Wallet,
@@ -345,6 +347,44 @@ def transaction_identity(transaction: dict[str, Any]) -> tuple[int, str] | None:
         return None
 
 
+async def enqueue_match_notifications(
+    db: Any,
+    duel: Duel,
+    offers: list[MatchmakingOffer],
+) -> None:
+    for offer in offers:
+        if offer.user_id is None:
+            continue
+        payload = json.dumps(
+            {
+                "duel_id": duel.id,
+                "onchain_duel_id": duel.onchain_duel_id,
+                "network": duel.network,
+                "offer_id": offer.onchain_offer_id,
+                "stake_nano": offer.stake_nano,
+                "chance_bps": offer.chance_bps,
+                "boost_deadline": (
+                    duel.boost_deadline.isoformat() if duel.boost_deadline else None
+                ),
+                "reveal_deadline": duel.reveal_deadline.isoformat(),
+            },
+            separators=(",", ":"),
+        )
+        try:
+            async with db.begin_nested():
+                db.add(
+                    NotificationOutbox(
+                        user_id=offer.user_id,
+                        kind=KIND_DUEL_MATCHED,
+                        dedupe_key=f"duel_matched:{duel.id}:{offer.user_id}",
+                        payload_json=payload,
+                    )
+                )
+                await db.flush()
+        except IntegrityError:
+            continue
+
+
 async def create_duel_projection(
     db: Any,
     settings: Any,
@@ -392,6 +432,7 @@ async def create_duel_projection(
                     stake_nano=offer.stake_nano,
                 )
             )
+        await enqueue_match_notifications(db, duel, ordered)
     challenge = await db.scalar(
         select(DuelChallenge).where(
             DuelChallenge.creator_offer_id.in_([first.id, second.id]),

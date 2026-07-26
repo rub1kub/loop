@@ -179,7 +179,14 @@ async def create_result_card(
     )
     db.add(card)
     await db.flush()
-    db.add(NotificationOutbox(user_id=user_id, result_card_id=card.id))
+    db.add(
+        NotificationOutbox(
+            user_id=user_id,
+            kind="result",
+            dedupe_key=f"result:{card.id}",
+            result_card_id=card.id,
+        )
+    )
     return card
 
 

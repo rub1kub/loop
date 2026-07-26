@@ -91,19 +91,21 @@ class ResultCard(Base):
 class NotificationOutbox(Base):
     __tablename__ = "notification_outbox"
     __table_args__ = (
-        UniqueConstraint("result_card_id", name="notification_result_once"),
+        UniqueConstraint("dedupe_key", name="notification_dedupe_once"),
         CheckConstraint(
             "state IN ('pending', 'processing', 'retry', 'sent', 'blocked', 'failed')",
             name="notification_state",
         ),
+        CheckConstraint("kind IN ('result', 'duel_matched')", name="notification_kind"),
         Index("ix_notification_outbox_due", "state", "next_attempt_at"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    result_card_id: Mapped[str] = mapped_column(
-        ForeignKey("result_cards.id"), nullable=False
-    )
+    kind: Mapped[str] = mapped_column(String(24), default="result", nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(180), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    result_card_id: Mapped[str | None] = mapped_column(ForeignKey("result_cards.id"))
     state: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     next_attempt_at: Mapped[datetime] = mapped_column(
