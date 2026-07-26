@@ -92,3 +92,58 @@ async def test_duel_v11_preflight_rejects_active_projection(app) -> None:
                 http=http,
                 engine=app.state.engine,
             )
+
+
+def v14_getter_client(locked: int) -> httpx.AsyncClient:
+    """A v1.4 contractConfig: `locked` is followed by `holderFeeSupported`."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v2/runGetMethod"
+        return httpx.Response(
+            200,
+            json={
+                "ok": True,
+                "result": {
+                    "exit_code": 0,
+                    "stack": [
+                        ["cell", {"bytes": ""}],
+                        ["cell", {"bytes": ""}],
+                        ["num", "0xfa"],
+                        ["num", "-0x3"],
+                        ["num", "0x8d18"],
+                        ["cell", {"bytes": ""}],
+                        ["num", "0x0"],
+                        ["num", hex(locked)],
+                        ["num", "-0x1"],
+                    ],
+                },
+            },
+        )
+
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+async def test_duel_preflight_reads_locked_not_the_holder_flag_on_v14(app) -> None:
+    # Taking the last stack item would read holderFeeSupported=-1 as a negative
+    # balance and block a legitimate migration away from a v1.4 contract.
+    async with v14_getter_client(0) as http:
+        proof = await run_preflight(
+            Settings(),
+            PREVIOUS_CONTRACT,
+            TARGET_CONTRACT,
+            http=http,
+            engine=app.state.engine,
+        )
+    assert proof.previous_locked_nano == 0
+
+
+async def test_duel_preflight_still_blocks_a_locked_v14_contract(app) -> None:
+    async with v14_getter_client(500_000_000) as http:
+        with pytest.raises(RuntimeError, match="still locks"):
+            await run_preflight(
+                Settings(),
+                PREVIOUS_CONTRACT,
+                TARGET_CONTRACT,
+                http=http,
+                engine=app.state.engine,
+            )

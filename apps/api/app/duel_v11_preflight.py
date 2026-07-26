@@ -67,10 +67,12 @@ async def previous_contract_locked(
         payload.get("ok") is not True
         or result.get("exit_code") != 0
         or not isinstance(stack, list)
-        or len(stack) not in {5, 8}
+        or len(stack) not in {5, 8, 9}
     ):
         raise TonProviderError("previous DUEL contractConfig getter failed")
-    locked = _stack_number(stack[-1])
+    # Legacy (5) and v1.3 (8) end with `locked`. v1.4 appends
+    # `holderFeeSupported`, so the last item is a flag, not a balance.
+    locked = _stack_number(stack[7] if len(stack) == 9 else stack[-1])
     if locked < 0:
         raise TonProviderError("previous DUEL locked balance is negative")
     return locked
