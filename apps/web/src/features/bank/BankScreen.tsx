@@ -248,7 +248,11 @@ export function BankScreen({
                   От 1 до {formatGram(limit?.principal_limit_nano ?? 5_000_000_000, 0)} GRAM. Лимит
                   растёт вместе с завершёнными позициями.
                 </p>
-                {message && <p className="form-note is-error">{message}</p>}
+                {message && (
+                  <p className="form-note is-error" role="alert">
+                    {message}
+                  </p>
+                )}
                 <button className="primary-button" onClick={continueFromAmount}>
                   ДАЛЬШЕ
                   <ArrowRight aria-hidden="true" />
@@ -330,7 +334,11 @@ export function BankScreen({
                     />
                   </dl>
                 </details>
-                {message && <p className="form-note is-error">{message}</p>}
+                {message && (
+                  <p className="form-note is-error" role="alert">
+                    {message}
+                  </p>
+                )}
                 <button className="primary-button" onClick={() => void confirmPosition()}>
                   ПОДТВЕРДИТЬ В КОШЕЛЬКЕ
                 </button>

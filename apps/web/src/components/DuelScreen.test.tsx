@@ -197,6 +197,19 @@ describe('DuelScreen', () => {
     expect(screen.queryByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).not.toBeInTheDocument();
   });
 
+  it('marks a failure as a failure instead of stamping it with a verified shield', () => {
+    render(
+      <DuelScreen profile={profile} offers={[]} duels={[]} invite={null} onRefresh={vi.fn()} />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Ставка в GRAM'), { target: { value: '0.1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }));
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Минимальная ставка — 0,25 GRAM');
+    expect(alert).toHaveClass('is-error');
+  });
+
   it('names a loss and never shows the winner-if-won payout as the outcome', () => {
     render(
       <DuelScreen

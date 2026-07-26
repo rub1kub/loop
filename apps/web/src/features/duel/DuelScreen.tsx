@@ -6,6 +6,7 @@ import {
   ShieldCheck,
   User,
   UserPlus,
+  WarningCircle,
 } from '@phosphor-icons/react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -75,7 +76,13 @@ export function DuelScreen({
   const [busy, setBusy] = useState(false);
   const [mockSearching, setMockSearching] = useState(false);
   const [mockExpiresAt, setMockExpiresAt] = useState<number | null>(null);
-  const [message, setMessage] = useState(invite ? `${invite.creator_name} бросил тебе вызов.` : '');
+  const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'error' }>(() => ({
+    text: invite ? `${invite.creator_name} бросил тебе вызов.` : '',
+    tone: 'info',
+  }));
+  const message = notice.text;
+  const setMessage = useCallback((text: string) => setNotice({ text, tone: 'info' }), []);
+  const failed = useCallback((text: string) => setNotice({ text, tone: 'error' }), []);
   const [now, setNow] = useState(() => Date.now());
   const [seenDuelId, setSeenDuelId] = useState(() => readSeenDuelId());
   const locked = useRef(false);
@@ -126,7 +133,7 @@ export function DuelScreen({
       haptic(latest.side === 'you' ? 'success' : 'warning');
     }, 0);
     return () => window.clearTimeout(notification);
-  }, [activeDuel]);
+  }, [activeDuel, setMessage]);
 
   const requestedStake = useMemo(() => {
     try {
@@ -248,7 +255,7 @@ export function DuelScreen({
         await onRefresh();
         haptic('success');
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : 'Не удалось создать DUEL');
+        failed(error instanceof Error ? error.message : 'Не удалось создать DUEL');
         haptic('error');
       } finally {
         locked.current = false;
@@ -258,10 +265,12 @@ export function DuelScreen({
     [
       activeOffer,
       chance,
+      failed,
       invite,
       onRefresh,
       profile.wallet,
       requestedStake,
+      setMessage,
       terms.stake,
       terms.opponentStake,
       terms.totalPool,
@@ -304,7 +313,7 @@ export function DuelScreen({
       await onRefresh();
       haptic('success');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Действие не выполнено');
+      failed(error instanceof Error ? error.message : 'Действие не выполнено');
       haptic('error');
     } finally {
       locked.current = false;
@@ -315,8 +324,10 @@ export function DuelScreen({
     activeOffer,
     duelBoosting,
     duelExpired,
+    failed,
     offerExpired,
     onRefresh,
+    setMessage,
     tonConnectUI,
     wallet,
   ]);
@@ -324,12 +335,12 @@ export function DuelScreen({
   const boostDuel = useCallback(async () => {
     if (locked.current || !activeDuel || !activeOffer || !duelBoosting) return;
     if (boostNano < 100_000_000) {
-      setMessage('Минимальное усиление — 0,1 GRAM');
+      failed('Минимальное усиление — 0,1 GRAM');
       haptic('warning');
       return;
     }
     if (boostedChanceBps > 9_000) {
-      setMessage('Максимальный перевес — 90%');
+      failed('Максимальный перевес — 90%');
       haptic('warning');
       return;
     }
@@ -366,7 +377,7 @@ export function DuelScreen({
       await onRefresh();
       haptic('success');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Не удалось усилить DUEL');
+      failed(error instanceof Error ? error.message : 'Не удалось усилить DUEL');
       haptic('error');
     } finally {
       locked.current = false;
@@ -378,20 +389,22 @@ export function DuelScreen({
     boostNano,
     boostedChanceBps,
     duelBoosting,
+    failed,
     onRefresh,
+    setMessage,
     tonConnectUI,
     wallet,
   ]);
 
   function inviteToTelegram() {
     if (!activeOffer || activeOffer.state !== 'open') {
-      setMessage('Сначала дождись подтверждения вызова.');
+      failed('Сначала дождись подтверждения вызова.');
       haptic('warning');
       return;
     }
     const app = telegram();
     if (!app?.switchInlineQuery) {
-      setMessage('Приглашение в Telegram доступно только внутри приложения.');
+      failed('Приглашение в Telegram доступно только внутри приложения.');
       return;
     }
     app.switchInlineQuery(`duel ${activeOffer.onchain_offer_id}`, ['users', 'groups']);
@@ -640,12 +653,18 @@ export function DuelScreen({
         {message && (
           <motion.p
             key={message}
-            className="duel-message"
+            className={`duel-message${notice.tone === 'error' ? ' is-error' : ''}`}
+            role={notice.tone === 'error' ? 'alert' : undefined}
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
           >
-            <ShieldCheck aria-hidden="true" /> {message}
+            {notice.tone === 'error' ? (
+              <WarningCircle aria-hidden="true" />
+            ) : (
+              <ShieldCheck aria-hidden="true" />
+            )}{' '}
+            {message}
           </motion.p>
         )}
       </AnimatePresence>

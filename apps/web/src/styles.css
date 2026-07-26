@@ -1094,7 +1094,10 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .form-note.is-error {
-  color: #bbb;
+  padding-left: 11px;
+  border-left: 2px solid #f5f5f7;
+  color: #f5f5f7;
+  font-weight: 560;
 }
 
 .contract-truth {
@@ -1774,6 +1777,14 @@ details[open] > summary .disclosure-indicator svg {
   font-size: 11px;
   line-height: 1.45;
   text-align: center;
+}
+
+.duel-message.is-error {
+  padding: 9px 12px;
+  border: 1px solid #f5f5f7;
+  border-radius: 11px;
+  color: #f5f5f7;
+  font-weight: 560;
 }
 
 .duel-message svg {
