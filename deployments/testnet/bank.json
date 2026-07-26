@@ -82,7 +82,8 @@
     "version": "1.3.0",
     "locked_nano": 0,
     "settled_by": "two owner deposits that paid every waiting position in full",
-    "settlement_note": "The queue does not empty on its own: each deposit's remainder seeds the next position. It was driven to zero deliberately by preparing the head's need so one later deposit covered it exactly, leaving no remainder. Both waiting positions were paid their full target before retirement."
+    "settlement_note": "The queue does not empty on its own: each deposit's remainder seeds the next position. It was driven to zero deliberately by preparing the head's need so one later deposit covered it exactly, leaving no remainder. Both waiting positions were paid their full target before retirement.",
+    "paused": true
   },
   "explorer_url": "https://testnet.tonviewer.com/kQDy0JOVjIjeH-ZmyCv1LLjmJHBJVOicPo0T3atxn5BLNL_q",
   "deploy_masterchain_seqno": 74104596
