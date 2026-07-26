@@ -574,7 +574,7 @@ get fun `test boost and reveal enforce the exact hard deadline`() {
     openEqualPair(hard, playerA, playerB);
     val hardDeadline = hard.duelData(OFFER_B_ID).hardDeadline;
     var revision = 0;
-    while (revision < 7) {
+    while (revision < 6) {
         val current = hard.duelData(OFFER_B_ID);
         testing.setNow(current.boostDeadline);
         val sender = revision % 2 == 0 ? playerA : playerB;
@@ -594,8 +594,44 @@ get fun `test boost and reveal enforce the exact hard deadline`() {
         ).toHaveSuccessfulTx<BoostDuel>();
         revision += 1;
     }
-    expect(testing.getNow()).toEqual(hardDeadline);
-    expect(hard.duelData(OFFER_B_ID).boostRevision).toEqual(7);
+    // The soft deadline has now been walked to exactly one extension short of
+    // the hard cap: this is the last moment a boost can still leave the
+    // opponent a full window to answer in.
+    expect(testing.getNow()).toEqual(hardDeadline - 20);
+    expect(hard.duelData(OFFER_B_ID).boostRevision).toEqual(6);
+
+    // One second later no boost can be answered, so none is accepted. Without
+    // this the final boost would land in the same second the window shuts.
+    testing.setNow(hardDeadline - 19);
+    expect(
+        hard.sendBoostDuel(
+            playerA.address,
+            330,
+            OFFER_B_ID,
+            OFFER_A_ID,
+            ton("0.1"),
+            6,
+            1_000,
+            hardDeadline,
+            { value: ton("0.15") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.BoostClosed });
+
+    testing.setNow(hardDeadline);
+    expect(
+        hard.sendBoostDuel(
+            playerB.address,
+            331,
+            OFFER_B_ID,
+            OFFER_B_ID,
+            ton("0.1"),
+            6,
+            1_000,
+            hardDeadline,
+            { value: ton("0.15") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.BoostClosed });
+
     expect(
         hard.sendReveal(
             playerA.address,

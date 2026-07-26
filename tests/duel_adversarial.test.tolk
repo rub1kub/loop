@@ -1212,3 +1212,73 @@ get fun `test S18 permit cannot cross deployment or network`() {
     expect(c.contractConfig().locked).toEqual(0);
     expect(other.contractConfig().locked).toEqual(0);
 }
+
+get fun `test S19 the last boost always leaves a full window to answer`() {
+    val (contract, _, _, playerA, playerB) = setup();
+    expect(
+        openEqual(
+            contract,
+            playerA,
+            901,
+            SA,
+            0,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    expect(
+        openEqual(
+            contract,
+            playerB,
+            902,
+            SB,
+            901,
+            null,
+        ),
+    ).toHaveSuccessfulTx<OpenOffer>();
+    val hardDeadline = contract.duelData(902).hardDeadline;
+
+    // Walk the soft deadline all the way up to the hard cap with alternating
+    // minimum boosts, the setup that used to end in an unanswerable boost.
+    var revision = 0;
+    while (revision < 6) {
+        testing.setNow(contract.duelData(902).boostDeadline);
+        val sender = revision % 2 == 0 ? playerA : playerB;
+        val offerId = revision % 2 == 0 ? 901 : 902;
+        expect(
+            contract.sendBoostDuel(
+                sender.address,
+                800 + revision,
+                902,
+                offerId,
+                ton("0.1"),
+                revision,
+                1_000,
+                hardDeadline,
+                { value: ton("0.15") },
+            ),
+        ).toHaveSuccessfulTx<BoostDuel>();
+        revision += 1;
+    }
+
+    // Every accepted boost left at least one full extension before the cap, so
+    // the opponent could always answer. The invariant, stated directly:
+    val duel = contract.duelData(902);
+    expect(duel.boostDeadline <= duel.hardDeadline).toEqual(true);
+    expect(testing.getNow() + 20 <= duel.hardDeadline).toEqual(true);
+
+    // A large last-second dilution is now impossible.
+    testing.setNow(hardDeadline);
+    expect(
+        contract.sendBoostDuel(
+            playerB.address,
+            820,
+            902,
+            902,
+            ton("8"),
+            6,
+            1_000,
+            hardDeadline,
+            { value: ton("8.05") },
+        ),
+    ).toHaveFailedTx({ exitCode: Errors.BoostClosed });
+}

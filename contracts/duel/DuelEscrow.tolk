@@ -31,8 +31,8 @@ const REASON_NO_REVEALS = 5
 
 contract DuelEscrow {
     author: "LOOP"
-    version: "1.4.0"
-    description: "Address-bound TON escrow with a bounded boost phase, commit-reveal and holder fee permits"
+    version: "1.5.0"
+    description: "Address-bound TON escrow with a guaranteed boost response window, commit-reveal and holder fee permits"
     storage: Storage
     incomingMessages: AllowedMessage
 }
@@ -392,8 +392,15 @@ fun Storage.boostDuel(
 ): void {
     assert (!self.paused) throw Errors.Paused;
     var duel = self.loadDuel(duelId);
+    // A boost must leave the opponent a full extension to answer in. Without
+    // this, alternating boosts could walk the soft deadline up to the hard cap
+    // and the last one would land in the same second the window shuts,
+    // provably unanswerable. That is value-neutral under proportional stakes,
+    // but the product promises a response window, so the contract enforces one
+    // instead of the interface explaining its absence.
     assert (
-        blockchain.now() <= duel.boostDeadline && blockchain.now() <= duel.hardDeadline
+        blockchain.now() <= duel.boostDeadline &&
+        blockchain.now() + BOOST_EXTENSION <= duel.hardDeadline
     ) throw Errors.BoostClosed;
     assert (
         blockchain.now() <= validUntil && validUntil <= duel.hardDeadline

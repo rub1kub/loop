@@ -49,7 +49,7 @@ make contracts-mainnet-verify
 
 ## Current evidence
 
-- 19 BANK and 54 DUEL contract tests (incl. DuelEscrow v1.4 holder-permit paths);
+- 22 BANK and 73 DUEL contract tests, including an adversarial suite and the allocation gas ceiling;
 - 99.67% contract line coverage and 87.45% branch coverage;
 - BANK mutation scores: 93.5% critical and 82.4% major;
 - DUEL mutation scores: 99.1% critical and 90.0% major;
