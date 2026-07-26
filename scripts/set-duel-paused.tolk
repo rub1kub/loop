@@ -12,7 +12,11 @@ enum DuelPauseErrors {
 fun main(duelAddress: address, ownerAddress: address, paused: bool, queryId: uint64) {
     val signer = scripts.wallet("deployer");
     val duel = DuelEscrow.fromAddress(duelAddress);
-    val before = duel.contractConfig();
+    // `adminState` has the same shape in every deployed DuelEscrow, while
+    // `contractConfig` grew a field in v1.4. Pausing a retired deployment must
+    // keep working after the local ABI moves on, otherwise the owner loses the
+    // ability to close the contract exactly when a cutover requires it.
+    val before = duel.adminState();
     assert (before.owner == ownerAddress) throw DuelPauseErrors.UnexpectedOwner;
     println(
         "signer={} sender={} contract={}",
@@ -35,6 +39,6 @@ fun main(duelAddress: address, ownerAddress: address, paused: bool, queryId: uin
     );
     val trace = result.waitForTrace();
     expect(trace!).toHaveAllSuccessfulTxs();
-    assert (duel.contractConfig().paused == paused) throw DuelPauseErrors.UnexpectedPauseState;
+    assert (duel.adminState().paused == paused) throw DuelPauseErrors.UnexpectedPauseState;
     println("DUEL pause state updated: paused={}", paused);
 }

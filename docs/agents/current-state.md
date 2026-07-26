@@ -7,8 +7,8 @@ TON от намерений, примеров и будущего mainnet-рел
 
 | Поле                    | Значение                                   |
 | ----------------------- | ------------------------------------------ |
-| Проверено               | 2026-07-26 16:32 UTC                       |
-| Активный runtime commit | `fc9f786d4954ab538bf095c0518064ac5dc57516` |
+| Проверено               | 2026-07-26 19:10 UTC                       |
+| Активный runtime commit | `689bab9e369b9cdfd46afd66b10a5737521e57d8` |
 | Активная ветка          | `main`                                     |
 | Пользовательская сеть   | TON testnet, global ID `-3`                |
 | Публичный домен         | <https://app.tonsuite.org>                 |
@@ -24,7 +24,7 @@ TON от намерений, примеров и будущего mainnet-рел
 На момент проверки:
 
 - `/live` и `/ready` отвечают успешно;
-- release и web release указывают на один commit `fc9f786…`;
+- release и web release указывают на один commit `689bab9e…`;
 - `api`, `worker`, `notifier`, `db` и `redis` имеют состояние `healthy`;
 - бот отвечает как `@getloopbot`;
 - inline mode и webhook включены;
@@ -62,22 +62,28 @@ curl --fail https://app.tonsuite.org/ready
 Полные transaction hashes, LT, masterchain blocks и message values находятся в
 [`deployments/testnet/bank.json`](../../deployments/testnet/bank.json).
 
-### DuelEscrow 1.3.0
+### DuelEscrow 1.4.0
 
-| Поле             | Значение                                                           |
-| ---------------- | ------------------------------------------------------------------ |
-| Address          | `kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M`                 |
-| Code hash        | `5BDAED2F56EF9F51B33F0B388EF7B31DDE843961D23876A16243BA06D53C17FB` |
-| Live balance     | `2.011894980 GRAM`                                                 |
-| Locked value     | `0 GRAM`                                                           |
-| Retained reserve | `0.2 GRAM`                                                         |
-| Active offers    | нет подтверждённых обязательств                                    |
-| Active duels     | нет подтверждённых обязательств                                    |
-| Reserve covered  | да                                                                 |
+| Поле               | Значение                                                           |
+| ------------------ | ------------------------------------------------------------------ |
+| Address            | `kQCO9-90Ee7fbKwXmit4NqaojuD8A2_s8G1sTTRBzs5-E2uM`                 |
+| Code hash          | `7E4675FDEA4807E6837FB6F942E0FC32494058E820578C6A8F94C8A85ED97C3B` |
+| Locked value       | `0 GRAM`                                                           |
+| Retained reserve   | `0.2 GRAM`                                                         |
+| Holder fee support | `holderFeeSupported=true` в живом getter                           |
+| Active offers      | нет подтверждённых обязательств                                    |
+| Active duels       | нет подтверждённых обязательств                                    |
+| Reserve covered    | да                                                                 |
 
-Доказаны open → cancel → refund и двухкошельковая цепочка direct match → boost `0.1 GRAM` →
-deadline → reveal → settlement. Полные доказательства находятся в
+Развёрнут 2026-07-26 с owner, treasury и invite signer предыдущего deployment, поэтому
+продовый signing key продолжает подписывать и прямые вызовы, и holder-permits. Доказаны
+open → cancel → refund и двухкошельковая цепочка direct match → boost `0.1 GRAM` → deadline →
+оба reveal → settlement: пул `1.1 GRAM` выплатил `1.0725` победителю и `0.0275` комиссии,
+то есть **не**-льготный путь при отсутствии permit. Полные доказательства находятся в
 [`deployments/testnet/duel.json`](../../deployments/testnet/duel.json).
+
+Предыдущий `DuelEscrow 1.3.0` (`kQD7JaRb…`) выведен из обращения: `paused=true`, `locked=0`,
+транзакция паузы `LbAv8Dg6hl0nTxeDtulYpLsblpK/sOnslhI9gFqaUqg=` (mc `74079149`).
 
 Повторная read-only проверка:
 
@@ -147,12 +153,11 @@ deadline → reveal → settlement. Полные доказательства н
 
 1. BANK зависит от новых взносов и не имеет cancel/early refund после подтверждения.
 2. Текущая testnet BANK-позиция с `0.73 GRAM` должна оставаться защищённым обязательством.
-3. PLUSH BRICK fee-free — утверждённая mainnet-модель. DuelEscrow v1.4 (holder-permit)
-   реализован в репозитории: контракт, backend, frontend и тесты готовы, но **testnet
-   deployment остаётся v1.3**, поэтому `LOOP_DUEL_HOLDER_FEE_ENABLED` выключен и профиль
-   возвращает `fee_discount_active=false`. До v1.4 broadcast `make contracts-verify` ожидаемо
-   сообщает hash mismatch для DUEL: локальная сборка новее манифеста. Buyback — ручное
-   намерение без публичного журнала.
+3. PLUSH BRICK fee-free работает в testnet: DuelEscrow v1.4 развёрнут, production переключён,
+   `LOOP_DUEL_HOLDER_FEE_ENABLED=true`, поэтому профиль holder'а возвращает
+   `fee_discount_active=true`. Живого подтверждения льготного settlement пока нет: canary-кошельки
+   не держат PLUSH BRICK, доказан только полнокомиссионный путь. Buyback остаётся ручным
+   намерением без публичного журнала.
 4. `ReferralReward` начисляет `100`, а месячный рейтинг даёт `25` за квалифицированного друга.
    Это две разные проекции; интерфейс профиля показывает число подтвердивших друзей и больше не
    называет обе метрики «очками», но сами счётчики всё ещё не объединены продуктовым решением.
