@@ -1,5 +1,7 @@
+import hashlib
 import importlib.util
 import json
+from datetime import date, timedelta
 from pathlib import Path
 from types import ModuleType
 
@@ -303,3 +305,88 @@ def test_post_deploy_runtime_must_match_release(
     monkeypatch.setenv("LOOP_MAX_POOL_NANO", "10000000000")
     with pytest.raises(readiness.ReadinessError, match="does not match"):
         readiness.validate_runtime_environment(release, commit)
+
+
+def self_reviewed_release(**overrides: object) -> dict[str, object]:
+    disclosure = ROOT / "docs" / "no-audit-disclosure.md"
+    digest = hashlib.sha256(disclosure.read_bytes()).hexdigest()
+    block = {
+        "acknowledgement": "NO INDEPENDENT AUDIT - OWNER ACCEPTS THE RISK",
+        "disclosure_path": "docs/no-audit-disclosure.md",
+        "disclosure_sha256": digest,
+        "adversarial_review_path": "docs/reviews/internal-review-2026-07-26.md",
+        "bounty_policy_path": "docs/security-bounty.md",
+        "bounty_contact": "https://t.me/rub1kub",
+        "bounty_max_reward_nano": 500_000_000_000,
+        "testnet_soak_started": (date.today() - timedelta(days=45)).isoformat(),
+    }
+    block.update(overrides)
+    return {"self_reviewed": block}
+
+
+def test_unreviewed_release_is_accepted_only_with_every_compensating_control() -> None:
+    readiness = load_script("check-mainnet-readiness.py")
+    readiness.validate_assurance(self_reviewed_release())
+
+    # Declaring both would let a weak path ride on a strong one's name.
+    with pytest.raises(readiness.ReadinessError, match="either an external audit"):
+        readiness.validate_assurance(
+            {**self_reviewed_release(), "external_audit": {"provider": "x"}}
+        )
+    # Shipping unreviewed must be a deliberate, exact statement.
+    with pytest.raises(readiness.ReadinessError, match="acknowledgement"):
+        readiness.validate_assurance(self_reviewed_release(acknowledgement="probably fine"))
+    # The disclosure the release points at must be the one users can read.
+    with pytest.raises(readiness.ReadinessError, match="SHA-256 mismatch"):
+        readiness.validate_assurance(self_reviewed_release(disclosure_sha256="ab" * 32))
+    # Paying for bugs replaces paying for a search, so it cannot be decorative.
+    with pytest.raises(readiness.ReadinessError, match="bug bounty contact"):
+        readiness.validate_assurance(self_reviewed_release(bounty_contact="  "))
+    with pytest.raises(readiness.ReadinessError, match="maximum reward"):
+        readiness.validate_assurance(self_reviewed_release(bounty_max_reward_nano=0))
+    # Time on testnet is the only evidence that is not an opinion.
+    with pytest.raises(readiness.ReadinessError, match="days on testnet"):
+        readiness.validate_assurance(
+            self_reviewed_release(
+                testnet_soak_started=(date.today() - timedelta(days=3)).isoformat()
+            )
+        )
+    with pytest.raises(readiness.ReadinessError, match="external_audit or self_reviewed"):
+        readiness.validate_assurance({})
+
+
+def test_unreviewed_release_caps_value_ten_times_lower(monkeypatch) -> None:
+    readiness = load_script("check-mainnet-readiness.py")
+    # Pin the release commit so the gate does not consult the live worktree.
+    monkeypatch.setenv("LOOP_RELEASE_COMMIT", "a" * 40)
+    release_dir = ROOT / "deployments" / "mainnet"
+    base = {
+        **self_reviewed_release(),
+        "audited_commit": "a" * 40,
+        "owner": MAINNET_ADDRESS,
+        "treasury": MAINNET_ADDRESS,
+        "duel_invite_signer_public_key": "b" * 64,
+    }
+    # A reviewed release may carry 10 GRAM; an unreviewed one may not, because
+    # the cap is the compensating control rather than a formality.
+    over_cap = {
+        **base,
+        "initial_limits": {
+            "bank_max_principal_nano": 5_000_000_000,
+            "duel_max_pool_nano": 1_000_000_000,
+        },
+    }
+    with pytest.raises(readiness.ReadinessError, match="1 GRAM launch cap"):
+        readiness.validate_release_evidence(over_cap, release_dir / "release.json")
+
+    within_cap = {
+        **base,
+        "initial_limits": {
+            "bank_max_principal_nano": 1_000_000_000,
+            "duel_max_pool_nano": 1_000_000_000,
+        },
+    }
+    assert (
+        readiness.validate_release_evidence(within_cap, release_dir / "release.json")
+        == "a" * 40
+    )

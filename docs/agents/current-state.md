@@ -142,20 +142,27 @@ open → cancel → refund и двухкошельковая цепочка dire
 
 ## Mainnet: что отсутствует
 
-| Gate                                    | Состояние             |
-| --------------------------------------- | --------------------- |
-| Независимый профессиональный аудит      | отсутствует           |
-| Отчёт под `docs/audits/`                | отсутствует           |
-| `deployments/mainnet/release.json`      | намеренно отсутствует |
-| Production BANK/DUEL mainnet manifests  | отсутствуют           |
-| Mainnet source verification             | отсутствует           |
-| BANK shadow finalized payout evidence   | отсутствует           |
-| DUEL mainnet two-wallet canary evidence | отсутствует           |
-| Production runtime network `-239`       | выключен              |
+| Gate                                    | Состояние                          |
+| --------------------------------------- | ---------------------------------- |
+| Независимый профессиональный аудит      | не планируется (решение владельца) |
+| Отчёт под `docs/audits/`                | не будет                           |
+| `deployments/mainnet/release.json`      | намеренно отсутствует              |
+| Production BANK/DUEL mainnet manifests  | отсутствуют                        |
+| Mainnet source verification             | отсутствует                        |
+| BANK shadow finalized payout evidence   | отсутствует                        |
+| DUEL mainnet two-wallet canary evidence | отсутствует                        |
+| Production runtime network `-239`       | выключен                           |
 
-Поэтому LOOP готов к передаче аудитору, но **не готов к приёму реальных средств**. Текущий
-`make contracts-mainnet-preflight` корректно завершается ошибкой на отсутствующем
-`deployments/mainnet/release.json`.
+Аудитора не будет — это решение владельца, зафиксированное 2026-07-27. Поэтому гейт получил
+второй путь: релиз объявляет `self_reviewed` вместо `external_audit` и обязан предъявить
+компенсирующие меры, каждая из которых проверяется машинно — точную строку признания риска,
+опубликованное раскрытие с закреплённым SHA-256, состязательный ревью, политику баунти с реальным
+контактом и суммой, не менее 30 дней в тестовой сети и **лимит в 1 GRAM вместо 10**.
+
+Аудит снижал бы неизвестный риск; этот путь снижает только цену ошибки. Разница обязана оставаться
+явной в текстах для пользователя: [`docs/no-audit-disclosure.md`](../no-audit-disclosure.md).
+Текущий `make contracts-mainnet-preflight` по-прежнему корректно завершается ошибкой на
+отсутствующем `deployments/mainnet/release.json`.
 
 ## Актуальные ограничения и долги
 

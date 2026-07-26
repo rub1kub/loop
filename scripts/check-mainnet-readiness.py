@@ -20,6 +20,8 @@ DEFAULT_RELEASE_FILE = ROOT / "deployments" / "mainnet" / "release.json"
 COMMIT = re.compile(r"[0-9a-f]{40}", re.IGNORECASE)
 HASH = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
 INITIAL_VALUE_CAP_NANO = 10_000_000_000
+UNREVIEWED_VALUE_CAP_NANO = 1_000_000_000
+MIN_SOAK_DAYS = 30
 
 
 class ReadinessError(RuntimeError):
@@ -66,6 +68,102 @@ def require_mainnet_address(value: Any, name: str) -> str:
     ).lower()
 
 
+
+def validate_external_audit(audit: dict[str, Any]) -> None:
+    if not str(audit.get("provider", "")).strip():
+        raise ReadinessError("external audit provider is required")
+    try:
+        completed_at = date.fromisoformat(str(audit.get("completed_at", "")))
+    except ValueError as exc:
+        raise ReadinessError("external audit completion date is invalid") from exc
+    if completed_at > date.today():
+        raise ReadinessError("external audit completion date cannot be in the future")
+    require_pinned_document(
+        audit.get("report_path"),
+        audit.get("report_sha256"),
+        ROOT / "docs" / "audits",
+        "audit report",
+    )
+
+
+def validate_self_reviewed(block: dict[str, Any]) -> None:
+    """Gate for a release that ships without independent review.
+
+    An audit buys an outside opinion, and nothing here reproduces that. What
+    this path can enforce is that the absence is deliberate, disclosed in a
+    file the release is pinned to, compensated by a low value cap, backed by a
+    standing offer to pay for bugs, and preceded by real time on testnet.
+    """
+    acknowledgement = str(block.get("acknowledgement", "")).strip()
+    if acknowledgement != "NO INDEPENDENT AUDIT - OWNER ACCEPTS THE RISK":
+        raise ReadinessError(
+            "an unreviewed release requires the exact owner acknowledgement string"
+        )
+    require_pinned_document(
+        block.get("disclosure_path"),
+        block.get("disclosure_sha256"),
+        ROOT / "docs",
+        "public disclosure",
+    )
+    for name in ("adversarial_review_path", "bounty_policy_path"):
+        target = ROOT / str(block.get(name, ""))
+        try:
+            target.relative_to(ROOT / "docs")
+        except ValueError as exc:
+            raise ReadinessError(f"{name} must live under docs/") from exc
+        if not target.is_file():
+            raise ReadinessError(f"{name} is missing: {target}")
+    contact = str(block.get("bounty_contact", "")).strip()
+    if not contact:
+        raise ReadinessError("an unreviewed release must publish a bug bounty contact")
+    reward = block.get("bounty_max_reward_nano")
+    if not isinstance(reward, int) or reward <= 0:
+        raise ReadinessError("the bug bounty must state a real maximum reward")
+    try:
+        soak_started = date.fromisoformat(str(block.get("testnet_soak_started", "")))
+    except ValueError as exc:
+        raise ReadinessError("testnet soak start date is invalid") from exc
+    soaked = (date.today() - soak_started).days
+    if soaked < MIN_SOAK_DAYS:
+        raise ReadinessError(
+            f"unreviewed release needs {MIN_SOAK_DAYS} days on testnet, has {soaked}"
+        )
+
+
+def require_pinned_document(
+    relative_path: Any,
+    expected_hash: Any,
+    root: Path,
+    label: str,
+) -> None:
+    digest = str(expected_hash or "")
+    if HASH.fullmatch(digest) is None or set(digest) == {"0"}:
+        raise ReadinessError(f"{label} SHA-256 is required")
+    target = ROOT / str(relative_path or "")
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise ReadinessError(f"{label} must be stored under {root.name}") from exc
+    if not target.is_file():
+        raise ReadinessError(f"{label} is missing: {target}")
+    if hashlib.sha256(target.read_bytes()).hexdigest().lower() != digest.lower():
+        raise ReadinessError(f"{label} SHA-256 mismatch")
+
+
+def validate_assurance(release: dict[str, Any]) -> None:
+    audit = release.get("external_audit")
+    self_reviewed = release.get("self_reviewed")
+    if isinstance(audit, dict) and isinstance(self_reviewed, dict):
+        raise ReadinessError("declare either an external audit or a self-reviewed release")
+    if isinstance(audit, dict):
+        validate_external_audit(audit)
+        return
+    if isinstance(self_reviewed, dict):
+        validate_self_reviewed(self_reviewed)
+        return
+    raise ReadinessError("release must declare external_audit or self_reviewed assurance")
+
+
 def validate_release_evidence(release: dict[str, Any], release_file: Path) -> str:
     release_commit = os.getenv("LOOP_RELEASE_COMMIT", "")
     if release_commit:
@@ -82,28 +180,7 @@ def validate_release_evidence(release: dict[str, Any], release_file: Path) -> st
     if COMMIT.fullmatch(audited_commit) is None or audited_commit.lower() != head.lower():
         raise ReadinessError("HEAD must equal the externally audited commit")
 
-    audit = release.get("external_audit")
-    if not isinstance(audit, dict) or not str(audit.get("provider", "")).strip():
-        raise ReadinessError("external audit provider is required")
-    try:
-        completed_at = date.fromisoformat(str(audit.get("completed_at", "")))
-    except ValueError as exc:
-        raise ReadinessError("external audit completion date is invalid") from exc
-    if completed_at > date.today():
-        raise ReadinessError("external audit completion date cannot be in the future")
-    expected_report_hash = str(audit.get("report_sha256", ""))
-    if HASH.fullmatch(expected_report_hash) is None or set(expected_report_hash) == {"0"}:
-        raise ReadinessError("external audit report SHA-256 is required")
-    report_path = ROOT / str(audit.get("report_path", ""))
-    try:
-        report_path.relative_to(ROOT / "docs" / "audits")
-    except ValueError as exc:
-        raise ReadinessError("audit report must be stored under docs/audits") from exc
-    if not report_path.is_file():
-        raise ReadinessError(f"audit report is missing: {report_path}")
-    actual_report_hash = hashlib.sha256(report_path.read_bytes()).hexdigest()
-    if actual_report_hash.lower() != expected_report_hash.lower():
-        raise ReadinessError("audit report SHA-256 mismatch")
+    validate_assurance(release)
 
     require_mainnet_address(release.get("owner"), "owner")
     require_mainnet_address(release.get("treasury"), "treasury")
@@ -113,10 +190,20 @@ def validate_release_evidence(release: dict[str, Any], release_file: Path) -> st
     limits = release.get("initial_limits")
     if not isinstance(limits, dict):
         raise ReadinessError("initial mainnet limits are required")
+    # Without an independent review the only honest lever left is exposure, so
+    # the unreviewed path caps a position at a tenth of what a reviewed one may
+    # carry. This is not a formality: it is the whole compensating control.
+    cap = (
+        INITIAL_VALUE_CAP_NANO
+        if isinstance(release.get("external_audit"), dict)
+        else UNREVIEWED_VALUE_CAP_NANO
+    )
     for key in ("bank_max_principal_nano", "duel_max_pool_nano"):
         value = limits.get(key)
-        if not isinstance(value, int) or value <= 0 or value > INITIAL_VALUE_CAP_NANO:
-            raise ReadinessError(f"{key} must be within the initial 10 GRAM cap")
+        if not isinstance(value, int) or value <= 0 or value > cap:
+            raise ReadinessError(
+                f"{key} must be within the {cap // 1_000_000_000} GRAM launch cap"
+            )
     if release_file.parent != ROOT / "deployments" / "mainnet":
         raise ReadinessError("release evidence must live under deployments/mainnet")
     return head
@@ -152,7 +239,10 @@ def validate_runtime_environment(
     if "testnet" in require_environment_value("LOOP_TONCENTER_URL").lower():
         raise ReadinessError("runtime TON provider must not target testnet")
 
-    expected_report_hash = str(release["external_audit"]["report_sha256"]).lower()
+    assurance = release.get("external_audit") or release["self_reviewed"]
+    expected_report_hash = str(
+        assurance.get("report_sha256") or assurance.get("disclosure_sha256")
+    ).lower()
     expected_values = {
         "LOOP_MAINNET_RELEASE_COMMIT": audited_commit.lower(),
         "LOOP_MAINNET_AUDITED_COMMIT": audited_commit.lower(),

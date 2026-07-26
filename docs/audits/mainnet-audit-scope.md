@@ -1,5 +1,13 @@
 # LOOP mainnet audit scope
 
+> **Status: no independent auditor is engaged.** This document remains the
+> scope an auditor would work to, and the questions in
+> `docs/reviews/audit-request-package.md` remain unanswered by anyone outside
+> the project. If the release ships without an audit it must take the
+> self-reviewed path in `deployments/mainnet/release.json`, which trades the
+> outside opinion for a tenfold lower value cap, a published disclosure and a
+> bug bounty. See `docs/no-audit-disclosure.md`.
+
 This document defines the independent review boundary for the exact Git commit named in
 `deployments/mainnet/release.json`. It is an audit request, not an audit report or a security
 guarantee.
