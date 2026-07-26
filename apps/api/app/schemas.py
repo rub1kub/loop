@@ -15,6 +15,7 @@ class UserView(BaseModel):
     photo_url: str | None
     onboarding_seen: bool
     onboarding_enabled: bool
+    result_notifications_enabled: bool
 
 
 class AuthResponse(BaseModel):
@@ -26,6 +27,25 @@ class AuthResponse(BaseModel):
 class SettingsUpdate(BaseModel):
     onboarding_seen: bool | None = None
     onboarding_enabled: bool | None = None
+    result_notifications_enabled: bool | None = None
+
+
+class ResultCardView(BaseModel):
+    id: str
+    mode: str
+    payout_nano: int
+    contributed_nano: int
+    result_nano: int
+    proof_url: str
+    image_url: str
+    seen_at: datetime | None
+    created_at: datetime
+
+
+class PreparedResultShareView(BaseModel):
+    prepared_message_id: str
+    expiration_date: datetime
+    fallback_query: str
 
 
 class WalletChallengeResponse(BaseModel):

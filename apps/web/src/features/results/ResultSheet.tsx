@@ -1,0 +1,96 @@
+import { ArrowSquareOut, ShareNetwork, X } from '@phosphor-icons/react';
+import { motion } from 'motion/react';
+import { useState } from 'react';
+
+import { api } from '../../api';
+import { haptic, isMockTelegram, openPlatformLink, sharePreparedResult } from '../../telegram';
+import { formatGram } from '../../ton';
+import type { ResultCard } from '../../types';
+
+export function ResultSheet({
+  card,
+  onClose,
+  onError,
+}: {
+  card: ResultCard;
+  onClose: () => Promise<void>;
+  onError: (message: string) => void;
+}) {
+  const [sharing, setSharing] = useState(false);
+  const modeLabel = card.mode === 'bank' ? 'Цикл замкнулся.' : 'DUEL завершён.';
+
+  async function share() {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      if (!isMockTelegram()) {
+        const prepared = await api.prepareResultShare(card.id);
+        const opened = await sharePreparedResult(
+          prepared.prepared_message_id,
+          prepared.fallback_query,
+        );
+        if (!opened) throw new Error('Не удалось открыть выбор получателя');
+      }
+      haptic('success');
+    } catch (error) {
+      haptic('error');
+      onError(error instanceof Error ? error.message : 'Не удалось поделиться результатом');
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  return (
+    <motion.div
+      className="result-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.section
+        className="result-sheet"
+        aria-labelledby="result-title"
+        initial={{ opacity: 0, y: 24, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 16, scale: 0.99 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <button className="result-close" aria-label="Закрыть" onClick={() => void onClose()}>
+          <X aria-hidden="true" />
+        </button>
+
+        {card.image_url ? (
+          <img className="result-card-image" src={card.image_url} alt="Карточка результата LOOP" />
+        ) : (
+          <div className="result-card-image result-card-demo" aria-hidden="true">
+            <span>∞ LOOP</span>
+            <i>∞</i>
+            <b>{card.mode === 'bank' ? 'МОЙ ЦИКЛ ЗАМКНУЛСЯ' : 'Я ЗАБРАЛ DUEL'}</b>
+            <strong>+{formatGram(card.result_nano, 3)} GRAM</strong>
+            <small>РАЗНИЦА К ВХОДУ</small>
+          </div>
+        )}
+
+        <div className="result-copy">
+          <p className="eyebrow">{card.mode.toUpperCase()}</p>
+          <h2 id="result-title">{modeLabel}</h2>
+          <strong>+{formatGram(card.result_nano, 3)} GRAM</strong>
+          <span>Результат подтверждён. Теперь им можно поделиться.</span>
+        </div>
+
+        <button
+          className="primary-button result-share"
+          disabled={sharing}
+          onClick={() => void share()}
+        >
+          <ShareNetwork aria-hidden="true" />
+          {sharing ? 'ГОТОВИМ…' : 'ПОДЕЛИТЬСЯ'}
+        </button>
+        <button className="result-proof" onClick={() => openPlatformLink(card.proof_url)}>
+          ПРОВЕРИТЬ
+          <ArrowSquareOut aria-hidden="true" />
+        </button>
+      </motion.section>
+    </motion.div>
+  );
+}

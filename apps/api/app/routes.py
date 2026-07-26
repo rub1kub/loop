@@ -88,6 +88,7 @@ def user_view(user: User) -> UserView:
         photo_url=user.photo_url,
         onboarding_seen=user.onboarding_seen,
         onboarding_enabled=user.onboarding_enabled,
+        result_notifications_enabled=user.result_notifications_enabled,
     )
 
 
@@ -329,6 +330,8 @@ async def update_settings(body: SettingsUpdate, user: CurrentUser, db: Db) -> Us
         user.onboarding_seen = body.onboarding_seen
     if body.onboarding_enabled is not None:
         user.onboarding_enabled = body.onboarding_enabled
+    if body.result_notifications_enabled is not None:
+        user.result_notifications_enabled = body.result_notifications_enabled
     await db.commit()
     return user_view(user)
 

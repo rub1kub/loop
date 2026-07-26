@@ -45,7 +45,7 @@ npm run deploy:vps:restart
 
 `npm run deploy:vps:web` is the guarded static-web path. It switches
 `/opt/loop/web-current` atomically, reloads nginx and runs public health checks without restarting
-the API/worker or touching PostgreSQL. It refuses the release when API code, migrations, Compose,
+the API, chain worker or notifier and without touching PostgreSQL. It refuses the release when API code, migrations, Compose,
 contracts or deployment manifests differ from the active runtime release. Use the full command
 for any such change or for a staged production environment.
 
@@ -66,8 +66,8 @@ The server activation then performs these guarded steps:
 6. Alembic upgrades to head and repeats the idle-projection guard.
 7. API startup attests both code hashes, retained reserves and the DUEL network/address/signer
    domain.
-8. API and worker health pass before nginx reload and public smoke.
-9. The CLI verifies the runtime SHA, web SHA, all four containers, Telegram webhook and exact frontend asset.
+8. API, chain-worker and notification-worker health pass before nginx reload and public smoke.
+9. The CLI verifies the runtime SHA, web SHA, all five containers, Telegram webhook and exact frontend asset.
 10. `/control` loads as a regular browser route, rejects an unauthenticated overview request and
     requests a one-time owner TON proof without Telegram initialization.
 
@@ -82,7 +82,9 @@ curl --fail https://app.tonsuite.org/live
 curl --fail https://app.tonsuite.org/ready
 ```
 
-Readiness checks PostgreSQL, Redis and configured contract attestation. Operations additionally inspect worker heartbeat, current Alembic revision, webhook URL/status, container health and hashed frontend asset delivery.
+Readiness checks PostgreSQL, Redis and configured contract attestation. Operations additionally
+inspect both worker heartbeats, current Alembic revision, webhook URL/status, container health and
+hashed frontend asset delivery.
 
 DUEL exposes authenticated Prometheus metrics for projection heartbeat, stale funding, overdue reveals, unbound direct matches, the last verified two-wallet canary and its lowest wallet balance. `deploy/monitoring/duel-alerts.yml` contains fail-closed rules. The public nginx virtual host always returns `404` for `/metrics`; scrapers use `127.0.0.1:8000` with the metrics bearer token.
 

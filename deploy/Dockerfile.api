@@ -7,6 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY apps/api/pyproject.toml ./pyproject.toml
 COPY apps/api/app ./app
 COPY apps/api/migrations ./migrations

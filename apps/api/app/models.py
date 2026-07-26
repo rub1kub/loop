@@ -1,10 +1,12 @@
 import enum
+import secrets
 import uuid
 from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -22,6 +24,10 @@ from .database import Base, utc_now
 
 def new_id() -> str:
     return str(uuid.uuid4())
+
+
+def new_public_id() -> str:
+    return secrets.token_urlsafe(18)
 
 
 class ProofType(enum.StrEnum):
@@ -43,10 +49,73 @@ class User(Base):
     referred_by_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     onboarding_seen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     onboarding_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    result_notifications_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+
+class ResultCard(Base):
+    __tablename__ = "result_cards"
+    __table_args__ = (
+        UniqueConstraint("event_key", name="result_card_event_once"),
+        UniqueConstraint("public_id", name="result_card_public_id"),
+        CheckConstraint("mode IN ('bank', 'duel')", name="result_card_mode"),
+        CheckConstraint("payout_nano >= 0", name="result_card_payout"),
+        CheckConstraint("contributed_nano >= 0", name="result_card_contributed"),
+        CheckConstraint("result_nano > 0", name="result_card_positive"),
+        Index("ix_result_cards_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    public_id: Mapped[str] = mapped_column(String(32), default=new_public_id, nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    mode: Mapped[str] = mapped_column(String(8), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    event_key: Mapped[str] = mapped_column(String(180), nullable=False)
+    network: Mapped[int] = mapped_column(Integer, nullable=False)
+    payout_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    contributed_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    result_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    tx_hash: Mapped[str] = mapped_column(String(96), nullable=False)
+    proof_url: Mapped[str] = mapped_column(Text, nullable=False)
+    template_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    share_prepared_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class NotificationOutbox(Base):
+    __tablename__ = "notification_outbox"
+    __table_args__ = (
+        UniqueConstraint("result_card_id", name="notification_result_once"),
+        CheckConstraint(
+            "state IN ('pending', 'processing', 'retry', 'sent', 'blocked', 'failed')",
+            name="notification_state",
+        ),
+        Index("ix_notification_outbox_due", "state", "next_attempt_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    result_card_id: Mapped[str] = mapped_column(
+        ForeignKey("result_cards.id"), nullable=False
+    )
+    state: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    last_error: Mapped[str | None] = mapped_column(String(64))
+    telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AuthExchange(Base):

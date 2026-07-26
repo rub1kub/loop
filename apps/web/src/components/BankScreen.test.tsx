@@ -18,6 +18,7 @@ const profile: Profile = {
     photo_url: null,
     onboarding_seen: true,
     onboarding_enabled: true,
+    result_notifications_enabled: true,
   },
   wallet: null,
   bank: { active: 1, completed: 0, total: 1 },

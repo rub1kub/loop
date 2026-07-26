@@ -11,6 +11,7 @@ import { TabBar } from './components/TabBar';
 import { BankScreen } from './features/bank/BankScreen';
 import { DuelScreen } from './features/duel/DuelScreen';
 import { RatingScreen } from './features/rating/RatingScreen';
+import { ResultSheet } from './features/results/ResultSheet';
 import { installInteractionGuards } from './interactionGuards';
 import {
   haptic,
@@ -179,6 +180,15 @@ export default function App() {
         bankHistory={state.bankHistory}
         duels={state.duels}
         onReplay={() => state.replayOnboarding()}
+        onResultNotificationsChange={async (enabled) => {
+          try {
+            await state.setResultNotificationsEnabled(enabled);
+          } catch (error) {
+            state.setError(
+              error instanceof Error ? error.message : 'Не удалось изменить настройку',
+            );
+          }
+        }}
       />
     ),
   }[state.activeTab];
@@ -205,6 +215,25 @@ export default function App() {
           state.setTab(tab);
         }}
       />
+
+      <AnimatePresence>
+        {state.results.find((card) => card.seen_at === null) && (
+          <ResultSheet
+            key={state.results.find((card) => card.seen_at === null)!.id}
+            card={state.results.find((card) => card.seen_at === null)!}
+            onClose={async () => {
+              const active = state.results.find((card) => card.seen_at === null);
+              if (!active) return;
+              try {
+                await state.markResultSeen(active.id);
+              } catch {
+                state.setError('Результат закрыт. При следующем входе он может показаться снова.');
+              }
+            }}
+            onError={(message) => state.setError(message)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {state.error && (

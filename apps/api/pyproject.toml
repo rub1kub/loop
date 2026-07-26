@@ -15,6 +15,7 @@ dependencies = [
   "fastapi==0.139.2",
   "httpx==0.28.1",
   "orjson==3.11.9",
+  "Pillow==12.3.0",
   "prometheus-client==0.25.0",
   "pydantic-settings==2.14.2",
   "redis==8.0.1",

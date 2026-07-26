@@ -120,6 +120,30 @@ services:
       start_period: 30s
       retries: 4
 
+  notifier:
+    <<: *api-environment
+    image: loop-api:${LOOP_IMAGE_TAG:-local}
+    command: ['python', '-m', 'app.notification_worker']
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    mem_limit: 256m
+    cpus: 0.5
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import os,time; p='/tmp/loop-notifier-heartbeat'; assert os.path.exists(p) and time.time()-os.path.getmtime(p)<90"
+      interval: 20s
+      timeout: 5s
+      start_period: 30s
+      retries: 4
+
   migrate:
     <<: *api-environment
     image: loop-api:${LOOP_IMAGE_TAG:-local}

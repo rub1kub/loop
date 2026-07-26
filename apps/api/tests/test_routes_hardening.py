@@ -99,10 +99,15 @@ async def test_authentication_and_wallet_challenge_are_fail_closed_and_one_time(
     updated = await client.patch(
         "/api/v1/me/settings",
         headers=headers,
-        json={"onboarding_seen": True, "onboarding_enabled": False},
+        json={
+            "onboarding_seen": True,
+            "onboarding_enabled": False,
+            "result_notifications_enabled": False,
+        },
     )
     assert updated.status_code == 200
     assert updated.json()["onboarding_enabled"] is False
+    assert updated.json()["result_notifications_enabled"] is False
     challenge = await client.post("/api/v1/wallet/challenge", headers=headers, json={})
     assert challenge.status_code == 200
     payload = challenge.json()["payload"]

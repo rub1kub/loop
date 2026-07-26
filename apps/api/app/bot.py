@@ -22,15 +22,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .config import Settings
-from .models import User
+from .models import ReferralCode, ResultCard, User
 from .modules.duel.models import (
     ChallengeState,
     DuelChallenge,
     MatchmakingOffer,
     OfferState,
 )
+from .result_cards import build_result_inline
 
 INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
+RESULT_PATTERN = re.compile(r"^\s*result\s+([A-Za-z0-9_-]{20,32})\s*$", re.IGNORECASE)
 BOT_NAME = "LOOP"
 BOT_DESCRIPTION = (
     "LOOP — живой цикл внутри Telegram. В BANK новые взносы постепенно наполняют "
@@ -190,7 +192,41 @@ def create_dispatcher(
         await message.answer(SUPPORT_TEXT, reply_markup=keyboard)
 
     @router.inline_query()
-    async def inline_duel(query: InlineQuery) -> None:
+    async def inline_result_or_duel(query: InlineQuery) -> None:
+        result_match = RESULT_PATTERN.match(query.query)
+        if result_match:
+            async with session_factory() as db:
+                creator = await db.scalar(
+                    select(User).where(User.telegram_id == query.from_user.id)
+                )
+                if creator is None:
+                    await query.answer([], cache_time=1, is_personal=True)
+                    return
+                card = await db.scalar(
+                    select(ResultCard).where(
+                        ResultCard.public_id == result_match.group(1),
+                        ResultCard.user_id == creator.id,
+                    )
+                )
+                referral = await db.scalar(
+                    select(ReferralCode).where(ReferralCode.owner_user_id == creator.id)
+                )
+            if card is None:
+                await query.answer([], cache_time=1, is_personal=True)
+                return
+            await query.answer(
+                [
+                    build_result_inline(
+                        card,
+                        settings,
+                        referral.code if referral else None,
+                    )
+                ],
+                cache_time=30,
+                is_personal=True,
+            )
+            return
+
         match = INLINE_PATTERN.match(query.query)
         if not match:
             await query.answer([], cache_time=1, is_personal=True)

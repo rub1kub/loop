@@ -1,12 +1,27 @@
 import { create } from 'zustand';
 
 import { api } from './api';
-import { isMockTelegram, telegramInitData, telegramStartParam } from './telegram';
-import type { BankPosition, Duel, Invite, Offer, Profile, Rating, Tab } from './types';
+import {
+  isMockTelegram,
+  requestResultNotificationAccess,
+  telegramInitData,
+  telegramStartParam,
+} from './telegram';
+import type { BankPosition, Duel, Invite, Offer, Profile, Rating, ResultCard, Tab } from './types';
 
 const mockParameters = new URLSearchParams(window.location.search);
 const mockScreen = mockParameters.get('screen');
 const now = Date.now();
+const dismissedResultIds = new Set<string>();
+
+function hideDismissedResults(results: ResultCard[]): ResultCard[] {
+  const dismissedAt = new Date().toISOString();
+  return results.map((card) =>
+    card.seen_at === null && dismissedResultIds.has(card.id)
+      ? { ...card, seen_at: dismissedAt }
+      : card,
+  );
+}
 
 const demoProfile: Profile = {
   user: {
@@ -17,6 +32,7 @@ const demoProfile: Profile = {
     photo_url: null,
     onboarding_seen: true,
     onboarding_enabled: true,
+    result_notifications_enabled: true,
   },
   wallet: {
     address: `0:${'42'.repeat(32)}`,
@@ -112,6 +128,21 @@ const demoDuel: Duel = {
       ? null
       : 'https://testnet.tonviewer.com/transaction/demo-duel-settlement',
 };
+
+const demoResult: ResultCard | null =
+  mockScreen === 'result-bank' || mockScreen === 'result-duel'
+    ? {
+        id: 'result-demo',
+        mode: mockScreen === 'result-duel' ? 'duel' : 'bank',
+        payout_nano: mockScreen === 'result-duel' ? 1_950_000_000 : 3_000_000_000,
+        contributed_nano: mockScreen === 'result-duel' ? 1_000_000_000 : 2_000_000_000,
+        result_nano: mockScreen === 'result-duel' ? 950_000_000 : 1_000_000_000,
+        proof_url: 'https://testnet.tonviewer.com/transaction/demo-result',
+        image_url: '',
+        seen_at: null,
+        created_at: new Date(now).toISOString(),
+      }
+    : null;
 
 const demoInvite: Invite = {
   code: 'demo-direct-duel',
@@ -222,6 +253,7 @@ interface LoopState {
   duels: Duel[];
   invite: Invite | null;
   rating: Rating | null;
+  results: ResultCard[];
   error: string | null;
   showOnboarding: boolean;
   onboardingPage: number;
@@ -233,6 +265,8 @@ interface LoopState {
   finishOnboarding(): Promise<void>;
   replayOnboarding(): void;
   setOnboardingEnabled(enabled: boolean): Promise<void>;
+  setResultNotificationsEnabled(enabled: boolean): Promise<void>;
+  markResultSeen(cardId: string): Promise<void>;
   setMockBankPosition(position: BankPosition): void;
 }
 
@@ -246,6 +280,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   duels: [],
   invite: null,
   rating: null,
+  results: [],
   error: null,
   showOnboarding: false,
   onboardingPage:
@@ -278,6 +313,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
           duels: mockScreen === 'duel-result' || mockScreen === 'duel-boost' ? [demoDuel] : [],
           invite: mockScreen === 'duel-invite' ? demoInvite : null,
           rating: demoRating,
+          results: demoResult ? [demoResult] : [],
           loading: false,
           showOnboarding:
             mockScreen === 'onboarding' ||
@@ -290,12 +326,13 @@ export const useLoopStore = create<LoopState>((set, get) => ({
       const initData = telegramInitData();
       if (!initData) throw new Error('Откройте LOOP внутри Telegram');
       const profile = (await api.authenticate(initData)).profile;
-      const [bankPosition, bankHistory, offers, duels, rating] = await Promise.all([
+      const [bankPosition, bankHistory, offers, duels, rating, results] = await Promise.all([
         api.currentBankPosition(),
         api.bankPositions(),
         api.offers(),
         api.duels(),
         api.rating().catch(() => null),
+        api.results(),
       ]);
       let invite: Invite | null = null;
       const startParam = telegramStartParam();
@@ -308,6 +345,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         duels,
         invite,
         rating,
+        results: hideDismissedResults(results),
         loading: false,
         activeTab: invite ? 'duel' : 'bank',
         showOnboarding: profile.user.onboarding_enabled && !profile.user.onboarding_seen,
@@ -322,14 +360,22 @@ export const useLoopStore = create<LoopState>((set, get) => ({
 
   async refresh() {
     if (isMockTelegram()) return;
-    const [profile, bankPosition, bankHistory, offers, duels] = await Promise.all([
+    const [profile, bankPosition, bankHistory, offers, duels, results] = await Promise.all([
       api.me(),
       api.currentBankPosition(),
       api.bankPositions(),
       api.offers(),
       api.duels(),
+      api.results(),
     ]);
-    set({ profile, bankPosition, bankHistory, offers, duels });
+    set({
+      profile,
+      bankPosition,
+      bankHistory,
+      offers,
+      duels,
+      results: hideDismissedResults(results),
+    });
   },
 
   async refreshRating() {
@@ -368,6 +414,33 @@ export const useLoopStore = create<LoopState>((set, get) => ({
     if (profile) {
       set({ profile: { ...profile, user: { ...profile.user, onboarding_enabled: enabled } } });
     }
+  },
+
+  async setResultNotificationsEnabled(enabled) {
+    if (enabled && !(await requestResultNotificationAccess())) {
+      throw new Error('Разрешите сообщения от LOOP в Telegram');
+    }
+    if (!isMockTelegram()) await api.updateSettings({ result_notifications_enabled: enabled });
+    const profile = get().profile;
+    if (profile) {
+      set({
+        profile: {
+          ...profile,
+          user: { ...profile.user, result_notifications_enabled: enabled },
+        },
+      });
+    }
+  },
+
+  async markResultSeen(cardId) {
+    dismissedResultIds.add(cardId);
+    const seenAt = new Date().toISOString();
+    set({
+      results: get().results.map((card) =>
+        card.id === cardId ? { ...card, seen_at: seenAt } : card,
+      ),
+    });
+    if (!isMockTelegram()) await api.markResultSeen(cardId);
   },
 
   setMockBankPosition(position) {

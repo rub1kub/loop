@@ -19,7 +19,7 @@ from app.chain_worker import (
     decode_body,
 )
 from app.config import get_settings
-from app.models import User, Wallet
+from app.models import NotificationOutbox, ResultCard, User, Wallet
 from app.modules.bank.models import BankChainEvent, BankPosition, BankPositionStatus
 from app.modules.duel.models import (
     ChallengeState,
@@ -268,7 +268,14 @@ async def test_bank_projection_is_fifo_proof_bound_and_idempotent(app) -> None:
         assert newer.funded_amount_nano == 980_000_000
         assert newer.remaining_amount_nano == 2_020_000_000
         assert await db.scalar(select(func.count()).select_from(BankChainEvent)) == 1
+        card = await db.scalar(select(ResultCard))
+        assert card is not None
+        assert card.mode == "bank"
+        assert card.user_id == older_user.id
+        assert card.result_nano == 250_000_000
+        assert await db.scalar(select(func.count()).select_from(NotificationOutbox)) == 1
         assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.IGNORED
+        assert await db.scalar(select(func.count()).select_from(ResultCard)) == 1
 
 
 @pytest.mark.asyncio
@@ -518,6 +525,12 @@ async def test_duel_projection_validates_funding_and_terminal_payout(app) -> Non
         await db.refresh(duel)
         assert duel.state == DuelState.SETTLED.value
         assert duel.winner_wallet == second_wallet.address
+        card = await db.scalar(select(ResultCard))
+        assert card is not None
+        assert card.mode == "duel"
+        assert card.user_id == second_user.id
+        assert card.result_nano == 2_875_000_000
+        assert await db.scalar(select(func.count()).select_from(NotificationOutbox)) == 1
 
 
 @pytest.mark.asyncio

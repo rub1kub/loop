@@ -160,6 +160,35 @@ export function openPlatformLink(url: string, telegramNative = false): void {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
+export async function requestResultNotificationAccess(): Promise<boolean> {
+  if (isMockTelegram()) return true;
+  const app = telegram();
+  if (app?.initDataUnsafe?.user?.allows_write_to_pm) return true;
+  if (!app?.requestWriteAccess) return false;
+  return await new Promise<boolean>((resolve) => {
+    app.requestWriteAccess?.((allowed) => resolve(allowed));
+  });
+}
+
+export async function sharePreparedResult(
+  preparedMessageId: string,
+  fallbackQuery: string,
+): Promise<boolean> {
+  const app = telegram();
+  if (isMockTelegram()) return true;
+  if (app?.shareMessage) {
+    const shared = await new Promise<boolean>((resolve) => {
+      app.shareMessage?.(preparedMessageId, (success) => resolve(success));
+    });
+    if (shared) return true;
+  }
+  if (app?.switchInlineQuery) {
+    app.switchInlineQuery(fallbackQuery, ['users', 'groups', 'channels']);
+    return true;
+  }
+  return false;
+}
+
 export async function storeDuelSecret(offerId: number, secretHex: string): Promise<void> {
   const key = `loop-duel-${offerId}`;
   const storage = telegram()?.SecureStorage;

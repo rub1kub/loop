@@ -24,12 +24,12 @@ Usage:
 Commands:
   deploy    Build, package, upload, activate and verify an immutable release.
   status    Verify the active release, containers, public health and Telegram bot.
-  restart   Restart API/bot and worker, reload nginx, then run status.
+  restart   Restart API/bot, chain worker and notifier, reload nginx, then run status.
 
 Options:
   --fast             Build the web client but skip local tests.
   --full-checks      Include browser, security and contract verification.
-  --web-only         Activate static web files without restarting API/worker or touching the database.
+  --web-only         Activate static web files without restarting runtime services or touching the database.
   --dry-run          Run local checks and package the release without uploading it.
   --allow-unpushed   Permit a committed HEAD that is not present on its upstream branch.
   --host HOST        SSH host or alias. Default: LOOP_DEPLOY_HOST or ton4-prod.
@@ -177,11 +177,11 @@ export LOOP_IMAGE_TAG="$release_id"
 printf 'release: %s\n' "$release_id"
 printf 'web release: %s\n' "$web_release_id"
 docker compose --project-name loop --env-file .env.production ps \
-  --format 'table {{.Service}}\t{{.Status}}' db redis api worker
+  --format 'table {{.Service}}\t{{.Status}}' db redis api worker notifier
 
 service_state=$(
   docker compose --project-name loop --env-file .env.production ps \
-    --format '{{.Service}} {{.State}} {{.Health}}' db redis api worker
+    --format '{{.Service}} {{.State}} {{.Health}}' db redis api worker notifier
 )
 printf '%s\n' "$service_state" |
   awk '
@@ -192,7 +192,7 @@ printf '%s\n' "$service_state" |
       }
     }
     END {
-      if (bad || !seen["api"] || !seen["db"] || !seen["redis"] || !seen["worker"]) {
+      if (bad || !seen["api"] || !seen["db"] || !seen["redis"] || !seen["worker"] || !seen["notifier"]) {
         exit 1
       }
     }
@@ -270,9 +270,9 @@ test -d "$release_dir"
 
 cd "$release_dir"
 export LOOP_IMAGE_TAG="$release_id"
-docker compose --project-name loop --env-file .env.production restart api worker
+docker compose --project-name loop --env-file .env.production restart api worker notifier
 docker compose --project-name loop --env-file .env.production up \
-  -d --wait --wait-timeout 120 api worker
+  -d --wait --wait-timeout 120 api worker notifier
 nginx -t
 systemctl reload nginx
 curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \

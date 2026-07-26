@@ -14,8 +14,10 @@ import type {
   Offer,
   OfferQuote,
   Profile,
+  PreparedResultShare,
   Rating,
   Referral,
+  ResultCard,
   Wallet,
 } from './types';
 
@@ -35,6 +37,7 @@ const profileSchema = z.object({
     photo_url: z.string().nullable(),
     onboarding_seen: z.boolean(),
     onboarding_enabled: z.boolean(),
+    result_notifications_enabled: z.boolean(),
   }),
   wallet: z
     .object({ address: z.string(), network: z.number(), verified_at: z.string() })
@@ -75,6 +78,18 @@ const bankPositionSchema = z.object({
   proof_url: z.string().nullable(),
   created_at: z.string(),
   completed_at: z.string().nullable(),
+});
+
+const resultCardSchema = z.object({
+  id: z.string(),
+  mode: z.enum(['bank', 'duel']),
+  payout_nano: z.number(),
+  contributed_nano: z.number(),
+  result_nano: z.number(),
+  proof_url: z.string(),
+  image_url: z.string(),
+  seen_at: z.string().nullable(),
+  created_at: z.string(),
 });
 
 const ratingEntrySchema = z.object({
@@ -225,6 +240,7 @@ export const api = {
   async updateSettings(input: {
     onboarding_seen?: boolean;
     onboarding_enabled?: boolean;
+    result_notifications_enabled?: boolean;
   }): Promise<void> {
     await request('/me/settings', { method: 'PATCH', body: JSON.stringify(input) });
   },
@@ -274,6 +290,26 @@ export const api = {
 
   async bankLimits(): Promise<BankLimit> {
     return await request('/bank/limits');
+  },
+
+  async results(): Promise<ResultCard[]> {
+    return z.array(resultCardSchema).parse(await request<unknown>('/results'));
+  },
+
+  async markResultSeen(cardId: string): Promise<ResultCard> {
+    return resultCardSchema.parse(
+      await request<unknown>(`/results/${encodeURIComponent(cardId)}/seen`, {
+        method: 'POST',
+        body: '{}',
+      }),
+    );
+  },
+
+  async prepareResultShare(cardId: string): Promise<PreparedResultShare> {
+    return await request(`/results/${encodeURIComponent(cardId)}/prepare`, {
+      method: 'POST',
+      body: '{}',
+    });
   },
 
   async contractState(mode: 'bank' | 'duel'): Promise<ContractState> {

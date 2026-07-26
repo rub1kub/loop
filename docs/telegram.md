@@ -44,6 +44,18 @@ terms.
 
 Inline messages cannot override an amount, wallet, contract, probability, expiry or offer state. Deleted, expired, self-funded, incompatible or already-consumed challenges are rejected server-side.
 
+## Result cards
+
+A BANK or DUEL card is created only after the chain worker has matched the finalized outgoing
+payout to its expected recipient and amount. The JPEG is rendered by the API from immutable
+database facts; the browser never submits the displayed amount.
+
+An outbox worker sends the card to the participant once. Users can disable these messages in
+settings; enabling them calls Telegram's `requestWriteAccess`. **Share** creates a short-lived
+prepared inline message and opens Telegram's native `shareMessage` chooser. Clients without that
+method fall back to the owner-bound inline query. Both forms contain the same public image,
+referral entry point and transaction proof.
+
 ## Bot surface
 
 The bot supports:
@@ -53,7 +65,7 @@ The bot supports:
 - a persistent menu Web App button;
 - inline duel invitations;
 - start parameters for direct challenges and referrals;
-- outbox-backed notifications for important social and on-chain states.
+- outbox-backed personal BANK and DUEL result cards.
 
 The production webhook uses an unguessable path and validates Telegram's secret-token header. Bot API configuration may set the webhook and menu, but inline capability itself must be enabled once through BotFather `/setinline`. Deployment acceptance checks `getMe.supports_inline_queries`.
 

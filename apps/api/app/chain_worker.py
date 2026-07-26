@@ -38,6 +38,7 @@ from .modules.duel.models import (
     MatchmakingOffer,
     OfferState,
 )
+from .result_cards import create_result_card
 from .ton import TonClient, TonProviderError, normalize_address, verify_direct_accept_permit
 
 logger = structlog.get_logger()
@@ -550,6 +551,17 @@ async def apply_bank_transaction(
                         tx_hash=tx_hash,
                     )
                 )
+            await create_result_card(
+                db,
+                user_id=earlier.user_id,
+                mode="bank",
+                entity_id=earlier.id,
+                event_key=f"bank:{earlier.network}:{earlier.id}:{tx_hash}",
+                network=earlier.network,
+                payout_nano=earlier.target_payout_nano,
+                contributed_nano=earlier.principal_nano,
+                tx_hash=tx_hash,
+            )
         else:
             earlier.current_status = BankPositionStatus.PARTIALLY_FUNDED.value
 
@@ -1003,6 +1015,17 @@ async def apply_duel_transaction(
                     tx_hash=tx_hash,
                 )
             )
+        await create_result_card(
+            db,
+            user_id=winner.user_id,
+            mode="duel",
+            entity_id=duel.id,
+            event_key=f"duel:{winner.network}:{duel.id}:{tx_hash}",
+            network=winner.network,
+            payout_nano=winner.payout_nano,
+            contributed_nano=winner.stake_nano,
+            tx_hash=tx_hash,
+        )
         await qualify_referral(db, first, duel, tx_hash)
         await qualify_referral(db, second, duel, tx_hash)
 

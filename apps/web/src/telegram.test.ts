@@ -5,7 +5,9 @@ import {
   initializeTelegram,
   isHapticsEnabled,
   openPlatformLink,
+  requestResultNotificationAccess,
   setHapticsEnabled,
+  sharePreparedResult,
   telegramInitData,
   telegramStartParam,
 } from './telegram';
@@ -250,5 +252,39 @@ describe('Telegram launch compatibility', () => {
 
     expect(openTelegramLink).toHaveBeenCalledWith('https://t.me/dtrade');
     expect(openLink).toHaveBeenCalledWith('https://app.ston.fi/swap');
+  });
+
+  it('requests private-message access only when Telegram has not granted it', async () => {
+    const requestWriteAccess = vi.fn((callback: (allowed: boolean) => void) => callback(true));
+    window.Telegram = {
+      WebApp: {
+        initDataUnsafe: { user: { id: 42, first_name: 'Loop' } },
+        requestWriteAccess,
+      } as unknown as TelegramWebApp,
+    };
+
+    await expect(requestResultNotificationAccess()).resolves.toBe(true);
+    expect(requestWriteAccess).toHaveBeenCalledOnce();
+
+    window.Telegram.WebApp.initDataUnsafe!.user!.allows_write_to_pm = true;
+    await expect(requestResultNotificationAccess()).resolves.toBe(true);
+    expect(requestWriteAccess).toHaveBeenCalledOnce();
+  });
+
+  it('uses Telegram prepared messages for native result sharing', async () => {
+    const shareMessage = vi.fn((_messageId: string, callback: (shared: boolean) => void) =>
+      callback(true),
+    );
+    const switchInlineQuery = vi.fn();
+    window.Telegram = {
+      WebApp: {
+        shareMessage,
+        switchInlineQuery,
+      } as unknown as TelegramWebApp,
+    };
+
+    await expect(sharePreparedResult('prepared-1', 'result public-id')).resolves.toBe(true);
+    expect(shareMessage).toHaveBeenCalledWith('prepared-1', expect.any(Function));
+    expect(switchInlineQuery).not.toHaveBeenCalled();
   });
 });

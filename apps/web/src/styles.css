@@ -423,6 +423,7 @@ summary:focus-visible .disclosure-indicator {
 
 .keyboard-open .tab-bar,
 .app-shell:has(.sheet-backdrop) .tab-bar,
+.app-shell:has(.result-overlay) .tab-bar,
 .app-shell:has(.bank-flow-screen) .tab-bar {
   visibility: hidden;
   opacity: 0;
@@ -432,6 +433,7 @@ summary:focus-visible .disclosure-indicator {
 
 .keyboard-open .screen-stage,
 .app-shell:has(.sheet-backdrop) .screen-stage,
+.app-shell:has(.result-overlay) .screen-stage,
 .app-shell:has(.bank-flow-screen) .screen-stage {
   height: 100%;
 }
@@ -768,6 +770,172 @@ summary:focus-visible .disclosure-indicator {
   font-size: 31px;
   font-weight: 650;
   letter-spacing: -0.055em;
+}
+
+.result-overlay {
+  position: fixed;
+  z-index: 150;
+  inset: 0;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  background: #000;
+}
+
+.result-sheet {
+  position: relative;
+  display: grid;
+  width: min(100%, 430px);
+  height: min(var(--loop-stable-height, var(--tg-viewport-stable-height, 100dvh)), 932px);
+  max-height: 932px;
+  justify-items: center;
+  align-content: center;
+  gap: 16px;
+  overflow-y: auto;
+  padding: calc(var(--safe-top) + 54px) max(22px, calc(var(--safe-right) + 16px))
+    calc(var(--safe-bottom) + 22px) max(22px, calc(var(--safe-left) + 16px));
+  background: #000;
+  scrollbar-width: none;
+}
+
+.result-sheet::-webkit-scrollbar {
+  display: none;
+}
+
+.result-close {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--safe-top) + 10px);
+  right: max(20px, calc(var(--safe-right) + 14px));
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid #303030;
+  border-radius: 50%;
+  background: #101010;
+  color: #aaa;
+}
+
+.result-close svg {
+  width: 19px;
+  height: 19px;
+}
+
+.result-card-image {
+  display: block;
+  width: min(70vw, 292px);
+  max-width: 100%;
+  aspect-ratio: 4 / 5;
+  border: 1px solid #222;
+  border-radius: 24px;
+  background: #050505;
+  box-shadow: 0 24px 70px rgb(255 255 255 / 5%);
+  object-fit: cover;
+}
+
+.result-card-demo {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto auto;
+  align-items: center;
+  justify-items: center;
+  padding: 20px;
+  text-align: center;
+}
+
+.result-card-demo > span {
+  justify-self: start;
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.13em;
+}
+
+.result-card-demo > i {
+  align-self: end;
+  color: #ddd;
+  font-family: Georgia, serif;
+  font-size: 88px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 0.8;
+  text-shadow: 0 0 24px rgb(255 255 255 / 22%);
+}
+
+.result-card-demo > b {
+  max-width: 220px;
+  margin-top: 16px;
+  font-size: 24px;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+
+.result-card-demo > strong {
+  margin-top: 20px;
+  font-size: 28px;
+  letter-spacing: -0.05em;
+}
+
+.result-card-demo > small {
+  margin-top: 7px;
+  color: #777;
+  font-size: 8px;
+  font-weight: 760;
+  letter-spacing: 0.16em;
+}
+
+.result-copy {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.result-copy h2 {
+  margin: 5px 0 0;
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.05em;
+}
+
+.result-copy > strong {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.result-copy > span {
+  max-width: 310px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.result-share {
+  width: 100%;
+  max-width: 360px;
+}
+
+.result-share svg {
+  width: 18px;
+  height: 18px;
+}
+
+.result-proof {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: #8d8d92;
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.15em;
+}
+
+.result-proof svg {
+  width: 14px;
+  height: 14px;
 }
 
 .round-icon-button {
@@ -2406,6 +2574,11 @@ details[open] > summary .disclosure-indicator svg {
   transform: scale(0.94);
 }
 
+.settings-toggle input:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
 .settings-toggle input:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 3px;
@@ -2765,6 +2938,23 @@ details[open] > summary .disclosure-indicator svg {
 
   .section-label {
     margin-top: 16px;
+  }
+
+  .result-sheet {
+    gap: 10px;
+    padding-top: calc(var(--safe-top) + 48px);
+  }
+
+  .result-card-image {
+    width: min(58vw, 220px);
+  }
+
+  .result-copy h2 {
+    font-size: 22px;
+  }
+
+  .result-copy > span {
+    margin-top: 3px;
   }
 }
 

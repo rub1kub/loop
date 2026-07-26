@@ -25,3 +25,5 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Owner-only contract reserve funding, protected surplus withdrawal, fee/treasury changes and ownership transfer with locked-value invariants.
 - Canonical agent knowledge base covering product rules, architecture, data, contracts, operations,
   task playbooks and the dated production snapshot.
+- Proof-bound BANK and DUEL result cards with personal Telegram delivery, native sharing,
+  referral links and user-controlled notifications.

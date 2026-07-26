@@ -10,6 +10,7 @@ Internet
        ↘ PostgreSQL 17
        ↘ Redis 8
   → independent chain worker
+  → independent result notification worker
 ```
 
 Публичные поверхности:
@@ -86,6 +87,7 @@ make docker-down
 | auth/security             | целевые security tests + `make test-security`                                       |
 | DB model/migration        | clean `alembic upgrade head`, `alembic check`, PostgreSQL path                      |
 | chain worker              | worker pytest, replay/idempotency/failed/finality cases                             |
+| result notifier           | outbox idempotency, owner binding, opt-out, renderer and Telegram fallback tests    |
 | BANK contract             | Acton BANK tests, coverage, build, fork smoke, manifest verification                |
 | DUEL contract             | Acton DUEL tests, coverage/mutation, two-wallet fork; live canary только оператором |
 | deployment                | все затронутые suites, backup/rollback rehearsal, public smoke                      |
@@ -186,7 +188,7 @@ contracts или deployment manifests.
 7. при DUEL address switch запускает migration preflight;
 8. делает PostgreSQL backup;
 9. запускает Alembic head;
-10. поднимает API/worker и проверяет health;
+10. поднимает API/chain worker/notifier и проверяет health;
 11. атомарно переключает `/opt/loop/current` и `/opt/loop/web-current`;
 12. проверяет nginx и public smoke;
 13. при ошибке возвращает env, DB dump и предыдущий release.
@@ -213,7 +215,8 @@ curl --fail https://app.tonsuite.org/live
 curl --fail https://app.tonsuite.org/ready
 ```
 
-`/ready` проверяет PostgreSQL и Redis. API и worker отдельно аттестуют code hashes при startup.
+`/ready` проверяет PostgreSQL и Redis. API и chain worker отдельно аттестуют code hashes при
+startup; notifier имеет отдельный heartbeat.
 
 DUEL metrics:
 

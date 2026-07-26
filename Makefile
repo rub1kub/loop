@@ -118,7 +118,7 @@ screenshots: ## Capture documentation screenshots from the production web build
 	npm run screenshots
 
 docker-up: ## Start the local production stack
-	docker compose --env-file .env.production up -d --wait db redis api worker
+	docker compose --env-file .env.production up -d --wait db redis api worker notifier
 
 docker-down: ## Stop the local production stack without deleting data
 	docker compose --env-file .env.production down

@@ -4,7 +4,12 @@ export interface TelegramWebApp {
   initData: string;
   initDataUnsafe?: {
     start_param?: string;
-    user?: { id: number; first_name: string; username?: string };
+    user?: {
+      id: number;
+      first_name: string;
+      username?: string;
+      allows_write_to_pm?: boolean;
+    };
   };
   version: string;
   platform: string;
@@ -29,6 +34,8 @@ export interface TelegramWebApp {
   openLink?(url: string): void;
   openTelegramLink(url: string): void;
   switchInlineQuery?(query: string, chooseChatTypes?: string[]): void;
+  shareMessage?(messageId: string, callback?: (shared: boolean) => void): void;
+  requestWriteAccess?(callback?: (allowed: boolean) => void): void;
   BackButton: {
     show(): void;
     hide(): void;
@@ -64,6 +71,25 @@ export interface User {
   photo_url: string | null;
   onboarding_seen: boolean;
   onboarding_enabled: boolean;
+  result_notifications_enabled: boolean;
+}
+
+export interface ResultCard {
+  id: string;
+  mode: 'bank' | 'duel';
+  payout_nano: number;
+  contributed_nano: number;
+  result_nano: number;
+  proof_url: string;
+  image_url: string;
+  seen_at: string | null;
+  created_at: string;
+}
+
+export interface PreparedResultShare {
+  prepared_message_id: string;
+  expiration_date: string;
+  fallback_query: string;
 }
 
 export interface Wallet {

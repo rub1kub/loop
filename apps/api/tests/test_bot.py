@@ -10,6 +10,7 @@ from app.bot import (
     BOT_NAME,
     BOT_SHORT_DESCRIPTION,
     INLINE_PATTERN,
+    RESULT_PATTERN,
     START_MESSAGES,
     SUPPORT_TEXT,
     configure_bot,
@@ -25,6 +26,14 @@ def test_inline_challenge_query_is_offer_bound() -> None:
     assert match is not None and match.group(1) == "123456"
     assert INLINE_PATTERN.fullmatch("2 50") is None
     assert INLINE_PATTERN.fullmatch("duel not-an-offer") is None
+
+
+def test_inline_result_query_uses_an_opaque_card_id() -> None:
+    public_id = "AbCdEfGhIjKlMnOpQrStUvWx"
+    match = RESULT_PATTERN.fullmatch(f"result {public_id}")
+    assert match is not None and match.group(1) == public_id
+    assert RESULT_PATTERN.fullmatch("result 1") is None
+    assert RESULT_PATTERN.fullmatch("result ../../secret") is None
 
 
 def test_inline_amount_format_is_human_readable() -> None:

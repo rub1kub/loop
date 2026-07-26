@@ -35,6 +35,7 @@ const profile: Profile = {
     photo_url: 'https://t.me/i/userpic/320/loop.jpg',
     onboarding_seen: true,
     onboarding_enabled: true,
+    result_notifications_enabled: true,
   },
   wallet: null,
   bank: { active: 0, completed: 0, total: 0 },
@@ -75,6 +76,7 @@ describe('ProfileScreen', () => {
         bankHistory={[]}
         duels={[]}
         onReplay={vi.fn()}
+        onResultNotificationsChange={vi.fn()}
       />,
     );
 
@@ -95,6 +97,7 @@ describe('ProfileScreen', () => {
         bankHistory={[]}
         duels={[]}
         onReplay={vi.fn()}
+        onResultNotificationsChange={vi.fn()}
       />,
     );
 
@@ -105,5 +108,24 @@ describe('ProfileScreen', () => {
     fireEvent.click(vibration);
     expect(vibration).not.toBeChecked();
     expect(telegramMocks.setHapticsEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('lets the user disable personal result cards', async () => {
+    const change = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ProfileScreen
+        profile={profile}
+        rating={null}
+        bankHistory={[]}
+        duels={[]}
+        onReplay={vi.fn()}
+        onResultNotificationsChange={change}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Настройки' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Карточки в Telegram' }));
+
+    await waitFor(() => expect(change).toHaveBeenCalledWith(false));
   });
 });

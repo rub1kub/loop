@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   ArrowSquareOut,
+  BellRinging,
   GearSix,
   Infinity as InfinityIcon,
   Link,
@@ -40,12 +41,14 @@ export function ProfileScreen({
   bankHistory,
   duels,
   onReplay,
+  onResultNotificationsChange,
 }: {
   profile: Profile;
   rating: Rating | null;
   bankHistory: BankPosition[];
   duels: Duel[];
   onReplay: () => void;
+  onResultNotificationsChange: (enabled: boolean) => Promise<void>;
 }) {
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
@@ -58,6 +61,7 @@ export function ProfileScreen({
   );
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [vibrationEnabled, setVibrationEnabled] = useState(isHapticsEnabled);
+  const [notificationPending, setNotificationPending] = useState(false);
 
   useEffect(() => {
     if (isMockTelegram()) return;
@@ -292,6 +296,25 @@ export function ProfileScreen({
                     setHapticsEnabled(enabled);
                     setVibrationEnabled(enabled);
                     if (enabled) haptic('light');
+                  }}
+                />
+              </label>
+              <label className="settings-toggle">
+                <span>
+                  <BellRinging /> Карточки в Telegram
+                </span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-label="Карточки в Telegram"
+                  checked={profile.user.result_notifications_enabled}
+                  disabled={notificationPending}
+                  onChange={(event) => {
+                    const enabled = event.currentTarget.checked;
+                    setNotificationPending(true);
+                    void onResultNotificationsChange(enabled)
+                      .then(() => haptic(enabled ? 'success' : 'light'))
+                      .finally(() => setNotificationPending(false));
                   }}
                 />
               </label>

@@ -110,6 +110,7 @@ Telegram Mini App                         Browser /control
        └──────────── chain worker ────────────────┘
                             │
               successful finalized transactions
+                            ├──── result outbox ────► Telegram DM
                             ▼
                        TON testnet
                  BankQueue   DuelEscrow
@@ -119,19 +120,19 @@ Telegram Mini App                         Browser /control
 
 ## Куда идти по типу задачи
 
-| Задача                                 | Сначала прочитать                                                        |
-| -------------------------------------- | ------------------------------------------------------------------------ |
-| Продукт, текст, сценарий, UX           | [product-and-ux.md](product-and-ux.md), затем `docs/product.md`          |
-| React/Mini App/клавиатура/safe area    | [product-and-ux.md](product-and-ux.md), `App.tsx`, `viewport.ts`         |
-| Telegram auth, fullscreen, inline      | [architecture-and-data.md](architecture-and-data.md), `docs/telegram.md` |
-| API, модели, миграции                  | [architecture-and-data.md](architecture-and-data.md)                     |
-| BANK                                   | [product-and-ux.md](product-and-ux.md), [blockchain.md](blockchain.md)   |
-| DUEL                                   | [product-and-ux.md](product-and-ux.md), [blockchain.md](blockchain.md)   |
-| Рейтинг или рефералы                   | [product-and-ux.md](product-and-ux.md), `apps/api/app/rating.py`         |
-| Tolk/Acton/контракт                    | [blockchain.md](blockchain.md), `docs/contracts.md`                      |
-| Панель владельца                       | [architecture-and-data.md](architecture-and-data.md), `docs/security.md` |
-| Тесты, CI, релиз, диагностика          | [operations.md](operations.md)                                           |
-| Найти точку изменения и набор проверок | [agent-playbooks.md](agent-playbooks.md)                                 |
+| Задача                                  | Сначала прочитать                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| Продукт, текст, сценарий, UX            | [product-and-ux.md](product-and-ux.md), затем `docs/product.md`          |
+| React/Mini App/клавиатура/safe area     | [product-and-ux.md](product-and-ux.md), `App.tsx`, `viewport.ts`         |
+| Telegram auth, fullscreen, inline/cards | [architecture-and-data.md](architecture-and-data.md), `docs/telegram.md` |
+| API, модели, миграции                   | [architecture-and-data.md](architecture-and-data.md)                     |
+| BANK                                    | [product-and-ux.md](product-and-ux.md), [blockchain.md](blockchain.md)   |
+| DUEL                                    | [product-and-ux.md](product-and-ux.md), [blockchain.md](blockchain.md)   |
+| Рейтинг или рефералы                    | [product-and-ux.md](product-and-ux.md), `apps/api/app/rating.py`         |
+| Tolk/Acton/контракт                     | [blockchain.md](blockchain.md), `docs/contracts.md`                      |
+| Панель владельца                        | [architecture-and-data.md](architecture-and-data.md), `docs/security.md` |
+| Тесты, CI, релиз, диагностика           | [operations.md](operations.md)                                           |
+| Найти точку изменения и набор проверок  | [agent-playbooks.md](agent-playbooks.md)                                 |
 
 ## Иерархия источников истины
 

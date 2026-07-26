@@ -45,6 +45,8 @@ synchronized contract configuration and the audit trail are durable PostgreSQL r
 4. TON Connect asks the external wallet to sign and broadcast.
 5. The worker reads the contract account, verifies message identity, values, opcode, exit status and masterchain inclusion.
 6. A database transaction applies the idempotent BANK or DUEL projection.
+7. A verified positive payout creates one immutable result card and one notification outbox row.
+   A separate worker renders and sends the card; the Mini App reads the same record.
 
 Administrative contract messages follow the same rule: the API only prepares a bounded payload,
 the owner wallet signs it, the contract enforces permissions and reserve invariants, and the worker
@@ -65,3 +67,5 @@ Redis provides rate limits and short-lived distributed locks. It is never author
 - Wallet callback without a block: remain pending.
 - Contract migration with locked funds or active DUEL projection: fail before Alembic runs.
 - Abandoned direct funding: release the expired reservation and let the same bound wallet retry.
+- Result delivery rate limit: retry only Telegram's explicit `retry_after`.
+- Ambiguous Telegram transport failure: do not resend and risk a duplicate; keep the card in-app.

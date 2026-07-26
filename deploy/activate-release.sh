@@ -85,7 +85,7 @@ rollback_release() {
   fi
   cd "$release_dir"
   export LOOP_IMAGE_TAG="$release_id"
-  docker compose --project-name loop --env-file .env.production stop api worker >/dev/null
+  docker compose --project-name loop --env-file .env.production stop api worker notifier >/dev/null
 
   local restore_ok=true
   if [[ $database_changed == true ]]; then
@@ -106,8 +106,14 @@ rollback_release() {
     cd "$previous_release"
     export LOOP_IMAGE_TAG
     LOOP_IMAGE_TAG=$(basename "$previous_release")
-    docker compose --project-name loop --env-file .env.production up -d api worker
-    docker compose --project-name loop --env-file .env.production up -d --wait --wait-timeout 120 api
+    previous_services=(api worker)
+    if docker compose --project-name loop --env-file .env.production config --services |
+      grep -Fxq notifier; then
+      previous_services+=(notifier)
+    fi
+    docker compose --project-name loop --env-file .env.production up -d "${previous_services[@]}"
+    docker compose --project-name loop --env-file .env.production up -d --wait \
+      --wait-timeout 120 "${previous_services[@]}"
     ln -sfn "$previous_release" "$loop_root/current.next"
     mv -Tf "$loop_root/current.next" "$loop_root/current"
     if [[ -n $previous_web_release && -d $previous_web_release ]]; then
@@ -284,7 +290,7 @@ docker compose --project-name loop --env-file .env.production build --pull api
 docker compose --project-name loop --env-file .env.production up -d --wait db redis
 if [[ -n $previous_release ]]; then
   rollback_armed=true
-  docker compose --project-name loop --env-file .env.production stop api worker
+  docker compose --project-name loop --env-file .env.production stop api worker notifier
   if [[ $source_network_id != "$target_network_id" ]]; then
     docker compose --project-name loop --env-file .env.production run --rm --no-deps api \
       python -m app.network_switch_preflight --target-network "$target_network_id"
@@ -327,8 +333,8 @@ if [[ $target_network_id == -239 ]]; then
 fi
 database_changed=true
 docker compose --project-name loop --env-file .env.production run --rm migrate
-docker compose --project-name loop --env-file .env.production up -d api worker
-docker compose --project-name loop --env-file .env.production up -d --wait --wait-timeout 120 api worker
+docker compose --project-name loop --env-file .env.production up -d api worker notifier
+docker compose --project-name loop --env-file .env.production up -d --wait --wait-timeout 120 api worker notifier
 curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
   http://127.0.0.1:8000/ready >/dev/null
 

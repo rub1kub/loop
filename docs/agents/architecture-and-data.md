@@ -2,17 +2,18 @@
 
 ## Компоненты времени выполнения
 
-| Компонент       | Код                                   | Ответственность                                                   |
-| --------------- | ------------------------------------- | ----------------------------------------------------------------- |
-| Mini App        | `apps/web/src`                        | Telegram lifecycle, UI, TON Connect и построение сообщений        |
-| Browser control | `apps/web/src/control`                | owner login, intake switches и подготовка admin transactions      |
-| API             | `apps/api/app/main.py`, routers       | auth, валидация, quote/intents, read models                       |
-| Telegram bot    | `apps/api/app/bot.py`                 | `/start`, menu button, webhook и inline DUEL                      |
-| Chain worker    | `apps/api/app/chain_worker.py`        | finalized TON transactions → идемпотентные PostgreSQL projections |
-| PostgreSQL      | SQLAlchemy + Alembic                  | продуктовые данные, проекции, checkpoints и audit                 |
-| Redis           | `nonce_store.py`, middleware, metrics | одноразовые challenge, rate limits и временная координация        |
-| Contracts       | `contracts/bank`, `contracts/duel`    | финансовые правила, escrow, выплаты и recovery                    |
-| Reverse proxy   | `deploy/apache`, `deploy/nginx`       | TLS, CSP, rate limits, static assets и API proxy                  |
+| Компонент       | Код                                   | Ответственность                                                    |
+| --------------- | ------------------------------------- | ------------------------------------------------------------------ |
+| Mini App        | `apps/web/src`                        | Telegram lifecycle, UI, TON Connect и построение сообщений         |
+| Browser control | `apps/web/src/control`                | owner login, intake switches и подготовка admin transactions       |
+| API             | `apps/api/app/main.py`, routers       | auth, валидация, quote/intents, read models                        |
+| Telegram bot    | `apps/api/app/bot.py`                 | `/start`, menu button, webhook и inline DUEL                       |
+| Chain worker    | `apps/api/app/chain_worker.py`        | finalized TON transactions → идемпотентные PostgreSQL projections  |
+| Result notifier | `apps/api/app/notification_worker.py` | подтверждённая выплата → одна карточка в личные сообщения Telegram |
+| PostgreSQL      | SQLAlchemy + Alembic                  | продуктовые данные, проекции, checkpoints и audit                  |
+| Redis           | `nonce_store.py`, middleware, metrics | одноразовые challenge, rate limits и временная координация         |
+| Contracts       | `contracts/bank`, `contracts/duel`    | финансовые правила, escrow, выплаты и recovery                     |
+| Reverse proxy   | `deploy/apache`, `deploy/nginx`       | TLS, CSP, rate limits, static assets и API proxy                   |
 
 ## Главные потоки
 
@@ -182,6 +183,15 @@ Browser и API не могут выполнить admin действие без 
 | `PATCH`  | `/control/application`  | maintenance/BANK/DUEL intake               |
 | `POST`   | `/control/transactions` | подготовить owner-signed admin transaction |
 
+### Result cards
+
+| Method | Path                             | Назначение                                  |
+| ------ | -------------------------------- | ------------------------------------------- |
+| `GET`  | `/results`                       | последние карточки текущего пользователя    |
+| `POST` | `/results/{id}/seen`             | больше не показывать карточку автоматически |
+| `POST` | `/results/{id}/prepare`          | нативное сообщение для публикации Telegram  |
+| `GET`  | `/results/cards/{public_id}.jpg` | публичный неизменяемый JPEG для Telegram    |
+
 ### Operational
 
 - `GET /live` — процесс отвечает.
@@ -192,7 +202,7 @@ Browser и API не могут выполнить admin действие без 
 
 ## PostgreSQL
 
-Текущая Alembic head: `20260723_0007`.
+Текущая Alembic head: `20260726_0009`.
 
 ### Shared
 
@@ -208,6 +218,8 @@ Browser и API не могут выполнить admin действие без 
 | `application_control`   | durable intake switches                              |
 | `contract_control`      | последняя проверенная admin-конфигурация контракта   |
 | `admin_audit_events`    | prepared/applied/confirmed административные действия |
+| `result_cards`          | неизменяемые факты подтверждённых BANK/DUEL выплат   |
+| `notification_outbox`   | одна попытка личной доставки на карточку             |
 
 ### BANK bounded context
 
