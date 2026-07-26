@@ -110,7 +110,8 @@ make contracts-verify
 make chain-smoke-test
 ```
 
-Смотри известное ограничение `contracts-verify` в
+Verifier сверяет локальную сборку, manifests, live bytecode, конфигурацию, резерв и сохранённые
+доказательства smoke/canary. Формат доказательств описан в
 [blockchain.md](blockchain.md#проверка-deployment).
 
 ## Browser tests
@@ -296,19 +297,15 @@ CLI diagnostics после локальной настройки:
 - не запускать deploy/canary/airdrop без необходимости и явного scope;
 - не считать explorer UI или wallet callback единственным доказательством.
 
-## Снимок production 2026-07-24
+## Актуальное production-состояние
 
-- Public `/live`: `{"status":"ok"}`.
-- Public `/ready`: `{"status":"ready"}`.
-- Последний операторски проверенный release symlink:
-  `3760e7774a6575c1c9f97f2181fe2c29559e5637`.
-- Локальный `main` и `origin/main` указывали на тот же commit.
-- Последний функциональный change: упрощённая панель владельца `/control`.
 - Production delivery выполняется напрямую через `scripts/deploy-vps.sh`, без GitHub Actions.
-- Живой TON-снимок содержит просроченный direct DUEL offer; см.
-  [blockchain.md](blockchain.md#снимок-сети-2026-07-24-0632-utc).
-
-Перед использованием этого снимка повтори public health, Git SHA, contract getters и deploy status.
+- Активные адреса и проверяемые данные находятся только в `deployments/<network>/`.
+- Release и web release должны указывать на один Git SHA после полного выпуска.
+- Public `/live`, `/ready`, Compose health, Telegram webhook и точный frontend asset проверяются
+  самим release CLI.
+- Не полагайся на сохранённый SHA или старый скриншот: перед операцией выполни
+  `npm run deploy:vps:status`, `make contracts-inspect` и `make contracts-verify`.
 
 ## Инцидентные подсказки
 

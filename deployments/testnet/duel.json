@@ -86,8 +86,12 @@
   },
   "previous_contract": {
     "address": "kQD9vsBIFke3V_cxWQaW8ostPE-3ama0D7Hm_YGac02xo6yP",
-    "paused": false,
-    "locked_nano": 0
+    "paused": true,
+    "locked_nano": 0,
+    "paused_at": "2026-07-26T10:39:31Z",
+    "pause_transaction": "rSknl6NHj6HWrme1Az/slhPy1vG3NAC4jks2B63opag=",
+    "pause_transaction_lt": 85653657000003,
+    "pause_masterchain_seqno": 74005476
   },
   "explorer_url": "https://testnet.tonviewer.com/kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M"
 }
