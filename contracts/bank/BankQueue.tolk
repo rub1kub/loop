@@ -22,8 +22,8 @@ const BANK_MAX_ALLOCATION_STEPS = 81
 
 contract BankQueue {
     author: "LOOP"
-    version: "1.4.0"
-    description: "FIFO payout cycle for LOOP BANK with maturity-based principal limits and pruned settled positions"
+    version: "1.3.0"
+    description: "FIFO payout cycle for LOOP BANK with maturity-based principal limits"
     storage: BankStorage
     incomingMessages: BankAllowedMessage
 }
@@ -137,13 +137,7 @@ fun BankStorage.allocateDeposit(mutate self, queryId: uint64, available: coins):
             position.completedAt = blockchain.now();
             self.lockedFunding -= position.targetPayout;
             self.activePositions.delete(position.owner);
-            // A settled position is dropped instead of retained. Keeping every
-            // completed record made the hot dictionary grow with lifetime
-            // history, so each allocation step in a cascade paid more gas the
-            // older the contract got. Replay protection stays with
-            // usedPositionIds, which is touched once per deposit rather than
-            // once per step, and the payout message remains the public proof.
-            self.positions.delete(positionId);
+            self.positions.set(positionId, position.toCell());
             self.queue.delete(self.headQueueIndex);
             self.headQueueIndex += 1;
             self.completedPositions += 1;

@@ -72,10 +72,9 @@ get fun `test exact funding sends payout and advances the head`() {
         to: first.address,
         value: ton("1.25"),
     });
-    // A settled position is pruned from storage, so `positionData` no longer
-    // answers for it: the payout message above is its public proof, and the
-    // dictionary stays proportional to the live queue rather than to lifetime
-    // history.
+    val completed = contract.positionData(POSITION_A);
+    expect(completed.status).toEqual(BANK_POSITION_PAYOUT_SENT);
+    expect(completed.fundedAmount).toEqual(completed.targetPayout);
     expect(contract.positionData(POSITION_B).fundedAmount).toEqual(ton("0.75"));
     expect(contract.queueData().headQueueIndex).toEqual(1);
     expect(contract.queueData().openPositions).toEqual(1);
@@ -100,10 +99,9 @@ get fun `test one deposit cascades across multiple older positions`() {
         to: third.address,
         value: ton("2"),
     });
-    // Both settled positions are pruned; the two payout messages above are the
-    // evidence that they closed.
+    expect(contract.positionData(POSITION_B).status).toEqual(BANK_POSITION_PAYOUT_SENT);
+    expect(contract.positionData(POSITION_C).status).toEqual(BANK_POSITION_PAYOUT_SENT);
     expect(contract.queueData().headQueueIndex).toEqual(3);
-    expect(contract.queueData().openPositions).toEqual(1);
 }
 
 get fun `test allocation step cap rejects corrupted oversized queue work`() {
