@@ -539,13 +539,13 @@ export function DuelScreen({
             {status === 'matched'
               ? duelBoosting
                 ? 'Соперник найден. Усилиться может каждый — твой шанс может и упасть.'
-                : 'Усиление закрыто. Открой результат сам — иначе его заберёт соперник.'
+                : 'Усиление закрыто. Открой результат — если откроет только соперник, весь пул уйдёт ему.'
               : // Telling the player to close the app is only true while the
                 // offer is unmatched. Once a match lands there is no push
                 // notification, the secret lives on this device, and a player
                 // who does not reveal in time hands the whole pool to the
                 // opponent who did.
-                'Ищем соперника с такой же ставкой. Ставка уже списана. Как только соперник найдётся, вернись сюда и открой результат — иначе его заберёт соперник.'}
+                'Ищем соперника с такой же ставкой. Ставка уже списана. Как только соперник найдётся, вернись сюда и открой результат — если откроет только он, весь пул уйдёт ему.'}
           </strong>
           <div className="duel-live-numbers">
             <span>

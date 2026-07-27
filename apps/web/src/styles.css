@@ -147,7 +147,7 @@ summary:focus-visible .disclosure-indicator {
   color: var(--ink);
   font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.1em;
 }
 
 .story-stage {
@@ -193,7 +193,7 @@ summary:focus-visible .disclosure-indicator {
   color: var(--muted);
   font-size: 10px;
   font-weight: 760;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.16em;
 }
 
 .story-copy h1 {
@@ -241,9 +241,9 @@ summary:focus-visible .disclosure-indicator {
   border-radius: 14px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 720;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   text-decoration: none;
   transition:
     border-color var(--motion-fast) ease,
@@ -259,9 +259,9 @@ summary:focus-visible .disclosure-indicator {
 
 .story-market-links small {
   color: var(--dim);
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 760;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
 }
 
 .story-market-links span {
@@ -300,7 +300,7 @@ summary:focus-visible .disclosure-indicator {
   border-radius: 18px;
   font-size: 11px;
   font-weight: 780;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-decoration: none;
   cursor: pointer;
   transition:
@@ -388,7 +388,7 @@ summary:focus-visible .disclosure-indicator {
   color: var(--muted);
   font-size: 10px;
   font-weight: 760;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.16em;
   line-height: 1.3;
 }
 
@@ -414,7 +414,7 @@ summary:focus-visible .disclosure-indicator {
   height: calc(var(--safe-bottom) + 70px);
   grid-template-columns: repeat(4, 1fr);
   padding: 8px 14px var(--safe-bottom);
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--edge);
   background: rgb(0 0 0 / 96%);
   backdrop-filter: blur(24px);
   transition:
@@ -450,9 +450,9 @@ summary:focus-visible .disclosure-indicator {
   background: transparent;
   color: var(--dim);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 780;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.02em;
   transition: color var(--motion-base) var(--ease-apple);
 }
 
@@ -616,9 +616,9 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .bank-state > strong {
-  font-size: 48px;
+  font-size: 46px;
   font-weight: 620;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.06em;
   line-height: 1;
 }
 
@@ -626,7 +626,7 @@ summary:focus-visible .disclosure-indicator {
 .bank-state > p {
   margin: 7px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .bank-active-state > p {
@@ -640,7 +640,7 @@ summary:focus-visible .disclosure-indicator {
 
 .bank-empty-state h2 {
   margin: 0;
-  font-size: 23px;
+  font-size: 22px;
   font-weight: 620;
   letter-spacing: -0.04em;
 }
@@ -654,7 +654,7 @@ summary:focus-visible .disclosure-indicator {
   max-width: 330px;
   margin: 8px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.42;
 }
 
@@ -685,15 +685,15 @@ summary:focus-visible .disclosure-indicator {
 
 .bank-cycle-metrics b {
   color: var(--ink);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 620;
 }
 
 .bank-cycle-metrics small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.1em;
 }
 
 .bank-cycle-metrics.is-empty {
@@ -704,7 +704,7 @@ summary:focus-visible .disclosure-indicator {
   max-width: 310px;
   margin: -4px 0 16px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -748,7 +748,7 @@ summary:focus-visible .disclosure-indicator {
   overflow-y: auto;
   padding: 20px max(21px, calc(var(--safe-right) + 16px)) calc(var(--safe-bottom) + 24px)
     max(21px, calc(var(--safe-left) + 16px));
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-bottom: 0;
   border-radius: 28px 28px 0 0;
   background: var(--surface);
@@ -769,7 +769,7 @@ summary:focus-visible .disclosure-indicator {
 
 .sheet-title-row h2 {
   margin: 4px 0 0;
-  font-size: 31px;
+  font-size: 32px;
   font-weight: 650;
   letter-spacing: -0.055em;
 }
@@ -849,7 +849,7 @@ summary:focus-visible .disclosure-indicator {
   justify-self: start;
   font-size: 10px;
   font-weight: 760;
-  letter-spacing: 0.13em;
+  letter-spacing: 0.16em;
 }
 
 .result-card-demo > i {
@@ -866,21 +866,21 @@ summary:focus-visible .disclosure-indicator {
 .result-card-demo > b {
   max-width: 220px;
   margin-top: 16px;
-  font-size: 24px;
-  letter-spacing: -0.05em;
+  font-size: 22px;
+  letter-spacing: -0.04em;
   line-height: 0.95;
 }
 
 .result-card-demo > strong {
   margin-top: 20px;
-  font-size: 28px;
-  letter-spacing: -0.05em;
+  font-size: 32px;
+  letter-spacing: -0.055em;
 }
 
 .result-card-demo > small {
   margin-top: 7px;
   color: var(--dim);
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.16em;
 }
@@ -893,14 +893,14 @@ summary:focus-visible .disclosure-indicator {
 
 .result-copy h2 {
   margin: 5px 0 0;
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 650;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.04em;
 }
 
 .result-copy > strong {
   margin-top: 6px;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 650;
 }
 
@@ -908,7 +908,7 @@ summary:focus-visible .disclosure-indicator {
   max-width: 310px;
   margin-top: 6px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.4;
 }
 
@@ -932,9 +932,9 @@ summary:focus-visible .disclosure-indicator {
   border: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.1em;
 }
 
 .result-proof svg {
@@ -978,7 +978,7 @@ summary:focus-visible .disclosure-indicator {
 
 .big-progress {
   margin: 5px 0 14px;
-  font-size: 64px;
+  font-size: 66px;
   font-weight: 610;
   letter-spacing: -0.07em;
 }
@@ -1016,13 +1016,13 @@ summary:focus-visible .disclosure-indicator {
 .detail-list dt,
 .duel-terms dt {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .detail-list dd,
 .duel-terms dd {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
   text-align: right;
 }
@@ -1033,7 +1033,7 @@ summary:focus-visible .disclosure-indicator {
 
 .wizard-step h3 {
   margin: 12px 0 22px;
-  font-size: 29px;
+  font-size: 32px;
   font-weight: 620;
   letter-spacing: -0.055em;
 }
@@ -1070,7 +1070,7 @@ summary:focus-visible .disclosure-indicator {
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 62px;
+  font-size: 66px;
   font-weight: 610;
   letter-spacing: -0.07em;
 }
@@ -1079,7 +1079,7 @@ summary:focus-visible .disclosure-indicator {
   color: var(--dim);
   font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.1em;
   transition: color var(--motion-base) var(--ease-apple);
 }
 
@@ -1091,7 +1091,7 @@ summary:focus-visible .disclosure-indicator {
   min-height: 18px;
   margin: 6px 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -1117,7 +1117,7 @@ summary:focus-visible .disclosure-indicator {
 .contract-truth p {
   margin: 7px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -1127,8 +1127,8 @@ summary:focus-visible .disclosure-indicator {
 
 .technical-details {
   margin-top: 12px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--edge);
+  border-bottom: 1px solid var(--edge);
 }
 
 .technical-details summary,
@@ -1150,9 +1150,9 @@ summary:focus-visible .disclosure-indicator {
 
 .technical-details summary {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
 }
 
 .disclosure-indicator {
@@ -1165,9 +1165,9 @@ summary:focus-visible .disclosure-indicator {
   border: 1px solid var(--edge);
   border-radius: 999px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.1em;
   line-height: 1;
   transition:
     color var(--motion-base) var(--ease-apple),
@@ -1262,13 +1262,17 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .choice-list span {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 670;
 }
 
 .choice-list strong {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
+}
+
+.choice-list + .form-note {
+  color: var(--ink);
 }
 
 .waiting-step {
@@ -1280,7 +1284,7 @@ details[open] > summary .disclosure-indicator svg {
 .waiting-step p {
   max-width: 310px;
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -1385,16 +1389,16 @@ details[open] > summary .disclosure-indicator svg {
 
 .stake-input-heading > span:first-child {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.1em;
 }
 
 .stake-edit-cue {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   transition: color 150ms ease;
 }
 
@@ -1430,7 +1434,7 @@ details[open] > summary .disclosure-indicator svg {
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 42px;
+  font-size: 46px;
   font-weight: 620;
   letter-spacing: -0.06em;
 }
@@ -1438,7 +1442,7 @@ details[open] > summary .disclosure-indicator svg {
 .stake-input b {
   color: var(--muted);
   font-size: 11px;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.1em;
 }
 
 .duel-equal-rule {
@@ -1457,9 +1461,9 @@ details[open] > summary .disclosure-indicator svg {
 
 .duel-equal-rule span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.1em;
 }
 
 .duel-terms {
@@ -1519,7 +1523,7 @@ details[open] > summary .disclosure-indicator svg {
   gap: 8px;
   margin: 13px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -1532,7 +1536,7 @@ details[open] > summary .disclosure-indicator svg {
 .duel-breakdown > p {
   margin: 4px 0 13px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -1552,7 +1556,7 @@ details[open] > summary .disclosure-indicator svg {
 .invite-banner strong {
   display: block;
   margin-top: 7px;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .duel-live-state,
@@ -1591,13 +1595,13 @@ details[open] > summary .disclosure-indicator svg {
 
 .duel-live-numbers b {
   color: var(--ink);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 620;
 }
 
 .duel-live-numbers small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
   letter-spacing: 0.1em;
 }
@@ -1606,7 +1610,7 @@ details[open] > summary .disclosure-indicator svg {
   max-width: 320px;
   margin: 13px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -1622,7 +1626,7 @@ details[open] > summary .disclosure-indicator svg {
   display: flex;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
   letter-spacing: 0.1em;
 }
@@ -1649,9 +1653,9 @@ details[open] > summary .disclosure-indicator svg {
 
 .boost-input > span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.13em;
+  letter-spacing: 0.1em;
 }
 
 .boost-input > div {
@@ -1670,14 +1674,14 @@ details[open] > summary .disclosure-indicator svg {
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 27px;
+  font-size: 32px;
   font-weight: 640;
 }
 
 .boost-input b {
   color: var(--muted);
-  font-size: 9px;
-  letter-spacing: 0.12em;
+  font-size: 11px;
+  letter-spacing: 0.1em;
 }
 
 .boost-quick-values {
@@ -1704,7 +1708,7 @@ details[open] > summary .disclosure-indicator svg {
 .duel-boost-panel > p {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   text-align: center;
 }
 
@@ -1721,7 +1725,7 @@ details[open] > summary .disclosure-indicator svg {
   justify-content: space-between;
   gap: 12px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .duel-boost-events strong {
@@ -1731,24 +1735,24 @@ details[open] > summary .disclosure-indicator svg {
 
 .duel-result h2 {
   margin: 10px 0 0;
-  font-size: clamp(38px, 12.4vw, 52px);
+  font-size: clamp(34px, 11vw, 46px);
   font-weight: 640;
-  letter-spacing: -0.065em;
+  letter-spacing: -0.06em;
 }
 
 .duel-result > strong {
   margin-top: 7px;
-  font-size: 21px;
+  font-size: 22px;
   font-weight: 620;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
 }
 
 .duel-result-note {
   max-width: 27ch;
   margin: 9px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -1761,7 +1765,7 @@ details[open] > summary .disclosure-indicator svg {
   gap: 6px;
   margin-top: 17px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .duel-result a svg {
@@ -1776,7 +1780,7 @@ details[open] > summary .disclosure-indicator svg {
   gap: 6px;
   margin: 15px 12px 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
   text-align: center;
 }
@@ -1829,9 +1833,9 @@ details[open] > summary .disclosure-indicator svg {
   border: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.1em;
 }
 
 .duel-direct-action:active {
@@ -1858,7 +1862,7 @@ details[open] > summary .disclosure-indicator svg {
   margin: 3px 0 1px;
   font-size: 32px;
   font-weight: 650;
-  letter-spacing: -0.06em;
+  letter-spacing: -0.055em;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1866,7 +1870,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .profile-identity > div > span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .avatar {
@@ -1905,21 +1909,21 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .profile-summary strong {
-  font-size: 25px;
+  font-size: 22px;
   font-weight: 620;
   line-height: 1;
 }
 
 .profile-summary span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
 }
 
 .profile-summary small {
   color: var(--dim);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .section-label {
@@ -1931,14 +1935,14 @@ details[open] > summary .disclosure-indicator svg {
 
 .section-label > span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.1em;
 }
 
 .section-label small {
   color: var(--dim);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .profile-row {
@@ -1949,7 +1953,7 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
   gap: 12px;
   padding: 10px 13px 10px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 17px;
   background: var(--surface);
   cursor: pointer;
@@ -1999,7 +2003,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .profile-row small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .profile-row > svg {
@@ -2025,8 +2029,8 @@ details[open] > summary .disclosure-indicator svg {
 
 .profile-proof-details {
   margin-top: 22px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--edge);
+  border-bottom: 1px solid var(--edge);
 }
 
 .profile-proof-details summary > span,
@@ -2035,9 +2039,9 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.1em;
 }
 
 .profile-proof-details summary svg,
@@ -2050,8 +2054,8 @@ details[open] > summary .disclosure-indicator svg {
 .rating-details summary small {
   margin-left: auto;
   color: var(--muted);
-  font-size: 10px;
-  letter-spacing: 0.09em;
+  font-size: 11px;
+  letter-spacing: 0.1em;
 }
 
 .profile-proof-details summary small + .disclosure-indicator,
@@ -2086,7 +2090,7 @@ details[open] > summary .disclosure-indicator svg {
   max-width: 330px;
   margin: 13px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -2101,9 +2105,9 @@ details[open] > summary .disclosure-indicator svg {
   border: 1px solid var(--edge);
   border-radius: 99px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.13em;
+  letter-spacing: 0.1em;
 }
 
 .rating-progress {
@@ -2132,7 +2136,7 @@ details[open] > summary .disclosure-indicator svg {
   color: var(--muted);
   font-size: 10px;
   font-weight: 760;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .rating-progress-copy span:last-child {
@@ -2160,15 +2164,15 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .rating-proof-line strong {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 620;
 }
 
 .rating-proof-line span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.02em;
 }
 
 .rating-pulse {
@@ -2191,15 +2195,15 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .rating-pulse strong {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 620;
 }
 
 .rating-pulse span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.02em;
 }
 
 .rating-list-switch {
@@ -2208,7 +2212,7 @@ details[open] > summary .disclosure-indicator svg {
   gap: 4px;
   margin-top: 22px;
   padding: 4px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 14px;
   background: var(--surface);
 }
@@ -2223,9 +2227,9 @@ details[open] > summary .disclosure-indicator svg {
   border-radius: 10px;
   background: transparent;
   color: var(--dim);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   cursor: pointer;
   transition:
     color var(--motion-base) var(--ease-apple),
@@ -2271,7 +2275,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .rating-rank {
   color: var(--dim);
-  font-size: 10px;
+  font-size: 13px;
   text-align: center;
 }
 
@@ -2286,7 +2290,7 @@ details[open] > summary .disclosure-indicator svg {
   border-radius: 50%;
   background: var(--surface);
   color: var(--ink);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
 }
 
@@ -2304,7 +2308,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .rating-list article > div strong {
   overflow: hidden;
-  font-size: 11px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2312,7 +2316,7 @@ details[open] > summary .disclosure-indicator svg {
 .rating-list article > div small {
   color: var(--dim);
   font-size: 10px;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.02em;
 }
 
 .rating-list article.is-me > div small,
@@ -2321,7 +2325,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .rating-list article > b {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 650;
 }
 
@@ -2352,7 +2356,7 @@ details[open] > summary .disclosure-indicator svg {
   max-width: 280px;
   margin: 7px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -2369,7 +2373,7 @@ details[open] > summary .disclosure-indicator svg {
 .rating-formula > p {
   margin: 12px 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -2384,9 +2388,9 @@ details[open] > summary .disclosure-indicator svg {
 .rating-pulse-label {
   margin: 18px 0 8px !important;
   color: var(--muted);
-  font-size: 9px !important;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.13em;
+  letter-spacing: 0.1em;
 }
 
 .rating-formula dl {
@@ -2407,7 +2411,7 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .rating-formula dt svg {
@@ -2418,7 +2422,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .rating-formula dd {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
 }
 
@@ -2443,7 +2447,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .proof-history {
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 17px;
   background: var(--surface);
 }
@@ -2469,7 +2473,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .proof-history > * + * {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--edge);
 }
 
 .proof-history span {
@@ -2478,13 +2482,13 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .proof-history b {
-  font-size: 10px;
-  letter-spacing: 0.15em;
+  font-size: 11px;
+  letter-spacing: 0.1em;
 }
 
 .proof-history small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .proof-history svg {
@@ -2500,10 +2504,10 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
   justify-content: space-between;
   border: 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--edge);
   background: transparent;
   color: inherit;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .settings-row {
@@ -2590,8 +2594,8 @@ details[open] > summary .disclosure-indicator svg {
 .settings-sheet > p {
   margin: 22px 0 0;
   color: var(--dim);
-  font-size: 10px;
-  letter-spacing: 0.15em;
+  font-size: 11px;
+  letter-spacing: 0.1em;
   text-align: center;
 }
 
@@ -2607,7 +2611,7 @@ details[open] > summary .disclosure-indicator svg {
   border-radius: 14px;
   background: var(--surface-active);
   box-shadow: 0 12px 40px #000;
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .fatal-screen {
@@ -2625,24 +2629,24 @@ details[open] > summary .disclosure-indicator svg {
 
 .fatal-screen h1 {
   margin: 12px 0 6px;
-  font-size: 28px;
-  letter-spacing: -0.05em;
+  font-size: 32px;
+  letter-spacing: -0.055em;
 }
 
 .fatal-screen p {
   margin: 0 0 30px;
   color: var(--dim);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .inline-preview {
   --bg: #d7d7d7;
-  --surface: var(--surface);
+  --surface: #f8f8f8;
   --surface-active: #ececec;
-  --line: var(--line);
-  --edge: var(--edge);
+  --line: #dedede;
+  --edge: #c8c8c8;
   --ink: #080808;
-  --dim: var(--dim);
+  --dim: #737373;
 
   overflow: hidden;
   background: var(--bg);
@@ -2684,7 +2688,7 @@ details[open] > summary .disclosure-indicator svg {
   gap: 2px;
 }
 .telegram-header strong {
-  font-size: 14px;
+  font-size: 16px;
 }
 .telegram-header small {
   color: var(--dim);
@@ -2710,7 +2714,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .inline-duel-card h1 {
   margin: 10px 0 25px;
-  font-size: 30px;
+  font-size: 32px;
   font-weight: 680;
   letter-spacing: -0.055em;
   line-height: 1.02;
@@ -2737,9 +2741,9 @@ details[open] > summary .disclosure-indicator svg {
 
 .inline-duel-card dt {
   color: var(--dim);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.1em;
 }
 
 .inline-duel-card dd {
@@ -2754,7 +2758,7 @@ details[open] > summary .disclosure-indicator svg {
   gap: 7px;
   margin: 14px 0 17px;
   color: var(--dim);
-  font-size: 9px;
+  font-size: 13px;
 }
 
 .inline-proof svg {
@@ -2771,13 +2775,13 @@ details[open] > summary .disclosure-indicator svg {
   color: var(--ink);
   font-size: 11px;
   font-weight: 780;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.1em;
 }
 
 .telegram-chat > time {
   margin: 7px 0 0 9px;
   color: var(--dim);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -2830,7 +2834,7 @@ details[open] > summary .disclosure-indicator svg {
   }
 
   .mode-header h1 {
-    font-size: 39px;
+    font-size: 32px;
   }
 
   .bank-object {
@@ -2844,12 +2848,12 @@ details[open] > summary .disclosure-indicator svg {
   }
 
   .bank-empty-state h2 {
-    font-size: 20px;
+    font-size: 22px;
   }
 
   .bank-empty-state .bank-risk {
     margin-top: 5px;
-    font-size: 11px;
+    font-size: 13px;
     line-height: 1.35;
   }
 
@@ -2867,7 +2871,7 @@ details[open] > summary .disclosure-indicator svg {
   }
 
   .bank-state > strong {
-    font-size: 40px;
+    font-size: 32px;
   }
 
   .duel-stage {
@@ -2896,7 +2900,7 @@ details[open] > summary .disclosure-indicator svg {
   }
 
   .stake-input input {
-    font-size: 36px;
+    font-size: 32px;
   }
 
   .duel-equal-rule {
@@ -2918,7 +2922,7 @@ details[open] > summary .disclosure-indicator svg {
 
   .duel-deadline-rule {
     margin-top: 6px;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.35;
   }
 
@@ -3001,12 +3005,6 @@ details[open] > summary .disclosure-indicator svg {
 
 .profile-identity {
   grid-template-columns: 58px minmax(0, 1fr) 44px;
-}
-
-@media (max-width: 360px) {
-  .rating-pulse span {
-    font-size: 8px;
-  }
 }
 
 @media (max-width: 350px), (max-height: 720px) {
