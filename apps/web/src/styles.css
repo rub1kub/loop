@@ -501,8 +501,10 @@ summary:focus-visible .disclosure-indicator {
   position: relative;
   display: grid;
   width: min(calc(100% + 42px), 430px);
-  height: min(47dvh, 405px);
-  flex: 0 0 auto;
+  height: auto;
+  min-height: 168px;
+  max-height: 520px;
+  flex: 1 1 auto;
   margin: 7px 0 0;
   overflow: hidden;
   place-items: center;
