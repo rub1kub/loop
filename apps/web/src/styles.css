@@ -505,8 +505,7 @@ summary:focus-visible .disclosure-indicator {
   flex: 0 0 auto;
   margin: 7px 0 0;
   overflow: hidden;
-  align-content: end;
-  place-items: end center;
+  place-items: center;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -514,7 +513,7 @@ summary:focus-visible .disclosure-indicator {
 
 .bank-vessel {
   position: relative;
-  width: min(106%, 455px);
+  height: 100%;
   aspect-ratio: 900 / 1015;
   justify-self: center;
   scale: 1;
