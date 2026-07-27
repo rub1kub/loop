@@ -3,10 +3,14 @@ import re
 import pytest
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.models import NotificationOutbox, ResultCard, User
 from app.result_cards import (
+    CARD_WIDTH,
     ENTRY_VARIANTS,
     CardFacts,
+    _font,
+    build_result_inline,
     create_entry_card,
     entry_variant,
     render_result_card,
@@ -160,3 +164,39 @@ async def test_the_caption_reports_the_contribution_and_no_gain(app) -> None:
     assert "1,5 GRAM" in caption
     assert "пирамид" in caption.lower()
     assert "+" not in caption
+
+
+def test_no_headline_overflows_the_card_at_any_plausible_amount() -> None:
+    font = _font(76, bold=True)
+    box = CARD_WIDTH - 140
+    for variant in ENTRY_VARIANTS:
+        for amount in ("0,001 GRAM", "0,25 GRAM", "1 GRAM", "2 GRAM", "1000 GRAM"):
+            for line in variant["headline"].format(amount=amount).split("\n"):
+                assert font.getlength(line) <= box, f"{line!r} overflows"
+
+
+@pytest.mark.asyncio
+async def test_an_entry_card_carries_no_referral_code(app) -> None:
+    settings = get_settings()
+    async with app.state.session_factory() as db:
+        user = User(telegram_id=920_003, first_name="Entrant")
+        db.add(user)
+        await db.flush()
+        entry = await create_entry_card(
+            db,
+            user_id=user.id,
+            entity_id="position-3",
+            event_key="bank_entry:-3:position-3",
+            network=-3,
+            contributed_nano=1_000_000_000,
+            queue_position=5,
+            tx_hash="ef" * 32,
+        )
+        await db.commit()
+
+    assert entry is not None
+    inline = build_result_inline(entry, settings, "SOMECODE")
+    urls = [button.url for row in inline.reply_markup.inline_keyboard for button in row]
+    assert not any(url and "ref_" in url for url in urls), (
+        "a confession card must not double as a paid recruitment link"
+    )

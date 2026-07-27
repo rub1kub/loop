@@ -85,7 +85,7 @@ ENTRY_VARIANTS: tuple[dict[str, str], ...] = (
     {
         "headline": "ЧЕМ БОЛЬШЕ\nЧИСЛО, ТЕМ ХУЖЕ.\nВЗНОС {amount}",
         "subline": "Не рейтинг, а место в финансовой пирамиде.",
-        "stat_label": "И МЕСТО, И ШАНСЫ",
+        "stat_label": "МОЁ МЕСТО В ОЧЕРЕДИ",
         "caption": (
             "Взнос {amount} в BANK. Число на карточке — моё место в очереди: чем оно "
             "больше, тем больше чужих взносов должно прийти раньше.\n\nBANK — финансовая "
@@ -180,7 +180,7 @@ def build_result_inline(
                 [
                     InlineKeyboardButton(
                         text="ОТКРЫТЬ LOOP",
-                        url=result_deep_link(settings, referral_code),
+                        url=result_deep_link(settings, None if entry else referral_code),
                     ),
                     InlineKeyboardButton(text="ПРОВЕРИТЬ", url=card.proof_url),
                 ]
@@ -427,14 +427,14 @@ def _render_entry_card(facts: CardFacts) -> bytes:
     if facts.queue_position:
         _centered_text(
             draw,
-            (CARD_WIDTH // 2, 900),
+            (CARD_WIDTH // 2, 880),
             f"№ {facts.queue_position}",
-            font=_font(118, bold=True),
+            font=_font(92, bold=True),
             fill=(255, 255, 255),
         )
         _centered_text(
             draw,
-            (CARD_WIDTH // 2, 1000),
+            (CARD_WIDTH // 2, 962),
             variant["stat_label"],
             font=_font(20, bold=True),
             fill=(135, 135, 135),
