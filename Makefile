@@ -67,6 +67,8 @@ contracts-deploy-duel-testnet: ## Deploy only the current DUEL with an explicit 
 	@test -n "$(LOOP_DUEL_INVITE_PUBLIC_KEY)" || (echo 'LOOP_DUEL_INVITE_PUBLIC_KEY is required' >&2; exit 2)
 	acton run deploy-duel-testnet
 
+GAS_FUZZ_SEED ?= 4990371069678758165
+
 contracts-mainnet-technical: ## Run deterministic, fork, coverage, mutation and gas gates
 	acton fmt --check
 	acton check
@@ -75,7 +77,8 @@ contracts-mainnet-technical: ## Run deterministic, fork, coverage, mutation and 
 		--coverage-file coverage.lcov
 	$(PYTHON) scripts/check-contract-coverage.py coverage.lcov \
 		--minimum-lines 98 --minimum-branches 75
-	acton test --baseline-snapshot contracts/gas-baseline.json --fail-on-diff
+	acton test --fuzz-seed $(GAS_FUZZ_SEED) \
+		--baseline-snapshot contracts/gas-baseline.json --fail-on-diff
 	acton test tests/bank_queue.test.tolk --mutate --mutate-contract BankQueue \
 		--mutation-levels critical --mutation-minimum-percent 90
 	acton test tests/bank_queue.test.tolk --mutate --mutate-contract BankQueue \
