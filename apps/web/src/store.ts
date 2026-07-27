@@ -132,19 +132,33 @@ const demoDuel: Duel = {
 };
 
 const demoResult: ResultCard | null =
-  mockScreen === 'result-bank' || mockScreen === 'result-duel'
+  mockScreen === 'result-entry'
     ? {
-        id: 'result-demo',
-        mode: mockScreen === 'result-duel' ? 'duel' : 'bank',
-        payout_nano: mockScreen === 'result-duel' ? 1_950_000_000 : 3_000_000_000,
-        contributed_nano: mockScreen === 'result-duel' ? 1_000_000_000 : 2_000_000_000,
-        result_nano: mockScreen === 'result-duel' ? 950_000_000 : 1_000_000_000,
-        proof_url: 'https://testnet.tonviewer.com/transaction/demo-result',
+        id: 'result-entry-demo',
+        mode: 'bank_entry',
+        payout_nano: 0,
+        contributed_nano: 2_000_000_000,
+        result_nano: 0,
+        queue_position: 47,
+        proof_url: 'https://testnet.tonviewer.com/transaction/demo-entry',
         image_url: '',
         seen_at: null,
-        created_at: new Date(now).toISOString(),
+        created_at: new Date().toISOString(),
       }
-    : null;
+    : mockScreen === 'result-bank' || mockScreen === 'result-duel'
+      ? {
+          id: 'result-demo',
+          mode: mockScreen === 'result-duel' ? 'duel' : 'bank',
+          payout_nano: mockScreen === 'result-duel' ? 1_950_000_000 : 3_000_000_000,
+          contributed_nano: mockScreen === 'result-duel' ? 1_000_000_000 : 2_000_000_000,
+          result_nano: mockScreen === 'result-duel' ? 950_000_000 : 1_000_000_000,
+          queue_position: null,
+          proof_url: 'https://testnet.tonviewer.com/transaction/demo-result',
+          image_url: '',
+          seen_at: null,
+          created_at: new Date(now).toISOString(),
+        }
+      : null;
 
 const demoInvite: Invite = {
   code: 'demo-direct-duel',

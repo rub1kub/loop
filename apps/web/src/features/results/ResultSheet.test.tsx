@@ -25,6 +25,7 @@ const card: ResultCard = {
   payout_nano: 3_000_000_000,
   contributed_nano: 2_000_000_000,
   result_nano: 1_000_000_000,
+  queue_position: null,
   proof_url: 'https://testnet.tonviewer.com/transaction/proof',
   image_url: 'https://loop.test/api/v1/results/cards/public.jpg',
   seen_at: null,
