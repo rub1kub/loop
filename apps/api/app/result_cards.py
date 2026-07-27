@@ -44,6 +44,7 @@ class CardFacts:
     payout_nano: int
     contributed_nano: int
     result_nano: int
+    queue_position: int | None = None
     demo: bool = False
 
 
@@ -51,6 +52,69 @@ def format_gram(nano: int, decimals: int = 3) -> str:
     value = nano / 1_000_000_000
     rendered = f"{value:.{decimals}f}".rstrip("0").rstrip(".")
     return rendered.replace(".", ",")
+
+
+ENTRY_VARIANTS: tuple[dict[str, str], ...] = (
+    {
+        "headline": "ЧЕК НА {amount}\nВ ФИНАНСОВУЮ\nПИРАМИДУ",
+        "subline": "Оплачено — да. Получено — нет.",
+        "stat_label": "МОЙ НОМЕР В ОЧЕРЕДИ",
+        "caption": (
+            "Чек на {amount}. Назначение платежа — финансовая пирамида.\n\nОплачено — да, "
+            "получено — нет. На руках номер в очереди."
+        ),
+    },
+    {
+        "headline": "СДАНО {amount}.\nНОМЕРОК НА РУКАХ.\nПАЛЬТО НЕ ВЕРНУТ.",
+        "subline": "Финансовая пирамида, если без метафор.",
+        "stat_label": "НОМЕРОК",
+        "caption": (
+            "Сдано {amount}, номерок на руках, пальто не вернут.\n\nBANK — финансовая "
+            "пирамида. Мне не выплачено ничего."
+        ),
+    },
+    {
+        "headline": "НЕ ИНВЕСТИЦИЯ.\nНЕ ДЕПОЗИТ.\nВЗНОС {amount}.",
+        "subline": "Финансовая пирамида. Другого слова тут нет.",
+        "stat_label": "МОЁ МЕСТО В ОЧЕРЕДИ",
+        "caption": (
+            "Не инвестиция и не депозит. Взнос {amount} в BANK — финансовую "
+            "пирамиду.\n\nМне не выплачено ничего — есть только номер в очереди."
+        ),
+    },
+    {
+        "headline": "ЧЕМ БОЛЬШЕ\nЧИСЛО, ТЕМ ХУЖЕ.\nВЗНОС {amount}",
+        "subline": "Не рейтинг, а место в финансовой пирамиде.",
+        "stat_label": "И МЕСТО, И ШАНСЫ",
+        "caption": (
+            "Взнос {amount} в BANK. Число на карточке — моё место в очереди: чем оно "
+            "больше, тем больше чужих взносов должно прийти раньше.\n\nBANK — финансовая "
+            "пирамида. Мне не выплачено ничего."
+        ),
+    },
+    {
+        "headline": "БЕЗ ГАРАНТИЙ.\nБЕЗ СРОКОВ.\nВЗНОС {amount}.",
+        "subline": "Отмены тоже нет. Это финансовая пирамида.",
+        "stat_label": "МОЁ МЕСТО В ОЧЕРЕДИ",
+        "caption": (
+            "Без гарантий, без сроков, без отмены. Взнос {amount} в BANK.\n\nBANK — "
+            "финансовая пирамида. Мне не выплачено ничего."
+        ),
+    },
+    {
+        "headline": "ВЗНОС {amount}\nПРИНЯТ. НОМЕР\nПРИСВОЕН.",
+        "subline": "Больше ничего не произошло. Финансовая пирамида.",
+        "stat_label": "ПРИСВОЕННЫЙ НОМЕР",
+        "caption": (
+            "Взнос {amount} принят, номер присвоен. Больше ничего не произошло.\n\nBANK — "
+            "финансовая пирамида. Мне не выплачено ничего."
+        ),
+    },
+)
+
+def entry_variant(public_id: str) -> dict[str, str]:
+    seed = int.from_bytes(hashlib.sha256(public_id.encode()).digest()[:4], "big")
+    return ENTRY_VARIANTS[seed % len(ENTRY_VARIANTS)]
 
 
 def result_headline(mode: str) -> str:
@@ -62,6 +126,9 @@ def result_headline(mode: str) -> str:
 
 
 def result_caption(card: ResultCard) -> str:
+    if card.mode == "bank_entry":
+        variant = entry_variant(card.public_id)
+        return variant["caption"].format(amount=f"{format_gram(card.contributed_nano)} GRAM")
     result = format_gram(card.result_nano)
     payout = format_gram(card.payout_nano)
     if card.mode == "bank":
@@ -94,14 +161,19 @@ def build_result_inline(
     referral_code: str | None,
 ) -> InlineQueryResultPhoto:
     image_url = result_card_image_url(settings, card)
+    entry = card.mode == "bank_entry"
     return InlineQueryResultPhoto(
         id=card.public_id,
         photo_url=image_url,
         thumbnail_url=image_url,
         photo_width=CARD_WIDTH,
         photo_height=CARD_HEIGHT,
-        title="Результат LOOP",
-        description=f"+{format_gram(card.result_nano)} GRAM",
+        title="Взнос в BANK" if entry else "Результат LOOP",
+        description=(
+            f"{format_gram(card.contributed_nano)} GRAM в очереди"
+            if entry
+            else f"+{format_gram(card.result_nano)} GRAM"
+        ),
         caption=result_caption(card),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
@@ -190,6 +262,45 @@ async def create_result_card(
     return card
 
 
+async def create_entry_card(
+    db: Any,
+    *,
+    user_id: str | None,
+    entity_id: str,
+    event_key: str,
+    network: int,
+    contributed_nano: int,
+    queue_position: int | None,
+    tx_hash: str,
+) -> ResultCard | None:
+    if user_id is None:
+        return None
+    if contributed_nano <= 0:
+        raise ValueError("an entry card needs a positive contribution")
+    existing: ResultCard | None = await db.scalar(
+        select(ResultCard).where(ResultCard.event_key == event_key)
+    )
+    if existing is not None:
+        return existing
+    card = ResultCard(
+        user_id=user_id,
+        mode="bank_entry",
+        entity_id=entity_id,
+        event_key=event_key,
+        network=network,
+        payout_nano=0,
+        contributed_nano=contributed_nano,
+        result_nano=0,
+        queue_position=queue_position,
+        tx_hash=tx_hash,
+        proof_url=explorer_transaction_url(network, tx_hash),
+        template_version=CARD_TEMPLATE_VERSION,
+    )
+    db.add(card)
+    await db.flush()
+    return card
+
+
 def _font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     candidates = FONT_BOLD_CANDIDATES if bold else FONT_REGULAR_CANDIDATES
     for path in candidates:
@@ -264,7 +375,97 @@ def _draw_duel_orbits(image: Image.Image) -> None:
 @lru_cache(maxsize=64)
 def render_result_card(facts: CardFacts) -> bytes:
     with RENDER_LIMIT:
+        if facts.mode == "bank_entry":
+            return _render_entry_card(facts)
         return _render_result_card(facts)
+
+
+def _render_entry_card(facts: CardFacts) -> bytes:
+    if facts.result_nano != 0 or facts.payout_nano != 0:
+        raise ValueError("an entry card must report no payout and no result")
+    variant = entry_variant(facts.public_id)
+    image = Image.new("RGBA", (CARD_WIDTH, CARD_HEIGHT), (0, 0, 0, 255))
+    draw = ImageDraw.Draw(image)
+    seed = int.from_bytes(hashlib.sha256(facts.public_id.encode()).digest()[:8], "big")
+    rng = random.Random(seed)  # noqa: S311 - deterministic visual noise, not security
+    for _ in range(520):
+        shade = rng.randint(14, 42)
+        draw.point(
+            (rng.randrange(CARD_WIDTH), rng.randrange(CARD_HEIGHT)),
+            fill=(shade, shade, shade, rng.randint(60, 150)),
+        )
+
+    draw.text((70, 64), "∞  LOOP", font=_font(30, bold=True), fill=(245, 245, 245), anchor="la")
+    draw.text(
+        (CARD_WIDTH - 70, 68),
+        "BANK",
+        font=_font(20, bold=True),
+        fill=(142, 142, 142),
+        anchor="ra",
+    )
+    if facts.demo:
+        draw.rounded_rectangle((430, 52, 650, 102), radius=25, outline=(105, 105, 105), width=2)
+        _centered_text(draw, (540, 77), "ОБРАЗЕЦ", font=_font(18, bold=True), fill=(170, 170, 170))
+
+    headline = variant["headline"].format(amount=f"{format_gram(facts.contributed_nano)} GRAM")
+    _centered_text(
+        draw,
+        (CARD_WIDTH // 2, 430),
+        headline,
+        font=_font(76, bold=True),
+        fill=(250, 250, 250),
+        spacing=16,
+    )
+    _centered_text(
+        draw,
+        (CARD_WIDTH // 2, 640),
+        variant["subline"],
+        font=_font(30),
+        fill=(150, 150, 150),
+    )
+
+    if facts.queue_position:
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 900),
+            f"№ {facts.queue_position}",
+            font=_font(118, bold=True),
+            fill=(255, 255, 255),
+        )
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 1000),
+            variant["stat_label"],
+            font=_font(20, bold=True),
+            fill=(135, 135, 135),
+        )
+
+    draw.line((70, 1176, CARD_WIDTH - 70, 1176), fill=(54, 54, 54), width=2)
+    draw.text(
+        (70, 1222),
+        f"ВНЕСЕНО  {format_gram(facts.contributed_nano)} GRAM",
+        font=_font(22, bold=True),
+        fill=(212, 212, 212),
+        anchor="la",
+    )
+    draw.text(
+        (CARD_WIDTH - 70, 1222),
+        "ВЫПЛАЧЕНО  0 GRAM",
+        font=_font(22, bold=True),
+        fill=(212, 212, 212),
+        anchor="ra",
+    )
+    draw.text(
+        (CARD_WIDTH // 2, 1318),
+        "LOOP · TONSUITE.ORG",
+        font=_font(16, bold=True),
+        fill=(95, 95, 95),
+        anchor="ma",
+    )
+
+    output = io.BytesIO()
+    image.convert("RGB").save(output, format="JPEG", quality=CARD_JPEG_QUALITY, optimize=True)
+    return output.getvalue()
 
 
 def _render_result_card(facts: CardFacts) -> bytes:

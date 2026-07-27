@@ -17,7 +17,12 @@ export function ResultSheet({
   onError: (message: string) => void;
 }) {
   const [sharing, setSharing] = useState(false);
-  const modeLabel = card.mode === 'bank' ? 'Цикл замкнулся.' : 'DUEL завершён.';
+  const entry = card.mode === 'bank_entry';
+  const modeLabel = entry
+    ? 'Ты в очереди.'
+    : card.mode === 'bank'
+      ? 'Цикл замкнулся.'
+      : 'DUEL завершён.';
 
   async function share() {
     if (sharing) return;
@@ -65,17 +70,35 @@ export function ResultSheet({
           <div className="result-card-image result-card-demo" aria-hidden="true">
             <span>∞ LOOP</span>
             <i>∞</i>
-            <b>{card.mode === 'bank' ? 'МОЙ ЦИКЛ ЗАМКНУЛСЯ' : 'Я ЗАБРАЛ DUEL'}</b>
-            <strong>+{formatGram(card.result_nano, 3)} GRAM</strong>
-            <small>РАЗНИЦА К ВХОДУ</small>
+            <b>
+              {entry
+                ? 'Я ДЕПНУЛ В ФИНАНСОВУЮ ПИРАМИДУ'
+                : card.mode === 'bank'
+                  ? 'МОЙ ЦИКЛ ЗАМКНУЛСЯ'
+                  : 'Я ЗАБРАЛ DUEL'}
+            </b>
+            <strong>
+              {entry
+                ? `${formatGram(card.contributed_nano, 3)} GRAM`
+                : `+${formatGram(card.result_nano, 3)} GRAM`}
+            </strong>
+            <small>{entry ? 'ВЫПЛАЧЕНО 0 GRAM' : 'РАЗНИЦА К ВХОДУ'}</small>
           </div>
         )}
 
         <div className="result-copy">
-          <p className="eyebrow">{card.mode.toUpperCase()}</p>
+          <p className="eyebrow">{entry ? 'BANK · ВЗНОС' : card.mode.toUpperCase()}</p>
           <h2 id="result-title">{modeLabel}</h2>
-          <strong>+{formatGram(card.result_nano, 3)} GRAM</strong>
-          <span>Результат подтверждён. Теперь им можно поделиться.</span>
+          <strong>
+            {entry
+              ? `${formatGram(card.contributed_nano, 3)} GRAM`
+              : `+${formatGram(card.result_nano, 3)} GRAM`}
+          </strong>
+          <span>
+            {entry
+              ? `Взнос подтверждён сетью${card.queue_position ? `, ты №${card.queue_position} в очереди` : ''}.`
+              : 'Результат подтверждён. Теперь им можно поделиться.'}
+          </span>
         </div>
 
         <button

@@ -288,14 +288,18 @@ async def test_bank_projection_is_fifo_proof_bound_and_idempotent(app) -> None:
         assert newer.funded_amount_nano == 980_000_000
         assert newer.remaining_amount_nano == 2_020_000_000
         assert await db.scalar(select(func.count()).select_from(BankChainEvent)) == 1
-        card = await db.scalar(select(ResultCard))
+        card = await db.scalar(select(ResultCard).where(ResultCard.mode == "bank"))
         assert card is not None
-        assert card.mode == "bank"
         assert card.user_id == older_user.id
         assert card.result_nano == 250_000_000
+        entry = await db.scalar(select(ResultCard).where(ResultCard.mode == "bank_entry"))
+        assert entry is not None
+        assert entry.payout_nano == 0
+        assert entry.result_nano == 0
+        assert entry.queue_position is not None
         assert await db.scalar(select(func.count()).select_from(NotificationOutbox)) == 1
         assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.IGNORED
-        assert await db.scalar(select(func.count()).select_from(ResultCard)) == 1
+        assert await db.scalar(select(func.count()).select_from(ResultCard)) == 2
 
 
 @pytest.mark.asyncio

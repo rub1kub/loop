@@ -63,17 +63,21 @@ class ResultCard(Base):
     __table_args__ = (
         UniqueConstraint("event_key", name="result_card_event_once"),
         UniqueConstraint("public_id", name="result_card_public_id"),
-        CheckConstraint("mode IN ('bank', 'duel')", name="result_card_mode"),
+        CheckConstraint("mode IN ('bank', 'duel', 'bank_entry')", name="result_card_mode"),
         CheckConstraint("payout_nano >= 0", name="result_card_payout"),
         CheckConstraint("contributed_nano >= 0", name="result_card_contributed"),
-        CheckConstraint("result_nano > 0", name="result_card_positive"),
+        CheckConstraint(
+            "(mode = 'bank_entry' AND result_nano = 0 AND payout_nano = 0)"
+            " OR (mode <> 'bank_entry' AND result_nano > 0)",
+            name="result_card_positive",
+        ),
         Index("ix_result_cards_user_created", "user_id", "created_at"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     public_id: Mapped[str] = mapped_column(String(32), default=new_public_id, nullable=False)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    mode: Mapped[str] = mapped_column(String(8), nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
     entity_id: Mapped[str] = mapped_column(String(36), nullable=False)
     event_key: Mapped[str] = mapped_column(String(180), nullable=False)
     network: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -82,6 +86,7 @@ class ResultCard(Base):
     result_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
     tx_hash: Mapped[str] = mapped_column(String(96), nullable=False)
     proof_url: Mapped[str] = mapped_column(Text, nullable=False)
+    queue_position: Mapped[int | None] = mapped_column(Integer)
     template_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     share_prepared_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

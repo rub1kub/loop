@@ -40,7 +40,7 @@ from .modules.duel.models import (
     MatchmakingOffer,
     OfferState,
 )
-from .result_cards import create_result_card
+from .result_cards import create_entry_card, create_result_card
 from .ton import (
     TonClient,
     TonProviderError,
@@ -646,6 +646,32 @@ async def apply_bank_transaction(
     )
     position.confirmed_at = datetime.fromtimestamp(int(transaction["now"]), UTC)
     position.funding_transaction = tx_hash
+    ahead = await db.scalar(
+        select(func.count())
+        .select_from(BankPosition)
+        .where(
+            BankPosition.network == position.network,
+            BankPosition.contract_address == position.contract_address,
+            BankPosition.current_status.in_(
+                [
+                    BankPositionStatus.QUEUED.value,
+                    BankPositionStatus.PARTIALLY_FUNDED.value,
+                ]
+            ),
+            BankPosition.queue_index.is_not(None),
+            BankPosition.queue_index < position.queue_index,
+        )
+    )
+    await create_entry_card(
+        db,
+        user_id=position.user_id,
+        entity_id=position.id,
+        event_key=f"bank_entry:{position.network}:{position.id}",
+        network=position.network,
+        contributed_nano=position.principal_nano,
+        queue_position=int(ahead or 0) + 1,
+        tx_hash=tx_hash,
+    )
     event = BankChainEvent(
         network=position.network,
         account=position.contract_address,

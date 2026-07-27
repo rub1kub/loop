@@ -82,10 +82,11 @@ const bankPositionSchema = z.object({
 
 const resultCardSchema = z.object({
   id: z.string(),
-  mode: z.enum(['bank', 'duel']),
+  mode: z.enum(['bank', 'duel', 'bank_entry']),
   payout_nano: z.number(),
   contributed_nano: z.number(),
   result_nano: z.number(),
+  queue_position: z.number().nullable(),
   proof_url: z.string(),
   image_url: z.string(),
   seen_at: z.string().nullable(),

@@ -76,10 +76,11 @@ export interface User {
 
 export interface ResultCard {
   id: string;
-  mode: 'bank' | 'duel';
+  mode: 'bank' | 'duel' | 'bank_entry';
   payout_nano: number;
   contributed_nano: number;
   result_nano: number;
+  queue_position: number | null;
   proof_url: string;
   image_url: string;
   seen_at: string | null;

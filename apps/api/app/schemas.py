@@ -36,6 +36,7 @@ class ResultCardView(BaseModel):
     payout_nano: int
     contributed_nano: int
     result_nano: int
+    queue_position: int | None
     proof_url: str
     image_url: str
     seen_at: datetime | None

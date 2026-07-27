@@ -21,6 +21,7 @@ def card_view(card: ResultCard, settings: Config) -> ResultCardView:
         payout_nano=card.payout_nano,
         contributed_nano=card.contributed_nano,
         result_nano=card.result_nano,
+        queue_position=card.queue_position,
         proof_url=card.proof_url,
         image_url=f"{settings.public_origin}/api/v1/results/cards/{card.public_id}.jpg",
         seen_at=card.seen_at,
@@ -71,6 +72,7 @@ async def result_image(public_id: str, db: Db) -> Response:
             payout_nano=card.payout_nano,
             contributed_nano=card.contributed_nano,
             result_nano=card.result_nano,
+            queue_position=card.queue_position,
         )
     )
     return Response(
