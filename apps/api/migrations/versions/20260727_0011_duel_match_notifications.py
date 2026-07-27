@@ -57,8 +57,14 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DELETE FROM notification_outbox WHERE kind <> 'result'")
+    if op.get_bind().dialect.name != "sqlite":
+        op.execute(
+            "ALTER TABLE notification_outbox "
+            "DROP CONSTRAINT IF EXISTS ck_notification_outbox_notification_kind"
+        )
     with op.batch_alter_table("notification_outbox") as batch:
-        batch.drop_constraint("notification_kind", type_="check")
+        if op.get_bind().dialect.name == "sqlite":
+            batch.drop_constraint("notification_kind", type_="check")
         batch.drop_constraint("notification_dedupe_once", type_="unique")
         batch.create_unique_constraint("notification_result_once", ["result_card_id"])
         batch.alter_column(
