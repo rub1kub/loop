@@ -505,7 +505,8 @@ summary:focus-visible .disclosure-indicator {
   flex: 0 0 auto;
   margin: 7px 0 0;
   overflow: hidden;
-  place-items: center;
+  align-content: end;
+  place-items: end center;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -611,7 +612,7 @@ summary:focus-visible .disclosure-indicator {
   display: grid;
   width: 100%;
   justify-items: center;
-  margin-top: -7px;
+  margin-top: 6px;
   text-align: center;
 }
 

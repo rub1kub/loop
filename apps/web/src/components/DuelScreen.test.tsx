@@ -269,6 +269,66 @@ describe('DuelScreen', () => {
     expect(screen.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' })).toBeVisible();
   });
 
+  it('puts the proof first after a loss and the exit first after a win', () => {
+    const proof = { settlement_proof_url: 'https://tonviewer.example/tx' };
+    const { unmount } = render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[settledDuel({ winner_wallet: '0:bbb', ...proof })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    const afterLoss = screen.getByRole('button', { name: 'ЗАКРЫТЬ' }).parentElement!;
+    expect(afterLoss.firstElementChild).toHaveTextContent('ПОСМОТРЕТЬ ОПЕРАЦИЮ');
+    unmount();
+
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[settledDuel({ winner_wallet: '0:aaa', ...proof })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    const afterWin = screen.getByRole('button', { name: 'ЗАКРЫТЬ' }).parentElement!;
+    expect(afterWin.firstElementChild).toHaveTextContent('ЗАКРЫТЬ');
+  });
+
+  it('resets the stake to the minimum after a loss instead of reloading it', () => {
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[settledDuel({ winner_wallet: '0:bbb', stake_nano: 5_000_000_000 })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'ЗАКРЫТЬ' }));
+
+    expect(screen.getByLabelText('Ставка в GRAM')).toHaveValue('0.25');
+  });
+
+  it('drops the waiting metaphor once the duel is settled', () => {
+    const { container } = render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[settledDuel({ winner_wallet: '0:aaa' })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.duel-stage')).toBeNull();
+  });
+
   it('offers no rematch wording that pushes a losing player straight back in', () => {
     render(
       <DuelScreen

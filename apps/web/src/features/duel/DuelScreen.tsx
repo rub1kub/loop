@@ -143,8 +143,6 @@ export function DuelScreen({
     }
   }, [stake]);
   const terms = useMemo(() => canonicalTerms(requestedStake, chance), [chance, requestedStake]);
-  // A verified PLUSH BRICK holder pays no protocol fee on a won duel; the
-  // exemption is proven on chain by a permit attached to the offer.
   const feeNano = profile.plush_brick.fee_discount_active
     ? 0
     : (terms.totalPool * profile.plush_brick.duel_fee_bps) / 10_000;
@@ -442,7 +440,7 @@ export function DuelScreen({
         <h1 id="duel-title">DUEL</h1>
       </header>
 
-      {status !== 'idle' && (
+      {status !== 'idle' && status !== 'result' && (
         <div className={`duel-stage is-${status}`}>
           <span className="player-node">
             <User aria-hidden="true" />
@@ -451,7 +449,7 @@ export function DuelScreen({
             <HourglassSimple aria-hidden="true" />
           </span>
           <span className="player-node opponent">
-            {status === 'matched' || status === 'result' || invite ? (
+            {status === 'matched' || invite ? (
               <User weight="fill" aria-hidden="true" />
             ) : (
               <UserPlus aria-hidden="true" />
@@ -531,21 +529,20 @@ export function DuelScreen({
           <p className="eyebrow">
             {status === 'matched'
               ? 'СОПЕРНИК НАЙДЕН'
-              : mode === 'direct'
-                ? 'ПРЯМОЙ ВЫЗОВ'
-                : 'ПОИСК СОПЕРНИКА'}
+              : offerExpired
+                ? 'СРОК ВЫЗОВА ИСТЁК'
+                : mode === 'direct'
+                  ? 'ПРЯМОЙ ВЫЗОВ'
+                  : 'ПОИСК СОПЕРНИКА'}
           </p>
           <strong>
             {status === 'matched'
               ? duelBoosting
                 ? 'Соперник найден. Усилиться может каждый — твой шанс может и упасть.'
                 : 'Усиление закрыто. Открой результат — если откроет только соперник, весь пул уйдёт ему.'
-              : // Telling the player to close the app is only true while the
-                // offer is unmatched. Once a match lands there is no push
-                // notification, the secret lives on this device, and a player
-                // who does not reveal in time hands the whole pool to the
-                // opponent who did.
-                'Ищем соперника с такой же ставкой. Ставка уже списана. Как только соперник найдётся, вернись сюда и открой результат — если откроет только он, весь пул уйдёт ему.'}
+              : offerExpired
+                ? 'Соперник не нашёлся, и срок вызова истёк. Ставка не потеряна: забери её обратно кнопкой ниже.'
+                : 'Ищем соперника с такой же ставкой. Ставка уже списана. Как только соперник найдётся, вернись сюда и открой результат — если откроет только он, весь пул уйдёт ему.'}
           </strong>
           <div className="duel-live-numbers">
             <span>
@@ -624,7 +621,7 @@ export function DuelScreen({
               )}
             </div>
           )}
-          {status === 'searching' && (
+          {status === 'searching' && !offerExpired && (
             <p className="duel-live-help">
               Остановить поиск можно в любой момент. Возврат нужно подписать в кошельке.
             </p>
@@ -642,11 +639,6 @@ export function DuelScreen({
               ? `В кошелёк пришло ${formatGram(latestDuel.payout_nano, 3)} GRAM — ставка вернулась вместе с выигрышем.`
               : `Ставка ${formatGram(latestDuel.stake_nano, 3)} GRAM ушла сопернику.`}
           </p>
-          {latestDuel.settlement_proof_url && (
-            <a href={latestDuel.settlement_proof_url} target="_blank" rel="noreferrer">
-              Посмотреть операцию <ArrowSquareOut aria-hidden="true" />
-            </a>
-          )}
         </div>
       )}
 
@@ -672,17 +664,40 @@ export function DuelScreen({
 
       <div className="duel-actions">
         {status === 'result' && latestDuel && (
-          <button
-            className="secondary-button"
-            onClick={() => {
-              markDuelSeen(latestDuel.id);
-              setSeenDuelId(latestDuel.id);
-              setMessage('');
-              haptic('selection');
-            }}
-          >
-            ЗАКРЫТЬ
-          </button>
+          <>
+            {!resultWon && latestDuel.settlement_proof_url && (
+              <a
+                className="duel-direct-action"
+                href={latestDuel.settlement_proof_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ArrowSquareOut aria-hidden="true" /> ПОСМОТРЕТЬ ОПЕРАЦИЮ
+              </a>
+            )}
+            <button
+              className="secondary-button"
+              onClick={() => {
+                markDuelSeen(latestDuel.id);
+                setSeenDuelId(latestDuel.id);
+                setMessage('');
+                if (!resultWon) setStake('0.25');
+                haptic('selection');
+              }}
+            >
+              ЗАКРЫТЬ
+            </button>
+            {resultWon && latestDuel.settlement_proof_url && (
+              <a
+                className="duel-direct-action"
+                href={latestDuel.settlement_proof_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ArrowSquareOut aria-hidden="true" /> ПОСМОТРЕТЬ ОПЕРАЦИЮ
+              </a>
+            )}
+          </>
         )}
         {status === 'idle' && (
           <>
