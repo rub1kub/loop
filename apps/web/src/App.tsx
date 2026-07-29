@@ -134,6 +134,24 @@ export default function App() {
 
   if (state.loading) return <Loader />;
 
+  if (state.error === 'closed_beta' && !state.profile) {
+    return (
+      <main className="fatal-screen closed-screen">
+        <img className="fatal-mark" src="/assets/loop-loader.webp" alt="" />
+        <h1>Ещё пилю</h1>
+        <p>Приложение закрыто, пока идёт разработка. Открытие скорее всего на выходных.</p>
+        <a
+          className="closed-source-link"
+          href="https://github.com/rub1kub/loop"
+          target="_blank"
+          rel="noreferrer"
+        >
+          КОД ОТКРЫТ ЦЕЛИКОМ
+        </a>
+      </main>
+    );
+  }
+
   if (state.error && !state.profile) {
     return (
       <main className="fatal-screen">

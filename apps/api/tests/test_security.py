@@ -86,3 +86,37 @@ def test_control_session_has_separate_audience_and_expiry() -> None:
         decode_session(token, get_settings(), now)
     with pytest.raises(AuthenticationError):
         decode_control_session(token, get_settings(), expires + timedelta(seconds=1))
+
+
+@pytest.mark.asyncio
+async def test_closed_beta_admits_only_the_listed_telegram_ids(client, monkeypatch) -> None:
+    from app.config import get_settings
+
+    def init_data_for(telegram_id: int) -> str:
+        return signed_init_data(
+            "123456:test-token",
+            datetime.now(UTC),
+            user=json.dumps({"id": telegram_id, "first_name": "Loop"}, separators=(",", ":")),
+        )
+
+    monkeypatch.setenv("LOOP_CLOSED_BETA_TELEGRAM_IDS", "1084693264")
+    get_settings.cache_clear()
+
+    denied = await client.post(
+        "/api/v1/auth/telegram", json={"init_data": init_data_for(555_001)}
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"] == "closed_beta"
+
+    allowed = await client.post(
+        "/api/v1/auth/telegram", json={"init_data": init_data_for(1_084_693_264)}
+    )
+    assert allowed.status_code == 200
+
+    monkeypatch.delenv("LOOP_CLOSED_BETA_TELEGRAM_IDS", raising=False)
+    get_settings.cache_clear()
+
+    reopened = await client.post(
+        "/api/v1/auth/telegram", json={"init_data": init_data_for(555_002)}
+    )
+    assert reopened.status_code == 200

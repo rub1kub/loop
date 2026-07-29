@@ -131,6 +131,10 @@ async def authenticate(body: TelegramAuthRequest, db: Db, settings: Config) -> A
     except AuthenticationError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
 
+    allowed = settings.closed_beta_ids
+    if allowed and identity.telegram_id not in allowed:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "closed_beta")
+
     user = await db.scalar(select(User).where(User.telegram_id == identity.telegram_id))
     if user is None:
         user = User(

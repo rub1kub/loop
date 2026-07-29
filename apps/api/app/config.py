@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     duel_contract_address: str = ""
     duel_contract_code_hash: str = ""
     duel_fee_bps: int = 250
+    closed_beta_telegram_ids: str = ""
     duel_invite_signing_key: SecretStr = SecretStr("")
     duel_invite_public_key: str = ""
     # Holder fee exemption may only be enabled against DuelEscrow v1.4+
@@ -83,6 +84,20 @@ class Settings(BaseSettings):
 
     webhook_path: str = "/api/internal/telegram/webhook"
     metrics_token: SecretStr = SecretStr("")
+
+    @property
+    def closed_beta_ids(self) -> frozenset[int]:
+        """Telegram ids allowed in while the app is closed. Empty means open."""
+        allowed = set()
+        for chunk in self.closed_beta_telegram_ids.split(","):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            try:
+                allowed.add(int(chunk))
+            except ValueError as exc:
+                raise ValueError(f"invalid telegram id in closed beta list: {chunk!r}") from exc
+        return frozenset(allowed)
 
     @property
     def cors_origin_list(self) -> list[str]:
