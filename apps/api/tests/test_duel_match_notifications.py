@@ -106,7 +106,7 @@ async def test_match_alert_reaches_a_player_who_left(app) -> None:
     assert bot.photos == []
     text = bot.messages[0]["text"]
     assert "Соперник найден" in text
-    assert "он заберёт весь пул" in text
+    assert "пул целиком уйдёт сопернику" in text
     async with app.state.session_factory() as db:
         row = await db.scalar(
             select(NotificationOutbox).where(NotificationOutbox.kind == "duel_matched")
