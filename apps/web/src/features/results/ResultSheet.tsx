@@ -72,10 +72,10 @@ export function ResultSheet({
             <i>∞</i>
             <b>
               {entry
-                ? 'Я ДЕПНУЛ В ФИНАНСОВУЮ ПИРАМИДУ'
+                ? 'ВЗНОС В ФИНАНСОВУЮ ПИРАМИДУ'
                 : card.mode === 'bank'
                   ? 'МОЙ ЦИКЛ ЗАМКНУЛСЯ'
-                  : 'Я ЗАБРАЛ DUEL'}
+                  : 'ПУЛ МОЙ'}
             </b>
             <strong>
               {entry

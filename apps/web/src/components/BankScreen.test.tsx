@@ -95,7 +95,7 @@ describe('BankScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /собрано 37%/i }));
     expect(
-      screen.getByText(/сколько новых взносов уже направлено в твою позицию/i),
+      screen.getByText(/сколько новых взносов уже пришло в твою позицию/i),
     ).toBeInTheDocument();
     expect(screen.getByText('Уже собрано')).toBeInTheDocument();
     expect(screen.getByText('Осталось собрать')).toBeInTheDocument();

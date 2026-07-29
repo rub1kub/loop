@@ -349,7 +349,7 @@ export function BankScreen({
                 <div className="waiting-step">
                   <span className="waiting-ring" />
                   <h3>Ждём подтверждение сети</h3>
-                  <p>Ждём окончательный результат. Это может занять немного времени.</p>
+                  <p>Может занять пару минут — можно закрыть и вернуться позже.</p>
                   {message && <p className="form-note">{message}</p>}
                 </div>
                 <button className="secondary-button" onClick={() => setWizard(null)}>
@@ -447,7 +447,7 @@ export function BankScreen({
             >
               <SheetTitle title="Позиция BANK" onClose={() => setDetails(false)} />
               <p className="bank-details-intro">
-                Банка показывает, сколько новых взносов уже направлено в твою позицию.
+                Банка — сколько новых взносов уже пришло в твою позицию.
               </p>
               <div className="big-progress">{Math.round(progressPercent)}%</div>
               <div className="progress-track">
