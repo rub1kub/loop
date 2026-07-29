@@ -288,3 +288,39 @@ describe('Telegram launch compatibility', () => {
     expect(switchInlineQuery).not.toHaveBeenCalled();
   });
 });
+
+describe('Telegram SDK loading never blocks the app', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.resetModules();
+    delete window.Telegram;
+    document.querySelectorAll('script[src*="telegram-web-app"]').forEach((n) => n.remove());
+  });
+
+  it('resolves on a timeout when no script ever fires load or error', async () => {
+    vi.resetModules();
+    const { loadTelegramSdk: load } = await import('./telegram');
+    vi.useFakeTimers();
+    let settled = false;
+    const loading = load().then(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(settled, 'must not resolve before the timeout').toBe(false);
+
+    await vi.advanceTimersByTimeAsync(6000);
+    await loading;
+    expect(settled).toBe(true);
+  });
+
+  it('asks its own origin first so a blocked telegram.org cannot stall the launch', async () => {
+    vi.resetModules();
+    const { loadTelegramSdk: load } = await import('./telegram');
+    void load();
+    const script = document.querySelector<HTMLScriptElement>('script[src*="telegram-web-app"]');
+    expect(script).not.toBeNull();
+    expect(script!.src).toContain('/telegram-web-app.js');
+    expect(script!.src).not.toContain('telegram.org');
+  });
+});

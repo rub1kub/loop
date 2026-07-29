@@ -1,7 +1,9 @@
 import type { TelegramWebApp } from './types';
 
 const mockTelegram = import.meta.env.VITE_MOCK_TELEGRAM === 'true';
-const telegramSdkUrl = 'https://telegram.org/js/telegram-web-app.js?63';
+const telegramSdkUrl = '/telegram-web-app.js';
+const telegramSdkFallbackUrl = 'https://telegram.org/js/telegram-web-app.js?63';
+const telegramSdkTimeoutMs = 6000;
 const immersiveTelegramPlatforms = new Set(['android', 'android_x', 'ios']);
 const telegramChromeColor = '#000000';
 const hapticsStorageKey = 'loop-haptics-enabled';
@@ -34,12 +36,23 @@ export function loadTelegramSdk(): Promise<void> {
   if (telegramSdkPromise) return telegramSdkPromise;
 
   telegramSdkPromise = new Promise((resolve) => {
-    const script = document.createElement('script');
-    script.src = telegramSdkUrl;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => resolve();
-    document.head.append(script);
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve();
+    };
+    const load = (src: string, onFail: () => void) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = finish;
+      script.onerror = onFail;
+      document.head.append(script);
+    };
+    const timer = window.setTimeout(finish, telegramSdkTimeoutMs);
+    load(telegramSdkUrl, () => load(telegramSdkFallbackUrl, finish));
   });
   return telegramSdkPromise;
 }

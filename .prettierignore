@@ -3,3 +3,4 @@ sources/
 output/
 build/
 .acton/
+apps/web/public/telegram-web-app.js
