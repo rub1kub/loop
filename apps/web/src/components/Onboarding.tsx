@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 
 import { haptic, openPlatformLink, setBackAction } from '../telegram';
 
-const plushBrickLogoUrl = 'https://tonsuite.org/assets/plush-brick-video.gif';
+const plushBrickLogoUrl = '/assets/plush-brick-loop.webp';
 const plushBrickMarkets = [
   {
     name: 'dTrade',
@@ -59,10 +59,8 @@ export function Onboarding({
   const [page, setPage] = useState(initialPage);
   const story = stories[page];
 
-  // The PLUSH BRICK mark is an animated GIF on a remote host and it lands on
-  // the last screen. Fetching it while the reader is still on the first one
-  // means it is decoded and ready by the time they swipe to it, instead of
-  // popping in after the copy has already settled.
+  // The mark lands on the last screen, so it is fetched while the reader is
+  // still on the first one and is decoded by the time they swipe to it.
   useEffect(() => {
     const preload = new Image();
     preload.src = plushBrickLogoUrl;
@@ -99,6 +97,8 @@ export function Onboarding({
             <img
               className={`story-mark${isPlushBrickStory ? ' story-mark-plush' : ''}`}
               src={story.mark ?? '/assets/loop-loader.webp'}
+              width={isPlushBrickStory ? 300 : 640}
+              height={isPlushBrickStory ? 300 : 427}
               alt={isPlushBrickStory ? 'Анимированный логотип PLUSH BRICK' : ''}
             />
             <p className="story-signal">{story.signal}</p>

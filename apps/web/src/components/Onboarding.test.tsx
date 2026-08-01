@@ -42,10 +42,14 @@ describe('Onboarding', () => {
 
     expect(screen.getByRole('heading', { name: 'Кирпич замыкает цикл.' })).toBeInTheDocument();
     expect(screen.getByText(/нужен для режима без комиссии/)).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Анимированный логотип PLUSH BRICK' })).toHaveAttribute(
-      'src',
-      'https://tonsuite.org/assets/plush-brick-video.gif',
-    );
+    // Served from our own origin, so it is cached with the build and cannot
+    // arrive late from a third-party host mid-animation.
+    const mark = screen.getByRole('img', { name: 'Анимированный логотип PLUSH BRICK' });
+    expect(mark).toHaveAttribute('src', '/assets/plush-brick-loop.webp');
+    // Declared dimensions keep the box reserved before the file decodes, so the
+    // copy does not sit high and then drop once the mark appears.
+    expect(mark).toHaveAttribute('width', '300');
+    expect(mark).toHaveAttribute('height', '300');
     expect(screen.getByRole('link', { name: 'Купить PLUSH BRICK в dTrade' })).toHaveAttribute(
       'href',
       expect.stringContaining('https://t.me/dtrade'),

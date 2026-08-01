@@ -193,6 +193,9 @@ summary:focus-visible .disclosure-indicator {
 .story-mark {
   display: block;
   width: min(48vw, 190px);
+  /* Without a ratio the box is zero-high until the file decodes, so the copy
+     sits high and then drops as the mark appears. */
+  aspect-ratio: 640 / 427;
   margin: 0 0 30px;
   opacity: 0.78;
   pointer-events: none;
