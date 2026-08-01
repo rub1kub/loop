@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 from aiogram import Bot, Dispatcher, Router
-from aiogram.exceptions import TelegramRetryAfter
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     BotCommand,
@@ -12,9 +12,18 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineQuery,
     InlineQueryResultArticle,
+    InputRichBlockDivider,
+    InputRichBlockList,
+    InputRichBlockListItem,
+    InputRichBlockParagraph,
+    InputRichBlockSectionHeading,
+    InputRichBlockUnion,
+    InputRichMessage,
     InputTextMessageContent,
     MenuButtonWebApp,
     Message,
+    RichTextBold,
+    RichTextItalic,
     WebAppInfo,
 )
 from redis.asyncio import Redis
@@ -149,6 +158,54 @@ async def next_start_message(redis_client: Redis, user_id: int) -> str:
     return start_message_for(user_id, sequence)
 
 
+SUPPORT_STEP_PATTERN = re.compile(r"^\d+\.\s+(.*)$")
+
+
+def build_start_rich_message(text: str) -> InputRichMessage:
+    """Turn a plain START_MESSAGES entry into a structured rich message.
+
+    Parses the "∞ LOOP\n\n{body}\n\n{cta}" shape the constant is written in,
+    rather than hand-duplicating all 33 variants as block literals — the
+    plain string stays the single source of truth, so editing START_MESSAGES
+    is still the only thing anyone has to do.
+    """
+    heading, *rest = text.split("\n\n")
+    blocks: list[InputRichBlockUnion] = [InputRichBlockSectionHeading(text=heading, size=3)]
+    has_cta = len(rest) >= 2
+    for section_index, section in enumerate(rest):
+        is_cta = has_cta and section_index == len(rest) - 1
+        for line in section.split("\n"):
+            body: str | RichTextItalic = RichTextItalic(text=line) if is_cta else line
+            blocks.append(InputRichBlockParagraph(text=body))
+    return InputRichMessage(blocks=blocks)
+
+
+def build_support_rich_message(text: str) -> InputRichMessage:
+    """Turn SUPPORT_TEXT's numbered plain-text steps into a real list block."""
+    heading, intro, steps_block, warning, closing = text.split("\n\n")
+    items: list[InputRichBlockListItem] = []
+    for line in steps_block.split("\n"):
+        match = SUPPORT_STEP_PATTERN.match(line)
+        if match is None:
+            raise ValueError(f"unexpected support step line: {line!r}")
+        items.append(
+            InputRichBlockListItem(
+                value=len(items) + 1,
+                blocks=[InputRichBlockParagraph(text=match.group(1))],
+            )
+        )
+    return InputRichMessage(
+        blocks=[
+            InputRichBlockSectionHeading(text=heading, size=3),
+            InputRichBlockParagraph(text=intro),
+            InputRichBlockList(items=items),
+            InputRichBlockDivider(),
+            InputRichBlockParagraph(text=RichTextBold(text=warning)),
+            InputRichBlockParagraph(text=closing),
+        ]
+    )
+
+
 def create_dispatcher(
     settings: Settings,
     session_factory: async_sessionmaker[AsyncSession],
@@ -168,10 +225,11 @@ def create_dispatcher(
             ]
         )
         user_id = message.from_user.id if message.from_user is not None else 0
-        await message.answer(
-            await next_start_message(redis_client, user_id),
-            reply_markup=keyboard,
-        )
+        text = await next_start_message(redis_client, user_id)
+        try:
+            await message.answer_rich(build_start_rich_message(text), reply_markup=keyboard)
+        except TelegramBadRequest:
+            await message.answer(text, reply_markup=keyboard)
 
     @router.message(Command("support"))
     async def support(message: Message) -> None:
@@ -186,7 +244,12 @@ def create_dispatcher(
                 ],
             ]
         )
-        await message.answer(SUPPORT_TEXT, reply_markup=keyboard)
+        try:
+            await message.answer_rich(
+                build_support_rich_message(SUPPORT_TEXT), reply_markup=keyboard
+            )
+        except TelegramBadRequest:
+            await message.answer(SUPPORT_TEXT, reply_markup=keyboard)
 
     @router.inline_query()
     async def inline_result_or_duel(query: InlineQuery) -> None:

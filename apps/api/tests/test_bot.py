@@ -13,12 +13,72 @@ from app.bot import (
     RESULT_PATTERN,
     START_MESSAGES,
     SUPPORT_TEXT,
+    build_start_rich_message,
+    build_support_rich_message,
     configure_bot,
     format_gram,
     main_app_deep_link,
     start_message_for,
 )
 from app.config import get_settings
+
+
+def _flatten_rich_text(node: object) -> str:
+    if isinstance(node, str):
+        return node
+    if isinstance(node, list):
+        return "".join(_flatten_rich_text(item) for item in node)
+    return _flatten_rich_text(node.text)  # type: ignore[attr-defined]
+
+
+def _flatten_rich_message(blocks: list[object]) -> list[str]:
+    parts = []
+    for block in blocks:
+        if hasattr(block, "items"):
+            for item in block.items:  # type: ignore[attr-defined]
+                for nested in item.blocks:
+                    parts.append(_flatten_rich_text(nested.text))
+        elif hasattr(block, "text"):
+            parts.append(_flatten_rich_text(block.text))  # type: ignore[attr-defined]
+    return parts
+
+
+def test_every_start_message_survives_the_rich_message_round_trip() -> None:
+    for raw in START_MESSAGES:
+        rich = build_start_rich_message(raw)
+        assert rich.blocks[0].text == "∞ LOOP"
+        original_words = raw.replace("\n", " ").split()
+        rebuilt_words = " ".join(_flatten_rich_message(rich.blocks)).split()
+        assert rebuilt_words == original_words, f"lost content converting {raw!r}"
+
+
+def test_start_rich_message_emphasises_only_the_closing_line() -> None:
+    from aiogram.types import RichTextItalic
+
+    three_part = next(m for m in START_MESSAGES if len(m.split("\n\n")) == 3)
+    rich = build_start_rich_message(three_part)
+    assert not isinstance(rich.blocks[1].text, RichTextItalic)
+    assert isinstance(rich.blocks[-1].text, RichTextItalic)
+
+    two_part = next(m for m in START_MESSAGES if len(m.split("\n\n")) == 2)
+    rich = build_start_rich_message(two_part)
+    assert all(not isinstance(block.text, RichTextItalic) for block in rich.blocks[1:])
+
+
+def test_support_rich_message_keeps_every_step_as_an_ordered_list_item() -> None:
+    rich = build_support_rich_message(SUPPORT_TEXT)
+    list_block = next(block for block in rich.blocks if hasattr(block, "items"))
+    steps = [item.blocks[0].text for item in list_block.items]
+    assert steps == [
+        "Не отправляй транзакцию повторно.",
+        "Сделай снимок экрана.",
+        "Скопируй адрес кошелька и хэш транзакции, если он появился.",
+        "Напиши, где возникла проблема: BANK, DUEL, рейтинг или вход.",
+    ]
+    assert [item.value for item in list_block.items] == [1, 2, 3, 4]
+    rebuilt = " ".join(_flatten_rich_message(rich.blocks))
+    assert "seed-фразу" in rebuilt
+    assert "никогда их не запрашивает" in rebuilt
 
 
 def test_inline_challenge_query_is_offer_bound() -> None:
