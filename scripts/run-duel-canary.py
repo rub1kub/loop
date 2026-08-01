@@ -200,6 +200,7 @@ def canary_evidence(
     wallet_snapshot_value: dict[str, dict[str, Any]],
     first_wallet: str,
     second_wallet: str,
+    network: str,
 ) -> dict[str, Any]:
     required_ints = (
         "duel_id",
@@ -214,9 +215,21 @@ def canary_evidence(
     transaction = proof_response.get("settlement_transaction")
     if not isinstance(transaction, str) or not transaction:
         raise SystemExit("canary proof endpoint omitted the settlement transaction")
+    addresses = (
+        wallet_snapshot_value[first_wallet]["address"],
+        wallet_snapshot_value[second_wallet]["address"],
+    )
+    # A v5r1 address depends on the network, so a testnet-scoped lookup answers
+    # with a different account entirely rather than a differently-flagged form
+    # of the same one. Evidence naming the wrong participants is worse than no
+    # evidence, so refuse it here instead of leaving it to the readiness gate.
+    if network == "mainnet" and any(
+        address.startswith(("kQ", "0Q")) for address in addresses
+    ):
+        raise SystemExit("mainnet canary evidence carries testnet wallet addresses")
     return {
-        "first_wallet": wallet_snapshot_value[first_wallet]["address"],
-        "second_wallet": wallet_snapshot_value[second_wallet]["address"],
+        "first_wallet": addresses[0],
+        "second_wallet": addresses[1],
         "duel_id": proof_response["duel_id"],
         "query_id": proof_response["duel_id"],
         "settlement_transaction": transaction,
@@ -455,7 +468,11 @@ def main() -> None:
         raise SystemExit("canary completed without a parseable settlement proof")
 
     try:
-        reported_balances = wallet_snapshot(environment)
+        reported_balances = (
+            mainnet_wallet_snapshot(environment, args.first_wallet, args.second_wallet)
+            if args.network == "mainnet"
+            else wallet_snapshot(environment)
+        )
         require_canary_wallets(reported_balances, args.first_wallet, args.second_wallet)
     except SystemExit:
         reported_balances = funded
@@ -514,6 +531,7 @@ def main() -> None:
                 reported_balances,
                 args.first_wallet,
                 args.second_wallet,
+                args.network,
             ),
             sort_keys=True,
         )

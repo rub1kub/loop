@@ -43,8 +43,11 @@ fun smokeCommitment(
         .hash();
 }
 
-fun main(duelAddress: address, offerId: uint64, expiresAt: uint32) {
-    val deployer = scripts.wallet("deployer");
+// The signer is named rather than assumed: the "deployer" alias only
+// resolves on testnet, and a v5r1 address depends on the network, so a
+// hardcoded alias silently smokes a different account on mainnet.
+fun main(duelAddress: address, offerId: uint64, expiresAt: uint32, signerWalletName: string) {
+    val deployer = scripts.wallet(signerWalletName);
     val duel = DuelEscrow.fromAddress(duelAddress);
     val before = duel.contractConfig();
     assert (before.locked == 0) throw SmokeErrors.ContractNotIdle;

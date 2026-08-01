@@ -126,8 +126,10 @@ def test_canary_fails_closed_when_airdrop_stays_below_floor(
 def test_mainnet_canary_never_requests_an_airdrop(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         RUNNER,
-        "wallet_snapshot",
-        lambda _environment: mainnet_wallets(1_000_000_000, 2_000_000_000),
+        "mainnet_wallet_snapshot",
+        lambda _environment, _first, _second: mainnet_wallets(
+            1_000_000_000, 2_000_000_000
+        ),
     )
     with pytest.raises(SystemExit, match="below the configured safety floor"):
         RUNNER.require_mainnet_funding(
@@ -150,6 +152,7 @@ def test_canary_formats_manifest_ready_finality_evidence() -> None:
         mainnet_wallets(2_000_000_000, 2_000_000_000),
         "loop-mainnet-canary-a",
         "loop-mainnet-canary-b",
+        "mainnet",
     )
     assert evidence == {
         "first_wallet": "a",
@@ -313,4 +316,31 @@ def test_duel_health_rejects_low_canary_balance() -> None:
             require_canary=True,
             canary_max_age=7_200,
             canary_min_balance=1_000_000_000,
+        )
+
+
+def test_mainnet_evidence_rejects_testnet_wallet_addresses() -> None:
+    testnet_scoped = {
+        "loop-mainnet-canary-a": {
+            "address": "kQCq78rAJ4g4itII4Kqld29kuv6bZEvbXjGL44QmgJ-lUjEu",
+            "balance": 2_000_000_000,
+        },
+        "loop-mainnet-canary-b": {
+            "address": "kQA52I5vI-9U_GDtmGAYxkL_5BQoaDucfR2hATBs65pMMesL",
+            "balance": 2_000_000_000,
+        },
+    }
+    with pytest.raises(SystemExit, match="testnet wallet addresses"):
+        RUNNER.canary_evidence(
+            {
+                "status": "verified",
+                "duel_id": 42,
+                "settlement_transaction": "ab" * 32,
+                "settlement_transaction_lt": 123,
+                "masterchain_seqno": 456,
+            },
+            testnet_scoped,
+            "loop-mainnet-canary-a",
+            "loop-mainnet-canary-b",
+            "mainnet",
         )
