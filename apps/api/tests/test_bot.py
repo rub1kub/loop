@@ -34,7 +34,11 @@ def _flatten_rich_text(node: object) -> str:
 def _flatten_rich_message(blocks: list[object]) -> list[str]:
     parts = []
     for block in blocks:
-        if hasattr(block, "items"):
+        if hasattr(block, "cells"):
+            for row in block.cells:  # type: ignore[attr-defined]
+                for cell in row:
+                    parts.append(_flatten_rich_text(cell.text))
+        elif hasattr(block, "items"):
             for item in block.items:  # type: ignore[attr-defined]
                 for nested in item.blocks:
                     parts.append(_flatten_rich_text(nested.text))
@@ -46,23 +50,23 @@ def _flatten_rich_message(blocks: list[object]) -> list[str]:
 def test_every_start_message_survives_the_rich_message_round_trip() -> None:
     for raw in START_MESSAGES:
         rich = build_start_rich_message(raw)
-        assert rich.blocks[0].text == "∞ LOOP"
+        assert _flatten_rich_text(rich.blocks[0].cells[0][0].text) == "∞ LOOP"
         original_words = raw.replace("\n", " ").split()
         rebuilt_words = " ".join(_flatten_rich_message(rich.blocks)).split()
         assert rebuilt_words == original_words, f"lost content converting {raw!r}"
 
 
-def test_start_rich_message_emphasises_only_the_closing_line() -> None:
-    from aiogram.types import RichTextItalic
-
+def test_start_rich_message_centers_only_the_heading_and_closing_line() -> None:
     three_part = next(m for m in START_MESSAGES if len(m.split("\n\n")) == 3)
     rich = build_start_rich_message(three_part)
-    assert not isinstance(rich.blocks[1].text, RichTextItalic)
-    assert isinstance(rich.blocks[-1].text, RichTextItalic)
+    assert rich.blocks[0].cells[0][0].align == "center"  # heading
+    assert not hasattr(rich.blocks[1], "cells")  # body stays a plain paragraph
+    assert rich.blocks[-1].cells[0][0].align == "center"  # closing line
 
     two_part = next(m for m in START_MESSAGES if len(m.split("\n\n")) == 2)
     rich = build_start_rich_message(two_part)
-    assert all(not isinstance(block.text, RichTextItalic) for block in rich.blocks[1:])
+    assert rich.blocks[0].cells[0][0].align == "center"  # heading only
+    assert all(not hasattr(block, "cells") for block in rich.blocks[1:])
 
 
 def test_support_rich_message_keeps_every_step_as_an_ordered_list_item() -> None:

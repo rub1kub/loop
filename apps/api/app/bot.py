@@ -17,14 +17,14 @@ from aiogram.types import (
     InputRichBlockList,
     InputRichBlockListItem,
     InputRichBlockParagraph,
-    InputRichBlockSectionHeading,
+    InputRichBlockTable,
     InputRichBlockUnion,
     InputRichMessage,
     InputTextMessageContent,
     MenuButtonWebApp,
     Message,
+    RichBlockTableCell,
     RichTextBold,
-    RichTextItalic,
     WebAppInfo,
 )
 from redis.asyncio import Redis
@@ -164,6 +164,17 @@ async def next_start_message(redis_client: Redis, user_id: int) -> str:
 SUPPORT_STEP_PATTERN = re.compile(r"^\d+\.\s+(.*)$")
 
 
+def _centered_box(text: str) -> InputRichBlockTable:
+    """A bordered, centered one-cell table — the only place Bot API 10.1
+    exposes text alignment at all (RichBlockTableCell.align). Every other
+    block type renders left-aligned with no override.
+    """
+    return InputRichBlockTable(
+        is_bordered=True,
+        cells=[[RichBlockTableCell(align="center", valign="middle", text=RichTextBold(text=text))]],
+    )
+
+
 def build_start_rich_message(text: str) -> InputRichMessage:
     """Turn a plain START_MESSAGES entry into a structured rich message.
 
@@ -171,15 +182,21 @@ def build_start_rich_message(text: str) -> InputRichMessage:
     rather than hand-duplicating all 33 variants as block literals — the
     plain string stays the single source of truth, so editing START_MESSAGES
     is still the only thing anyone has to do.
+
+    The opening "∞ LOOP" line and the closing line (when the message has one)
+    render as centered, bordered boxes; the body stays plain left-aligned
+    text, same as everywhere else in the message.
     """
     heading, *rest = text.split("\n\n")
-    blocks: list[InputRichBlockUnion] = [InputRichBlockSectionHeading(text=heading, size=3)]
+    blocks: list[InputRichBlockUnion] = [_centered_box(heading)]
     has_cta = len(rest) >= 2
     for section_index, section in enumerate(rest):
         is_cta = has_cta and section_index == len(rest) - 1
+        if is_cta:
+            blocks.append(_centered_box(section.replace("\n", " ")))
+            continue
         for line in section.split("\n"):
-            body: str | RichTextItalic = RichTextItalic(text=line) if is_cta else line
-            blocks.append(InputRichBlockParagraph(text=body))
+            blocks.append(InputRichBlockParagraph(text=line))
     return InputRichMessage(blocks=blocks)
 
 
@@ -199,7 +216,7 @@ def build_support_rich_message(text: str) -> InputRichMessage:
         )
     return InputRichMessage(
         blocks=[
-            InputRichBlockSectionHeading(text=heading, size=3),
+            _centered_box(heading),
             InputRichBlockParagraph(text=intro),
             InputRichBlockList(items=items),
             InputRichBlockDivider(),
