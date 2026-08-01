@@ -7,8 +7,8 @@ enum SetBankPausedErrors {
     StateMismatch = 901
 }
 
-fun main(bankAddress: address, paused: bool, queryId: uint64) {
-    val owner = scripts.wallet("deployer");
+fun main(bankAddress: address, paused: bool, queryId: uint64, ownerWalletName: string) {
+    val owner = scripts.wallet(ownerWalletName);
     val bank = BankQueue.fromAddress(bankAddress);
     val result = bank.sendSetBankPaused(
         owner.address,

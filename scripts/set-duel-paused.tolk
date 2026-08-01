@@ -9,8 +9,8 @@ enum DuelPauseErrors {
     UnexpectedOwner = 993
 }
 
-fun main(duelAddress: address, ownerAddress: address, paused: bool, queryId: uint64) {
-    val signer = scripts.wallet("deployer");
+fun main(duelAddress: address, ownerAddress: address, paused: bool, queryId: uint64, signerWalletName: string) {
+    val signer = scripts.wallet(signerWalletName);
     val duel = DuelEscrow.fromAddress(duelAddress);
     // `adminState` has the same shape in every deployed DuelEscrow, while
     // `contractConfig` grew a field in v1.4. Pausing a retired deployment must
