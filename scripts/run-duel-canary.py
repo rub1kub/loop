@@ -59,6 +59,58 @@ def run(
     return result.stdout + result.stderr if include_stderr else result.stdout
 
 
+TONCENTER_BY_NETWORK = {
+    "testnet": "https://testnet.toncenter.com",
+    "mainnet": "https://toncenter.com",
+}
+
+
+def mainnet_wallet_snapshot(
+    environment: dict[str, str], first_wallet: str, second_wallet: str
+) -> dict[str, dict[str, Any]]:
+    """Resolve the pair on mainnet and read their mainnet balances.
+
+    `acton wallet list` answers in a testnet context: for a v5r1 wallet that is
+    a different address with a different balance, so using it to clear a
+    mainnet safety floor checks the wrong accounts entirely.
+    """
+    raw = run(
+        [
+            "acton",
+            "script",
+            "--net",
+            "mainnet",
+            "scripts/resolve-wallet-pair.tolk",
+            first_wallet,
+            second_wallet,
+        ],
+        environment,
+        echo=False,
+    )
+    addresses: dict[str, str] = {}
+    for line in raw.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[0] == "WALLET":
+            addresses[parts[1]] = parts[2]
+    if set(addresses) != {first_wallet, second_wallet}:
+        raise SystemExit("could not resolve both canary wallets on mainnet")
+
+    base = TONCENTER_BY_NETWORK["mainnet"]
+    snapshot: dict[str, dict[str, Any]] = {}
+    for name, address in addresses.items():
+        request = urllib.request.Request(
+            f"{base}/api/v3/accountStates?address={urllib.parse.quote(address)}",
+            # TonCenter answers 403 to the default urllib agent.
+            headers={"User-Agent": "loop-canary/1.0"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read())
+        accounts = payload.get("accounts") or []
+        balance = int(accounts[0].get("balance", 0)) if accounts else 0
+        snapshot[name] = {"name": name, "address": address, "balance": balance}
+    return snapshot
+
+
 def wallet_snapshot(environment: dict[str, str]) -> dict[str, dict[str, Any]]:
     raw = run(
         ["acton", "wallet", "list", "--balance", "--json"],
@@ -128,7 +180,7 @@ def require_mainnet_funding(
     second_wallet: str,
     minimum_balance_nano: int,
 ) -> dict[str, dict[str, Any]]:
-    snapshot = wallet_snapshot(environment)
+    snapshot = mainnet_wallet_snapshot(environment, first_wallet, second_wallet)
     require_canary_wallets(snapshot, first_wallet, second_wallet)
     if any(
         not isinstance(snapshot[name].get("balance"), int)

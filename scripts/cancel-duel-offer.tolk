@@ -7,11 +7,14 @@ enum RecoveryErrors {
     LockedValueRemains = 980
 }
 
-fun main(duelAddress: address, offerId: uint64) {
-    val deployer = scripts.wallet("deployer");
+// Only the offer's own owner may cancel it, and on mainnet that is never the
+// testnet "deployer" alias this script used to hardcode, so the signer is named
+// explicitly.
+fun main(duelAddress: address, offerId: uint64, ownerWalletName: string) {
+    val owner = scripts.wallet(ownerWalletName);
     val duel = DuelEscrow.fromAddress(duelAddress);
     val cancelled = duel.sendCancelOffer(
-        deployer.address,
+        owner.address,
         offerId,
         offerId,
         { value: ton("0.03") },
