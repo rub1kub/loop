@@ -3,6 +3,7 @@ import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
+import structlog
 from aiogram import Bot, Dispatcher, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandStart
@@ -40,6 +41,8 @@ from .modules.duel.models import (
 )
 from .referrals import get_or_create_referral_code
 from .result_cards import build_result_inline
+
+logger = structlog.get_logger()
 
 INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
 RESULT_PATTERN = re.compile(r"^\s*result\s+([A-Za-z0-9_-]{20,32})\s*$", re.IGNORECASE)
@@ -228,7 +231,8 @@ def create_dispatcher(
         text = await next_start_message(redis_client, user_id)
         try:
             await message.answer_rich(build_start_rich_message(text), reply_markup=keyboard)
-        except TelegramBadRequest:
+        except TelegramBadRequest as exc:
+            logger.warning("start_rich_message_rejected", error=str(exc))
             await message.answer(text, reply_markup=keyboard)
 
     @router.message(Command("support"))
@@ -248,7 +252,8 @@ def create_dispatcher(
             await message.answer_rich(
                 build_support_rich_message(SUPPORT_TEXT), reply_markup=keyboard
             )
-        except TelegramBadRequest:
+        except TelegramBadRequest as exc:
+            logger.warning("support_rich_message_rejected", error=str(exc))
             await message.answer(SUPPORT_TEXT, reply_markup=keyboard)
 
     @router.inline_query()
