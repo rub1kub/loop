@@ -50,13 +50,13 @@ class Settings(BaseSettings):
     require_duel_canary: bool = False
     bank_contract_address: str = ""
     bank_contract_code_hash: str = ""
-    bank_fee_bps: int = 100
+    bank_fee_bps: int = 1000
     bank_position_gas_nano: int = 80_000_000
     bank_min_principal_nano: int = 1_000_000_000
     bank_max_principal_nano: int = 100_000_000_000
     duel_contract_address: str = ""
     duel_contract_code_hash: str = ""
-    duel_fee_bps: int = 250
+    duel_fee_bps: int = 1000
     closed_beta_telegram_ids: str = ""
     duel_invite_signing_key: SecretStr = SecretStr("")
     duel_invite_public_key: str = ""
@@ -74,7 +74,6 @@ class Settings(BaseSettings):
     offer_gas_nano: int = 50_000_000
     min_pool_nano: int = 1_000_000_000
     max_pool_nano: int = 100_000_000_000
-    fee_bps: int = 250
 
     plush_brick_master: str = "EQAJ40p3zlCoomgANMQ4u5eIktLMZtWP87GGKDKlyW_EZBwt"
     plush_brick_network_id: int = -239
@@ -172,8 +171,10 @@ class Settings(BaseSettings):
                 .public_key()
                 .public_bytes(Encoding.Raw, PublicFormat.Raw)
             )
-            if len(seed) != 32 or len(configured_public_key) != 32 or not secrets.compare_digest(
-                derived_public_key, configured_public_key
+            if (
+                len(seed) != 32
+                or len(configured_public_key) != 32
+                or not secrets.compare_digest(derived_public_key, configured_public_key)
             ):
                 raise ValueError
         except ValueError as exc:
@@ -196,10 +197,9 @@ class Settings(BaseSettings):
                 )
             ):
                 raise ValueError("mainnet release commit must equal the externally audited commit")
-            if (
-                hash_pattern.fullmatch(self.mainnet_audit_report_sha256) is None
-                or set(self.mainnet_audit_report_sha256.lower()) == {"0"}
-            ):
+            if hash_pattern.fullmatch(self.mainnet_audit_report_sha256) is None or set(
+                self.mainnet_audit_report_sha256.lower()
+            ) == {"0"}:
                 raise ValueError("mainnet requires a SHA-256 audit report fingerprint")
             if (
                 not self.bank_min_principal_nano

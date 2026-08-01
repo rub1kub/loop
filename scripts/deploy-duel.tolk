@@ -28,7 +28,7 @@ fun main(networkId: int32, inviteSignerPublicKey: uint256, startPaused: bool) {
     val escrow = DuelEscrow.fromStorage({
         owner,
         treasury,
-        feeBps: 250,
+        feeBps: 1000,
         networkId,
         inviteSignerPublicKey,
         paused: startPaused,

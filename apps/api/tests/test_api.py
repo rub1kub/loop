@@ -496,7 +496,7 @@ async def test_non_holder_quote_keeps_the_fee_and_issues_no_permit(
     assert quote.status_code == 201, quote.text
     result = quote.json()
     assert result["offer"]["fee_exempt"] is False
-    assert result["offer"]["payout_nano"] == 1_950_000_000
+    assert result["offer"]["payout_nano"] == 1_800_000_000
     tx = result["transaction"]
     # The wire layout flag still tells the client to emit the v1.4 maybe-bit.
     assert tx["holder_fee_supported"] is True

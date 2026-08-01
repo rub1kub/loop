@@ -285,8 +285,8 @@ async def test_bank_projection_is_fifo_proof_bound_and_idempotent(app) -> None:
         assert older.current_status == BankPositionStatus.PAYOUT_SENT.value
         assert newer.queue_index == 1
         assert newer.current_status == BankPositionStatus.PARTIALLY_FUNDED.value
-        assert newer.funded_amount_nano == 980_000_000
-        assert newer.remaining_amount_nano == 2_020_000_000
+        assert newer.funded_amount_nano == 800_000_000
+        assert newer.remaining_amount_nano == 2_200_000_000
         assert await db.scalar(select(func.count()).select_from(BankChainEvent)) == 1
         card = await db.scalar(select(ResultCard).where(ResultCard.mode == "bank"))
         assert card is not None
@@ -348,8 +348,8 @@ async def test_bank_projection_tracks_permissionless_position_and_detaches_stale
         assert position.wallet_id is None
         assert position.owner_wallet == "0:" + "ff" * 32
         assert position.current_status == BankPositionStatus.PARTIALLY_FUNDED.value
-        assert position.funded_amount_nano == 990_000_000
-        assert position.remaining_amount_nano == 260_000_000
+        assert position.funded_amount_nano == 900_000_000
+        assert position.remaining_amount_nano == 350_000_000
 
 
 @pytest.mark.asyncio
@@ -383,7 +383,7 @@ async def test_bank_projection_claims_position_for_verified_wallet(app) -> None:
         assert position.user_id == user.id
         assert position.wallet_id == wallet.id
         assert position.current_status == BankPositionStatus.PARTIALLY_FUNDED.value
-        assert position.funded_amount_nano == 990_000_000
+        assert position.funded_amount_nano == 900_000_000
 
 
 @pytest.mark.asyncio
@@ -460,8 +460,8 @@ async def test_duel_projection_validates_funding_and_terminal_payout(app) -> Non
             total_pool_nano=4_000_000_000,
             stake_nano=3_000_000_000,
             opponent_stake_nano=1_000_000_000,
-            fee_bps=250,
-            payout_nano=3_900_000_000,
+            fee_bps=1000,
+            payout_nano=3_600_000_000,
             commitment_hex="aa" * 32,
             state=OfferState.OPEN.value,
             expires_at=expires,
@@ -478,8 +478,8 @@ async def test_duel_projection_validates_funding_and_terminal_payout(app) -> Non
             total_pool_nano=4_000_000_000,
             stake_nano=1_000_000_000,
             opponent_stake_nano=3_000_000_000,
-            fee_bps=250,
-            payout_nano=3_900_000_000,
+            fee_bps=1000,
+            payout_nano=3_600_000_000,
             commitment_hex="bb" * 32,
             counter_offer_id=900,
             expires_at=expires,
@@ -539,7 +539,7 @@ async def test_duel_projection_validates_funding_and_terminal_payout(app) -> Non
                 (
                     second_wallet.address,
                     duel_payout_body(900, 100),
-                    4_875_000_000,
+                    4_500_000_000,
                 )
             ],
             now=1_800_000_076,
@@ -553,7 +553,7 @@ async def test_duel_projection_validates_funding_and_terminal_payout(app) -> Non
         assert card is not None
         assert card.mode == "duel"
         assert card.user_id == second_user.id
-        assert card.result_nano == 2_875_000_000
+        assert card.result_nano == 2_500_000_000
         assert (
             await db.scalar(
                 select(func.count())
@@ -1057,7 +1057,7 @@ async def test_funding_without_permit_clears_a_stale_local_exemption(app) -> Non
         await db.commit()
         await db.refresh(offer)
         assert offer.fee_exempt is False
-        assert offer.payout_nano == 1_950_000_000
+        assert offer.payout_nano == 1_800_000_000
 
 
 @pytest.mark.asyncio

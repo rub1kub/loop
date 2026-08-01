@@ -26,7 +26,7 @@ fun main(networkId: int32, startPaused: bool) {
     val bank = BankQueue.fromStorage({
         owner,
         treasury,
-        feeBps: 100,
+        feeBps: 1000,
         paused: startPaused,
         headQueueIndex: 0,
         nextQueueIndex: 0,
