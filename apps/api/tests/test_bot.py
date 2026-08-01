@@ -114,7 +114,10 @@ def test_bot_profile_describes_independent_bank_and_duel() -> None:
 
 
 def test_start_and_support_copy_are_clear_and_safe() -> None:
-    assert len(START_MESSAGES) >= 32
+    # A small, distinct set beats a large templated rotation — 33 near-identical
+    # "BANK clause. DUEL clause. punchline." variants read as machine-generated
+    # precisely because the shape repeated, not because any single line was bad.
+    assert len(START_MESSAGES) >= 5
     assert len(set(START_MESSAGES)) == len(START_MESSAGES)
     for message in START_MESSAGES:
         start_copy = message.lower()
