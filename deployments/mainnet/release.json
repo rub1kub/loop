@@ -1,0 +1,19 @@
+{
+  "audited_commit": "cfa0cca3a7312c5ce8e821fd7be6338731b33faf",
+  "self_reviewed": {
+    "acknowledgement": "NO INDEPENDENT AUDIT - OWNER ACCEPTS THE RISK",
+    "disclosure_path": "docs/no-audit-disclosure.md",
+    "disclosure_sha256": "e9e73d8a35835ca0f0c7587c9e698141c6ba39fd1aaa381d48b4709bbc6a4183",
+    "adversarial_review_path": "docs/reviews/internal-review-2026-07-26.md",
+    "bounty_policy_path": "docs/security-bounty.md",
+    "bounty_contact": "https://t.me/rub1kub",
+    "bounty_max_reward_nano": 500000000000
+  },
+  "owner": "EQBz1O_KbeC9N62AeY9ORMC7YCPPGWM96gjaY8ZYYAjot9MJ",
+  "treasury": "EQBx6mDe-FZbgZIw6If2-MLUI8sfgSylNfIq36lz8bgPU0Ur",
+  "duel_invite_signer_public_key": "4071653b6203e099b7a47c116a12a75272383f9f2018da86b200ff8fae79bb93",
+  "initial_limits": {
+    "bank_max_principal_nano": 1000000000,
+    "duel_max_pool_nano": 1000000000
+  }
+}
