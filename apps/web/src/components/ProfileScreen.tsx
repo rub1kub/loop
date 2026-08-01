@@ -203,8 +203,8 @@ export function ProfileScreen({
             <span>PLUSH BRICK</span>
           </div>
           <div className="profile-row static-row">
-            <span className="row-icon">
-              <InfinityIcon />
+            <span className="row-icon row-icon-mark">
+              <img src="/assets/plush-brick-mark.webp" alt="" width={40} height={40} />
             </span>
             <div>
               <b>{profile.plush_brick.holder ? 'Владение подтверждено' : 'Токен не найден'}</b>

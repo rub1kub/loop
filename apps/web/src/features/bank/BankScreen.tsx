@@ -366,7 +366,7 @@ export function BankScreen({
   return (
     <section className="screen bank-screen" aria-labelledby="bank-title">
       <header className="mode-header">
-        <p className="eyebrow">ОЧЕРЕДЬ ВЫПЛАТ</p>
+        <p className="eyebrow">ФИНАНСОВАЯ ПИРАМИДА</p>
         <h1 id="bank-title">BANK</h1>
       </header>
 

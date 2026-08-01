@@ -59,6 +59,15 @@ export function Onboarding({
   const [page, setPage] = useState(initialPage);
   const story = stories[page];
 
+  // The PLUSH BRICK mark is an animated GIF on a remote host and it lands on
+  // the last screen. Fetching it while the reader is still on the first one
+  // means it is decoded and ready by the time they swipe to it, instead of
+  // popping in after the copy has already settled.
+  useEffect(() => {
+    const preload = new Image();
+    preload.src = plushBrickLogoUrl;
+  }, []);
+
   useEffect(() => setBackAction(page ? () => setPage((value) => value - 1) : undefined), [page]);
 
   function next() {
