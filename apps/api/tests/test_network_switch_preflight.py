@@ -64,7 +64,7 @@ async def test_network_switch_requires_paused_drained_contracts(
 
 
 @pytest.mark.asyncio
-async def test_network_switch_rejects_live_value(
+async def test_leaving_mainnet_rejects_live_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def active_counts(_engine: Any, _network: int) -> tuple[int, int, int, int]:
@@ -76,14 +76,55 @@ async def test_network_switch_rejects_live_value(
     settings = Settings(
         _env_file=None,
         app_env="test",
-        ton_network_id=-3,
+        ton_network_id=-239,
+        mainnet_enabled=True,
         bank_contract_address="0:" + "12" * 32,
         duel_contract_address="0:" + "13" * 32,
     )
     with pytest.raises(RuntimeError, match="not drained"):
         await run_preflight(
             settings,
-            -239,
+            -3,
             ton_client=FakeTonClient(locked_nano=1),  # type: ignore[arg-type]
+            engine=object(),  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.asyncio
+async def test_leaving_testnet_reports_what_it_abandons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def active_counts(_engine: Any, _network: int) -> tuple[int, int, int, int]:
+        return 3, 1, 0, 0
+
+    monkeypatch.setattr(
+        "app.network_switch_preflight.active_projection_counts", active_counts
+    )
+    settings = Settings(
+        _env_file=None,
+        app_env="test",
+        ton_network_id=-3,
+        bank_contract_address="0:" + "12" * 32,
+        duel_contract_address="0:" + "13" * 32,
+    )
+    # Test coins are free, so stranding them harms nobody and paying them out
+    # would only mean minting more of them. The switch proceeds, but the proof
+    # still carries what was left behind.
+    proof = await run_preflight(
+        settings,
+        -239,
+        ton_client=FakeTonClient(locked_nano=500_000_000),  # type: ignore[arg-type]
+        engine=object(),  # type: ignore[arg-type]
+    )
+    assert proof.active_bank_positions == 3
+    assert proof.active_duel_offers == 1
+    assert proof.bank_locked_nano == 500_000_000
+
+    # The contracts still have to be stopped first, whichever network it is.
+    with pytest.raises(RuntimeError, match="must be paused"):
+        await run_preflight(
+            settings,
+            -239,
+            ton_client=FakeTonClient(paused=False, locked_nano=1),  # type: ignore[arg-type]
             engine=object(),  # type: ignore[arg-type]
         )

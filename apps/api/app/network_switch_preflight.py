@@ -11,7 +11,7 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from .config import SUPPORTED_TON_NETWORK_IDS, Settings
+from .config import MAINNET_NETWORK_ID, SUPPORTED_TON_NETWORK_IDS, Settings
 from .database import create_database
 from .ton import TonClient, TonProviderError
 
@@ -117,7 +117,18 @@ async def run_preflight(
     )
     if not bank.paused or not duel.paused:
         raise RuntimeError("both source contracts must be paused before a network switch")
-    if bank.locked_nano or duel.locked_nano or any(counts):
+    # Draining exists so that nobody's money is stranded on a network the
+    # application has walked away from. Testnet coins are not money: they are
+    # free, and the whole point of leaving testnet is that its state is
+    # disposable. Requiring a drain there protects nothing and would have to be
+    # satisfied by paying out test positions with more test coins.
+    #
+    # Leaving mainnet is the case the check is for, and it stays absolute.
+    # What is abandoned on testnet is reported rather than hidden, so the
+    # release record shows exactly what was left behind.
+    if settings.ton_network_id == MAINNET_NETWORK_ID and (
+        bank.locked_nano or duel.locked_nano or any(counts)
+    ):
         raise RuntimeError(
             "source network is not drained: "
             f"bank_locked={bank.locked_nano}, duel_locked={duel.locked_nano}, "
