@@ -183,18 +183,13 @@ def build_start_rich_message(text: str) -> InputRichMessage:
     plain string stays the single source of truth, so editing START_MESSAGES
     is still the only thing anyone has to do.
 
-    The opening "∞ LOOP" line and the closing line (when the message has one)
-    render as centered, bordered boxes; the body stays plain left-aligned
-    text, same as everywhere else in the message.
+    Only the opening "∞ LOOP" line renders as a centered, bordered box —
+    everything after it, including the closing line, stays plain
+    left-aligned text.
     """
     heading, *rest = text.split("\n\n")
     blocks: list[InputRichBlockUnion] = [_centered_box(heading)]
-    has_cta = len(rest) >= 2
-    for section_index, section in enumerate(rest):
-        is_cta = has_cta and section_index == len(rest) - 1
-        if is_cta:
-            blocks.append(_centered_box(section.replace("\n", " ")))
-            continue
+    for section in rest:
         for line in section.split("\n"):
             blocks.append(InputRichBlockParagraph(text=line))
     return InputRichMessage(blocks=blocks)

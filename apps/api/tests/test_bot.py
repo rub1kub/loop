@@ -56,17 +56,13 @@ def test_every_start_message_survives_the_rich_message_round_trip() -> None:
         assert rebuilt_words == original_words, f"lost content converting {raw!r}"
 
 
-def test_start_rich_message_centers_only_the_heading_and_closing_line() -> None:
-    three_part = next(m for m in START_MESSAGES if len(m.split("\n\n")) == 3)
-    rich = build_start_rich_message(three_part)
-    assert rich.blocks[0].cells[0][0].align == "center"  # heading
-    assert not hasattr(rich.blocks[1], "cells")  # body stays a plain paragraph
-    assert rich.blocks[-1].cells[0][0].align == "center"  # closing line
-
-    two_part = next(m for m in START_MESSAGES if len(m.split("\n\n")) == 2)
-    rich = build_start_rich_message(two_part)
-    assert rich.blocks[0].cells[0][0].align == "center"  # heading only
-    assert all(not hasattr(block, "cells") for block in rich.blocks[1:])
+def test_start_rich_message_centers_only_the_heading() -> None:
+    for raw in START_MESSAGES:
+        rich = build_start_rich_message(raw)
+        assert rich.blocks[0].cells[0][0].align == "center"  # heading
+        assert all(not hasattr(block, "cells") for block in rich.blocks[1:]), (
+            f"a non-heading block is centered in {raw!r}"
+        )
 
 
 def test_support_rich_message_keeps_every_step_as_an_ordered_list_item() -> None:
