@@ -40,11 +40,7 @@
     ],
     "expansion_every_completions": 250,
     "expansion_step_nano": 5000000000,
-    "multipliers_bps": [
-      12500,
-      15000,
-      20000
-    ],
+    "multipliers_bps": [12500, 15000, 20000],
     "settled_positions_pruned": true,
     "worst_case_cascade_gas": 861439,
     "head_queue_index": 0,
