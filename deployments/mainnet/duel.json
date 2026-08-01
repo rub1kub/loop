@@ -9,7 +9,7 @@
   "deploy_masterchain_seqno": 83367068,
   "code_hash": "E934E407353B47FE20F1874A4A8DEB6A0E5CAE7D08407CF927DC34ABDB2F4B3A",
   "data_hash": "1CCA757F6D6A85385FB63CE604C1960DA09029B5A7FECC59BD9A12604A78F207",
-  "source_commit": "80624b8d4635b60abce05d89888e292386bbcbfb",
+  "source_commit": "d0706d10632d33176cea5328c3da9699e1cf7760",
   "compiler_version": "Tolk 1.4.0",
   "acton_version": "1.0.0",
   "configuration": {
