@@ -21,7 +21,6 @@ COMMIT = re.compile(r"[0-9a-f]{40}", re.IGNORECASE)
 HASH = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
 INITIAL_VALUE_CAP_NANO = 10_000_000_000
 UNREVIEWED_VALUE_CAP_NANO = 1_000_000_000
-MIN_SOAK_DAYS = 30
 
 
 class ReadinessError(RuntimeError):
@@ -68,7 +67,6 @@ def require_mainnet_address(value: Any, name: str) -> str:
     ).lower()
 
 
-
 def validate_external_audit(audit: dict[str, Any]) -> None:
     if not str(audit.get("provider", "")).strip():
         raise ReadinessError("external audit provider is required")
@@ -91,8 +89,13 @@ def validate_self_reviewed(block: dict[str, Any]) -> None:
 
     An audit buys an outside opinion, and nothing here reproduces that. What
     this path can enforce is that the absence is deliberate, disclosed in a
-    file the release is pinned to, compensated by a low value cap, backed by a
-    standing offer to pay for bugs, and preceded by real time on testnet.
+    file the release is pinned to, compensated by a low value cap, and backed
+    by a standing offer to pay for bugs.
+
+    This release carries no minimum testnet soak — the owner decided against
+    it on 2026-08-01, after the readiness sweep first shipped one. That
+    tradeoff is not this gate's to soften: docs/no-audit-disclosure.md says so
+    to the people whose funds are at risk, in exactly those words.
     """
     acknowledgement = str(block.get("acknowledgement", "")).strip()
     if acknowledgement != "NO INDEPENDENT AUDIT - OWNER ACCEPTS THE RISK":
@@ -119,15 +122,6 @@ def validate_self_reviewed(block: dict[str, Any]) -> None:
     reward = block.get("bounty_max_reward_nano")
     if not isinstance(reward, int) or reward <= 0:
         raise ReadinessError("the bug bounty must state a real maximum reward")
-    try:
-        soak_started = date.fromisoformat(str(block.get("testnet_soak_started", "")))
-    except ValueError as exc:
-        raise ReadinessError("testnet soak start date is invalid") from exc
-    soaked = (date.today() - soak_started).days
-    if soaked < MIN_SOAK_DAYS:
-        raise ReadinessError(
-            f"unreviewed release needs {MIN_SOAK_DAYS} days on testnet, has {soaked}"
-        )
 
 
 def require_pinned_document(
@@ -154,21 +148,27 @@ def validate_assurance(release: dict[str, Any]) -> None:
     audit = release.get("external_audit")
     self_reviewed = release.get("self_reviewed")
     if isinstance(audit, dict) and isinstance(self_reviewed, dict):
-        raise ReadinessError("declare either an external audit or a self-reviewed release")
+        raise ReadinessError(
+            "declare either an external audit or a self-reviewed release"
+        )
     if isinstance(audit, dict):
         validate_external_audit(audit)
         return
     if isinstance(self_reviewed, dict):
         validate_self_reviewed(self_reviewed)
         return
-    raise ReadinessError("release must declare external_audit or self_reviewed assurance")
+    raise ReadinessError(
+        "release must declare external_audit or self_reviewed assurance"
+    )
 
 
 def validate_release_evidence(release: dict[str, Any], release_file: Path) -> str:
     release_commit = os.getenv("LOOP_RELEASE_COMMIT", "")
     if release_commit:
         if COMMIT.fullmatch(release_commit) is None:
-            raise ReadinessError("LOOP_RELEASE_COMMIT must be a 40-character Git commit")
+            raise ReadinessError(
+                "LOOP_RELEASE_COMMIT must be a 40-character Git commit"
+            )
         head = release_commit
     else:
         head = git("rev-parse", "HEAD")
@@ -177,7 +177,10 @@ def validate_release_evidence(release: dict[str, Any], release_file: Path) -> st
         if git("branch", "--show-current") != "main":
             raise ReadinessError("mainnet release must be cut from main")
     audited_commit = str(release.get("audited_commit", ""))
-    if COMMIT.fullmatch(audited_commit) is None or audited_commit.lower() != head.lower():
+    if (
+        COMMIT.fullmatch(audited_commit) is None
+        or audited_commit.lower() != head.lower()
+    ):
         raise ReadinessError("HEAD must equal the externally audited commit")
 
     validate_assurance(release)
@@ -276,20 +279,24 @@ def validate_manifest(
         require_mainnet_address(release.get("owner"), "release owner")
     ):
         raise ReadinessError(f"{contract}: owner mismatch")
-    if require_mainnet_address(configuration.get("treasury"), f"{contract} treasury") != (
-        require_mainnet_address(release.get("treasury"), "release treasury")
-    ):
+    if require_mainnet_address(
+        configuration.get("treasury"), f"{contract} treasury"
+    ) != (require_mainnet_address(release.get("treasury"), "release treasury")):
         raise ReadinessError(f"{contract}: treasury mismatch")
     if contract == "DuelEscrow" and int(configuration.get("network_id", 0)) != -239:
         raise ReadinessError("DuelEscrow: mainnet domain is missing")
     if configuration.get("paused") is not True:
-        raise ReadinessError(f"{contract}: contract must remain paused at application activation")
+        raise ReadinessError(
+            f"{contract}: contract must remain paused at application activation"
+        )
     if int(configuration.get("locked_nano", -1)) != 0:
-        raise ReadinessError(f"{contract}: locked value must be zero at application activation")
+        raise ReadinessError(
+            f"{contract}: locked value must be zero at application activation"
+        )
     limits = release["initial_limits"]
-    if contract == "BankQueue" and int(configuration.get("principal_limit_nano", 0)) < int(
-        limits["bank_max_principal_nano"]
-    ):
+    if contract == "BankQueue" and int(
+        configuration.get("principal_limit_nano", 0)
+    ) < int(limits["bank_max_principal_nano"]):
         raise ReadinessError("BankQueue: application limit exceeds the contract limit")
     if contract == "BankQueue" and any(
         int(configuration.get(name, -1)) != 0
@@ -350,7 +357,9 @@ def validate_manifest(
     elif contract == "DuelEscrow":
         canary = manifest.get("verified_canary")
         if not isinstance(canary, dict):
-            raise ReadinessError("DuelEscrow: finalized two-wallet canary proof is missing")
+            raise ReadinessError(
+                "DuelEscrow: finalized two-wallet canary proof is missing"
+            )
         first_wallet = require_mainnet_address(
             canary.get("first_wallet"), "DUEL canary first wallet"
         )

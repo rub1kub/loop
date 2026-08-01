@@ -7,8 +7,7 @@
     "adversarial_review_path": "docs/reviews/internal-review-2026-07-26.md",
     "bounty_policy_path": "docs/security-bounty.md",
     "bounty_contact": "REPLACE_WITH_CONTACT",
-    "bounty_max_reward_nano": 500000000000,
-    "testnet_soak_started": "YYYY-MM-DD"
+    "bounty_max_reward_nano": 500000000000
   },
   "owner": "REPLACE_WITH_MAINNET_OWNER_ADDRESS",
   "treasury": "REPLACE_WITH_MAINNET_TREASURY_ADDRESS",

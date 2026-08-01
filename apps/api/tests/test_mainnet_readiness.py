@@ -1,7 +1,6 @@
 import hashlib
 import importlib.util
 import json
-from datetime import date, timedelta
 from pathlib import Path
 from types import ModuleType
 
@@ -318,7 +317,6 @@ def self_reviewed_release(**overrides: object) -> dict[str, object]:
         "bounty_policy_path": "docs/security-bounty.md",
         "bounty_contact": "https://t.me/rub1kub",
         "bounty_max_reward_nano": 500_000_000_000,
-        "testnet_soak_started": (date.today() - timedelta(days=45)).isoformat(),
     }
     block.update(overrides)
     return {"self_reviewed": block}
@@ -344,13 +342,6 @@ def test_unreviewed_release_is_accepted_only_with_every_compensating_control() -
         readiness.validate_assurance(self_reviewed_release(bounty_contact="  "))
     with pytest.raises(readiness.ReadinessError, match="maximum reward"):
         readiness.validate_assurance(self_reviewed_release(bounty_max_reward_nano=0))
-    # Time on testnet is the only evidence that is not an opinion.
-    with pytest.raises(readiness.ReadinessError, match="days on testnet"):
-        readiness.validate_assurance(
-            self_reviewed_release(
-                testnet_soak_started=(date.today() - timedelta(days=3)).isoformat()
-            )
-        )
     with pytest.raises(readiness.ReadinessError, match="external_audit or self_reviewed"):
         readiness.validate_assurance({})
 
@@ -386,7 +377,4 @@ def test_unreviewed_release_caps_value_ten_times_lower(monkeypatch) -> None:
             "duel_max_pool_nano": 1_000_000_000,
         },
     }
-    assert (
-        readiness.validate_release_evidence(within_cap, release_dir / "release.json")
-        == "a" * 40
-    )
+    assert readiness.validate_release_evidence(within_cap, release_dir / "release.json") == "a" * 40
