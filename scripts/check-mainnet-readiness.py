@@ -169,19 +169,24 @@ def validate_release_evidence(release: dict[str, Any], release_file: Path) -> st
             raise ReadinessError(
                 "LOOP_RELEASE_COMMIT must be a 40-character Git commit"
             )
-        head = release_commit
     else:
-        head = git("rev-parse", "HEAD")
         if git("status", "--porcelain"):
             raise ReadinessError("mainnet release requires a clean worktree")
         if git("branch", "--show-current") != "main":
             raise ReadinessError("mainnet release must be cut from main")
     audited_commit = str(release.get("audited_commit", ""))
-    if (
-        COMMIT.fullmatch(audited_commit) is None
-        or audited_commit.lower() != head.lower()
-    ):
-        raise ReadinessError("HEAD must equal the externally audited commit")
+    if COMMIT.fullmatch(audited_commit) is None:
+        raise ReadinessError("audited_commit must be a 40-character Git commit")
+    # This deliberately does not demand that the deployed commit equal the
+    # audited one. It cannot: `audited_commit` lives in this file, the file is
+    # committed, and no commit can contain its own hash. The attestation always
+    # sits one commit above the tree it attests, so requiring equality only made
+    # every mainnet activation impossible — which is how this was found.
+    #
+    # What still binds the deployment to the audited source: both manifests must
+    # carry `source_commit == audited_commit`, the operator-set release and audit
+    # commits must match it too, and verify-contracts.py proves the bytecode on
+    # chain is a build of the shipped sources.
 
     validate_assurance(release)
 
@@ -209,7 +214,7 @@ def validate_release_evidence(release: dict[str, Any], release_file: Path) -> st
             )
     if release_file.parent != ROOT / "deployments" / "mainnet":
         raise ReadinessError("release evidence must live under deployments/mainnet")
-    return head
+    return audited_commit
 
 
 def require_environment_value(name: str) -> str:

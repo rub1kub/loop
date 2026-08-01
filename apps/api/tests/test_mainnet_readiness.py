@@ -378,3 +378,36 @@ def test_unreviewed_release_caps_value_ten_times_lower(monkeypatch) -> None:
         },
     }
     assert readiness.validate_release_evidence(within_cap, release_dir / "release.json") == "a" * 40
+
+
+def test_attestation_may_sit_one_commit_above_the_tree_it_attests(monkeypatch) -> None:
+    readiness = load_script("check-mainnet-readiness.py")
+    release_dir = ROOT / "deployments" / "mainnet"
+    release = {
+        **self_reviewed_release(),
+        "audited_commit": "a" * 40,
+        "owner": MAINNET_ADDRESS,
+        "treasury": MAINNET_ADDRESS,
+        "duel_invite_signer_public_key": "b" * 64,
+        "initial_limits": {
+            "bank_max_principal_nano": 1_000_000_000,
+            "duel_max_pool_nano": 1_000_000_000,
+        },
+    }
+    # The deployed commit is the one that carries the attestation, so it can
+    # never equal the commit being attested. Demanding equality made every
+    # mainnet activation impossible; what the gate returns must stay the
+    # audited commit, since the runtime environment is checked against it.
+    monkeypatch.setenv("LOOP_RELEASE_COMMIT", "c" * 40)
+    assert (
+        readiness.validate_release_evidence(release, release_dir / "release.json")
+        == "a" * 40
+    )
+    monkeypatch.setenv("LOOP_RELEASE_COMMIT", "not-a-commit")
+    with pytest.raises(readiness.ReadinessError, match="LOOP_RELEASE_COMMIT"):
+        readiness.validate_release_evidence(release, release_dir / "release.json")
+    monkeypatch.setenv("LOOP_RELEASE_COMMIT", "c" * 40)
+    with pytest.raises(readiness.ReadinessError, match="audited_commit"):
+        readiness.validate_release_evidence(
+            {**release, "audited_commit": "short"}, release_dir / "release.json"
+        )
