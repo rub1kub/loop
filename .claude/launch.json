@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "VITE_MOCK_TELEGRAM=true npm run dev --prefix apps/web -- --port 5290 --strictPort"
+      ],
+      "port": 5290
+    }
+  ]
+}

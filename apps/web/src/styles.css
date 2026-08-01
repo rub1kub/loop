@@ -54,10 +54,26 @@ html,
 body,
 #root {
   width: 100%;
+  max-width: 100%;
   height: 100%;
   margin: 0;
   background: var(--bg);
   touch-action: pan-y;
+}
+
+/* Nothing inside may widen the page. Telegram changes the viewport under us
+   when it expands or goes fullscreen, and a single element that reports a
+   wider min-content is enough to stretch the layout past the screen — which
+   reads as the right-hand padding vanishing while everything, tab bar
+   included, drifts sideways. */
+html {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+#root {
+  min-width: 0;
+  overflow-x: clip;
 }
 
 img {
@@ -69,6 +85,11 @@ img {
 body {
   display: grid;
   overflow: hidden;
+  /* An implicit auto track grows to its widest child, and the shell is then
+     centred inside that grown track rather than inside the screen — which is
+     how one over-wide element drags the whole layout, tab bar included, off
+     to the right. A capped 1fr column can never outgrow the viewport. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: start center;
   overscroll-behavior: none;
 }
@@ -102,7 +123,7 @@ summary:focus-visible .disclosure-indicator {
 .app-shell,
 .inline-preview {
   width: 100%;
-  max-width: 430px;
+  max-width: min(430px, 100%);
   min-width: 0;
   height: min(var(--loop-stable-height, var(--tg-viewport-stable-height, 100dvh)), 932px);
   max-height: 932px;
