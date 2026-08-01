@@ -9,7 +9,7 @@
   "deploy_masterchain_seqno": 83367043,
   "code_hash": "0FF2E5136C4186BEA8269D426E31FAA9E7D4B8BEBF5BAEFB13B3118F677560ED",
   "data_hash": "D35FAADACEDB3FA939DFE3D46D090D4F59A7C0900BE1EAE3FF891590E2812250",
-  "source_commit": "de325a067de3e2449c20e4fa054c127e4034f3fc",
+  "source_commit": "ac87ce2a68618f0d41dc4b4a8d930e66f4677bdd",
   "compiler_version": "Tolk 1.4.0",
   "acton_version": "1.0.0",
   "configuration": {
@@ -25,13 +25,26 @@
     "min_principal_nano": 1000000000,
     "max_principal_nano": 100000000000,
     "maturity_limits": [
-      { "completed_positions": 0, "principal_limit_nano": 5000000000 },
-      { "completed_positions": 25, "principal_limit_nano": 10000000000 },
-      { "completed_positions": 100, "principal_limit_nano": 15000000000 }
+      {
+        "completed_positions": 0,
+        "principal_limit_nano": 5000000000
+      },
+      {
+        "completed_positions": 25,
+        "principal_limit_nano": 10000000000
+      },
+      {
+        "completed_positions": 100,
+        "principal_limit_nano": 15000000000
+      }
     ],
     "expansion_every_completions": 250,
     "expansion_step_nano": 5000000000,
-    "multipliers_bps": [12500, 15000, 20000],
+    "multipliers_bps": [
+      12500,
+      15000,
+      20000
+    ],
     "settled_positions_pruned": true,
     "worst_case_cascade_gas": 861439,
     "head_queue_index": 0,
