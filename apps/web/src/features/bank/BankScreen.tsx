@@ -416,8 +416,6 @@ export function BankScreen({
         </div>
       ) : (
         <div className="bank-state bank-empty-state">
-          <h2>Войди в очередь.</h2>
-          <p className="bank-risk">Выплата зависит от новых взносов и не гарантирована.</p>
           <div className="bank-cycle-metrics is-empty">
             <CycleMetric value={pulse?.active_bank ?? '—'} label="В ОЧЕРЕДИ" />
             <CycleMetric value={pulse?.active_participants ?? '—'} label="СЕЙЧАС В LOOP" />

@@ -14,7 +14,7 @@ describe('Onboarding', () => {
     render(<Onboarding onDone={vi.fn()} />);
 
     expect(screen.getByRole('heading', { name: 'Войди в живой цикл.' })).toBeInTheDocument();
-    expect(screen.getByText(/BANK — очередь выплат/)).toBeInTheDocument();
+    expect(screen.getByText(/BANK — финансовая пирамида/)).toBeInTheDocument();
     expect(screen.getByLabelText('Экран 1 из 4')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'ПРОДОЛЖИТЬ' })).toBeInTheDocument();
   });

@@ -66,15 +66,13 @@ describe('BankScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Войди в очередь.' })).toBeVisible();
-    const hint = screen.getByText('Выплата зависит от новых взносов и не гарантирована.');
     const action = screen.getByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ' });
-    expect(hint).toBeVisible();
-    expect(screen.queryByText('Финансовая пирамида.')).not.toBeInTheDocument();
-    expect(hint.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
     expect(action).toBeVisible();
+    // The empty state carries no copy of its own: the metrics and the action
+    // say everything it needs to. The payout warning is not dropped, it lives
+    // where the user actually commits money — see the multiplier step below.
+    expect(screen.queryByRole('heading', { name: /очередь/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/не гарантирована/)).not.toBeInTheDocument();
     expect(screen.queryByTestId('bank-sand-level')).not.toBeInTheDocument();
   });
 

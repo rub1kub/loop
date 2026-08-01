@@ -640,31 +640,6 @@ summary:focus-visible .disclosure-indicator {
   margin-top: 14px;
 }
 
-.bank-empty-state h2 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 620;
-  letter-spacing: -0.04em;
-}
-
-.bank-empty-state p {
-  max-width: 330px;
-  line-height: 1.45;
-}
-
-.bank-empty-state .bank-risk {
-  max-width: 330px;
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.42;
-}
-
-.bank-empty-state .bank-risk strong {
-  color: var(--ink);
-  font-weight: 650;
-}
-
 .bank-cycle-metrics {
   display: grid;
   width: min(100%, 330px);
@@ -2867,16 +2842,6 @@ details[open] > summary .disclosure-indicator svg {
 
   .bank-state {
     margin-top: -2px;
-  }
-
-  .bank-empty-state h2 {
-    font-size: 22px;
-  }
-
-  .bank-empty-state .bank-risk {
-    margin-top: 5px;
-    font-size: 13px;
-    line-height: 1.35;
   }
 
   .bank-cycle-metrics.is-empty {
