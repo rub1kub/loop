@@ -18,6 +18,12 @@ COPY apps/api/alembic.ini ./alembic.ini
 COPY scripts/check-mainnet-readiness.py ./scripts/check-mainnet-readiness.py
 COPY deployments ./deployments
 COPY docs/audits ./docs/audits
+# The readiness gate reads the assurance documents the release pins, and an
+# unreviewed release pins these three. Without them in the image the gate
+# cannot verify the disclosure users are promised, and so refuses to activate.
+COPY docs/no-audit-disclosure.md ./docs/no-audit-disclosure.md
+COPY docs/security-bounty.md ./docs/security-bounty.md
+COPY docs/reviews ./docs/reviews
 
 RUN python -m pip install --no-cache-dir . \
     && addgroup --system --gid 10001 loop \
