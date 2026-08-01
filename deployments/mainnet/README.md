@@ -17,3 +17,26 @@ settlement from two distinct dedicated mainnet canary wallets. Then run
 `make contracts-mainnet-verify`. The gate rejects a BANK smoke that points at the production
 address, live obligations, runtime limits that differ from audited limits, or an application
 configuration that does not repeat the audited commit and report hash.
+
+## Wallet addresses are network-specific — never read them from `acton wallet list`
+
+A W5 (v5r1) wallet's address depends on `walletId`, which is `2^31 + network
+global id`: `-3` on testnet, `-239` on mainnet. The same key therefore has two
+different addresses, and `acton wallet list` prints the **testnet** one, because
+Acton's wallet subsystem defaults to a testnet context.
+
+Converting that address from `kQ…` to `UQ…` changes only the display flags, not
+the account. Funding the converted address on mainnet sends real funds to an
+account no mainnet wallet app will offer to control, and `acton run
+deploy-*-mainnet` then fails with "wallet has no active state on mainnet",
+because it correctly looks at the `-239` address, which is empty.
+
+Get mainnet addresses from Acton itself under the target network:
+
+```bash
+acton script --net mainnet scripts/print-mainnet-wallets.tolk
+```
+
+Cross-check them against what the wallet app shows for the same seed before
+sending anything. If the two disagree, stop: one of them is not the account you
+think it is.
