@@ -35,5 +35,22 @@
     "reveal_window_seconds": 300,
     "guaranteed_boost_response_seconds": 20
   },
+  "source_verification": {
+    "verified": true,
+    "url": "https://verifier.ton.org/EQBN4TO22cyYn15CHhwwbp6zazZaAGYWMG5f_Jr8yotYogMv",
+    "verifier": "verifier.ton.org",
+    "verifier_id": "0x7494b4c0aca9820e02a5024a9009a84321bd379467c8be09c9d25a26f18d0b87",
+    "compiler": "tolk 1.4",
+    "verified_at": "2026-08-01T19:15:03Z",
+    "proof_transaction": "3ERy4+NjFbtGmTYdQeL56OC6dAzOi/EUKrmXcrG0xNE=",
+    "proof_transaction_lt": 93983524000001,
+    "proof_masterchain_seqno": 83377011,
+    "published_sources": [
+      "contracts/duel/DuelEscrow.tolk",
+      "contracts/duel/errors.tolk",
+      "contracts/duel/messages.tolk",
+      "contracts/duel/storage.tolk"
+    ]
+  },
   "explorer_url": "https://tonviewer.com/EQBN4TO22cyYn15CHhwwbp6zazZaAGYWMG5f_Jr8yotYogMv"
 }

@@ -61,5 +61,22 @@
     "payout_nano": 1250000000,
     "remaining_funding_nano": 550000000
   },
+  "source_verification": {
+    "verified": true,
+    "url": "https://verifier.ton.org/EQDy9lB3yFbqncwY0jHtoKuUVPXIEKYv0wauZMHkxawhahKn",
+    "verifier": "verifier.ton.org",
+    "verifier_id": "0x7494b4c0aca9820e02a5024a9009a84321bd379467c8be09c9d25a26f18d0b87",
+    "compiler": "tolk 1.4",
+    "verified_at": "2026-08-01T19:14:42Z",
+    "proof_transaction": "Yu9PUMCzIrZ7otby39FxUG7NDRRvYVNbcxkVJEAltg8=",
+    "proof_transaction_lt": 93983473000018,
+    "proof_masterchain_seqno": 83376958,
+    "published_sources": [
+      "contracts/bank/BankQueue.tolk",
+      "contracts/bank/errors.tolk",
+      "contracts/bank/messages.tolk",
+      "contracts/bank/storage.tolk"
+    ]
+  },
   "explorer_url": "https://tonviewer.com/EQDy9lB3yFbqncwY0jHtoKuUVPXIEKYv0wauZMHkxawhahKn"
 }
