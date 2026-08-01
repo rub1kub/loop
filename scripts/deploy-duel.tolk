@@ -14,7 +14,10 @@ enum DeployErrors {
 fun main(networkId: int32, inviteSignerPublicKey: uint256, startPaused: bool) {
     assert (networkId == -3 || networkId == -239) throw DeployErrors.InvalidNetwork;
     assert (inviteSignerPublicKey != 0) throw DeployErrors.InvalidInviteSigner;
-    val deployer = scripts.wallet("deployer");
+    // See deploy-bank.tolk: literals, not a runtime name, and bound to network.
+    val deployer = networkId == -239
+        ? scripts.wallet("loop-mainnet-deployer")
+        : scripts.wallet("deployer");
     val configuredOwner = env<address>("LOOP_CONTRACT_OWNER_ADDRESS");
     val configuredTreasury = env<address>("LOOP_CONTRACT_TREASURY_ADDRESS");
     if (networkId == -239) {

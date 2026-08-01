@@ -12,7 +12,14 @@ enum DeployErrors {
 
 fun main(networkId: int32, startPaused: bool) {
     assert (networkId == -3 || networkId == -239) throw DeployErrors.InvalidNetwork;
-    val deployer = scripts.wallet("deployer");
+    // Bind the signing wallet to the target network with literals: a runtime
+    // string cannot be used here because emulation resolves the name through
+    // `testing.treasury`, which parses it as a compile-time slice. Binding it
+    // this way also makes it impossible to sign a mainnet deployment with the
+    // testnet key, which holds no mainnet funds.
+    val deployer = networkId == -239
+        ? scripts.wallet("loop-mainnet-deployer")
+        : scripts.wallet("deployer");
     val configuredOwner = env<address>("LOOP_CONTRACT_OWNER_ADDRESS");
     val configuredTreasury = env<address>("LOOP_CONTRACT_TREASURY_ADDRESS");
     if (networkId == -239) {
