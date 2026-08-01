@@ -9,7 +9,13 @@ enum DuelPauseErrors {
     UnexpectedOwner = 993
 }
 
-fun main(duelAddress: address, ownerAddress: address, paused: bool, queryId: uint64, signerWalletName: string) {
+fun main(
+    duelAddress: address,
+    ownerAddress: address,
+    paused: bool,
+    queryId: uint64,
+    signerWalletName: string,
+) {
     val signer = scripts.wallet(signerWalletName);
     val duel = DuelEscrow.fromAddress(duelAddress);
     // `adminState` has the same shape in every deployed DuelEscrow, while
