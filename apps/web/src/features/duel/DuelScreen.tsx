@@ -37,6 +37,8 @@ import {
 } from '../../ton';
 import type { Duel, Invite, Offer, Profile } from '../../types';
 
+import { sameAddress } from '../../address';
+
 const DEFAULT_CHANCE_BPS = 5000;
 
 function canonicalTerms(requestedStake: number, chanceBps: number) {
@@ -170,7 +172,7 @@ export function DuelScreen({
           ? 'result'
           : 'idle';
   const resultWon = Boolean(
-    latestDuel?.winner_wallet && latestDuel.winner_wallet === profile.wallet?.address,
+    latestDuel?.winner_wallet && sameAddress(latestDuel.winner_wallet, profile.wallet?.address),
   );
   const resultDeltaNano = latestDuel
     ? resultWon

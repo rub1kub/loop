@@ -22,6 +22,8 @@ import { formatGram } from '../ton';
 import type { BankPosition, Duel, Profile, Rating, Referral } from '../types';
 import { DisclosureIndicator } from './DisclosureIndicator';
 
+import { friendlyAddress } from '../address';
+
 function shortAddress(address: string): string {
   return `${address.slice(0, 7)}…${address.slice(-5)}`;
 }
@@ -192,7 +194,7 @@ export function ProfileScreen({
               <b>{profile.wallet ? 'Кошелёк подключён' : 'Подключить кошелёк'}</b>
               <small>
                 {profile.wallet
-                  ? shortAddress(profile.wallet.address)
+                  ? shortAddress(friendlyAddress(profile.wallet.address, profile.wallet.network))
                   : 'Для подписи операций и получения выплат'}
               </small>
             </div>

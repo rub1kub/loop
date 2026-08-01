@@ -24,6 +24,8 @@ import {
 import { useLoopStore } from './store';
 import { installViewportBehavior } from './viewport';
 
+import { sameAddress } from './address';
+
 export default function App() {
   const state = useLoopStore();
   const wallet = useTonWallet();
@@ -75,7 +77,11 @@ export default function App() {
   }, [setError, state.loading, state.profile, tonConnectUI]);
 
   useEffect(() => {
-    if (!wallet || isMockTelegram() || state.profile?.wallet?.address === wallet.account.address)
+    if (
+      !wallet ||
+      isMockTelegram() ||
+      sameAddress(state.profile?.wallet?.address, wallet.account.address)
+    )
       return;
     const proof = wallet.connectItems?.tonProof;
     if (!proof || !('proof' in proof) || !wallet.account.publicKey) return;
@@ -110,6 +116,15 @@ export default function App() {
     }, 5000);
     return () => window.clearInterval(timer);
   }, [refresh, setError, state.bankPosition, state.offers]);
+
+  // A toast that only clears on tap sits there forever when the error keeps
+  // being re-raised, which reads as the app being stuck rather than as one
+  // failed action.
+  useEffect(() => {
+    if (!state.error) return;
+    const timer = window.setTimeout(() => setError(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [setError, state.error]);
 
   useEffect(() => {
     if (state.activeTab !== 'rating' || isMockTelegram()) return;

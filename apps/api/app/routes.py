@@ -419,9 +419,14 @@ async def wallet_verify(
                 ),
             )
         )
+        # Scoped to the current network like the BANK check above it. Without
+        # that, an offer left open on a network the application has since moved
+        # away from blocks the user from ever linking a wallet again — and it
+        # cannot be settled, because nothing here talks to that network anymore.
         duel_active = await db.scalar(
             select(MatchmakingOffer.id).where(
                 MatchmakingOffer.wallet_id == current.id,
+                MatchmakingOffer.network == settings.ton_network_id,
                 MatchmakingOffer.state.in_(
                     [
                         OfferState.PENDING_FUNDING.value,
