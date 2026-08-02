@@ -1,4 +1,5 @@
 import base64
+from dataclasses import replace
 
 import pytest
 from fastapi import HTTPException
@@ -119,6 +120,9 @@ async def test_control_overview_and_safe_transaction_preparation(client, app) ->
 
 @pytest.mark.asyncio
 async def test_application_pause_blocks_only_new_operations(client, app) -> None:
+    # Switching the application off now asks the chain who owns the contract,
+    # so this needs a chain to ask.
+    app.state.ton_client = FakeControlTonClient()
     authorize_control(client)
     response = await client.patch(
         "/api/v1/control/application",
@@ -132,3 +136,30 @@ async def test_application_pause_blocks_only_new_operations(client, app) -> None
         control = await application_control(db)
         assert control.bank_enabled is True
         assert control.duel_enabled is True
+
+
+@pytest.mark.asyncio
+async def test_application_control_follows_on_chain_ownership(client, app) -> None:
+    """Switching the application off tracks who owns the contract now.
+
+    The session gate only proves the caller holds a session for the configured
+    admin wallet. It says nothing about whether that wallet still owns
+    anything, so after an ownership transfer the former admin could still take
+    the app down. Every other control action already asks the chain; this one
+    does too now.
+    """
+    class TransferredOwner(FakeControlTonClient):
+        async def get_contract_admin_state(self, mode: str, address: str):
+            state = await super().get_contract_admin_state(mode, address)
+            return replace(state, owner="0:" + "99" * 32)
+
+    app.state.ton_client = TransferredOwner()
+    authorize_control(client)
+
+    response = await client.patch(
+        "/api/v1/control/application",
+        json={"maintenance_enabled": True},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "connected wallet is not contract owner"

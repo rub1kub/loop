@@ -5,13 +5,17 @@ import "storage"
 const BANK_BASIS_POINTS = 10_000
 const BANK_MIN_PRINCIPAL = 1_000_000_000
 const BANK_MAX_PRINCIPAL = 100_000_000_000
-const BANK_INITIAL_PRINCIPAL_LIMIT = 5_000_000_000
-const BANK_SECOND_PRINCIPAL_LIMIT = 10_000_000_000
-const BANK_THIRD_PRINCIPAL_LIMIT = 15_000_000_000
-const BANK_LIMIT_STEP = 5_000_000_000
-const BANK_SECOND_STAGE_COMPLETIONS = 25
-const BANK_THIRD_STAGE_COMPLETIONS = 100
-const BANK_EXPANSION_COMPLETIONS = 250
+// The cap exists for one reason: a single oversized position holds up
+// everyone behind it. A position of N GRAM at the x2 target needs about
+// 2.2N of later deposits to clear, so N GRAM is unlocked only once the queue
+// has actually delivered 5N payouts. That keeps the worst stall one
+// participant can impose at roughly half of the history already behind them,
+// at every rung.
+//
+// The top rung is 100 rather than higher because the allocation loop is
+// bounded at 81 steps for gas: a deposit large enough to close more than
+// eighty minimum positions reverts, and that limit falls at 112 GRAM.
+const BANK_COMPLETIONS_PER_GRAM = 5
 const BANK_OPEN_GAS_BUFFER = 80_000_000
 const BANK_MIN_ADMIN_GAS = 20_000_000
 const BANK_WITHDRAW_GAS_BUFFER = 50_000_000
@@ -41,20 +45,39 @@ fun validMultiplier(multiplierBps: uint16): bool {
     return multiplierBps == 12_500 || multiplierBps == 15_000 || multiplierBps == 20_000;
 }
 
-fun completedExpansionStages(completedPositions: uint64): int {
-    return (completedPositions - BANK_THIRD_STAGE_COMPLETIONS) / BANK_EXPANSION_COMPLETIONS;
+/// Rungs in whole GRAM. Round numbers people can hold in their head, spaced
+/// so each step is a believable next move rather than a jump.
+fun ladderRung(index: int): int {
+    if (index == 0) { return 1; }
+    if (index == 1) { return 2; }
+    if (index == 2) { return 3; }
+    if (index == 3) { return 5; }
+    if (index == 4) { return 7; }
+    if (index == 5) { return 10; }
+    if (index == 6) { return 15; }
+    if (index == 7) { return 20; }
+    if (index == 8) { return 30; }
+    if (index == 9) { return 50; }
+    if (index == 10) { return 75; }
+    return 100;
 }
 
+const BANK_LADDER_RUNGS = 12
+
 fun BankStorage.principalLimit(self): coins {
-    if (self.completedPositions < BANK_SECOND_STAGE_COMPLETIONS) {
-        return BANK_INITIAL_PRINCIPAL_LIMIT;
+    // The rungs only ever rise, so the highest one the queue has earned is the
+    // answer; walking all of them costs a fixed twelve comparisons and avoids
+    // an early exit, which Tolk does not offer.
+    var limit = ladderRung(0);
+    var index = 1;
+    while (index < BANK_LADDER_RUNGS) {
+        val rung = ladderRung(index);
+        if (self.completedPositions >= rung * BANK_COMPLETIONS_PER_GRAM) {
+            limit = rung;
+        }
+        index += 1;
     }
-    if (self.completedPositions < BANK_THIRD_STAGE_COMPLETIONS) {
-        return BANK_SECOND_PRINCIPAL_LIMIT;
-    }
-    val extraStages = completedExpansionStages(self.completedPositions);
-    val expanded = BANK_THIRD_PRINCIPAL_LIMIT + extraStages * BANK_LIMIT_STEP;
-    return expanded < BANK_MAX_PRINCIPAL ? expanded : BANK_MAX_PRINCIPAL;
+    return limit * 1_000_000_000;
 }
 
 fun sendBankPayout(

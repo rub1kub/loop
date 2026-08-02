@@ -166,7 +166,13 @@ def create_app() -> FastAPI:
             else request.headers.get("x-real-ip")
             or (request.client.host if request.client else "unknown")
         )
-        group = "auth" if request.url.path.endswith("/auth/telegram") else "api"
+        # Signing into the control panel is an authentication attempt like any
+        # other and belongs in the tighter bucket — the path never matched the
+        # rule that only looked for /auth/telegram.
+        authenticating = request.url.path.endswith("/auth/telegram") or request.url.path.endswith(
+            "/control/session"
+        )
+        group = "auth" if authenticating else "api"
         limit = 20 if group == "auth" else 120
         bucket = int(time.time() // 60)
         key = f"loop:rate:{group}:{source}:{bucket}"

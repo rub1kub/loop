@@ -300,6 +300,18 @@ async def _sync_contract_control(
     state.last_tx_hash = view.last_transaction_hash
 
 
+async def _assert_contract_owner(request: Request, settings: Settings, wallet: str) -> None:
+    """Confirms with the chain that this wallet still owns a LOOP contract."""
+    for mode in ("bank", "duel"):
+        try:
+            _, admin, _ = await _live_contract(request, settings, wallet, mode)
+        except TonProviderError:
+            continue
+        if normalize_address(admin.owner) == normalize_address(wallet):
+            return
+    raise HTTPException(status.HTTP_403_FORBIDDEN, "connected wallet is not contract owner")
+
+
 @router.post("/challenge", response_model=WalletChallengeResponse)
 async def control_challenge(request: Request, settings: Config) -> WalletChallengeResponse:
     if not settings.control_admin_wallet:
@@ -471,7 +483,19 @@ async def update_application_control(
     body: ApplicationControlUpdate,
     wallet: ControlWallet,
     db: Db,
+    request: Request,
+    settings: Config,
 ) -> ApplicationControlView:
+    # The session gate proves only that the caller holds a session for the
+    # configured admin wallet — not that the wallet still owns anything. Every
+    # other control action asks the chain; without this one an ownership
+    # transfer would leave the former admin able to switch the app off.
+    #
+    # It is not a defence against a forged session: a forged one claims the
+    # owner's own address, and the chain agrees. What limits that is the
+    # asymmetry below — a transaction still has to be signed by the owner's
+    # wallet, so a stolen session can cause an outage but cannot move funds.
+    await _assert_contract_owner(request, settings, wallet)
     control = await application_control(db)
     changes = body.model_dump(exclude_none=True)
     for key, value in changes.items():

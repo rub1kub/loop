@@ -31,17 +31,25 @@ ACTIVE_POSITION_STATES = [
 GRAM = 1_000_000_000
 
 
+# Mirrors BankQueue.tolk exactly: a cap of N GRAM unlocks after 5N payouts.
+# The contract is the authority; this exists so the app can show the number
+# and refuse an over-limit deposit before the user pays gas to be rejected.
+LADDER_GRAM = (1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 75, 100)
+COMPLETIONS_PER_GRAM = 5
+
+
 def maturity_limit(completed_positions: int) -> tuple[int, int | None, int | None]:
-    if completed_positions < 25:
-        return 5 * GRAM, 10 * GRAM, 25 - completed_positions
-    if completed_positions < 100:
-        return 10 * GRAM, 15 * GRAM, 100 - completed_positions
-    stage = (completed_positions - 100) // 250
-    current = min(15 + stage * 5, 100) * GRAM
-    if current >= 100 * GRAM:
-        return current, None, None
-    next_boundary = 100 + (stage + 1) * 250
-    return current, current + 5 * GRAM, next_boundary - completed_positions
+    current = LADDER_GRAM[0]
+    next_rung: int | None = None
+    for rung in LADDER_GRAM[1:]:
+        if completed_positions >= rung * COMPLETIONS_PER_GRAM:
+            current = rung
+        elif next_rung is None:
+            next_rung = rung
+    if next_rung is None:
+        return current * GRAM, None, None
+    needed = next_rung * COMPLETIONS_PER_GRAM - completed_positions
+    return current * GRAM, next_rung * GRAM, needed
 
 
 async def bank_limit(db: Db, settings: Config) -> BankLimitView:

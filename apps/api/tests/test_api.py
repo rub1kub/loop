@@ -144,9 +144,11 @@ async def test_rating_starts_transparently_without_money_metrics(client) -> None
 @pytest.mark.asyncio
 async def test_bank_quote_is_testnet_only_and_requires_verified_wallet(client, app) -> None:
     headers = await authenticate(client)
+    # A fresh queue caps deposits at one GRAM, so the amount has to sit under
+    # the cap for the wallet check to be what rejects this.
     payload = {
         "position_id": 1001,
-        "principal_nano": 2_000_000_000,
+        "principal_nano": 1_000_000_000,
         "multiplier_bps": 15_000,
     }
     denied = await client.post("/api/v1/bank/positions/quote", headers=headers, json=payload)
@@ -155,9 +157,9 @@ async def test_bank_quote_is_testnet_only_and_requires_verified_wallet(client, a
     quote = await client.post("/api/v1/bank/positions/quote", headers=headers, json=payload)
     assert quote.status_code == 201, quote.text
     result = quote.json()
-    assert result["position"]["target_payout_nano"] == 3_000_000_000
+    assert result["position"]["target_payout_nano"] == 1_500_000_000
     assert result["transaction"]["operation"] == "create_bank_position"
-    assert result["transaction"]["amount_nano"] == "2080000000"
+    assert result["transaction"]["amount_nano"] == "1080000000"
     assert (await client.get("/api/v1/bank/positions/current", headers=headers)).json()[
         "position_id"
     ] == 1001
@@ -166,12 +168,19 @@ async def test_bank_quote_is_testnet_only_and_requires_verified_wallet(client, a
 @pytest.mark.parametrize(
     ("completed", "current", "next_limit", "remaining"),
     [
-        (0, 5, 10, 25),
-        (24, 5, 10, 1),
-        (25, 10, 15, 75),
-        (99, 10, 15, 1),
-        (100, 15, 20, 250),
-        (350, 20, 25, 250),
+        # A cap of N GRAM unlocks after 5N payouts. Both ends of every rung so
+        # an off-by-one in either implementation shows up here.
+        (0, 1, 2, 10),
+        (9, 1, 2, 1),
+        (10, 2, 3, 5),
+        (15, 3, 5, 10),
+        (25, 5, 7, 10),
+        (35, 7, 10, 15),
+        (50, 10, 15, 25),
+        (100, 20, 30, 50),
+        (250, 50, 75, 125),
+        (499, 75, 100, 1),
+        (500, 100, None, None),
         (10_000, 100, None, None),
     ],
 )
@@ -196,14 +205,14 @@ async def test_early_bank_rejects_oversized_position_before_wallet_confirmation(
     await add_wallet(app, 777000111)
     limits = await client.get("/api/v1/bank/limits", headers=headers)
     assert limits.status_code == 200
-    assert limits.json()["principal_limit_nano"] == 5_000_000_000
+    assert limits.json()["principal_limit_nano"] == 1_000_000_000
     denied = await client.post(
         "/api/v1/bank/positions/preview",
         headers=headers,
-        json={"principal_nano": 5_000_000_001, "multiplier_bps": 12_500},
+        json={"principal_nano": 1_000_000_001, "multiplier_bps": 12_500},
     )
     assert denied.status_code == 422
-    assert denied.json()["detail"] == "Сейчас можно внести от 1 до 5 GRAM"
+    assert denied.json()["detail"] == "Сейчас можно внести от 1 до 1 GRAM"
 
 
 @pytest.mark.asyncio

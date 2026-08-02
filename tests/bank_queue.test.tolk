@@ -274,62 +274,71 @@ get fun `test zero fee emits no protocol transfer`() {
     });
 }
 
-get fun `test early BANK stages reject oversized positions and expand only after completions`() {
-    val (early, _, _, first, second) = setupBankAtCompleted(0, 0);
-    expect(early.queueData().principalLimit).toEqual(ton("5"));
+get fun `test BANK opens at one GRAM and each rung needs five payouts per GRAM`() {
+    // A fresh queue has proved nothing, so it carries the smallest position
+    // the contract accepts and refuses a hair more.
+    val (fresh, _, _, first, second) = setupBankAtCompleted(0, 0);
+    expect(fresh.queueData().principalLimit).toEqual(ton("1"));
     expect(
-        openPosition(early, first, POSITION_A, ton("5"), 12_500),
+        openPosition(fresh, first, POSITION_A, ton("1"), 12_500),
     ).toHaveSuccessfulTx<CreatePosition>();
     expect(
-        openPosition(early, second, POSITION_B, ton("5.000000001"), 12_500),
+        openPosition(fresh, second, POSITION_B, ton("1.000000001"), 12_500),
     ).toHaveFailedTx({ exitCode: BankErrors.InvalidPrincipal });
 
-    val (secondStage, _, _, third, _) = setupBankAtCompleted(0, 25);
-    expect(secondStage.queueData().principalLimit).toEqual(ton("10"));
+    // One payout short of a rung the old cap still stands.
+    val (justShort, _, _, _, _) = setupBankAtCompleted(0, 9);
+    expect(justShort.queueData().principalLimit).toEqual(ton("1"));
+
+    val (twoGram, _, _, third, _) = setupBankAtCompleted(0, 10);
+    expect(twoGram.queueData().principalLimit).toEqual(ton("2"));
     expect(
-        openPosition(secondStage, third, POSITION_C, ton("10"), 12_500),
+        openPosition(twoGram, third, POSITION_C, ton("2"), 12_500),
     ).toHaveSuccessfulTx<CreatePosition>();
 
-    val (middleSecondStage, _, _, middlePlayer, _) = setupBankAtCompleted(0, 50);
-    expect(middleSecondStage.queueData().principalLimit).toEqual(ton("10"));
+    val (fiveGram, _, _, fourth, _) = setupBankAtCompleted(0, 25);
+    expect(fiveGram.queueData().principalLimit).toEqual(ton("5"));
     expect(
-        openPosition(
-            middleSecondStage,
-            middlePlayer,
-            POSITION_D,
-            ton("10.000000001"),
-            12_500,
-        ),
+        openPosition(fiveGram, fourth, POSITION_D, ton("5.000000001"), 12_500),
     ).toHaveFailedTx({ exitCode: BankErrors.InvalidPrincipal });
-
-    val (thirdStage, _, _, fourth, _) = setupBankAtCompleted(0, 100);
-    expect(thirdStage.queueData().principalLimit).toEqual(ton("15"));
-    expect(
-        openPosition(thirdStage, fourth, POSITION_D, ton("15"), 12_500),
-    ).toHaveSuccessfulTx<CreatePosition>();
 }
 
-get fun `test mature BANK limit grows by five GRAM every 250 completions and stays capped`() {
-    val (beforeExpansion, _, _, _, _) = setupBankAtCompleted(0, 300);
-    expect(beforeExpansion.queueData().principalLimit).toEqual(ton("15"));
+get fun `test BANK ladder climbs to one hundred GRAM and stops there`() {
+    val (ten, _, _, _, _) = setupBankAtCompleted(0, 50);
+    expect(ten.queueData().principalLimit).toEqual(ton("10"));
 
-    val (expanded, _, _, first, _) = setupBankAtCompleted(0, 350);
-    expect(expanded.queueData().principalLimit).toEqual(ton("20"));
+    val (thirty, _, _, first, _) = setupBankAtCompleted(0, 150);
+    expect(thirty.queueData().principalLimit).toEqual(ton("30"));
     expect(
-        openPosition(expanded, first, POSITION_A, ton("20"), 12_500),
+        openPosition(thirty, first, POSITION_A, ton("30"), 12_500),
     ).toHaveSuccessfulTx<CreatePosition>();
 
+    // The top rung is not a round-number choice: the allocation loop is
+    // bounded at 81 steps, and a deposit past ~112 GRAM cannot be spread over
+    // a queue of minimum positions without reverting.
     val (capped, _, _, _, _) = setupBankAtCompleted(0, 10_000);
     expect(capped.queueData().principalLimit).toEqual(ton("100"));
+
+    val (stillCapped, _, _, second, _) = setupBankAtCompleted(0, 1_000_000);
+    expect(stillCapped.queueData().principalLimit).toEqual(ton("100"));
+    expect(
+        openPosition(stillCapped, second, POSITION_B, ton("100.000000001"), 12_500),
+    ).toHaveFailedTx({ exitCode: BankErrors.InvalidPrincipal });
 }
 
-get fun `test second maturity stage stays capped through completion ninety-nine`() {
+get fun `test a rung holds until its last missing payout arrives`() {
     val (contract, _, _, player, _) = setupBankAtCompleted(0, 99);
-    expect(contract.contractConfig().principalLimit).toEqual(ton("10"));
+    expect(contract.contractConfig().principalLimit).toEqual(ton("15"));
     expect(
-        openPosition(contract, player, POSITION_A, ton("15"), 12_500),
+        openPosition(contract, player, POSITION_A, ton("20"), 12_500),
     ).toHaveFailedTx({ exitCode: BankErrors.InvalidPrincipal });
     expect(contract.queueData().openPositions).toEqual(0);
+
+    val (unlocked, _, _, next, _) = setupBankAtCompleted(0, 100);
+    expect(unlocked.contractConfig().principalLimit).toEqual(ton("20"));
+    expect(
+        openPosition(unlocked, next, POSITION_B, ton("20"), 12_500),
+    ).toHaveSuccessfulTx<CreatePosition>();
 }
 
 get fun `test owner can fund reserve and withdraw only free balance while paused`() {
