@@ -355,3 +355,42 @@ async def test_verified_jetton_balance_requires_the_master_to_derive_the_wallet(
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler_for(counterfeit))) as http:
         client = TonClient(http, settings)
         assert await client.verified_jetton_balance(owner, master) == 5000
+
+
+@pytest.mark.asyncio
+async def test_jetton_lookup_uses_the_filter_the_provider_honours() -> None:
+    owner = "0:" + "22" * 32
+    master = "0:" + "33" * 32
+    other_master = "0:" + "55" * 32
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(request.url.params)
+        # A filter TonCenter does not recognise is ignored rather than
+        # rejected, and the reply is every jetton the owner holds. That is what
+        # `jetton_master` did: the holder check then read the answer as
+        # ambiguous and failed for anyone holding a second token.
+        wallets = [
+            {
+                "address": "0:" + "44" * 32,
+                "owner": owner,
+                "jetton": master,
+                "balance": "999",
+            }
+        ]
+        if "jetton_address" not in request.url.params:
+            wallets.append(
+                {
+                    "address": "0:" + "66" * 32,
+                    "owner": owner,
+                    "jetton": other_master,
+                    "balance": "7",
+                }
+            )
+        return httpx.Response(200, json={"jetton_wallets": wallets})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        state = await TonClient(http, get_settings()).get_jetton_wallet(owner, master)
+
+    assert seen.get("jetton_address") == master
+    assert state.balance_nano == 999

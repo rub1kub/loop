@@ -130,7 +130,11 @@ class TonClient:
         response = await self.http.get(
             f"{self.base_url}/api/v3/jetton/wallets",
             headers=self.headers,
-            params={"owner_address": owner, "jetton_master": master, "limit": 2},
+            # TonCenter v3 names this filter `jetton_address`. Sent as
+            # `jetton_master` it is silently ignored and the answer is every
+            # jetton the owner holds, so the reply looked ambiguous and the
+            # holder check failed for anyone holding more than one token.
+            params={"owner_address": owner, "jetton_address": master, "limit": 2},
         )
         if response.status_code != 200:
             raise TonProviderError("Jetton provider unavailable")
