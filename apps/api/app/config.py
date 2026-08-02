@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     duel_contract_code_hash: str = ""
     duel_fee_bps: int = 1000
     closed_beta_telegram_ids: str = ""
+    # Telegram publishes no list of message effects, and the community ones
+    # disagree, so this is configurable and its failure is never fatal.
+    result_effect_id: str = "5046509860389126442"
     duel_invite_signing_key: SecretStr = SecretStr("")
     duel_invite_public_key: str = ""
     # Holder fee exemption may only be enabled against DuelEscrow v1.4+

@@ -212,8 +212,14 @@ async def deliver_one(
         )
         return
 
-    try:
-        message = await bot.send_photo(
+    # A win is worth a little noise. Telegram publishes no list of effect ids
+    # and the community ones disagree, so a rejected effect must never cost the
+    # notification: the send is retried plainly.
+    celebratory = card.mode != "bank_entry" and card.payout_nano > card.contributed_nano
+    effect_id = settings.result_effect_id.strip() if celebratory else ""
+
+    async def send(with_effect: bool):
+        return await bot.send_photo(
             chat_id=user.telegram_id,
             photo=result_card_image_url(settings, card),
             caption=result_caption(card),
@@ -222,7 +228,17 @@ async def deliver_one(
                 settings,
                 referral.code if referral else None,
             ),
+            **({"message_effect_id": effect_id} if with_effect else {}),
         )
+
+    try:
+        try:
+            message = await send(bool(effect_id))
+        except TelegramBadRequest:
+            if not effect_id:
+                raise
+            logger.warning("result effect rejected by telegram, sending without it")
+            message = await send(False)
     except TelegramRetryAfter as exc:
         await update_delivery(
             session_factory,

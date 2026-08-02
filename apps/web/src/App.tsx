@@ -108,14 +108,26 @@ export default function App() {
     const duelActive = state.offers.some((offer) =>
       ['pending_funding', 'open', 'reserved', 'matched'].includes(offer.state),
     );
-    if (!bankActive && !duelActive) return;
-    const timer = window.setInterval(() => {
+    // Watching the jar is itself a reason to keep it current: the fill moves
+    // when other people deposit, not only when this user does. Something of
+    // one's own in flight is polled faster than a screen merely being looked
+    // at, and nothing is polled while the app is in the background.
+    const watchingBank = state.activeTab === 'bank';
+    if (!bankActive && !duelActive && !watchingBank) return;
+    const period = bankActive || duelActive ? 5000 : 12_000;
+    const tick = () => {
+      if (document.visibilityState === 'hidden') return;
       void refresh().catch((error: unknown) => {
-        setError(error instanceof Error ? error.message : 'Не удалось обновить дуэль');
+        setError(error instanceof Error ? error.message : 'Не удалось обновить данные');
       });
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [refresh, setError, state.bankPosition, state.offers]);
+    };
+    const timer = window.setInterval(tick, period);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [refresh, setError, state.activeTab, state.bankPosition, state.offers]);
 
   // A toast that only clears on tap sits there forever when the error keeps
   // being re-raised, which reads as the app being stuck rather than as one

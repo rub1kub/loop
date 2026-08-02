@@ -16,6 +16,8 @@ import type { BankLimit, BankPosition, BankPreview, Profile, RatingPulse } from 
 
 import { JarBalls } from './JarBalls';
 
+import { useCountUp } from '../../useCountUp';
+
 type WizardStep = 'amount' | 'multiplier' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
 
@@ -208,6 +210,9 @@ export function BankScreen({
 
   const progress = position?.progress_bps ?? 0;
   const progressPercent = Math.min(100, Math.max(0, progress / 100));
+  // Other people's deposits move this while the screen is open, so it counts
+  // across rather than snapping to the new figure.
+  const shownPercent = useCountUp(progressPercent);
 
   if (wizard) {
     return (
@@ -363,7 +368,7 @@ export function BankScreen({
 
       {position ? (
         <div className="bank-state bank-active-state">
-          <strong>{Math.round(progressPercent)}%</strong>
+          <strong>{Math.round(shownPercent)}%</strong>
           <div className="bank-cycle-metrics">
             <CycleMetric
               value={position.queue_position ? `#${position.queue_position}` : '—'}

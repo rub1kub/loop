@@ -36,8 +36,10 @@
     var(--tg-content-safe-area-inset-left, 0px),
     var(--loop-safe-area-inset-left, 0px)
   );
+  --motion-press: 80ms;
   --motion-fast: 140ms;
   --motion-base: 240ms;
+  --motion-slow: 420ms;
   --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-apple-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
 }
@@ -426,6 +428,75 @@ summary:focus-visible .disclosure-indicator {
   font-weight: 660;
   letter-spacing: -0.06em;
   line-height: 1;
+}
+
+/* Every control answers a touch. One shared rule beats a dozen bespoke ones,
+   and the transform is the only property here that never triggers layout. */
+.primary-button,
+.secondary-button,
+.profile-row,
+.settings-row,
+.result-proof,
+.choice-list button,
+.round-icon-button,
+.tab-bar button,
+.bank-cycle-metrics > * {
+  transition:
+    transform var(--motion-fast) var(--ease-apple),
+    opacity var(--motion-fast) ease;
+}
+
+.primary-button:active,
+.secondary-button:active,
+.profile-row:active,
+.settings-row:active,
+.result-proof:active,
+.choice-list button:active,
+.round-icon-button:active {
+  transform: scale(0.97);
+  transition-duration: var(--motion-press);
+}
+
+.tab-bar button:active {
+  transform: scale(0.92);
+  transition-duration: var(--motion-press);
+}
+
+/* The active tab's icon marks the change once, rather than only recolouring. */
+.tab-bar button.active svg {
+  animation: tab-mark var(--motion-base) var(--ease-apple-spring);
+}
+
+@keyframes tab-mark {
+  0% {
+    transform: scale(0.82) rotate(-8deg);
+  }
+  60% {
+    transform: scale(1.08) rotate(2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* The waiting ring slows as it turns, so it reads as working rather than as a
+   loop that has forgotten about you. */
+.waiting-ring {
+  animation:
+    spin 1.15s cubic-bezier(0.5, 0.05, 0.4, 0.95) infinite,
+    waiting-breathe 2.3s ease-in-out infinite;
+}
+
+@keyframes waiting-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    scale: 0.96;
+  }
+  50% {
+    opacity: 1;
+    scale: 1.04;
+  }
 }
 
 .tab-bar {
