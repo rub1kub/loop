@@ -3150,7 +3150,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .prelaunch-hero h1 {
-  margin: 6px 0 4px;
+  margin: 6px 0 20px;
   font-size: 74px;
   font-weight: 760;
   letter-spacing: -0.06em;
@@ -3169,7 +3169,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .prelaunch-date {
-  margin: 0 0 18px;
+  margin: 16px 0 0;
   color: var(--dim);
   font-size: 11px;
   font-weight: 780;
@@ -3211,19 +3211,6 @@ details[open] > summary .disclosure-indicator svg {
   letter-spacing: 0.16em;
 }
 
-.prelaunch-pulse {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 20px 0 0;
-  color: var(--dim);
-  font-size: 12px;
-}
-
-.prelaunch-pulse b {
-  color: var(--ink);
-}
-
 .prelaunch section:not(.prelaunch-hero) {
   border: 1px solid var(--edge);
   border-radius: 22px;
@@ -3231,31 +3218,37 @@ details[open] > summary .disclosure-indicator svg {
   padding: 20px;
 }
 
-.prelaunch section header h2 {
-  margin: 6px 0 8px;
-  font-size: 21px;
+.prelaunch section h2 {
+  margin: 0 0 14px;
+  font-size: 19px;
   letter-spacing: -0.04em;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
-.prelaunch section header p {
-  margin: 0 0 16px;
+.prelaunch-plush p {
+  margin: -8px 0 14px;
   color: var(--dim);
   font-size: 12.5px;
   line-height: 1.5;
 }
 
-.prelaunch-link {
-  overflow: hidden;
-  margin-bottom: 12px;
-  border: 1px dashed var(--edge);
-  border-radius: 12px;
-  padding: 12px 14px;
-  color: var(--ink);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  text-overflow: ellipsis;
+.prelaunch-board-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.prelaunch-board-head small {
+  color: var(--muted);
+  font-size: 11px;
   white-space: nowrap;
+}
+
+.prelaunch-markets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .prelaunch-link-actions {

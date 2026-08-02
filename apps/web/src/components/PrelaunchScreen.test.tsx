@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Prelaunch, Profile } from '../types';
+import type { Prelaunch } from '../types';
 import { PrelaunchScreen } from './PrelaunchScreen';
 
 vi.mock('../telegram', () => ({
@@ -9,31 +9,6 @@ vi.mock('../telegram', () => ({
   openPlatformLink: vi.fn(),
   telegram: () => undefined,
 }));
-
-const profile: Profile = {
-  user: {
-    id: 'u1',
-    telegram_id: 1,
-    username: 'guest',
-    first_name: 'Гость',
-    photo_url: null,
-    onboarding_seen: false,
-    onboarding_enabled: true,
-    result_notifications_enabled: true,
-  },
-  wallet: null,
-  bank: { active: 0, completed: 0, total: 0 },
-  duel: { active: 0, completed: 0, total: 0 },
-  plush_brick: {
-    verified: false,
-    balance_nano: 0,
-    holder: false,
-    duel_fee_bps: 1000,
-    fee_discount_active: false,
-  },
-  app_open: false,
-  launch_at: '2026-08-08T16:00:00Z',
-};
 
 const prelaunch: Prelaunch = {
   launch_at: '2026-08-08T16:00:00Z',
@@ -62,21 +37,22 @@ describe('PrelaunchScreen', () => {
   });
 
   it('counts down to the launch moment and shows the race', () => {
-    render(<PrelaunchScreen profile={profile} prelaunch={prelaunch} />);
+    render(<PrelaunchScreen prelaunch={prelaunch} />);
 
-    expect(screen.getByText('ОТКРЫТИЕ · 8 АВГУСТА · 19:00 МСК')).toBeInTheDocument();
+    expect(screen.getByText('8 АВГУСТА · 19:00 МСК')).toBeInTheDocument();
     const clock = screen.getByRole('timer');
     expect(clock.textContent).toContain('02');
     expect(clock.textContent).toContain('03');
     expect(clock.textContent).toContain('04');
     expect(clock.textContent).toContain('05');
 
-    expect(screen.getByTestId('referral-url').textContent).toContain(
-      't.me/getloopbot?startapp=ref_abc123',
-    );
     expect(screen.getByText('2% с каждого взноса приглашённых. Навсегда.')).toBeInTheDocument();
     expect(screen.getByText('@akxiemy')).toBeInTheDocument();
-    expect(screen.getByText('41')).toBeInTheDocument();
+    expect(screen.getByText('Уже внутри: 41')).toBeInTheDocument();
+    // Покупка кирпича ведёт на маркеты, а не на сайт.
+    expect(screen.getByRole('button', { name: 'dTrade' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'RedoTrade' })).toBeInTheDocument();
+    expect(screen.getByText(/выкупается с рынка/)).toBeInTheDocument();
     // Ranked second in the list even though rank says third overall.
     expect(screen.getByText(/место №3/)).toBeInTheDocument();
   });
@@ -84,7 +60,7 @@ describe('PrelaunchScreen', () => {
   it('ticks live and never reloads before the moment', () => {
     const reload = vi.fn();
     vi.stubGlobal('location', { ...window.location, reload });
-    render(<PrelaunchScreen profile={profile} prelaunch={prelaunch} />);
+    render(<PrelaunchScreen prelaunch={prelaunch} />);
 
     const seconds = () => screen.getByRole('timer').textContent ?? '';
     expect(seconds()).toContain('05');

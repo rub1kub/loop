@@ -164,7 +164,7 @@ export default function App() {
   if (state.loading) return <Loader />;
 
   if (state.profile && !state.profile.app_open && state.prelaunch) {
-    return <PrelaunchScreen profile={state.profile} prelaunch={state.prelaunch} />;
+    return <PrelaunchScreen prelaunch={state.prelaunch} />;
   }
 
   if (state.error && !state.profile) {
