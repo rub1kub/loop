@@ -6,6 +6,14 @@ import type { Ball } from './jarPhysics';
 
 const NEW_TOKEN_INTERVAL = 0.095;
 
+// Normalized from TON's official Gram Diamond Mark asset. Keeping the original
+// paths matters here: the small white spark in the upper-right is what makes a
+// GRAM token read as GRAM instead of as the old triangular TON glyph.
+const GRAM_DIAMOND_PATH =
+  'M66.523 11.333H33.477c-4.401 0-6.601 0-8.592.616a13.792 13.792 0 0 0-4.808 2.625c-1.594 1.341-2.784 3.192-5.164 6.894L4.408 37.81c-1.572 2.446-2.358 3.67-2.572 4.956a6.322 6.322 0 0 0 .362 3.37c.482 1.212 1.51 2.24 3.567 4.296l39.033 39.034c1.821 1.82 2.731 2.731 3.781 3.072.924.3 1.918.3 2.842 0 1.05-.34 1.96-1.251 3.78-3.072l39.035-39.034c2.056-2.056 3.084-3.084 3.566-4.296a6.32 6.32 0 0 0 .362-3.37c-.214-1.287-1-2.51-2.572-4.956L85.087 21.47c-2.38-3.703-3.57-5.554-5.164-6.895a13.792 13.792 0 0 0-4.808-2.625c-1.99-.616-4.191-.616-8.592-.616z';
+const GRAM_SPARK_PATH =
+  'M60.268 24.224c.537-1.45 2.59-1.45 3.126 0l3.71 10.027a2.2 2.2 0 0 0 1.3 1.3l10.027 3.71c1.451.537 1.451 2.59 0 3.126l-10.027 3.71a2.2 2.2 0 0 0-1.3 1.3l-3.71 10.027c-.537 1.451-2.59 1.451-3.126 0l-3.71-10.027a2.2 2.2 0 0 0-1.3-1.3l-10.027-3.71c-1.451-.537-1.451-2.589 0-3.126l10.027-3.71a2.2 2.2 0 0 0 1.3-1.3l3.71-10.027z';
+
 /**
  * The jar's contents: a pit of grey balls that settles like a liquid. Gravity
  * follows the device tilt on phones where Telegram exposes the gyroscope
@@ -30,6 +38,8 @@ export function JarBalls({ fill }: { fill: number }) {
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const pile = createPile(0, 0);
+    const gramDiamond = new Path2D(GRAM_DIAMOND_PATH);
+    const gramSpark = new Path2D(GRAM_SPARK_PATH);
     let dpr = 1;
     let raf = 0;
     let pourClock = 0;
@@ -61,14 +71,7 @@ export function JarBalls({ fill }: { fill: number }) {
     };
     resize();
 
-    /**
-     * The GRAM diamond, stamped into a ball.
-     *
-     * Drawn as a path rather than loaded as an image: a ball is a handful of
-     * pixels across, and the mark has to stay crisp at any radius and on any
-     * pixel ratio. Flat top, point at the bottom, centre seam — the silhouette
-     * is what reads at this size, so nothing finer is worth the fill.
-     */
+    /** The official GRAM diamond and spark, stamped into a physical token. */
     const stampGram = (ball: Ball) => {
       const facing = Math.cos(ball.facePhase);
       const visibility = Math.abs(facing);
@@ -89,26 +92,18 @@ export function JarBalls({ fill }: { fill: number }) {
         return;
       }
 
-      const s = ball.r * 0.56;
-      const top = -s * 0.62;
       context.save();
       context.translate(ball.x, ball.y);
       context.rotate(ball.angle);
       context.scale(facing, 1);
       context.globalAlpha = facing < 0 ? 0.2 + visibility * 0.16 : 0.28 + visibility * 0.28;
-      context.beginPath();
-      context.moveTo(-s, top);
-      context.lineTo(s, top);
-      context.lineTo(0, s);
-      context.closePath();
-      context.fillStyle = 'rgba(0, 0, 0, 0.62)';
-      context.fill();
-      context.beginPath();
-      context.moveTo(0, top);
-      context.lineTo(0, s);
-      context.lineWidth = Math.max(0.6, ball.r * 0.08);
-      context.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-      context.stroke();
+      const markScale = (ball.r * 1.16) / 100;
+      context.scale(markScale, markScale);
+      context.translate(-50, -52);
+      context.fillStyle = 'rgba(10, 10, 10, 0.82)';
+      context.fill(gramDiamond);
+      context.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      context.fill(gramSpark);
       context.restore();
     };
 
