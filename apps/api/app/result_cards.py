@@ -6,6 +6,7 @@ import math
 import random
 import threading
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -674,3 +675,173 @@ def _render_result_card(facts: CardFacts) -> bytes:
         optimize=True,
     )
     return output.getvalue()
+
+
+LAUNCH_MONTHS_RU = (
+    "",
+    "ЯНВАРЯ",
+    "ФЕВРАЛЯ",
+    "МАРТА",
+    "АПРЕЛЯ",
+    "МАЯ",
+    "ИЮНЯ",
+    "ИЮЛЯ",
+    "АВГУСТА",
+    "СЕНТЯБРЯ",
+    "ОКТЯБРЯ",
+    "НОЯБРЯ",
+    "ДЕКАБРЯ",
+)
+
+
+def launch_moment_ru(launch_at: datetime) -> tuple[str, str]:
+    """The launch moment in Moscow words: ("5 АВГУСТА", "19:30 МСК").
+
+    Derived rather than typed, so moving the launch is an env change and not
+    an image-editing session.
+    """
+    if launch_at.tzinfo is None:
+        launch_at = launch_at.replace(tzinfo=UTC)
+    moscow = launch_at.astimezone(timezone(timedelta(hours=3)))
+    return (
+        f"{moscow.day} {LAUNCH_MONTHS_RU[moscow.month]}",
+        f"{moscow.hour}:{moscow.minute:02d} МСК",
+    )
+
+
+def render_invite_card(*, first_name: str, username: str | None, launch_at: datetime) -> bytes:
+    """The card a person sends when they invite someone in.
+
+    Personalised with the inviter's name: an invitation from a person carries
+    further than an advert from a bot.
+    """
+    with RENDER_LIMIT:
+        date_text, time_text = launch_moment_ru(launch_at)
+        image = Image.new("RGBA", (CARD_WIDTH, CARD_HEIGHT), (0, 0, 0, 255))
+        draw = ImageDraw.Draw(image)
+        seed = int.from_bytes(hashlib.sha256(first_name.encode()).digest()[:8], "big")
+        rng = random.Random(seed)  # noqa: S311 - deterministic visual noise, not security
+        for _ in range(520):
+            shade = rng.randint(14, 42)
+            draw.point(
+                (rng.randrange(CARD_WIDTH), rng.randrange(CARD_HEIGHT)),
+                fill=(shade, shade, shade, rng.randint(60, 150)),
+            )
+
+        draw.text(
+            (70, 64), "∞  LOOP", font=_font(30, bold=True), fill=(245, 245, 245), anchor="la"
+        )
+        draw.text(
+            (CARD_WIDTH - 70, 68),
+            "ПРИГЛАШЕНИЕ",
+            font=_font(20, bold=True),
+            fill=(142, 142, 142),
+            anchor="ra",
+        )
+
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 360),
+            "ФИНАНСОВАЯ ПИРАМИДА",
+            font=_font(30, bold=True),
+            fill=(150, 150, 150),
+        )
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 520),
+            "ОТКРЫТИЕ",
+            font=_font(72, bold=True),
+            fill=(250, 250, 250),
+        )
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 660),
+            date_text,
+            font=_font(104, bold=True),
+            fill=(255, 255, 255),
+        )
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 780),
+            time_text,
+            font=_font(44, bold=True),
+            fill=(200, 200, 200),
+        )
+
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 960),
+            "Очередь выплат на TON. Код открыт.",
+            font=_font(28),
+            fill=(150, 150, 150),
+        )
+
+        draw.line((70, 1176, CARD_WIDTH - 70, 1176), fill=(54, 54, 54), width=2)
+        inviter = f"@{username}" if username else first_name
+        draw.text(
+            (70, 1222),
+            f"ТЕБЯ ЗОВЁТ  {inviter.upper()}",
+            font=_font(22, bold=True),
+            fill=(212, 212, 212),
+            anchor="la",
+        )
+        draw.text(
+            (CARD_WIDTH - 70, 1222),
+            "ВХОД УЖЕ ОТКРЫТ",
+            font=_font(22, bold=True),
+            fill=(212, 212, 212),
+            anchor="ra",
+        )
+        draw.text(
+            (CARD_WIDTH // 2, 1318),
+            "LOOP · TONSUITE.ORG",
+            font=_font(16, bold=True),
+            fill=(95, 95, 95),
+            anchor="ma",
+        )
+
+        output = io.BytesIO()
+        image.convert("RGB").save(output, format="JPEG", quality=CARD_JPEG_QUALITY, optimize=True)
+        return output.getvalue()
+
+
+def invite_caption(launch_at: datetime) -> str:
+    date_text, time_text = launch_moment_ru(launch_at)
+    return (
+        f"LOOP открывается {date_text.lower()} в {time_text.removesuffix(' МСК')} МСК.\n\n"
+        "Финансовая пирамида на TON: заходишь, вносишь, встаёшь в очередь — "
+        "выплата приходит сама.\n\n"
+        "Вход уже открыт. Займи место до толпы."
+    )
+
+
+def build_invite_inline(
+    *,
+    settings: Settings,
+    referral_code: str,
+    first_name: str,
+    username: str | None,
+    launch_at: datetime,
+) -> InlineQueryResultPhoto:
+    image_url = f"{settings.public_origin}/api/v1/prelaunch/cards/{referral_code}.jpg"
+    del first_name, username  # drawn into the image itself
+    return InlineQueryResultPhoto(
+        id=f"invite-{referral_code}",
+        photo_url=image_url,
+        thumbnail_url=image_url,
+        photo_width=CARD_WIDTH,
+        photo_height=CARD_HEIGHT,
+        title="Приглашение в LOOP",
+        description="Открытие · вход уже открыт",
+        caption=invite_caption(launch_at),
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="ЗАНЯТЬ МЕСТО",
+                        url=result_deep_link(settings, referral_code),
+                    )
+                ]
+            ]
+        ),
+    )

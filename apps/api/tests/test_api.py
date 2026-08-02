@@ -697,3 +697,35 @@ async def test_prelaunch_ranks_inviters_and_accrues_nothing_for_zero(client, app
     other_view = (await client.get("/api/v1/prelaunch", headers=other)).json()
     assert other_view["rank"] is None
     assert other_view["invited"] == 0
+
+
+@pytest.mark.asyncio
+async def test_invite_card_is_public_and_keyed_by_referral_code(client, app, monkeypatch) -> None:
+    """Telegram fetches the card unauthenticated; a stranger learns only a name."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("LOOP_LAUNCH_AT", "2026-08-05T16:30:00Z")
+    get_settings.cache_clear()
+
+    headers = await authenticate(client)
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == 777000111))
+        assert user is not None
+        from app.referrals import get_or_create_referral_code
+
+        code = (await get_or_create_referral_code(db, user.id)).code
+        await db.commit()
+
+    image = await client.get(f"/api/v1/prelaunch/cards/{code}.jpg")
+    assert image.status_code == 200
+    assert image.headers["content-type"] == "image/jpeg"
+    assert image.content[:3] == b"\xff\xd8\xff"
+
+    assert (await client.get("/api/v1/prelaunch/cards/nope0000.jpg")).status_code == 404
+
+    # Without a bot the share degrades loudly, not silently.
+    denied = await client.post("/api/v1/prelaunch/share", headers=headers)
+    assert denied.status_code == 503
+
+    monkeypatch.delenv("LOOP_LAUNCH_AT", raising=False)
+    get_settings.cache_clear()

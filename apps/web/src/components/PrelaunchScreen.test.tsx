@@ -7,7 +7,12 @@ import { PrelaunchScreen } from './PrelaunchScreen';
 vi.mock('../telegram', () => ({
   haptic: vi.fn(),
   openPlatformLink: vi.fn(),
+  sharePreparedResult: vi.fn(),
   telegram: () => undefined,
+}));
+
+vi.mock('../api', () => ({
+  api: { prepareInviteShare: vi.fn() },
 }));
 
 const prelaunch: Prelaunch = {

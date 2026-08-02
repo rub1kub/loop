@@ -403,6 +403,10 @@ export const api = {
     return prelaunchSchema.parse(await request<unknown>('/prelaunch'));
   },
 
+  async prepareInviteShare(): Promise<PreparedResultShare> {
+    return await request('/prelaunch/share', { method: 'POST', body: '{}' });
+  },
+
   async rating(): Promise<Rating> {
     return ratingSchema.parse(await request<unknown>('/rating'));
   },

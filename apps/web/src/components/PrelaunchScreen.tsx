@@ -1,7 +1,8 @@
 import { Copy, ShareNetwork, TrendUp } from '@phosphor-icons/react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { haptic, openPlatformLink, telegram } from '../telegram';
+import { api } from '../api';
+import { haptic, openPlatformLink, sharePreparedResult, telegram } from '../telegram';
 import type { Prelaunch } from '../types';
 
 const SHARE_TEXT = 'LOOP открывается 5 августа в 19:30 МСК. Займи место до толпы — вот моя ссылка.';
@@ -63,8 +64,18 @@ export function PrelaunchScreen({ prelaunch }: { prelaunch: Prelaunch }) {
 
   const left = target === null ? null : remainingUntil(target, now);
 
-  const share = () => {
+  const share = async () => {
     haptic('selection');
+    // The card first: a designed invitation with a button lands better than a
+    // bare link. Anything failing along the way falls back to the plain share.
+    try {
+      const prepared = await api.prepareInviteShare();
+      if (await sharePreparedResult(prepared.prepared_message_id, prepared.fallback_query)) {
+        return;
+      }
+    } catch {
+      // fall through to the link share
+    }
     const url = `https://t.me/share/url?url=${encodeURIComponent(prelaunch.referral_url)}&text=${encodeURIComponent(SHARE_TEXT)}`;
     const app = telegram();
     if (app?.openTelegramLink) app.openTelegramLink(url);
@@ -112,7 +123,7 @@ export function PrelaunchScreen({ prelaunch }: { prelaunch: Prelaunch }) {
       <section className="prelaunch-referral">
         <h2>2% с каждого взноса приглашённых. Навсегда.</h2>
         <div className="prelaunch-link-actions">
-          <button className="primary-button" onClick={share}>
+          <button className="primary-button" onClick={() => void share()}>
             <ShareNetwork size={18} aria-hidden="true" /> ПРИГЛАСИТЬ
           </button>
           <button

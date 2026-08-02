@@ -3,9 +3,11 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 
 import httpx
+from aiogram.exceptions import TelegramAPIError
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
+from starlette.concurrency import run_in_threadpool
 
 from .control_state import effective_contract_fee, ensure_mode_enabled
 from .dependencies import Config, CurrentUser, Db
@@ -26,6 +28,7 @@ from .modules.duel.models import (
 )
 from .rating import build_rating
 from .referrals import get_or_create_referral_code
+from .result_cards import build_invite_inline, render_invite_card
 from .schemas import (
     AuthResponse,
     ContractStateView,
@@ -35,6 +38,7 @@ from .schemas import (
     PlushBrickView,
     PrelaunchLeaderView,
     PrelaunchView,
+    PreparedResultShareView,
     ProfileView,
     RatingView,
     ReferralRewardView,
@@ -692,6 +696,94 @@ async def prelaunch(user: CurrentUser, db: Db, settings: Config) -> PrelaunchVie
             if leader_id in leaders
         ],
         participants=participants,
+    )
+
+
+@router.get("/prelaunch/cards/{code}.jpg", include_in_schema=False)
+async def prelaunch_card_image(code: str, db: Db, settings: Config) -> Response:
+    """The invite card, addressable by referral code.
+
+    Public on purpose: Telegram's servers fetch this URL to build the shared
+    message, and the code is the one piece of the referral that is already
+    meant to travel. It resolves to nothing but a first name and a username.
+    """
+    if not 4 <= len(code) <= 24 or not all(
+        character.isalnum() or character in "-_" for character in code
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "card not found")
+    referral = await db.get(ReferralCode, code)
+    if referral is None or settings.launch_at is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "card not found")
+    owner = await db.get(User, referral.owner_user_id)
+    if owner is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "card not found")
+    content = await run_in_threadpool(
+        render_invite_card,
+        first_name=owner.first_name,
+        username=owner.username,
+        launch_at=settings.launch_at,
+    )
+    # The name on it can change and the date is env-driven — cache briefly.
+    return Response(
+        content=content,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@router.post("/prelaunch/share", response_model=PreparedResultShareView)
+async def prepare_invite_share(
+    user: CurrentUser,
+    db: Db,
+    settings: Config,
+    request: Request,
+) -> PreparedResultShareView:
+    """A ready-to-send invitation: the card, the pitch, the ЗАНЯТЬ МЕСТО button."""
+    if settings.launch_at is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "there is nothing to announce")
+    bot = request.app.state.bot
+    if bot is None:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Telegram sharing is unavailable"
+        )
+    try:
+        referral = await get_or_create_referral_code(db, user.id)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Telegram sharing is temporarily unavailable",
+        ) from exc
+    try:
+        prepared = await bot.save_prepared_inline_message(
+            user_id=user.telegram_id,
+            result=build_invite_inline(
+                settings=settings,
+                referral_code=referral.code,
+                first_name=user.first_name,
+                username=user.username,
+                launch_at=settings.launch_at,
+            ),
+            allow_user_chats=True,
+            allow_bot_chats=False,
+            allow_group_chats=True,
+            allow_channel_chats=True,
+        )
+    except TelegramAPIError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Telegram sharing is temporarily unavailable"
+        ) from exc
+    expiration = prepared.expiration_date
+    if isinstance(expiration, int):
+        expiration = datetime.fromtimestamp(expiration, UTC)
+    elif isinstance(expiration, timedelta):
+        expiration = datetime.now(UTC) + expiration
+    elif expiration.tzinfo is None:
+        expiration = expiration.replace(tzinfo=UTC)
+    await db.commit()
+    return PreparedResultShareView(
+        prepared_message_id=prepared.id,
+        expiration_date=expiration,
+        fallback_query=f"invite {referral.code}",
     )
 
 

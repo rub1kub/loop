@@ -40,12 +40,13 @@ from .modules.duel.models import (
     OfferState,
 )
 from .referrals import get_or_create_referral_code
-from .result_cards import build_result_inline
+from .result_cards import build_invite_inline, build_result_inline
 
 logger = structlog.get_logger()
 
 INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
 RESULT_PATTERN = re.compile(r"^\s*result\s+([A-Za-z0-9_-]{20,32})\s*$", re.IGNORECASE)
+INVITE_PATTERN = re.compile(r"^\s*invite\s+[A-Za-z0-9_-]{4,24}\s*$", re.IGNORECASE)
 BOT_NAME = "LOOP"
 BOT_DESCRIPTION = (
     "LOOP — живой цикл внутри Telegram. В BANK новые взносы постепенно наполняют "
@@ -216,6 +217,31 @@ def create_dispatcher(
 
     @router.inline_query()
     async def inline_result_or_duel(query: InlineQuery) -> None:
+        invite_match = INVITE_PATTERN.match(query.query)
+        if invite_match and settings.launch_at is not None:
+            async with session_factory() as db:
+                creator = await db.scalar(
+                    select(User).where(User.telegram_id == query.from_user.id)
+                )
+                if creator is None:
+                    await query.answer([], cache_time=1, is_personal=True)
+                    return
+                referral = await get_or_create_referral_code(db, creator.id)
+            await query.answer(
+                [
+                    build_invite_inline(
+                        settings=settings,
+                        referral_code=referral.code,
+                        first_name=creator.first_name,
+                        username=creator.username,
+                        launch_at=settings.launch_at,
+                    )
+                ],
+                cache_time=30,
+                is_personal=True,
+            )
+            return
+
         result_match = RESULT_PATTERN.match(query.query)
         if result_match:
             async with session_factory() as db:
