@@ -43,6 +43,32 @@ export function JarBalls({ fill }: { fill: number }) {
     };
     resize();
 
+    /**
+     * The GRAM diamond, stamped into a ball.
+     *
+     * Drawn as a path rather than loaded as an image: a ball is a handful of
+     * pixels across, and the mark has to stay crisp at any radius and on any
+     * pixel ratio. Flat top, point at the bottom, centre seam — the silhouette
+     * is what reads at this size, so nothing finer is worth the fill.
+     */
+    const stampGram = (x: number, y: number, r: number) => {
+      const s = r * 0.56;
+      const top = -s * 0.62;
+      context.beginPath();
+      context.moveTo(x - s, y + top);
+      context.lineTo(x + s, y + top);
+      context.lineTo(x, y + s);
+      context.closePath();
+      context.fillStyle = 'rgba(0, 0, 0, 0.34)';
+      context.fill();
+      context.beginPath();
+      context.moveTo(x, y + top);
+      context.lineTo(x, y + s);
+      context.lineWidth = Math.max(0.6, r * 0.09);
+      context.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      context.stroke();
+    };
+
     const draw = () => {
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, pile.width, pile.height);
@@ -52,6 +78,7 @@ export function JarBalls({ fill }: { fill: number }) {
         context.fillStyle = ball.shade;
         context.globalAlpha = 0.92;
         context.fill();
+        stampGram(ball.x, ball.y, ball.r);
       }
       context.globalAlpha = 1;
     };

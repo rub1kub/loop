@@ -2369,6 +2369,12 @@ details[open] > summary .disclosure-indicator svg {
   border-bottom: 1px solid var(--line);
 }
 
+/* The block below the list opens with its own rule, and the two of them drew
+   a pair of parallel lines with a gap between. */
+.rating-list article:last-child {
+  border-bottom: 0;
+}
+
 .rating-list article.is-me {
   background: var(--ink);
   color: var(--surface);
