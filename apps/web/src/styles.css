@@ -529,7 +529,10 @@ summary:focus-visible .disclosure-indicator {
   min-height: 168px;
   max-height: 520px;
   flex: 1 1 auto;
-  margin: 7px 0 0;
+  /* Deliberately wider than the text column so the jar bleeds past the screen
+     padding. Without auto side margins a block that wide starts at the left
+     content edge and leans right — the jar sat 8px off centre. */
+  margin: 7px auto 0;
   overflow: hidden;
   place-items: center;
   border: 0;
@@ -596,41 +599,20 @@ summary:focus-visible .disclosure-indicator {
   pointer-events: none;
 }
 
-.bank-sand-level {
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.bank-ball-canvas {
   position: absolute;
   inset: 0;
-  overflow: hidden;
-  transform: translate3d(0, calc(100% - var(--bank-fill, 0%)), 0);
-  transition: transform 6s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform;
-}
-
-.bank-sand-material {
-  position: absolute;
-  top: -7%;
-  left: -22%;
-  display: block;
-  width: 144%;
-  height: 110%;
-  max-width: none;
-  object-fit: cover;
-  object-position: center top;
-  animation: bank-sand-drift 9s ease-in-out infinite alternate;
-  pointer-events: none;
-  user-select: none;
-  will-change: transform;
-}
-
-@keyframes bank-sand-drift {
-  0% {
-    transform: translate3d(-4%, 3px, 0) rotate(-0.35deg);
-  }
-  50% {
-    transform: translate3d(0, -3px, 0) rotate(0.2deg);
-  }
-  100% {
-    transform: translate3d(4%, 3px, 0) rotate(0.4deg);
-  }
+  width: 100%;
+  height: 100%;
 }
 
 .bank-state {
@@ -807,10 +789,12 @@ summary:focus-visible .disclosure-indicator {
   display: none;
 }
 
+/* Telegram's Close pill and chevron occupy the top strip, so the card's own
+   button clears them rather than hiding underneath. */
 .result-close {
   position: absolute;
   z-index: 2;
-  top: calc(var(--safe-top) + 10px);
+  top: calc(var(--safe-top) + 58px);
   right: max(20px, calc(var(--safe-right) + 14px));
   display: grid;
   width: 44px;

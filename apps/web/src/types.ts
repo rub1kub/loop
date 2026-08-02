@@ -36,6 +36,19 @@ export interface TelegramWebApp {
   switchInlineQuery?(query: string, chooseChatTypes?: string[]): void;
   shareMessage?(messageId: string, callback?: (shared: boolean) => void): void;
   requestWriteAccess?(callback?: (allowed: boolean) => void): void;
+  /** Bot API 8.0+. Angles are radians, unlike the W3C sensor API's degrees. */
+  DeviceOrientation?: {
+    isStarted: boolean;
+    absolute: boolean;
+    alpha: number;
+    beta: number;
+    gamma: number;
+    start(
+      params: { refresh_rate?: number; need_absolute?: boolean },
+      callback?: (started: boolean) => void,
+    ): void;
+    stop(callback?: (stopped: boolean) => void): void;
+  };
   BackButton: {
     show(): void;
     hide(): void;

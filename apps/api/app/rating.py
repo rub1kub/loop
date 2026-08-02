@@ -356,6 +356,7 @@ async def build_rating(
             )
         )
     )
+    registered_users = int(await db.scalar(select(func.count()).select_from(User)) or 0)
     since = current - timedelta(hours=24)
     bank_proofs_24h = await db.scalar(
         select(func.count()).select_from(BankPayout).where(BankPayout.created_at >= since)
@@ -375,7 +376,10 @@ async def build_rating(
         leaderboard=ranked[:50],
         circle=[entry for entry in ranked if entry.user_id in circle_ids][:20],
         pulse=RatingPulseView(
-            active_participants=len(active_bank_users | active_duel_users),
+            # Everyone who has ever opened the bot, not just those mid-position:
+            # next to "в очереди" the old figure was the same people counted a
+            # second time, so the two tiles always agreed and said nothing.
+            active_participants=registered_users,
             active_bank=len(active_bank_users),
             active_duels=len(active_duel_users),
             proofs_24h=int(bank_proofs_24h or 0) + int(duel_proofs_24h or 0),

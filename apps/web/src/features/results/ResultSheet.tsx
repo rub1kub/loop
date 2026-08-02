@@ -1,11 +1,19 @@
 import { ArrowSquareOut, ShareNetwork, X } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { api } from '../../api';
-import { haptic, isMockTelegram, openPlatformLink, sharePreparedResult } from '../../telegram';
+import {
+  haptic,
+  isMockTelegram,
+  openPlatformLink,
+  setBackAction,
+  sharePreparedResult,
+} from '../../telegram';
 import { formatGram } from '../../ton';
 import type { ResultCard } from '../../types';
+
+import { Confetti } from '../../components/Confetti';
 
 export function ResultSheet({
   card,
@@ -17,6 +25,11 @@ export function ResultSheet({
   onError: (message: string) => void;
 }) {
   const [sharing, setSharing] = useState(false);
+
+  // Telegram's own Close sits in the same corner as ours and wins the tap.
+  // Its Back button is the one control guaranteed not to overlap, and here it
+  // means the same thing: dismiss the card, return to BANK.
+  useEffect(() => setBackAction(() => void onClose()), [onClose]);
   const entry = card.mode === 'bank_entry';
   const modeLabel = entry
     ? 'Ты в очереди.'
@@ -52,6 +65,7 @@ export function ResultSheet({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
+      <Confetti />
       <motion.section
         className="result-sheet"
         aria-labelledby="result-title"

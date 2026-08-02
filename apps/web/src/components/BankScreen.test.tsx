@@ -76,7 +76,7 @@ describe('BankScreen', () => {
     expect(screen.queryByTestId('bank-sand-level')).not.toBeInTheDocument();
   });
 
-  it('maps on-chain progress to the live sand level and explains the target', () => {
+  it('shows on-chain progress and explains the target', () => {
     render(
       <BankScreen
         profile={profile}
@@ -87,9 +87,12 @@ describe('BankScreen', () => {
       />,
     );
 
+    // Under the jar the percent stands alone: the amounts, the status and the
+    // payout promise all said what the number already says.
     expect(screen.getByText('37%')).toBeVisible();
-    expect(screen.getByText(/Собрано 1[,.]11 из 3 GRAM/)).toBeVisible();
-    expect(screen.getByTestId('bank-sand-level').style.getPropertyValue('--bank-fill')).toBe('37%');
+    expect(screen.queryByText(/Собрано/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Позиция ждёт новых взносов/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/выплата отправится автоматически/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /собрано 37%/i }));
     expect(

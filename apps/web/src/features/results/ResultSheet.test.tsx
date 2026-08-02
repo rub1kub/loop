@@ -16,6 +16,9 @@ vi.mock('../../telegram', () => ({
   haptic: vi.fn(),
   isMockTelegram: () => false,
   openPlatformLink: vi.fn(),
+  // Telegram's own Close overlaps the card's, so the sheet claims the Back
+  // button while it is open and releases it on unmount.
+  setBackAction: () => () => undefined,
   sharePreparedResult: telegramMocks.sharePreparedResult,
 }));
 

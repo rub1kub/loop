@@ -1,7 +1,6 @@
 import { ArrowRight, ArrowSquareOut, Check, X } from '@phosphor-icons/react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../api';
@@ -14,6 +13,8 @@ import {
   parseGram,
 } from '../../ton';
 import type { BankLimit, BankPosition, BankPreview, Profile, RatingPulse } from '../../types';
+
+import { JarBalls } from './JarBalls';
 
 type WizardStep = 'amount' | 'multiplier' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
@@ -207,10 +208,6 @@ export function BankScreen({
 
   const progress = position?.progress_bps ?? 0;
   const progressPercent = Math.min(100, Math.max(0, progress / 100));
-  const sandStyle = { '--bank-fill': `${progressPercent}%` } as CSSProperties;
-  const fundingCopy = position
-    ? `Собрано ${formatGram(position.funded_amount_nano, 3)} из ${formatGram(position.target_payout_nano, 3)} GRAM. На 100% выплата отправится автоматически.`
-    : '';
 
   if (wizard) {
     return (
@@ -357,9 +354,7 @@ export function BankScreen({
           <img className="bank-jar-shell" src="/assets/empty-jar.webp" alt="" />
           {position && (
             <span className="bank-sand-chamber">
-              <span className="bank-sand-level" data-testid="bank-sand-level" style={sandStyle}>
-                <img className="bank-sand-material" src="/assets/bank-sand-wave.webp" alt="" />
-              </span>
+              <JarBalls fill={progressPercent} />
             </span>
           )}
           {position && <img className="bank-jar-glass" src="/assets/empty-jar.webp" alt="" />}
@@ -369,7 +364,6 @@ export function BankScreen({
       {position ? (
         <div className="bank-state bank-active-state">
           <strong>{Math.round(progressPercent)}%</strong>
-          <p>{fundingCopy}</p>
           <div className="bank-cycle-metrics">
             <CycleMetric
               value={position.queue_position ? `#${position.queue_position}` : '—'}

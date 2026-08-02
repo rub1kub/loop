@@ -120,8 +120,12 @@ async def test_rating_starts_transparently_without_money_metrics(client) -> None
     assert rating["me"]["score"] == 0
     assert rating["me"]["rank"] == 1
     assert rating["me"]["proofs"] == 0
+    # active_participants counts everyone registered, so authenticating for
+    # this request is itself the one participant. The other tiles stay at zero
+    # because nothing has been staked — which is the distinction the two tiles
+    # exist to draw.
     assert rating["pulse"] == {
-        "active_participants": 0,
+        "active_participants": 1,
         "active_bank": 0,
         "active_duels": 0,
         "proofs_24h": 0,
