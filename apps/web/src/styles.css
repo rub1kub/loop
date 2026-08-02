@@ -683,7 +683,11 @@ summary:focus-visible .disclosure-indicator {
 .confetti-canvas {
   position: fixed;
   inset: 0;
-  z-index: 1;
+  /* Above every sheet, card and toast. Celebrations fire at the same moment
+     as the card announcing what happened, and underneath it the burst was
+     invisible — which is the one moment it exists for. It can never swallow a
+     tap: the canvas takes no pointer events. */
+  z-index: 300;
   width: 100%;
   height: 100%;
   pointer-events: none;

@@ -243,8 +243,8 @@ def result_caption(card: ResultCard) -> str:
     if card.mode == "bank":
         return (
             f"Мой цикл в LOOP замкнулся.\n\n"
-            f"Выплата: {payout} GRAM\n"
-            f"Разница к входу: +{result} GRAM\n\n"
+            f"Выплата: +{payout} GRAM\n"
+            f"Сверх взноса: +{result} GRAM\n\n"
             "Результат подтверждён."
         )
     return (
@@ -281,7 +281,7 @@ def build_result_inline(
         description=(
             f"{format_gram(card.contributed_nano)} GRAM в очереди"
             if entry
-            else f"+{format_gram(card.result_nano)} GRAM"
+            else f"+{format_gram(card.payout_nano)} GRAM"
         ),
         caption=result_caption(card),
         reply_markup=InlineKeyboardMarkup(
@@ -623,14 +623,14 @@ def _render_result_card(facts: CardFacts) -> bytes:
     _centered_text(
         draw,
         (CARD_WIDTH // 2, 790),
-        f"+{format_gram(facts.result_nano)} GRAM",
+        f"+{format_gram(facts.payout_nano)} GRAM",
         font=_font(82, bold=True),
         fill=(255, 255, 255),
     )
     _centered_text(
         draw,
         (CARD_WIDTH // 2, 868),
-        "РАЗНИЦА К ВХОДУ",
+        "ВЫПЛАЧЕНО",
         font=_font(20, bold=True),
         fill=(135, 135, 135),
     )
@@ -644,7 +644,9 @@ def _render_result_card(facts: CardFacts) -> bytes:
     draw.line((70, 1200, CARD_WIDTH - 70, 1200), fill=(54, 54, 54), width=2)
     draw.text(
         (70, 1246),
-        f"ВЫПЛАТА  {format_gram(facts.payout_nano)} GRAM",
+        # The headline now carries the payout, so the footer carries what went
+        # in — repeating the payout twice told the reader nothing new.
+        f"ВЗНОС  {format_gram(facts.contributed_nano)} GRAM",
         font=_font(22, bold=True),
         fill=(212, 212, 212),
         anchor="la",

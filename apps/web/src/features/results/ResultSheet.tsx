@@ -99,9 +99,9 @@ export function ResultSheet({
             <strong>
               {entry
                 ? `${formatGram(card.contributed_nano, 3)} GRAM`
-                : `+${formatGram(card.result_nano, 3)} GRAM`}
+                : `+${formatGram(card.payout_nano, 3)} GRAM`}
             </strong>
-            <small>{entry ? 'ВЫПЛАЧЕНО 0 GRAM' : 'РАЗНИЦА К ВХОДУ'}</small>
+            <small>{entry ? 'ВЫПЛАЧЕНО 0 GRAM' : 'ВЫПЛАЧЕНО'}</small>
           </div>
         )}
 
@@ -111,7 +111,7 @@ export function ResultSheet({
           <strong>
             {entry
               ? `${formatGram(card.contributed_nano, 3)} GRAM`
-              : `+${formatGram(card.result_nano, 3)} GRAM`}
+              : `+${formatGram(card.payout_nano, 3)} GRAM`}
           </strong>
           <span>
             {entry
