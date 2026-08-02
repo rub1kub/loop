@@ -104,3 +104,15 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   no transaction builder, chain projection or contract state consumes the displayed value.
 - The VPS deploy helper now detects a pending production environment before its same-commit
   shortcut, so configuration-only releases are applied atomically instead of being skipped.
+
+## 2026-08-03: one-decision DUEL interface
+
+- Removed the decorative player diagram, duplicate condition cards and repeated live-state copy.
+- Idle DUEL now shows only the editable stake, equal start, one sentence and the primary action.
+- Search and matched states use one large value, one timer and only the action available at that
+  stage; the reveal action becomes primary after the stake window closes.
+- Merged fee math, timeout rules and confirmed additions into one collapsed `ПРАВИЛА` section.
+- Raised the client-side minimum to 0.5 GRAM per player so it matches the active 1 GRAM equal-pool
+  constraint instead of allowing a transaction that the service would reject.
+- Focused component tests and mobile Chromium/WebKit DUEL flows pass; desktop and 390 px visual
+  inspections cover idle, rules, searching, matched, add-GRAM, invite and result states.

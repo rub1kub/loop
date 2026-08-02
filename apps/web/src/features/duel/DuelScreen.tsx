@@ -1,11 +1,8 @@
 import {
   ArrowRight,
   ArrowSquareOut,
-  HourglassSimple,
   PaperPlaneTilt,
   ShieldCheck,
-  User,
-  UserPlus,
   WarningCircle,
 } from '@phosphor-icons/react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
@@ -201,7 +198,7 @@ export function DuelScreen({
       setBusy(true);
       setMode(selectedMode);
       try {
-        if (requestedStake < 250_000_000) throw new Error('Минимальная ставка — 0,25 GRAM');
+        if (requestedStake < 500_000_000) throw new Error('Минимальная ставка — 0,5 GRAM');
         if (isMockTelegram()) {
           setMockSearching(true);
           setMockExpiresAt(Date.now() + 15 * 60_000);
@@ -449,6 +446,7 @@ export function DuelScreen({
       : activeOffer
         ? Date.parse(activeOffer.expires_at)
         : mockExpiresAt;
+  const liveMode = activeOffer?.mode ?? mode;
 
   return (
     <section className="screen duel-screen" aria-labelledby="duel-title">
@@ -456,24 +454,6 @@ export function DuelScreen({
         <p className="eyebrow">ИГРА 1 НА 1</p>
         <h1 id="duel-title">DUEL</h1>
       </header>
-
-      {status !== 'idle' && status !== 'result' && (
-        <div className={`duel-stage is-${status}`}>
-          <span className="player-node">
-            <User aria-hidden="true" />
-          </span>
-          <span className="duel-link">
-            <HourglassSimple aria-hidden="true" />
-          </span>
-          <span className="player-node opponent">
-            {status === 'matched' || invite ? (
-              <User weight="fill" aria-hidden="true" />
-            ) : (
-              <UserPlus aria-hidden="true" />
-            )}
-          </span>
-        </div>
-      )}
 
       {status === 'idle' && (
         <div className="duel-form">
@@ -483,7 +463,8 @@ export function DuelScreen({
                 ВЫЗОВ ОТ {invite.creator_name.toUpperCase()} · {chance / 100}/
                 {(10_000 - chance) / 100}
               </p>
-              <strong>Перед принятием ещё раз проверь сумму и выплату.</strong>
+              <strong>{formatGram(terms.stake, 3)} GRAM</strong>
+              <span>ТВОЯ СТАВКА</span>
             </div>
           ) : (
             <>
@@ -509,35 +490,9 @@ export function DuelScreen({
             </>
           )}
 
-          <dl className="duel-terms duel-primary-terms" aria-label="Главные условия DUEL">
-            <Term label="Твоя ставка" value={`${formatGram(terms.stake, 3)} GRAM`} />
-            <Term label="Победитель получит" value={`${formatGram(payoutNano, 3)} GRAM`} />
-          </dl>
-          <p className="duel-deadline-rule">
-            <ShieldCheck aria-hidden="true" />
-            Старт — 50/50. Пока идёт таймер, каждый может увеличить свою долю. Победитель получает
-            общий банк.
+          <p className="duel-simple-rule">
+            Соперник внесёт столько же. Победитель заберёт общий банк.
           </p>
-          <details className="technical-details duel-breakdown">
-            <summary>
-              <span>КАК ЭТО РАБОТАЕТ</span>
-              <DisclosureIndicator />
-            </summary>
-            <p>
-              Соперник ставит столько же. После встречи у вас есть минута: можно подождать или
-              добавить GRAM к своей стороне. Затем каждый открывает результат в кошельке. Если этого
-              не сделает никто, ставки вернутся.
-            </p>
-            <dl className="detail-list">
-              <Term label="Общий банк" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
-              <Term label="Комиссия" value={`${formatGram(feeNano, 4)} GRAM`} />
-              <Term label="Разница при победе" value={`+${formatGram(profitNano, 3)} GRAM`} />
-            </dl>
-            <p>
-              Если результат откроет только один игрок, он победит. До встречи поиск можно
-              остановить и вернуть ставку через кошелёк.
-            </p>
-          </details>
         </div>
       )}
 
@@ -545,44 +500,41 @@ export function DuelScreen({
         <div className="duel-live-state">
           <p className="eyebrow">
             {status === 'matched'
-              ? 'СОПЕРНИК НАЙДЕН'
+              ? duelBoosting
+                ? 'СОПЕРНИК НАЙДЕН'
+                : activeDuel?.own_revealed
+                  ? 'РЕЗУЛЬТАТ ОТКРЫТ'
+                  : 'ВРЕМЯ ВЫШЛО'
               : offerExpired
                 ? 'СРОК ВЫЗОВА ИСТЁК'
-                : mode === 'direct'
+                : liveMode === 'direct'
                   ? 'ПРЯМОЙ ВЫЗОВ'
-                  : 'ПОИСК СОПЕРНИКА'}
+                  : 'ИЩЕМ СОПЕРНИКА'}
           </p>
-          <strong>
-            {status === 'matched'
-              ? duelBoosting
-                ? 'Можно подождать или увеличить свою долю.'
-                : 'Время вышло. Открой результат.'
-              : offerExpired
-                ? 'Вызов закончился. Ставка цела.'
-                : mode === 'direct'
-                  ? 'Вызов готов. Отправь его другу.'
-                  : 'Ищем игрока с такой же ставкой.'}
-          </strong>
-          <div className="duel-live-numbers">
-            <span>
-              <b>
-                {status === 'matched' && activeDuel
-                  ? `${Math.round(activeDuel.chance_bps / 100)} / ${Math.round((10_000 - activeDuel.chance_bps) / 100)}`
-                  : `${formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM`}
-              </b>
-              <small>{status === 'matched' ? 'ТЫ / СОПЕРНИК' : 'ТВОЯ СТАВКА'}</small>
-            </span>
-            <span>
-              <b>{timeLeft(activeDeadline, now)}</b>
-              <small>
-                {status === 'matched'
-                  ? duelBoosting
-                    ? 'НА УСИЛЕНИЕ'
-                    : 'ОТКРЫТЬ ДО'
-                  : 'ДО ИСТЕЧЕНИЯ'}
-              </small>
-            </span>
+          <div className="duel-live-focus">
+            <strong>
+              {status === 'matched' && activeDuel
+                ? `${Math.round(activeDuel.chance_bps / 100)} / ${Math.round((10_000 - activeDuel.chance_bps) / 100)}`
+                : `${formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM`}
+            </strong>
+            <span>{status === 'matched' ? 'ТЫ / СОПЕРНИК' : 'ТВОЯ СТАВКА'}</span>
           </div>
+          <p className="duel-live-timer">
+            <strong>{timeLeft(activeDeadline, now)}</strong>
+            <span>
+              {status === 'matched'
+                ? duelBoosting
+                  ? 'ДО КОНЦА СТАВОК'
+                  : activeDuel?.own_revealed
+                    ? 'ЖДЁМ СОПЕРНИКА'
+                    : 'ОТКРЫТЬ РЕЗУЛЬТАТ'
+                : offerExpired
+                  ? 'СТАВКУ МОЖНО ВЕРНУТЬ'
+                  : liveMode === 'direct'
+                    ? 'ВЫЗОВ ГОТОВ'
+                    : 'ПОИСК ИДЁТ'}
+            </span>
+          </p>
           {status === 'matched' && activeDuel && duelBoosting && (
             <>
               {!boostPanelOpen && (
@@ -593,7 +545,7 @@ export function DuelScreen({
                     haptic('selection');
                   }}
                 >
-                  УСИЛИТЬ СВОЮ СТОРОНУ
+                  УВЕЛИЧИТЬ ШАНС
                 </button>
               )}
               {boostPanelOpen && (
@@ -634,43 +586,75 @@ export function DuelScreen({
                     disabled={busy}
                     onClick={() => void boostDuel()}
                   >
-                    {busy ? 'ОТПРАВЛЯЕМ…' : 'ПОДТВЕРДИТЬ УСИЛЕНИЕ'}
+                    {busy ? 'ОТПРАВЛЯЕМ…' : 'ДОБАВИТЬ GRAM'}
                   </button>
                   <button className="duel-boost-dismiss" onClick={() => setBoostPanelDuelId(null)}>
                     НЕ СЕЙЧАС
                   </button>
                 </motion.div>
               )}
-              {activeDuel.boost_events.length > 0 && !boostPanelOpen && (
-                <details className="technical-details duel-events-details">
-                  <summary>
-                    <span>ХОД ДУЭЛИ · {activeDuel.boost_events.length}</span>
-                    <DisclosureIndicator />
-                  </summary>
-                  <ol className="duel-boost-events" aria-label="Подтверждённые усиления">
-                    {activeDuel.boost_events
-                      .slice()
-                      .reverse()
-                      .map((event) => (
-                        <li key={event.tx_hash}>
-                          <span>{event.side === 'you' ? 'Ты' : 'Соперник'}</span>
-                          <strong>
-                            +{formatGram(event.amount_nano, 3)} GRAM ·{' '}
-                            {(event.chance_bps / 100).toFixed(1).replace('.', ',')}%
-                          </strong>
-                        </li>
-                      ))}
-                  </ol>
-                </details>
-              )}
             </>
           )}
-          {status === 'searching' && !offerExpired && (
-            <p className="duel-live-help">
-              Поиск можно остановить. Ставка вернётся после подтверждения в кошельке.
-            </p>
-          )}
         </div>
+      )}
+
+      {status !== 'result' && !boostPanelOpen && (
+        <details className="technical-details duel-rules">
+          <summary>
+            <span>ПРАВИЛА</span>
+            <DisclosureIndicator />
+          </summary>
+          <div className="duel-rules-body">
+            <p>
+              Соперник вносит столько же. После встречи у обоих есть минута, чтобы увеличить свой
+              шанс.
+            </p>
+            <dl className="detail-list">
+              <Term
+                label="Общий банк"
+                value={`${formatGram(activeDuel?.total_pool_nano ?? activeOffer?.total_pool_nano ?? terms.totalPool, 3)} GRAM`}
+              />
+              <Term
+                label="Победитель получит"
+                value={`${formatGram(activeDuel?.payout_nano ?? activeOffer?.payout_nano ?? payoutNano, 3)} GRAM`}
+              />
+              <Term
+                label="Комиссия"
+                value={`${formatGram(
+                  (activeDuel?.total_pool_nano ?? activeOffer?.total_pool_nano ?? terms.totalPool) -
+                    (activeDuel?.payout_nano ?? activeOffer?.payout_nano ?? payoutNano),
+                  4,
+                )} GRAM`}
+              />
+              {status === 'idle' && (
+                <Term label="Разница при победе" value={`+${formatGram(profitNano, 3)} GRAM`} />
+              )}
+            </dl>
+            <p>
+              Затем каждый открывает результат. Открыл один — он выигрывает. Не открыл никто —
+              ставки возвращаются.
+            </p>
+            {activeDuel && activeDuel.boost_events.length > 0 && (
+              <>
+                <p className="duel-rules-caption">ХОД ДУЭЛИ</p>
+                <ol className="duel-boost-events" aria-label="Подтверждённые усиления">
+                  {activeDuel.boost_events
+                    .slice()
+                    .reverse()
+                    .map((event) => (
+                      <li key={event.tx_hash}>
+                        <span>{event.side === 'you' ? 'Ты' : 'Соперник'}</span>
+                        <strong>
+                          +{formatGram(event.amount_nano, 3)} GRAM ·{' '}
+                          {(event.chance_bps / 100).toFixed(1).replace('.', ',')}%
+                        </strong>
+                      </li>
+                    ))}
+                </ol>
+              </>
+            )}
+          </div>
+        </details>
       )}
 
       {status === 'result' && latestDuel && (
@@ -680,7 +664,7 @@ export function DuelScreen({
           <strong>{`${resultWon ? '+' : '−'}${formatGram(resultDeltaNano, 3)} GRAM`}</strong>
           <p className="duel-result-note">
             {resultWon
-              ? `В кошелёк пришло ${formatGram(latestDuel.payout_nano, 3)} GRAM — ставка вернулась вместе с выигрышем.`
+              ? `В кошелёк пришло ${formatGram(latestDuel.payout_nano, 3)} GRAM.`
               : `Ставка ${formatGram(latestDuel.stake_nano, 3)} GRAM ушла сопернику.`}
           </p>
         </div>
@@ -725,7 +709,7 @@ export function DuelScreen({
                 markDuelSeen(latestDuel.id);
                 setSeenDuelId(latestDuel.id);
                 setMessage('');
-                if (!resultWon) setStake('0.25');
+                if (!resultWon) setStake('0.5');
                 haptic('selection');
               }}
             >
@@ -771,7 +755,7 @@ export function DuelScreen({
           )}
         {activeActionLabel && (
           <button
-            className="secondary-button"
+            className={status === 'matched' ? 'primary-button' : 'secondary-button'}
             disabled={busy}
             onClick={() => {
               if (mockSearching && !activeOffer) {

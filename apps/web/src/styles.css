@@ -1396,75 +1396,9 @@ details[open] > summary .disclosure-indicator svg {
   align-items: center;
 }
 
-.duel-stage {
-  display: grid;
-  width: 100%;
-  grid-template-columns: 82px minmax(62px, 1fr) 82px;
-  align-items: center;
-  margin-top: 34px;
-}
-
-.player-node {
-  display: grid;
-  width: 82px;
-  height: 82px;
-  place-items: center;
-  border: 1px solid var(--edge);
-  border-radius: 50%;
-  background: var(--surface);
-}
-
-.player-node svg {
-  width: 31px;
-  height: 31px;
-}
-
-.player-node.opponent {
-  color: var(--dim);
-}
-
-.duel-stage.is-searching .player-node:first-child,
-.duel-stage.is-matched .player-node,
-.duel-stage.is-result .player-node {
-  border-color: var(--ink);
-}
-
-.duel-link {
-  position: relative;
-  display: grid;
-  height: 50px;
-  place-items: center;
-  color: var(--dim);
-}
-
-.duel-link::before,
-.duel-link::after {
-  position: absolute;
-  width: calc(50% - 18px);
-  height: 1px;
-  background: var(--edge);
-  content: '';
-}
-
-.duel-link::before {
-  left: 0;
-}
-.duel-link::after {
-  right: 0;
-}
-
-.duel-link svg {
-  width: 22px;
-  height: 22px;
-}
-
-.duel-stage.is-searching .duel-link svg {
-  animation: spin 1.8s ease-in-out infinite;
-}
-
 .duel-form {
   width: 100%;
-  margin-top: 20px;
+  margin-top: 26px;
 }
 
 .stake-input-heading {
@@ -1553,97 +1487,35 @@ details[open] > summary .disclosure-indicator svg {
   letter-spacing: 0.1em;
 }
 
-.duel-terms {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 15px 0 0;
-  gap: 8px;
-}
-
-.duel-terms div {
-  display: grid;
-  min-height: 48px;
-  align-content: center;
-  gap: 3px;
-  border: 0;
-}
-
-.duel-terms div:nth-child(odd) {
-  padding-right: 10px;
-}
-
-.duel-terms div:nth-child(even) {
-  padding-left: 12px;
-  border-left: 0;
-}
-
-.duel-terms dd {
-  text-align: left;
-}
-
-.duel-primary-terms {
-  grid-template-columns: 1fr;
-  gap: 1px;
-  padding: 7px 2px 0;
-}
-
-.duel-primary-terms div,
-.duel-primary-terms div:nth-child(odd),
-.duel-primary-terms div:nth-child(even) {
-  display: flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 0;
-  border: 0;
-}
-
-.duel-primary-terms dd {
-  font-weight: 650;
-  text-align: right;
-}
-
-.duel-deadline-rule {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 13px 0 0;
+.duel-simple-rule {
+  max-width: 32ch;
+  margin: 16px 2px 0;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
-}
-
-.duel-deadline-rule svg {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-}
-
-.duel-breakdown > p {
-  margin: 4px 0 13px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.duel-breakdown {
-  padding: 0 14px;
-  border: 0;
-  border-radius: 16px;
-  background: var(--surface);
 }
 
 .invite-banner {
-  padding: 14px 0 16px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  display: grid;
+  justify-items: center;
+  padding: 20px 0 8px;
+  text-align: center;
 }
 
 .invite-banner strong {
   display: block;
-  margin-top: 7px;
-  font-size: 16px;
+  margin-top: 18px;
+  font-size: clamp(38px, 12vw, 52px);
+  font-weight: 620;
+  letter-spacing: -0.06em;
+}
+
+.invite-banner > span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.14em;
 }
 
 .duel-live-state,
@@ -1651,54 +1523,45 @@ details[open] > summary .disclosure-indicator svg {
   display: grid;
   width: 100%;
   justify-items: center;
-  margin-top: 37px;
+  margin-top: 30px;
   text-align: center;
 }
 
-.duel-live-state > strong {
-  margin-top: 9px;
-  font-size: 22px;
-  font-weight: 620;
-  letter-spacing: -0.04em;
-}
-
-.duel-live-numbers {
+.duel-live-focus {
   display: grid;
-  width: min(100%, 310px);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 14px;
+  justify-items: center;
+  gap: 5px;
+  margin-top: 22px;
 }
 
-.duel-live-numbers span {
-  display: grid;
-  min-height: 58px;
-  place-content: center;
-  gap: 4px;
-  padding: 8px 10px;
-  border: 1px solid var(--edge);
-  border-radius: 15px;
-}
-
-.duel-live-numbers b {
-  color: var(--ink);
-  font-size: 16px;
+.duel-live-focus strong {
+  font-size: clamp(44px, 14vw, 62px);
   font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.07em;
+  line-height: 1;
 }
 
-.duel-live-numbers small {
+.duel-live-focus span,
+.duel-live-timer span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 760;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.14em;
 }
 
-.duel-live-help {
-  max-width: 320px;
-  margin: 13px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
+.duel-live-timer {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 18px 0 0;
+}
+
+.duel-live-timer strong {
+  font-size: 20px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
 }
 
 .duel-boost-panel {
@@ -1791,18 +1654,38 @@ details[open] > summary .disclosure-indicator svg {
   letter-spacing: 0.1em;
 }
 
-.duel-events-details {
-  width: min(100%, 360px);
+.duel-rules {
+  width: 100%;
+  flex: 0 0 auto;
   margin-top: 8px;
-  border-bottom: 0;
+  border: 0;
 }
 
-.duel-events-details summary {
-  min-height: 42px;
+.duel-rules summary {
+  min-height: 44px;
 }
 
-.duel-events-details[open] {
-  padding-bottom: 4px;
+.duel-rules-body {
+  padding-bottom: 6px;
+}
+
+.duel-rules-body > p {
+  margin: 2px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.duel-rules-body .detail-list {
+  margin-bottom: 12px;
+}
+
+.duel-rules-caption {
+  padding-top: 4px;
+  color: var(--ink) !important;
+  font-size: 10px !important;
+  font-weight: 760;
+  letter-spacing: 0.14em;
 }
 
 .duel-boost-events {
@@ -2997,19 +2880,6 @@ details[open] > summary .disclosure-indicator svg {
     font-size: 32px;
   }
 
-  .duel-stage {
-    margin-top: 21px;
-  }
-
-  .player-node {
-    width: 70px;
-    height: 70px;
-  }
-
-  .duel-stage {
-    grid-template-columns: 70px minmax(52px, 1fr) 70px;
-  }
-
   .duel-form {
     margin-top: 8px;
   }
@@ -3030,26 +2900,13 @@ details[open] > summary .disclosure-indicator svg {
     margin-top: 7px;
   }
 
-  .duel-primary-terms {
-    margin-top: 8px;
-    padding-top: 2px;
-  }
-
-  .duel-terms div {
-    min-height: 41px;
-  }
-
-  .duel-primary-terms div {
-    min-height: 27px;
-  }
-
-  .duel-deadline-rule {
+  .duel-simple-rule {
     margin-top: 6px;
     font-size: 13px;
     line-height: 1.35;
   }
 
-  .duel-breakdown summary {
+  .duel-rules summary {
     min-height: 40px;
   }
 
@@ -3131,7 +2988,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 @media (max-width: 350px), (max-height: 720px) {
-  .duel-breakdown summary,
+  .duel-rules summary,
   .duel-direct-action {
     min-height: 44px;
   }

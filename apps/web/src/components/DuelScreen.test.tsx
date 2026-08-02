@@ -112,15 +112,11 @@ describe('DuelScreen', () => {
     expect(screen.getByText('РАВНЫЙ СТАРТ')).toBeInTheDocument();
     expect(screen.getByLabelText('Ставка в GRAM')).toBeInTheDocument();
     expect(screen.getByText('ВВЕДИ СУММУ')).toBeInTheDocument();
-    expect(screen.getByText('Твоя ставка')).toBeInTheDocument();
-    expect(screen.getByText('1 GRAM')).toBeInTheDocument();
-    expect(screen.getByText('Победитель получит')).toBeInTheDocument();
-    expect(screen.getByText(/Старт — 50\/50/)).toBeVisible();
-    expect(screen.getByText(/каждый может увеличить свою долю/)).toBeVisible();
-    expect(screen.getByText('КАК ЭТО РАБОТАЕТ').closest('details')).not.toHaveAttribute('open');
-    expect(screen.getByText('КАК ЭТО РАБОТАЕТ').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
+    expect(screen.getByText(/Соперник внесёт столько же/)).toBeVisible();
+    expect(screen.getByText('ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
     expect(screen.getByText('Комиссия')).not.toBeVisible();
-    expect(screen.getByText(/Если результат откроет только один игрок/)).not.toBeVisible();
+    expect(screen.getByText(/Открыл один — он выигрывает/)).not.toBeVisible();
     expect(screen.queryByText(/Можно закрыть приложение/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeInTheDocument();
     expect(screen.queryByText(/Одинаковая ставка/)).not.toBeInTheDocument();
@@ -135,10 +131,11 @@ describe('DuelScreen', () => {
     );
 
     expect(screen.getByText(/ВЫЗОВ ОТ МИША/)).toBeInTheDocument();
-    expect(screen.getByText('Твоя ставка')).toBeInTheDocument();
     expect(screen.getByText('1 GRAM')).toBeInTheDocument();
-    expect(screen.getByText('1,95 GRAM')).toBeInTheDocument();
-    expect(screen.getByText('Комиссия')).not.toBeVisible();
+    expect(screen.getByText('ТВОЯ СТАВКА')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('ПРАВИЛА'));
+    expect(screen.getByText('1,95 GRAM')).toBeVisible();
+    expect(screen.getByText('Комиссия')).toBeVisible();
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
   });
 
@@ -182,7 +179,7 @@ describe('DuelScreen', () => {
       settled_tx_hash: null,
       settlement_proof_url: null,
     };
-    render(
+    const { rerender } = render(
       <DuelScreen
         profile={profile}
         offers={[offer]}
@@ -192,18 +189,37 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByText('Можно подождать или увеличить свою долю.')).toBeVisible();
     expect(screen.getByText('50 / 50')).toBeVisible();
+    expect(screen.getByText('ДО КОНЦА СТАВОК')).toBeVisible();
     expect(screen.queryByLabelText('Сумма усиления в GRAM')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'УСИЛИТЬ СВОЮ СТОРОНУ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'УВЕЛИЧИТЬ ШАНС' }));
 
     expect(screen.getByLabelText('Сумма усиления в GRAM')).toHaveValue('0.5');
     expect(screen.getByText('Твоя доля станет')).toHaveTextContent('60,0%');
-    expect(screen.getByRole('button', { name: 'ПОДТВЕРДИТЬ УСИЛЕНИЕ' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ДОБАВИТЬ GRAM' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'НЕ СЕЙЧАС' }));
     expect(screen.queryByLabelText('Сумма усиления в GRAM')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).not.toBeInTheDocument();
+
+    rerender(
+      <DuelScreen
+        profile={profile}
+        offers={[offer]}
+        duels={[
+          {
+            ...duel,
+            state: 'revealing',
+            boost_deadline: new Date(Date.now() - 1_000).toISOString(),
+          },
+        ]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'УВЕЛИЧИТЬ ШАНС' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).toHaveClass('primary-button');
   });
 
   it('marks a failure as a failure instead of stamping it with a verified shield', () => {
@@ -215,7 +231,7 @@ describe('DuelScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }));
 
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent('Минимальная ставка — 0,25 GRAM');
+    expect(alert).toHaveTextContent('Минимальная ставка — 0,5 GRAM');
     expect(alert).toHaveClass('is-error');
   });
 
@@ -315,7 +331,7 @@ describe('DuelScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'ЗАКРЫТЬ' }));
 
-    expect(screen.getByLabelText('Ставка в GRAM')).toHaveValue('0.25');
+    expect(screen.getByLabelText('Ставка в GRAM')).toHaveValue('0.5');
   });
 
   it('drops the waiting metaphor once the duel is settled', () => {
