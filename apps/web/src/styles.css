@@ -530,9 +530,12 @@ summary:focus-visible .disclosure-indicator {
   max-height: 520px;
   flex: 1 1 auto;
   /* Deliberately wider than the text column so the jar bleeds past the screen
-     padding. Without auto side margins a block that wide starts at the left
-     content edge and leans right — the jar sat 8px off centre. */
-  margin: 7px auto 0;
+     padding. The screen is a flex column, and auto side margins collapse to
+     zero when the item is wider than the container — the jar then started at
+     the left content edge and leaned right by the whole padding. align-self
+     centres it and lets it overflow evenly on both sides. */
+  align-self: center;
+  margin: 7px 0 0;
   overflow: hidden;
   place-items: center;
   border: 0;
@@ -726,7 +729,10 @@ summary:focus-visible .disclosure-indicator {
 
 .sheet {
   width: min(100%, 430px);
-  max-height: min(calc(100dvh - var(--safe-top) - 8px), 800px);
+  /* Telegram floats its Close pill and menu over the top of the web view, so
+     a sheet that rises to the safe-area edge puts its own title and close
+     button underneath them. Stop short of that strip. */
+  max-height: min(calc(100dvh - var(--safe-top) - 56px), 800px);
   margin: 0 auto;
   overflow-y: auto;
   padding: 20px max(21px, calc(var(--safe-right) + 16px)) calc(var(--safe-bottom) + 24px)
@@ -741,7 +747,7 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .keyboard-open .sheet {
-  max-height: calc(var(--loop-visual-height, 100dvh) - var(--safe-top) - 8px);
+  max-height: calc(var(--loop-visual-height, 100dvh) - var(--safe-top) - 56px);
   padding-bottom: 20px;
 }
 
