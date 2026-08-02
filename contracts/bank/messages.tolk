@@ -35,6 +35,21 @@ struct (0x4C424E07) BankSetOwner {
     owner: address
 }
 
+/// Returns a waiting position's collected funding to the person who owns it
+/// and closes the position. The owner may only send it back — never to
+/// themselves — so winding a queue down can never take anyone's money.
+struct (0x4C424E08) BankRefundPosition {
+    queryId: uint64
+    positionId: uint64
+}
+
+/// Attached to a refund so an indexer can tell it from a payout.
+struct (0x4C424E14) BankRefund {
+    queryId: uint64
+    positionId: uint64
+    amount: coins
+}
+
 struct (0x4C424E11) BankPayout {
     queryId: uint64
     positionId: uint64

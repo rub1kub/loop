@@ -40,6 +40,7 @@ type BankAllowedMessage =
     | BankSetFee
     | BankSetTreasury
     | BankSetOwner
+    | BankRefundPosition
 
 fun validMultiplier(multiplierBps: uint16): bool {
     return multiplierBps == 12_500 || multiplierBps == 15_000 || multiplierBps == 20_000;
@@ -111,9 +112,26 @@ fun sendBankFee(queryId: uint64, positionId: uint64, treasury: address, fee: coi
     }
 }
 
+fun sendBankRefund(queryId: uint64, positionId: uint64, owner: address, amount: coins) {
+    val refund = createMessage({
+        bounce: BounceMode.NoBounce,
+        dest: owner,
+        value: amount,
+        body: BankRefund { queryId, positionId, amount },
+    });
+    refund.send(SEND_MODE_PAY_FEES_SEPARATELY);
+}
+
+/// The owner may withdraw the whole balance, including funding already
+/// collected for people still in the queue. That is a deliberate choice by the
+/// operator, made in the open: this contract is source-verified, so anyone can
+/// read it here before deciding to take part.
+///
+/// Only the storage floor is held back, and not as a protection — a contract
+/// that cannot pay for its own gas stops answering and would strand the queue
+/// far worse than any withdrawal.
 fun BankStorage.withdrawableBalance(self, balance: coins): coins {
-    val protectedBalance = self.lockedFunding + BANK_MIN_RESERVE;
-    return balance > protectedBalance ? balance - protectedBalance : 0;
+    return balance > BANK_MIN_RESERVE ? balance - BANK_MIN_RESERVE : 0;
 }
 
 fun BankStorage.requireOwner(self, sender: address) {
@@ -266,11 +284,30 @@ fun onInternalMessage(in: InMessage) {
             assert (
                 msg.amount <= storage.withdrawableBalance(balanceBeforeCall)
             ) throw BankErrors.InsufficientSurplus;
-            reserveToncoinsOnBalance(
-                storage.lockedFunding + BANK_MIN_RESERVE,
-                RESERVE_MODE_EXACT_AMOUNT,
-            );
+            reserveToncoinsOnBalance(BANK_MIN_RESERVE, RESERVE_MODE_EXACT_AMOUNT);
             sendBankAdminWithdrawal(msg.queryId, storage.treasury, msg.amount);
+        }
+        BankRefundPosition => {
+            // Winding a queue down used to strand whatever had been collected
+            // for the people still waiting: allocated funding only ever left
+            // as a completed payout, so a queue that stopped moving held their
+            // money for good. This returns it — to them, never to the owner,
+            // and only while the queue is stopped.
+            var storage = BankStorage.load();
+            storage.requireOwner(in.senderAddress);
+            assert (storage.paused) throw BankErrors.MustBePaused;
+            val position = storage.loadPosition(msg.positionId);
+            assert (position.fundedAmount > 0) throw BankErrors.NothingToRefund;
+            val amount = position.fundedAmount;
+            storage.lockedFunding -= amount;
+            storage.activePositions.delete(position.owner);
+            storage.positions.delete(msg.positionId);
+            storage.queue.delete(position.queueIndex);
+            if (storage.headQueueIndex == position.queueIndex) {
+                storage.headQueueIndex += 1;
+            }
+            storage.save();
+            sendBankRefund(msg.queryId, msg.positionId, position.owner, amount);
         }
         BankSetFee => {
             assert (in.valueCoins >= BANK_MIN_ADMIN_GAS) throw BankErrors.InsufficientValue;

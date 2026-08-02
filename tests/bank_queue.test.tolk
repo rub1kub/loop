@@ -411,9 +411,15 @@ get fun `test BANK surplus withdrawal cannot touch position funding`() {
     expect(contract.contractConfig().lockedFunding).toEqual(ton("1"));
 }
 
-get fun `test BANK withdrawal boundary excludes locked value and inbound gas`() {
+get fun `test BANK withdrawal reaches collected funding and stops at the storage floor`() {
+    // The owner can take the whole balance, funding already collected for the
+    // queue included. This is the operator's stated choice, in the open, and
+    // the only thing held back is the gas floor — a contract that cannot
+    // answer strands the queue worse than any withdrawal.
     val (lockedContract, owner, _, first, _) = setupBank(0);
     openPosition(lockedContract, first, POSITION_A, ton("1"), 20_000);
+    // One deposit at x2 seeds its own position with what the fee leaves.
+    expect(lockedContract.contractConfig().lockedFunding).toEqual(ton("1"));
     expect(
         lockedContract.sendSetBankPaused(
             owner.address,
@@ -423,12 +429,12 @@ get fun `test BANK withdrawal boundary excludes locked value and inbound gas`() 
         ),
     ).toHaveSuccessfulTx<SetBankPaused>();
     val lockedBalance = testing.getAccountBalance(lockedContract.address);
-    val lockedFree = lockedBalance - ton("1") - ton("0.2");
+    val lockedFree = lockedBalance - ton("0.2");
     expect(
         lockedContract.sendBankWithdrawSurplus(
             owner.address,
             2_112,
-            lockedFree + 1,
+            lockedFree + ton("0.06"),
             { value: ton("0.05") },
         ),
     ).toHaveFailedTx({ exitCode: BankErrors.InsufficientSurplus });
@@ -680,4 +686,75 @@ fun setupBankAtCompleted(
     val deployed = contract.deploy(owner.address, { value: ton("1") });
     expect(deployed).toHaveSuccessfulDeploy({ to: contract.address });
     return (contract, owner, feeCollector, first, second);
+}
+
+get fun `test the owner can return collected funding to a waiting position`() {
+    val (contract, owner, _, first, second) = setupBankAtCompleted(1_000, 0);
+    expect(
+        openPosition(contract, first, POSITION_A, ton("1"), 20_000),
+    ).toHaveSuccessfulTx<CreatePosition>();
+    // Each deposit leaves 0.9 after the fee. The first has no earlier position
+    // to fill so it seeds its own; the second goes to the first as well, which
+    // leaves 1.8 collected against a target of two.
+    expect(
+        openPosition(contract, second, POSITION_B, ton("1"), 20_000),
+    ).toHaveSuccessfulTx<CreatePosition>();
+    expect(contract.contractConfig().lockedFunding).toEqual(ton("1.8"));
+
+    // Refunds only while the queue is stopped, and only by the owner.
+    expect(
+        contract.sendBankRefundPosition(owner.address, 3_001, POSITION_A, { value: ton("0.05") }),
+    ).toHaveFailedTx({ exitCode: BankErrors.MustBePaused });
+    expect(
+        contract.sendSetBankPaused(owner.address, 3_002, true, { value: ton("0.02") }),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+    expect(
+        contract.sendBankRefundPosition(first.address, 3_003, POSITION_A, { value: ton("0.05") }),
+    ).toHaveFailedTx({ exitCode: BankErrors.NotOwner });
+
+    // The money goes to whoever owns the position, never to the owner.
+    val refunded = contract.sendBankRefundPosition(
+        owner.address,
+        3_004,
+        POSITION_A,
+        { value: ton("0.05") },
+    );
+    expect(refunded).toHaveSuccessfulTx<BankRefundPosition>();
+    expect(refunded).toHaveTx<BankRefund>({ from: contract.address, to: first.address });
+    expect(refunded).toNotHaveTx<BankRefund>({ from: contract.address, to: owner.address });
+    expect(contract.contractConfig().lockedFunding).toEqual(0);
+
+    // Nothing collected means nothing to return, and a position is refundable
+    // only once.
+    expect(
+        contract.sendBankRefundPosition(owner.address, 3_005, POSITION_B, { value: ton("0.05") }),
+    ).toHaveFailedTx({ exitCode: BankErrors.NothingToRefund });
+    expect(
+        contract.sendBankRefundPosition(owner.address, 3_006, POSITION_A, { value: ton("0.05") }),
+    ).toHaveFailedTx({ exitCode: BankErrors.PositionMissing });
+}
+
+get fun `test a refunded owner can open a new position and the queue keeps moving`() {
+    val (contract, owner, _, first, second) = setupBankAtCompleted(1_000, 0);
+    expect(
+        openPosition(contract, first, POSITION_A, ton("1"), 20_000),
+    ).toHaveSuccessfulTx<CreatePosition>();
+    expect(
+        openPosition(contract, second, POSITION_B, ton("1"), 20_000),
+    ).toHaveSuccessfulTx<CreatePosition>();
+    expect(
+        contract.sendSetBankPaused(owner.address, 3_101, true, { value: ton("0.02") }),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+    expect(
+        contract.sendBankRefundPosition(owner.address, 3_102, POSITION_A, { value: ton("0.05") }),
+    ).toHaveSuccessfulTx<BankRefundPosition>();
+    expect(
+        contract.sendSetBankPaused(owner.address, 3_103, false, { value: ton("0.02") }),
+    ).toHaveSuccessfulTx<SetBankPaused>();
+
+    // The refund released the one-position-per-address hold too.
+    expect(
+        openPosition(contract, first, POSITION_C, ton("1"), 12_500),
+    ).toHaveSuccessfulTx<CreatePosition>();
+    expect(contract.queueData().openPositions).toEqual(2);
 }

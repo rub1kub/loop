@@ -14,5 +14,6 @@ enum BankErrors {
     MustBePaused = 212
     InvalidTreasury = 213
     InvalidOwner = 214
+    NothingToRefund = 215
     InvalidMessage = 0xFFFF
 }
