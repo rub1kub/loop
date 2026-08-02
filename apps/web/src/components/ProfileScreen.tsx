@@ -14,7 +14,7 @@ import {
 } from '@phosphor-icons/react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../api';
 import { haptic, isHapticsEnabled, isMockTelegram, setHapticsEnabled, telegram } from '../telegram';
@@ -23,6 +23,7 @@ import type { BankPosition, Duel, Profile, Rating, Referral } from '../types';
 import { DisclosureIndicator } from './DisclosureIndicator';
 
 import { friendlyAddress } from '../address';
+import { celebrate } from '../celebrate';
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 7)}…${address.slice(-5)}`;
@@ -98,6 +99,14 @@ export function ProfileScreen({
     if (telegram()) telegram()?.openTelegramLink(url);
     else await navigator.clipboard.writeText(referral.url);
   }
+
+  // Becoming a holder is the moment DUEL's fee drops to zero — worth a smaller
+  // mark than a payout, but it should not pass in silence.
+  const wasHolder = useRef(profile.plush_brick.holder);
+  useEffect(() => {
+    if (profile.plush_brick.holder && !wasHolder.current) celebrate('spark');
+    wasHolder.current = profile.plush_brick.holder;
+  }, [profile.plush_brick.holder]);
 
   const recentBank = bankHistory.find((item) => item.proof_url);
   const recentDuel = duels.find((item) => item.settlement_proof_url);

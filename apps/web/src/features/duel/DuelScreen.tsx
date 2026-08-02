@@ -39,6 +39,8 @@ import type { Duel, Invite, Offer, Profile } from '../../types';
 
 import { sameAddress } from '../../address';
 
+import { celebrate } from '../../celebrate';
+
 const DEFAULT_CHANCE_BPS = 5000;
 
 function canonicalTerms(requestedStake: number, chanceBps: number) {
@@ -174,6 +176,16 @@ export function DuelScreen({
   const resultWon = Boolean(
     latestDuel?.winner_wallet && sameAddress(latestDuel.winner_wallet, profile.wallet?.address),
   );
+  // A duel resolves in an instant and the screen simply swaps to the result.
+  // The win gets a burst; the loss gets nothing — celebrating someone's money
+  // leaving is mockery, not humour.
+  const celebratedDuel = useRef<string | null>(null);
+  useEffect(() => {
+    if (status !== 'result' || !latestDuel || celebratedDuel.current === latestDuel.id) return;
+    celebratedDuel.current = latestDuel.id;
+    if (resultWon) celebrate();
+  }, [latestDuel, resultWon, status]);
+
   const resultDeltaNano = latestDuel
     ? resultWon
       ? latestDuel.payout_nano - latestDuel.stake_nano

@@ -7,6 +7,7 @@ import { InlineDuelPreview } from './components/InlineDuelPreview';
 import { Loader } from './components/Loader';
 import { Onboarding } from './components/Onboarding';
 import { ProfileScreen } from './components/ProfileScreen';
+import { Celebration } from './components/Celebration';
 import { TabBar } from './components/TabBar';
 import { BankScreen } from './features/bank/BankScreen';
 import { DuelScreen } from './features/duel/DuelScreen';
@@ -253,6 +254,7 @@ export default function App() {
         </motion.div>
       </AnimatePresence>
 
+      <Celebration />
       <TabBar
         active={state.activeTab}
         onChange={(tab) => {

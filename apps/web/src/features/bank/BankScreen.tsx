@@ -18,6 +18,8 @@ import { JarBalls } from './JarBalls';
 
 import { useCountUp } from '../../useCountUp';
 
+import { celebrate } from '../../celebrate';
+
 type WizardStep = 'amount' | 'multiplier' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
 
@@ -207,6 +209,31 @@ export function BankScreen({
   if (wizard === 'waiting' && position && position.current_status !== 'pending_confirmation') {
     setWizard(null);
   }
+
+  // Two moments worth marking, and they are different: the network accepting
+  // the deposit, and the jar filling. The first is watched by status rather
+  // than by the waiting screen, so it lands even if the screen was closed.
+  const previousStatus = useRef(position?.current_status);
+  useEffect(() => {
+    const was = previousStatus.current;
+    const now = position?.current_status;
+    previousStatus.current = now;
+    if (!now || was === now) return;
+    if (was === 'pending_confirmation' && now !== 'failed') {
+      celebrate();
+      haptic('success');
+    }
+  }, [position?.current_status]);
+
+  const wasFull = useRef((position?.progress_bps ?? 0) >= 10_000);
+  useEffect(() => {
+    const full = (position?.progress_bps ?? 0) >= 10_000;
+    if (full && !wasFull.current) {
+      celebrate();
+      haptic('success');
+    }
+    wasFull.current = full;
+  }, [position?.progress_bps]);
 
   const progress = position?.progress_bps ?? 0;
   const progressPercent = Math.min(100, Math.max(0, progress / 100));

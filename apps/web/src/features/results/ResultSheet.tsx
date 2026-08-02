@@ -13,7 +13,7 @@ import {
 import { formatGram } from '../../ton';
 import type { ResultCard } from '../../types';
 
-import { Confetti } from '../../components/Confetti';
+import { celebrate } from '../../celebrate';
 
 export function ResultSheet({
   card,
@@ -30,6 +30,12 @@ export function ResultSheet({
   // Its Back button is the one control guaranteed not to overlap, and here it
   // means the same thing: dismiss the card, return to BANK.
   useEffect(() => setBackAction(() => void onClose()), [onClose]);
+
+  // The card only appears for a settled result, so its arrival is the moment
+  // worth marking.
+  useEffect(() => {
+    if (card.mode !== 'bank_entry') celebrate();
+  }, [card.mode]);
   const entry = card.mode === 'bank_entry';
   const modeLabel = entry
     ? 'Ты в очереди.'
@@ -65,7 +71,6 @@ export function ResultSheet({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      <Confetti />
       <motion.section
         className="result-sheet"
         aria-labelledby="result-title"
