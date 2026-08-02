@@ -102,3 +102,5 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   contract state, queue order and payouts remain authoritative and untouched.
 - Real progress above the preview always wins, and the mainnet configuration gate rejects the
   override entirely.
+- The VPS deploy helper now detects a pending production environment before its same-commit
+  shortcut, so configuration-only releases are applied atomically instead of being skipped.

@@ -157,6 +157,21 @@ fi
 REMOTE
 }
 
+remote_pending_env_state() {
+  ssh_run bash -s <<'REMOTE'
+set -Eeuo pipefail
+
+pending=/opt/loop/shared/.env.production.next
+if [[ -s $pending ]]; then
+  printf 'present\n'
+elif [[ -e $pending ]]; then
+  printf 'invalid\n'
+else
+  printf 'absent\n'
+fi
+REMOTE
+}
+
 status_remote() {
   log "Checking $deploy_host"
   ssh_run bash -s <<'REMOTE'
@@ -748,10 +763,20 @@ case "$command" in
     git_preflight
     if [[ $dry_run == false ]]; then
       active_release=$(remote_current_release)
-      if [[ $active_release == "$release_id" ]]; then
+      pending_env_state=$(remote_pending_env_state)
+      if [[ $pending_env_state == invalid ]]; then
+        die "pending production environment exists but is empty"
+      fi
+      if [[ $release_kind == web && $pending_env_state == present ]]; then
+        die "pending production environment requires a full release"
+      fi
+      if [[ $active_release == "$release_id" && $pending_env_state == absent ]]; then
         log "Release $release_id is already active; nothing to upload"
         status_remote
         exit 0
+      fi
+      if [[ $active_release == "$release_id" && $pending_env_state == present ]]; then
+        log "Release $release_id is active; reapplying it with the pending environment"
       fi
     fi
 
