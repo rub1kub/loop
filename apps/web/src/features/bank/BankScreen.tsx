@@ -16,7 +16,7 @@ import {
 } from '../../ton';
 import type { BankLimit, BankPosition, BankPreview, Profile, RatingPulse } from '../../types';
 
-type WizardStep = 'amount' | 'multiplier' | 'confirm' | 'waiting';
+type WizardStep = 'amount' | 'multiplier' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
 
 const statusCopy: Record<BankPosition['current_status'], string> = {
@@ -47,7 +47,7 @@ export function BankScreen({
   const [details, setDetails] = useState(false);
   const [amount, setAmount] = useState('2');
   const [multiplier, setMultiplier] = useState<(typeof multipliers)[number]>(15000);
-  const [preview, setPreview] = useState<BankPreview | null>(null);
+  const [fetchedPreview, setFetchedPreview] = useState<BankPreview | null>(null);
   const [limit, setLimit] = useState<BankLimit | null>(
     isMockTelegram()
       ? {
@@ -74,7 +74,6 @@ export function BankScreen({
     return setBackAction(() => {
       if (wizard === 'amount') setWizard(null);
       else if (wizard === 'multiplier') setWizard('amount');
-      else if (wizard === 'confirm') setWizard('multiplier');
     });
   }, [wizard]);
 
@@ -101,52 +100,50 @@ export function BankScreen({
     setWizard('multiplier');
   }
 
-  async function showConfirmation() {
-    if (principalNano < 1_000_000_000) {
-      setMessage('Минимальная сумма — 1 GRAM');
-      haptic('warning');
-      return;
-    }
-    if (isMockTelegram()) {
-      setPreview({
-        principal_nano: principalNano,
-        multiplier_bps: multiplier,
-        target_payout_nano: (principalNano * multiplier) / 10_000,
-        fee_nano: principalNano / 100,
-        gas_nano: 80_000_000,
-        transaction_amount_nano: principalNano + 80_000_000,
-        contract_address: `0:${'12'.repeat(32)}`,
-        network: -3,
+  // The summary used to be a third screen. It is the same numbers either way,
+  // so they are computed as soon as the target is on screen and shown beneath
+  // it — one screen fewer, nothing hidden before signing.
+  const canPreview =
+    !isMockTelegram() &&
+    Boolean(wallet) &&
+    isSupportedTonNetwork(wallet?.account.chain ?? '') &&
+    Boolean(profile.wallet);
+
+  const mockPreview = useMemo<BankPreview | null>(
+    () =>
+      isMockTelegram()
+        ? {
+            principal_nano: principalNano,
+            multiplier_bps: multiplier,
+            target_payout_nano: (principalNano * multiplier) / 10_000,
+            fee_nano: principalNano / 10,
+            gas_nano: 80_000_000,
+            transaction_amount_nano: principalNano + 80_000_000,
+            contract_address: `0:${'12'.repeat(32)}`,
+            network: -3,
+          }
+        : null,
+    [multiplier, principalNano],
+  );
+
+  useEffect(() => {
+    if (wizard !== 'multiplier' || !canPreview) return;
+    let active = true;
+    void api
+      .previewBankPosition({ principal_nano: principalNano, multiplier_bps: multiplier })
+      .then((result) => {
+        if (active) setFetchedPreview(result);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setMessage(error instanceof Error ? error.message : 'Не удалось рассчитать позицию');
       });
-      setWizard('confirm');
-      return;
-    }
-    if (!wallet) {
-      await tonConnectUI.openModal();
-      return;
-    }
-    if (!isSupportedTonNetwork(wallet.account.chain)) {
-      setMessage('Этот кошелёк сейчас не поддерживается');
-      haptic('error');
-      return;
-    }
-    if (!profile.wallet) {
-      setMessage('Подтверждаем владение внешним кошельком…');
-      return;
-    }
-    try {
-      const result = await api.previewBankPosition({
-        principal_nano: principalNano,
-        multiplier_bps: multiplier,
-      });
-      setPreview(result);
-      setWizard('confirm');
-      haptic('light');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Не удалось рассчитать позицию');
-      haptic('error');
-    }
-  }
+    return () => {
+      active = false;
+    };
+  }, [canPreview, multiplier, principalNano, wizard]);
+
+  const preview = mockPreview ?? (canPreview ? fetchedPreview : null);
 
   async function confirmPosition() {
     if (locked.current || !preview) return;
@@ -195,7 +192,7 @@ export function BankScreen({
       haptic('success');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Не удалось создать позицию');
-      setWizard('confirm');
+      setWizard('multiplier');
       haptic('error');
     } finally {
       locked.current = false;
@@ -234,7 +231,7 @@ export function BankScreen({
           >
             {wizard === 'amount' && (
               <>
-                <p className="eyebrow">ШАГ 1 ИЗ 3 · СУММА</p>
+                <p className="eyebrow">ШАГ 1 ИЗ 2 · СУММА</p>
                 <label className="amount-input">
                   <input
                     inputMode="decimal"
@@ -261,7 +258,7 @@ export function BankScreen({
             )}
             {wizard === 'multiplier' && (
               <>
-                <p className="eyebrow">ШАГ 2 ИЗ 3 · ЦЕЛЬ</p>
+                <p className="eyebrow">ШАГ 2 ИЗ 2 · ЦЕЛЬ И ИТОГ</p>
                 <h3>Выбери целевую выплату.</h3>
                 <div className="choice-list">
                   {multipliers.map((value) => (
@@ -283,66 +280,70 @@ export function BankScreen({
                   Ранние позиции наполняются первыми. Чем выше цель, тем больше новых взносов
                   потребуется; выплата не гарантирована.
                 </p>
-                <button className="primary-button" onClick={() => void showConfirmation()}>
-                  ДАЛЬШЕ
-                  <ArrowRight aria-hidden="true" />
-                </button>
-              </>
-            )}
-            {wizard === 'confirm' && preview && (
-              <>
-                <p className="eyebrow">ШАГ 3 ИЗ 3 · ИТОГ</p>
-                <h3>Проверь сумму и риск.</h3>
-                <dl className="detail-list">
-                  <Detail
-                    label="К оплате в кошельке"
-                    value={`${formatGram(preview.transaction_amount_nano, 3)} GRAM`}
-                  />
-                  <Detail
-                    label="Твой взнос"
-                    value={`${formatGram(preview.principal_nano, 3)} GRAM`}
-                  />
-                  <Detail
-                    label="Целевая выплата"
-                    value={`${formatGram(preview.target_payout_nano, 3)} GRAM`}
-                  />
-                  <Detail label="Комиссия" value={`${formatGram(preview.fee_nano, 4)} GRAM`} />
-                  <Detail
-                    label="Запас на проведение"
-                    value={`${formatGram(preview.gas_nano, 3)} GRAM`}
-                  />
-                </dl>
-                <div className="contract-truth bank-risk-disclosure">
-                  <strong>Что произойдёт</strong>
-                  <p>
-                    Комиссия удержится из взноса. Остаток пойдёт ранним позициям; если что-то
-                    останется — начнёт наполнять твою.
-                  </p>
-                  <p>
-                    Выплата зависит от будущих взносов и может не наступить. Подписанный взнос
-                    вернуть нельзя.
-                  </p>
-                </div>
-                <details className="technical-details">
-                  <summary>
-                    <span>ДАННЫЕ ДЛЯ ПРОВЕРКИ</span>
-                    <DisclosureIndicator />
-                  </summary>
-                  <dl className="detail-list">
-                    <Detail
-                      label="Адрес BANK"
-                      value={`${preview.contract_address.slice(0, 7)}…${preview.contract_address.slice(-5)}`}
-                    />
-                  </dl>
-                </details>
+                {preview ? (
+                  <>
+                    <dl className="detail-list">
+                      <Detail
+                        label="К оплате в кошельке"
+                        value={`${formatGram(preview.transaction_amount_nano, 3)} GRAM`}
+                      />
+                      <Detail
+                        label="Твой взнос"
+                        value={`${formatGram(preview.principal_nano, 3)} GRAM`}
+                      />
+                      <Detail
+                        label="Целевая выплата"
+                        value={`${formatGram(preview.target_payout_nano, 3)} GRAM`}
+                      />
+                      <Detail label="Комиссия" value={`${formatGram(preview.fee_nano, 4)} GRAM`} />
+                      <Detail
+                        label="Запас на проведение"
+                        value={`${formatGram(preview.gas_nano, 3)} GRAM`}
+                      />
+                    </dl>
+                    <div className="contract-truth bank-risk-disclosure">
+                      <strong>Что произойдёт</strong>
+                      <p>
+                        Комиссия удержится из взноса. Остаток пойдёт ранним позициям; если что-то
+                        останется — начнёт наполнять твою.
+                      </p>
+                      <p>
+                        Выплата зависит от будущих взносов и может не наступить. Подписанный взнос
+                        вернуть нельзя.
+                      </p>
+                    </div>
+                    <details className="technical-details">
+                      <summary>
+                        <span>ДАННЫЕ ДЛЯ ПРОВЕРКИ</span>
+                        <DisclosureIndicator />
+                      </summary>
+                      <dl className="detail-list">
+                        <Detail
+                          label="Адрес BANK"
+                          value={`${preview.contract_address.slice(0, 7)}…${preview.contract_address.slice(-5)}`}
+                        />
+                      </dl>
+                    </details>
+                  </>
+                ) : null}
                 {message && (
                   <p className="form-note is-error" role="alert">
                     {message}
                   </p>
                 )}
-                <button className="primary-button" onClick={() => void confirmPosition()}>
-                  ПОДПИСАТЬ В КОШЕЛЬКЕ
-                </button>
+                {!wallet && !isMockTelegram() ? (
+                  <button className="primary-button" onClick={() => void tonConnectUI.openModal()}>
+                    ПОДКЛЮЧИТЬ КОШЕЛЁК
+                  </button>
+                ) : (
+                  <button
+                    className="primary-button"
+                    disabled={!preview}
+                    onClick={() => void confirmPosition()}
+                  >
+                    {preview ? 'ПОДПИСАТЬ В КОШЕЛЬКЕ' : 'СЧИТАЕМ СУММУ…'}
+                  </button>
+                )}
               </>
             )}
             {wizard === 'waiting' && (
