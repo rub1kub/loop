@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { haptic, openPlatformLink, telegram } from '../telegram';
 import type { Prelaunch } from '../types';
 
-const SHARE_TEXT = 'LOOP открывается 8 августа в 19:00 МСК. Займи место до толпы — вот моя ссылка.';
+const SHARE_TEXT = 'LOOP открывается 5 августа в 19:30 МСК. Займи место до толпы — вот моя ссылка.';
 
 // The same deep links the onboarding uses — one referral market per button.
 const PLUSH_MARKETS = [
@@ -106,7 +106,7 @@ export function PrelaunchScreen({ prelaunch }: { prelaunch: Prelaunch }) {
             </div>
           </div>
         )}
-        <p className="prelaunch-date">8 АВГУСТА · 19:00 МСК</p>
+        <p className="prelaunch-date">5 АВГУСТА · 19:30 МСК</p>
       </section>
 
       <section className="prelaunch-referral">

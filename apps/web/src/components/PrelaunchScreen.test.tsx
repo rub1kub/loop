@@ -11,7 +11,7 @@ vi.mock('../telegram', () => ({
 }));
 
 const prelaunch: Prelaunch = {
-  launch_at: '2026-08-08T16:00:00Z',
+  launch_at: '2026-08-05T16:30:00Z',
   referral_code: 'abc123',
   referral_url: 'https://t.me/getloopbot?startapp=ref_abc123',
   invited: 2,
@@ -28,7 +28,7 @@ describe('PrelaunchScreen', () => {
     // Two days, three hours, four minutes and five seconds before the door
     // opens — every unit of the countdown is distinct and non-zero.
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-06T12:55:55Z'));
+    vi.setSystemTime(new Date('2026-08-03T13:25:55Z'));
   });
 
   afterEach(() => {
@@ -39,7 +39,7 @@ describe('PrelaunchScreen', () => {
   it('counts down to the launch moment and shows the race', () => {
     render(<PrelaunchScreen prelaunch={prelaunch} />);
 
-    expect(screen.getByText('8 АВГУСТА · 19:00 МСК')).toBeInTheDocument();
+    expect(screen.getByText('5 АВГУСТА · 19:30 МСК')).toBeInTheDocument();
     const clock = screen.getByRole('timer');
     expect(clock.textContent).toContain('02');
     expect(clock.textContent).toContain('03');

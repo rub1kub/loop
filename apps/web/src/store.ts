@@ -334,10 +334,10 @@ export const useLoopStore = create<LoopState>((set, get) => ({
             profile: {
               ...demoProfile,
               app_open: false,
-              launch_at: '2026-08-08T16:00:00Z',
+              launch_at: '2026-08-05T16:30:00Z',
             },
             prelaunch: {
-              launch_at: '2026-08-08T16:00:00Z',
+              launch_at: '2026-08-05T16:30:00Z',
               referral_code: 'demo1234',
               referral_url: 'https://t.me/getloopbot?startapp=ref_demo1234',
               invited: 4,
