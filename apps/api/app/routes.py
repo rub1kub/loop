@@ -636,8 +636,8 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
 
 
 @router.get("/rating", response_model=RatingView)
-async def rating(user: CurrentUser, db: Db) -> RatingView:
-    return await build_rating(db, user)
+async def rating(user: CurrentUser, db: Db, settings: Config) -> RatingView:
+    return await build_rating(db, user, settings=settings)
 
 
 async def invitation_view(invitation: DuelInvitation, db: Db) -> InviteView:

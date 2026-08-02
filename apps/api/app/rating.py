@@ -7,6 +7,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
+from .config import Settings, get_settings
 from .models import ReferralAttribution, User
 from .modules.bank.models import BankPayout, BankPosition, BankPositionStatus
 from .modules.duel.models import (
@@ -154,6 +155,7 @@ async def build_rating(
     current_user: User,
     *,
     now: datetime | None = None,
+    settings: Settings | None = None,
 ) -> RatingView:
     current = now or datetime.now(UTC)
     if current.tzinfo is None:
@@ -340,10 +342,16 @@ async def build_rating(
         )
     me = next(entry for entry in ranked if entry.is_me)
 
+    # Only the queue people can actually join. Positions left on a contract
+    # the application has moved away from stay open forever — counting them
+    # told everyone three were queueing on a contract nobody could reach.
+    config = settings or get_settings()
     active_bank_users = set(
         await db.scalars(
             select(BankPosition.user_id).where(
                 BankPosition.user_id.is_not(None),
+                BankPosition.network == config.ton_network_id,
+                BankPosition.contract_address == config.bank_contract_address,
                 BankPosition.current_status.in_(ACTIVE_BANK_STATES),
             )
         )
@@ -352,6 +360,8 @@ async def build_rating(
         await db.scalars(
             select(DuelOffer.user_id).where(
                 DuelOffer.user_id.is_not(None),
+                DuelOffer.network == config.ton_network_id,
+                DuelOffer.contract_address == config.effective_duel_contract_address,
                 DuelOffer.state.in_(ACTIVE_DUEL_STATES),
             )
         )

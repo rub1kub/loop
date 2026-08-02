@@ -563,3 +563,93 @@ async def test_wire_layout_follows_the_contract_not_the_feature_flag(client, app
     assert transaction["holder_fee_supported"] is True
     assert transaction["holder_signature_hex"] is None
     assert quote.json()["offer"]["fee_exempt"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_position_left_on_a_retired_contract_frees_the_wallet(client, app) -> None:
+    """Switching BANK contracts must not lock every wallet out of the new one.
+
+    A position on a contract the application has moved away from never settles
+    — that contract is paused and its queue cannot advance. Held against the
+    wallet, it blocked the owner from ever opening a position again, and the
+    database constraint fired after the route's own check had passed, so the
+    tester saw a bare connection error rather than any explanation.
+    """
+    from app.modules.bank.models import BankPosition, BankPositionStatus
+
+    headers = await authenticate(client)
+    wallet = await add_wallet(app, 777000111)
+    settings = get_settings()
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == 777000111))
+        assert user is not None
+        db.add(
+            BankPosition(
+                position_id=8801,
+                query_id=8801,
+                user_id=user.id,
+                wallet_id=wallet.id,
+                owner_wallet=wallet.address,
+                network=settings.ton_network_id,
+                contract_address="0:" + "9" * 64,
+                principal_nano=1_000_000_000,
+                multiplier_bps=12_500,
+                target_payout_nano=1_250_000_000,
+                remaining_amount_nano=1_250_000_000,
+                current_status=BankPositionStatus.PARTIALLY_FUNDED.value,
+            )
+        )
+        await db.commit()
+
+    quote = await client.post(
+        "/api/v1/bank/positions/quote",
+        headers=headers,
+        json={"position_id": 8802, "principal_nano": 1_000_000_000, "multiplier_bps": 12_500},
+    )
+    assert quote.status_code == 201, quote.text
+
+    # The rule still holds on the contract the application is actually on.
+    again = await client.post(
+        "/api/v1/bank/positions/quote",
+        headers=headers,
+        json={"position_id": 8803, "principal_nano": 1_000_000_000, "multiplier_bps": 12_500},
+    )
+    assert again.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_queue_size_counts_only_the_contract_people_can_join(client, app) -> None:
+    """"В очереди" must mean the live queue.
+
+    Positions stranded on a retired contract were counted too, so the app
+    advertised a queue of three on a contract nobody could reach.
+    """
+    from app.modules.bank.models import BankPosition, BankPositionStatus
+
+    headers = await authenticate(client)
+    wallet = await add_wallet(app, 777000111)
+    settings = get_settings()
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == 777000111))
+        assert user is not None
+        db.add(
+            BankPosition(
+                position_id=8901,
+                query_id=8901,
+                user_id=user.id,
+                wallet_id=wallet.id,
+                owner_wallet=wallet.address,
+                network=settings.ton_network_id,
+                contract_address="0:" + "9" * 64,
+                principal_nano=1_000_000_000,
+                multiplier_bps=12_500,
+                target_payout_nano=1_250_000_000,
+                remaining_amount_nano=1_250_000_000,
+                current_status=BankPositionStatus.QUEUED.value,
+            )
+        )
+        await db.commit()
+
+    rating = await client.get("/api/v1/rating", headers=headers)
+    assert rating.status_code == 200, rating.text
+    assert rating.json()["pulse"]["active_bank"] == 0

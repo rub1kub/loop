@@ -38,9 +38,15 @@ class BankPosition(Base):
             "network", "contract_address", "position_id", name="bank_position_chain_id"
         ),
         UniqueConstraint("network", "contract_address", "query_id", name="bank_position_query_id"),
+        # One open position per wallet *per contract*, which is what the
+        # contract itself enforces. Keyed on the wallet alone, a position left
+        # behind on a contract the application has moved away from blocked that
+        # wallet from ever opening one on the new contract.
         Index(
             "uq_active_bank_position_wallet",
             "wallet_id",
+            "network",
+            "contract_address",
             unique=True,
             postgresql_where=text(
                 "current_status IN "
