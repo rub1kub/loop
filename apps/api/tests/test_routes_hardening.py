@@ -386,3 +386,78 @@ def test_public_security_headers_use_values_browsers_honor() -> None:
     assert policy["base-uri"] == "'none'"
     assert policy["frame-ancestors"] == "https://web.telegram.org https://*.telegram.org"
     assert "'unsafe-eval'" not in directives["Content-Security-Policy"]
+
+
+@pytest.mark.asyncio
+async def test_switching_wallets_releases_the_old_one_before_claiming_the_new(
+    client, app, monkeypatch
+) -> None:
+    settings = get_settings()
+    old_address = "0:" + "a1" * 32
+    new_address = "0:" + "b2" * 32
+    headers = await auth_headers(client, 700_042)
+
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == 700_042))
+        # The ids decide the order SQLAlchemy emits the two UPDATEs in, and
+        # that order is what makes this fail or pass. Pinned so the row being
+        # activated goes first — the losing order, and the one production hit.
+        db.add(
+            Wallet(
+                id="ffffffff-0000-0000-0000-00000000old0",
+                user_id=user.id,
+                network=settings.ton_network_id,
+                address=old_address.upper(),
+                public_key="c3" * 32,
+            )
+        )
+        # The wallet being switched to is already on file from an earlier link,
+        # which is what made the two UPDATEs land in one flush in production.
+        db.add(
+            Wallet(
+                id="00000000-0000-0000-0000-00000000new0",
+                user_id=user.id,
+                network=settings.ton_network_id,
+                address=new_address.upper(),
+                public_key="d4" * 32,
+                active=False,
+            )
+        )
+        await db.commit()
+
+    challenge = await client.post("/api/v1/wallet/challenge", headers=headers, json={})
+    payload = challenge.json()["payload"]
+
+    async def public_key(_address: str) -> str:
+        return "d4" * 32
+
+    monkeypatch.setattr(app.state.ton_client, "get_wallet_public_key", public_key)
+    monkeypatch.setattr(
+        "app.routes.verify_ton_proof", lambda **_kwargs: new_address.upper()
+    )
+
+    response = await client.post(
+        "/api/v1/wallet/verify",
+        headers=headers,
+        json={
+            "address": new_address,
+            "network": settings.ton_network_id,
+            "publicKey": "d4" * 32,
+            "proof": {
+                "timestamp": int(datetime.now(UTC).timestamp()),
+                "domain": {"lengthBytes": 9, "value": "loop.test"},
+                "signature": "s" * 88,
+                "payload": payload,
+            },
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["address"] == new_address.upper()
+    async with app.state.session_factory() as db:
+        active = (
+            await db.scalars(
+                select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True))
+            )
+        ).all()
+    assert [wallet.address for wallet in active] == [new_address.upper()]

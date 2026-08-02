@@ -443,6 +443,12 @@ async def wallet_verify(
                 "finish active BANK and DUEL operations before changing wallet",
             )
         current.active = False
+        # One active wallet per user is a unique index, and a single flush lets
+        # SQLAlchemy order the two UPDATEs however it likes. When it activates
+        # the new row before releasing the old one the database sees two active
+        # wallets and rejects the write, which surfaced as a bare 500 and read
+        # to the user as a connection error.
+        await db.flush()
     wallet = existing or Wallet(
         user_id=user.id,
         network=body.network,
