@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     # Telegram publishes no list of message effects, and the community ones
     # disagree, so this is configurable and its failure is never fatal.
     result_effect_id: str = "5046509860389126442"
+    # A match is tension, not victory, so it gets fire rather than confetti.
+    match_effect_id: str = "5104841245755180586"
     duel_invite_signing_key: SecretStr = SecretStr("")
     duel_invite_public_key: str = ""
     # Holder fee exemption may only be enabled against DuelEscrow v1.4+

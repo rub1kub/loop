@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -116,6 +117,24 @@ async def update_delivery(
         await db.commit()
 
 
+async def send_with_effect(
+    effect_id: str,
+    send: Callable[[str | None], Awaitable[Message]],
+) -> Message:
+    """Sends with a message effect, and again without it if Telegram refuses.
+
+    Telegram publishes no list of effect ids and the community ones disagree,
+    so an id can be wrong. A decoration must never cost the notification.
+    """
+    if not effect_id:
+        return await send(None)
+    try:
+        return await send(effect_id)
+    except TelegramBadRequest:
+        logger.warning("telegram rejected the message effect, sending without it")
+        return await send(None)
+
+
 async def deliver_match_alert(
     bot: Bot,
     session_factory: Any,
@@ -142,10 +161,16 @@ async def deliver_match_alert(
         return
 
     try:
-        message = await bot.send_message(
-            chat_id=user.telegram_id,
-            text=match_notification_text({**payload, "reveal_deadline": deadline.isoformat()}, now),
-            reply_markup=match_notification_markup(settings),
+        message = await send_with_effect(
+            settings.match_effect_id.strip(),
+            lambda effect: bot.send_message(
+                chat_id=user.telegram_id,
+                text=match_notification_text(
+                    {**payload, "reveal_deadline": deadline.isoformat()}, now
+                ),
+                reply_markup=match_notification_markup(settings),
+                message_effect_id=effect,
+            ),
         )
     except TelegramRetryAfter as exc:
         await update_delivery(
@@ -219,27 +244,21 @@ async def deliver_one(
     celebratory = card.mode != "bank_entry" and card.payout_nano > card.contributed_nano
     effect_id = settings.result_effect_id.strip() if celebratory else ""
 
-    async def send(with_effect: bool) -> Message:
-        return await bot.send_photo(
-            chat_id=user.telegram_id,
-            photo=result_card_image_url(settings, card),
-            caption=result_caption(card),
-            reply_markup=notification_markup(
-                card,
-                settings,
-                referral.code if referral else None,
-            ),
-            message_effect_id=effect_id if with_effect else None,
-        )
-
     try:
-        try:
-            message = await send(bool(effect_id))
-        except TelegramBadRequest:
-            if not effect_id:
-                raise
-            logger.warning("result effect rejected by telegram, sending without it")
-            message = await send(False)
+        message = await send_with_effect(
+            effect_id,
+            lambda effect: bot.send_photo(
+                chat_id=user.telegram_id,
+                photo=result_card_image_url(settings, card),
+                caption=result_caption(card),
+                reply_markup=notification_markup(
+                    card,
+                    settings,
+                    referral.code if referral else None,
+                ),
+                message_effect_id=effect,
+            ),
+        )
     except TelegramRetryAfter as exc:
         await update_delivery(
             session_factory,
