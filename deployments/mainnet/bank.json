@@ -26,20 +26,7 @@
     "min_principal_nano": 1000000000,
     "max_principal_nano": 100000000000,
     "completions_per_gram": 5,
-    "ladder_rungs_gram": [
-      1,
-      2,
-      3,
-      5,
-      7,
-      10,
-      15,
-      20,
-      30,
-      50,
-      75,
-      100
-    ],
+    "ladder_rungs_gram": [1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 75, 100],
     "maturity_limits": [
       {
         "completed_positions": 0,
@@ -90,11 +77,7 @@
         "principal_limit_nano": 100000000000
       }
     ],
-    "multipliers_bps": [
-      12500,
-      15000,
-      20000
-    ],
+    "multipliers_bps": [12500, 15000, 20000],
     "settled_positions_pruned": true,
     "owner_can_refund_position_while_paused": true,
     "owner_withdrawal_floor_nano": 200000000,
