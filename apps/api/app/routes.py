@@ -28,7 +28,7 @@ from .modules.duel.models import (
 )
 from .rating import build_rating
 from .referrals import get_or_create_referral_code
-from .result_cards import build_invite_inline, render_invite_card
+from .result_cards import INVITE_VARIANTS, build_invite_inline, render_invite_card
 from .schemas import (
     AuthResponse,
     ContractStateView,
@@ -699,14 +699,17 @@ async def prelaunch(user: CurrentUser, db: Db, settings: Config) -> PrelaunchVie
     )
 
 
-@router.get("/prelaunch/cards/{code}.jpg", include_in_schema=False)
-async def prelaunch_card_image(code: str, db: Db, settings: Config) -> Response:
+@router.get("/prelaunch/cards/{slug}.jpg", include_in_schema=False)
+async def prelaunch_card_image(slug: str, db: Db, settings: Config) -> Response:
     """The invite card, addressable by referral code.
 
     Public on purpose: Telegram's servers fetch this URL to build the shared
     message, and the code is the one piece of the referral that is already
     meant to travel. It resolves to nothing but a first name and a username.
     """
+    code, _, variant = slug.rpartition("-")
+    if not code or not variant.isdigit():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "card not found")
     if not 4 <= len(code) <= 24 or not all(
         character.isalnum() or character in "-_" for character in code
     ):
@@ -722,6 +725,7 @@ async def prelaunch_card_image(code: str, db: Db, settings: Config) -> Response:
         first_name=owner.first_name,
         username=owner.username,
         launch_at=settings.launch_at,
+        variant_index=int(variant),
     )
     # The name on it can change and the date is env-driven — cache briefly.
     return Response(
@@ -762,6 +766,9 @@ async def prepare_invite_share(
                 first_name=user.first_name,
                 username=user.username,
                 launch_at=settings.launch_at,
+                # A fresh draw each share: the same friends see the same
+                # invitation several times over a launch week.
+                variant_index=secrets.randbelow(len(INVITE_VARIANTS)),
             ),
             allow_user_chats=True,
             allow_bot_chats=False,

@@ -716,12 +716,21 @@ async def test_invite_card_is_public_and_keyed_by_referral_code(client, app, mon
         code = (await get_or_create_referral_code(db, user.id)).code
         await db.commit()
 
-    image = await client.get(f"/api/v1/prelaunch/cards/{code}.jpg")
+    image = await client.get(f"/api/v1/prelaunch/cards/{code}-0.jpg")
     assert image.status_code == 200
     assert image.headers["content-type"] == "image/jpeg"
     assert image.content[:3] == b"\xff\xd8\xff"
 
-    assert (await client.get("/api/v1/prelaunch/cards/nope0000.jpg")).status_code == 404
+    # Every variant renders, and the joke actually differs between them.
+    from app.result_cards import INVITE_VARIANTS
+
+    other = await client.get(f"/api/v1/prelaunch/cards/{code}-1.jpg")
+    assert other.status_code == 200
+    assert other.content != image.content
+    assert len({variant["headline"] for variant in INVITE_VARIANTS}) == len(INVITE_VARIANTS)
+
+    assert (await client.get("/api/v1/prelaunch/cards/nope0000-0.jpg")).status_code == 404
+    assert (await client.get(f"/api/v1/prelaunch/cards/{code}.jpg")).status_code == 404
 
     # Without a bot the share degrades loudly, not silently.
     denied = await client.post("/api/v1/prelaunch/share", headers=headers)

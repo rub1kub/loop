@@ -677,6 +677,126 @@ def _render_result_card(facts: CardFacts) -> bytes:
     return output.getvalue()
 
 
+INVITE_VARIANTS: tuple[dict[str, str], ...] = (
+    {
+        "headline": "ПИРАМИДА\nОТКРЫВАЕТСЯ.\nМЕСТА СВЕРХУ.",
+        "subline": "Потом будут только снизу.",
+        "caption": (
+            "Пирамида открывается. Места пока сверху — потом будут только снизу.\n\n"
+            "LOOP: заходишь, вносишь, встаёшь в очередь."
+        ),
+    },
+    {
+        "headline": "ЗОВУ ТЕБЯ\nВ ФИНАНСОВУЮ\nПИРАМИДУ.",
+        "subline": "Да, прямо так и называется.",
+        "caption": (
+            "Зову тебя в финансовую пирамиду. Да, она прямо так и называется — "
+            "никто ничего не прячет.\n\nОткрытие уже скоро."
+        ),
+    },
+    {
+        "headline": "КТО ПЕРВЫЙ ВСТАЛ,\nТОГО И ОЧЕРЕДЬ.\nЯ УЖЕ ВСТАЛ.",
+        "subline": "Стою и машу тебе рукой.",
+        "caption": (
+            "Кто первый встал, того и очередь. Я уже стою.\n\nLOOP открывается — "
+            "выплаты идут по порядку, с начала."
+        ),
+    },
+    {
+        "headline": "ПОТОМ БУДЕШЬ\nГОВОРИТЬ, ЧТО\nНЕ ЗВАЛИ.",
+        "subline": "Вот, зову. Скриншот сохрани.",
+        "caption": (
+            "Потом будешь говорить, что не звали. Вот — зову, скриншот "
+            "сохрани.\n\nLOOP открывается."
+        ),
+    },
+    {
+        "headline": "ОЧЕРЕДЬ ЕЩЁ\nПУСТАЯ. ЭТО\nНЕНАДОЛГО.",
+        "subline": "Дальше начнётся давка.",
+        "caption": (
+            "Очередь пока пустая, и это ненадолго.\n\nLOOP: ранние позиции "
+            "наполняются первыми."
+        ),
+    },
+    {
+        "headline": "НЕ ИНВЕСТИЦИЯ.\nНЕ ПРОЕКТ.\nПРОСТО ОЧЕРЕДЬ.",
+        "subline": "Зато честно с первой секунды.",
+        "caption": (
+            "Не инвестиция, не проект, не стартап. Просто очередь за деньгами.\n\n"
+            "LOOP открывается — правила видно каждому."
+        ),
+    },
+    {
+        "headline": "ВСЕ СТРОЯТ\nПИРАМИДЫ. Я ЗОВУ\nВ ЧЕСТНУЮ.",
+        "subline": "Честную в том, что она пирамида.",
+        "caption": (
+            "Все строят пирамиды, просто называют иначе. Эта честная — в том, "
+            "что она пирамида.\n\nLOOP открывается."
+        ),
+    },
+    {
+        "headline": "СКАЖИ ПОТОМ,\nЧТО Я ТЕБЯ\nНЕ ПРЕДУПРЕЖДАЛ.",
+        "subline": "Предупреждаю: это пирамида.",
+        "caption": (
+            "Скажи потом, что не предупреждал. Предупреждаю: это финансовая "
+            "пирамида.\n\nLOOP открывается. Дальше сам."
+        ),
+    },
+    {
+        "headline": "ТУТ НЕТ\nГРАФИКОВ.\nТУТ ЕСТЬ ОЧЕРЕДЬ.",
+        "subline": "Ни свечей, ни иксов, ни аналитики.",
+        "caption": (
+            "Тут нет графиков и прогнозов. Тут есть очередь и твой номер в "
+            "ней.\n\nLOOP открывается."
+        ),
+    },
+    {
+        "headline": "МЕСТО В ОЧЕРЕДИ\nПОКА БЕСПЛАТНО.\nПОТОМ — НЕТ.",
+        "subline": "Ну то есть вход бесплатный.",
+        "caption": (
+            "Место в очереди пока никем не занято.\n\nLOOP открывается — "
+            "вход уже открыт, зайди заранее."
+        ),
+    },
+    {
+        "headline": "ПРИГЛАШАЮ\nВ ОЧЕРЕДЬ\nЗА ЧУЖИМИ ДЕНЬГАМИ.",
+        "subline": "Формулировка точная. Извини.",
+        "caption": (
+            "Приглашаю в очередь за чужими деньгами. Формулировка точная.\n\n"
+            "LOOP — финансовая пирамида на TON. Открытие скоро."
+        ),
+    },
+    {
+        "headline": "ЗАЙДЁШЬ РАНЬШЕ —\nБУДЕШЬ ВЫШЕ.\nВОТ И ВСЯ СХЕМА.",
+        "subline": "Другой схемы и не было.",
+        "caption": (
+            "Зайдёшь раньше — будешь выше в очереди. Вот и вся схема, другой "
+            "нет.\n\nLOOP открывается."
+        ),
+    },
+    {
+        "headline": "ОБЕЩАТЬ НИЧЕГО\nНЕ БУДУ.\nПОЗВАТЬ — ПОЗОВУ.",
+        "subline": "Гарантий тут не выдают.",
+        "caption": (
+            "Обещать ничего не буду — гарантий тут не выдают. А позвать "
+            "позову.\n\nLOOP открывается."
+        ),
+    },
+    {
+        "headline": "ЭТО ПИРАМИДА.\nВОПРОС ЗАКРЫТ.\nТЕПЕРЬ ПО ДЕЛУ:",
+        "subline": "Открытие — уже скоро.",
+        "caption": (
+            "Да, это пирамида, вопрос закрыт. Теперь по делу — открытие уже "
+            "скоро.\n\nLOOP на TON."
+        ),
+    },
+)
+
+
+def invite_variant(index: int) -> dict[str, str]:
+    return INVITE_VARIANTS[index % len(INVITE_VARIANTS)]
+
+
 LAUNCH_MONTHS_RU = (
     "",
     "ЯНВАРЯ",
@@ -709,17 +829,24 @@ def launch_moment_ru(launch_at: datetime) -> tuple[str, str]:
     )
 
 
-def render_invite_card(*, first_name: str, username: str | None, launch_at: datetime) -> bytes:
+def render_invite_card(
+    *, first_name: str, username: str | None, launch_at: datetime, variant_index: int
+) -> bytes:
     """The card a person sends when they invite someone in.
 
-    Personalised with the inviter's name: an invitation from a person carries
-    further than an advert from a bot.
+    One of a set of jokes rather than a single poster: the same three friends
+    see the same invitation several times over a launch week, and a card that
+    is always identical stops being read. The variant travels in the URL, so
+    each share is a fresh draw and the image itself stays cacheable.
     """
     with RENDER_LIMIT:
+        variant = invite_variant(variant_index)
         date_text, time_text = launch_moment_ru(launch_at)
         image = Image.new("RGBA", (CARD_WIDTH, CARD_HEIGHT), (0, 0, 0, 255))
         draw = ImageDraw.Draw(image)
-        seed = int.from_bytes(hashlib.sha256(first_name.encode()).digest()[:8], "big")
+        seed = int.from_bytes(
+            hashlib.sha256(f"{first_name}:{variant_index}".encode()).digest()[:8], "big"
+        )
         rng = random.Random(seed)  # noqa: S311 - deterministic visual noise, not security
         for _ in range(520):
             shade = rng.randint(14, 42)
@@ -741,39 +868,33 @@ def render_invite_card(*, first_name: str, username: str | None, launch_at: date
 
         _centered_text(
             draw,
-            (CARD_WIDTH // 2, 360),
-            "ФИНАНСОВАЯ ПИРАМИДА",
-            font=_font(30, bold=True),
-            fill=(150, 150, 150),
-        )
-        _centered_text(
-            draw,
-            (CARD_WIDTH // 2, 520),
-            "ОТКРЫТИЕ",
-            font=_font(72, bold=True),
+            (CARD_WIDTH // 2, 430),
+            variant["headline"],
+            font=_font(76, bold=True),
             fill=(250, 250, 250),
+            spacing=16,
         )
         _centered_text(
             draw,
-            (CARD_WIDTH // 2, 660),
-            date_text,
-            font=_font(104, bold=True),
-            fill=(255, 255, 255),
-        )
-        _centered_text(
-            draw,
-            (CARD_WIDTH // 2, 780),
-            time_text,
-            font=_font(44, bold=True),
-            fill=(200, 200, 200),
+            (CARD_WIDTH // 2, 640),
+            variant["subline"],
+            font=_font(30),
+            fill=(150, 150, 150),
         )
 
         _centered_text(
             draw,
-            (CARD_WIDTH // 2, 960),
-            "Очередь выплат на TON. Код открыт.",
-            font=_font(28),
-            fill=(150, 150, 150),
+            (CARD_WIDTH // 2, 858),
+            date_text,
+            font=_font(92, bold=True),
+            fill=(255, 255, 255),
+        )
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 946),
+            f"ОТКРЫТИЕ · {time_text}",
+            font=_font(20, bold=True),
+            fill=(135, 135, 135),
         )
 
         draw.line((70, 1176, CARD_WIDTH - 70, 1176), fill=(54, 54, 54), width=2)
@@ -805,14 +926,10 @@ def render_invite_card(*, first_name: str, username: str | None, launch_at: date
         return output.getvalue()
 
 
-def invite_caption(launch_at: datetime) -> str:
+def invite_caption(launch_at: datetime, variant_index: int) -> str:
     date_text, time_text = launch_moment_ru(launch_at)
-    return (
-        f"LOOP открывается {date_text.lower()} в {time_text.removesuffix(' МСК')} МСК.\n\n"
-        "Финансовая пирамида на TON: заходишь, вносишь, встаёшь в очередь — "
-        "выплата приходит сама.\n\n"
-        "Вход уже открыт. Займи место до толпы."
-    )
+    opening = f"Открытие {date_text.lower()} в {time_text.removesuffix(' МСК')} МСК."
+    return f"{invite_variant(variant_index)['caption']}\n\n{opening} Вход уже открыт."
 
 
 def build_invite_inline(
@@ -822,18 +939,22 @@ def build_invite_inline(
     first_name: str,
     username: str | None,
     launch_at: datetime,
+    variant_index: int,
 ) -> InlineQueryResultPhoto:
-    image_url = f"{settings.public_origin}/api/v1/prelaunch/cards/{referral_code}.jpg"
+    image_url = (
+        f"{settings.public_origin}/api/v1/prelaunch/cards/"
+        f"{referral_code}-{variant_index}.jpg"
+    )
     del first_name, username  # drawn into the image itself
     return InlineQueryResultPhoto(
-        id=f"invite-{referral_code}",
+        id=f"invite-{referral_code}-{variant_index}",
         photo_url=image_url,
         thumbnail_url=image_url,
         photo_width=CARD_WIDTH,
         photo_height=CARD_HEIGHT,
         title="Приглашение в LOOP",
-        description="Открытие · вход уже открыт",
-        caption=invite_caption(launch_at),
+        description=invite_variant(variant_index)["subline"],
+        caption=invite_caption(launch_at, variant_index),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [

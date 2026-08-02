@@ -258,11 +258,9 @@ export default function App() {
             onClose={async () => {
               const active = state.results.find((card) => card.seen_at === null);
               if (!active) return;
-              try {
-                await state.markResultSeen(active.id);
-              } catch {
-                state.setError('Результат закрыт. При следующем входе он может появиться снова.');
-              }
+              // Closed is closed. The dismissal is stored locally and the call
+              // retries on its own, so a failed request is ours to worry about.
+              await state.markResultSeen(active.id).catch(() => undefined);
             }}
             onError={(message) => state.setError(message)}
           />

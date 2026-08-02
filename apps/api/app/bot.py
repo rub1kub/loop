@@ -1,5 +1,6 @@
 import asyncio
 import re
+import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
@@ -40,7 +41,7 @@ from .modules.duel.models import (
     OfferState,
 )
 from .referrals import get_or_create_referral_code
-from .result_cards import build_invite_inline, build_result_inline
+from .result_cards import INVITE_VARIANTS, build_invite_inline, build_result_inline
 
 logger = structlog.get_logger()
 
@@ -235,6 +236,7 @@ def create_dispatcher(
                         first_name=creator.first_name,
                         username=creator.username,
                         launch_at=settings.launch_at,
+                        variant_index=secrets.randbelow(len(INVITE_VARIANTS)),
                     )
                 ],
                 cache_time=30,

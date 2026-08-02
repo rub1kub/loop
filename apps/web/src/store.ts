@@ -22,7 +22,29 @@ import type {
 const mockParameters = new URLSearchParams(window.location.search);
 const mockScreen = mockParameters.get('screen');
 const now = Date.now();
-const dismissedResultIds = new Set<string>();
+// Kept across reloads: closing a card is the user saying "I have seen this",
+// and a request that never reached the server must not bring it back.
+const DISMISSED_KEY = 'loop-dismissed-results';
+
+function readDismissed(): Set<string> {
+  try {
+    const stored = window.localStorage.getItem(DISMISSED_KEY);
+    return new Set<string>(stored ? (JSON.parse(stored) as string[]) : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+const dismissedResultIds = readDismissed();
+
+function rememberDismissed(cardId: string): void {
+  dismissedResultIds.add(cardId);
+  try {
+    window.localStorage.setItem(DISMISSED_KEY, JSON.stringify([...dismissedResultIds].slice(-200)));
+  } catch {
+    // Private mode or a full quota: the in-memory set still covers this session.
+  }
+}
 
 function hideDismissedResults(results: ResultCard[]): ResultCard[] {
   const dismissedAt = new Date().toISOString();
@@ -491,7 +513,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   },
 
   async markResultSeen(cardId) {
-    dismissedResultIds.add(cardId);
+    rememberDismissed(cardId);
     const seenAt = new Date().toISOString();
     set({
       results: get().results.map((card) =>

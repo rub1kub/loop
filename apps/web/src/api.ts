@@ -154,6 +154,8 @@ const ratingSchema = z.object({
   ),
 });
 
+const IDEMPOTENT_POSTS = /^\/results\/[^/]+\/seen$/;
+
 async function restoreSession(): Promise<boolean> {
   const initData = telegramInitData();
   if (!initData) return false;
@@ -179,7 +181,9 @@ async function request<T>(path: string, init?: RequestInit, retryUnauthorized = 
   headers.set('Content-Type', 'application/json');
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   const method = (init?.method ?? 'GET').toUpperCase();
-  const canRetry = method === 'GET' || path === '/auth/telegram';
+  // Marking a card seen sets one timestamp once, so repeating it is harmless
+  // and a dropped request must not cost the user a dismissal.
+  const canRetry = method === 'GET' || path === '/auth/telegram' || IDEMPOTENT_POSTS.test(path);
   let response: Response | undefined;
   let networkError: unknown;
   const attempts = canRetry ? RETRY_DELAYS_MS.length + 1 : 1;
