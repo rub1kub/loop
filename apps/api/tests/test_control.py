@@ -163,3 +163,30 @@ async def test_application_control_follows_on_chain_ownership(client, app) -> No
 
     assert response.status_code == 403
     assert response.json()["detail"] == "connected wallet is not contract owner"
+
+
+@pytest.mark.asyncio
+async def test_withdrawal_carries_the_gas_the_contract_demands(client, app) -> None:
+    """Both contracts require more gas for a withdrawal than for anything else.
+
+    The panel sent the same amount for every admin call, so a withdrawal
+    arrived under the contract's floor and was rejected outright — the owner
+    saw a failed contract call and a bounce, with no clue why.
+    """
+    app.state.ton_client = FakeControlTonClient()
+    authorize_control(client)
+
+    withdrawal = await client.post(
+        "/api/v1/control/transactions",
+        json={"mode": "duel", "action": "withdraw_surplus", "amount_nano": 100_000_000},
+    )
+    assert withdrawal.status_code == 200, withdrawal.text
+    # WITHDRAW_GAS_BUFFER is 50_000_000 in both contracts.
+    assert int(withdrawal.json()["amount_nano"]) >= 50_000_000
+
+    pause = await client.post(
+        "/api/v1/control/transactions",
+        json={"mode": "duel", "action": "pause", "paused": True},
+    )
+    assert pause.status_code == 200, pause.text
+    assert int(pause.json()["amount_nano"]) == 30_000_000

@@ -35,7 +35,11 @@ from .ton import ContractAdminState, ContractState, TonProviderError, normalize_
 router = APIRouter(prefix="/api/v1/control", tags=["Control"])
 
 CONTROL_COOKIE = "loop_control"
+# Both contracts demand more gas for a withdrawal than for any other admin
+# call, and a call that arrives short is rejected outright — the panel sent
+# the same 0.03 for everything, so withdrawing simply bounced.
 ADMIN_GAS_NANO = 30_000_000
+WITHDRAW_GAS_NANO = 60_000_000
 MIN_RETAINED_RESERVE_NANO = 200_000_000
 
 BANK_OPCODES = {
@@ -580,7 +584,8 @@ async def prepare_control_transaction(
 
     query_id = secrets.randbelow(2**63 - 1) + 1
     payload = _write_admin_payload(body, query_id)
-    amount = ADMIN_GAS_NANO + (
+    gas = WITHDRAW_GAS_NANO if body.action == "withdraw_surplus" else ADMIN_GAS_NANO
+    amount = gas + (
         body.amount_nano if body.action == "fund_reserve" and body.amount_nano else 0
     )
     event = AdminAuditEvent(
