@@ -195,8 +195,11 @@ summary:focus-visible .disclosure-indicator {
 .story-mark {
   display: block;
   width: min(48vw, 190px);
-  /* Without a ratio the box is zero-high until the file decodes, so the copy
-     sits high and then drops as the mark appears. */
+  /* The width and height attributes on the element reserve the box before the
+     file decodes, but the height one is a presentational hint that CSS width
+     alone does not displace — without height:auto it pinned the mark to its
+     intrinsic 427px and the ratio below never applied. */
+  height: auto;
   aspect-ratio: 640 / 427;
   margin: 0 0 30px;
   opacity: 0.78;
@@ -205,6 +208,7 @@ summary:focus-visible .disclosure-indicator {
 
 .story-mark-plush {
   width: min(42vw, 168px);
+  height: auto;
   aspect-ratio: 1;
   margin-bottom: 26px;
   border: 1px solid var(--line);

@@ -20,8 +20,12 @@ from .config import Settings, get_settings
 from .database import create_database
 from .duel_notifications import (
     KIND_DUEL_MATCHED,
+    KIND_DUEL_REVEAL_SOON,
+    KIND_REFERRAL_QUALIFIED,
     match_notification_markup,
     match_notification_text,
+    referral_text,
+    reveal_reminder_text,
 )
 from .models import NotificationOutbox, ResultCard, User
 from .modules.duel.models import Duel, DuelState
@@ -135,6 +139,66 @@ async def send_with_effect(
         return await send(None)
 
 
+async def deliver_plain_alert(
+    bot: Bot,
+    session_factory: Any,
+    settings: Settings,
+    outbox_id: str,
+    kind: str,
+    user: User | None,
+    payload: dict[str, Any],
+) -> None:
+    """A confirmed friend, or the last call before a duel expires unplayed."""
+    if user is None:
+        await update_delivery(session_factory, outbox_id, state="failed", error="user_missing")
+        return
+    now = datetime.now(UTC)
+    if kind == KIND_DUEL_REVEAL_SOON:
+        deadline = datetime.fromisoformat(str(payload["reveal_deadline"]))
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=UTC)
+        # A warning that arrives after the window has closed is worse than none.
+        if now >= deadline:
+            await update_delivery(
+                session_factory, outbox_id, state="blocked", error="deadline_passed"
+            )
+            return
+        text = reveal_reminder_text(payload, now)
+        effect = settings.match_effect_id.strip()
+    else:
+        text = referral_text(payload)
+        effect = settings.referral_effect_id.strip()
+
+    try:
+        message = await send_with_effect(
+            effect,
+            lambda value: bot.send_message(
+                chat_id=user.telegram_id,
+                text=text,
+                reply_markup=match_notification_markup(settings),
+                message_effect_id=value,
+            ),
+        )
+    except TelegramRetryAfter as exc:
+        await update_delivery(
+            session_factory,
+            outbox_id,
+            state="retry",
+            error="telegram_rate_limit",
+            retry_after=exc.retry_after,
+        )
+        return
+    except TelegramForbiddenError:
+        await update_delivery(session_factory, outbox_id, state="blocked", error="bot_blocked")
+        return
+    except TelegramAPIError as exc:
+        await update_delivery(session_factory, outbox_id, state="retry", error=str(exc)[:180])
+        return
+    await update_delivery(
+        session_factory, outbox_id, state="sent", message_id=message.message_id
+    )
+
+
 async def deliver_match_alert(
     bot: Bot,
     session_factory: Any,
@@ -215,17 +279,26 @@ async def deliver_one(
         outbox = await db.get(NotificationOutbox, outbox_id)
         if outbox is None or outbox.state != "processing":
             return
-        if outbox.kind == KIND_DUEL_MATCHED:
+        kind = outbox.kind
+        if kind == KIND_DUEL_MATCHED:
             payload = json.loads(outbox.payload_json)
             player = await db.get(User, outbox.user_id)
             duel = await db.get(Duel, payload["duel_id"])
+        elif kind in (KIND_DUEL_REVEAL_SOON, KIND_REFERRAL_QUALIFIED):
+            payload = json.loads(outbox.payload_json)
+            plain_user = await db.get(User, outbox.user_id)
         else:
             payload = None
             card = await db.get(ResultCard, outbox.result_card_id)
             user = await db.get(User, outbox.user_id)
             referral = await get_or_create_referral_code(db, outbox.user_id) if user else None
-    if payload is not None:
+    if kind == KIND_DUEL_MATCHED:
         await deliver_match_alert(bot, session_factory, settings, outbox_id, player, duel, payload)
+        return
+    if kind in (KIND_DUEL_REVEAL_SOON, KIND_REFERRAL_QUALIFIED):
+        await deliver_plain_alert(
+            bot, session_factory, settings, outbox_id, kind, plain_user, payload
+        )
         return
     if card is None or user is None:
         await update_delivery(

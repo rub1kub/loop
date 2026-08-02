@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     result_effect_id: str = "5046509860389126442"
     # A match is tension, not victory, so it gets fire rather than confetti.
     match_effect_id: str = "5104841245755180586"
+    referral_effect_id: str = "5159385139981059251"
     duel_invite_signing_key: SecretStr = SecretStr("")
     duel_invite_public_key: str = ""
     # Holder fee exemption may only be enabled against DuelEscrow v1.4+

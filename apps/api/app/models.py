@@ -101,7 +101,10 @@ class NotificationOutbox(Base):
             "state IN ('pending', 'processing', 'retry', 'sent', 'blocked', 'failed')",
             name="notification_state",
         ),
-        CheckConstraint("kind IN ('result', 'duel_matched')", name="notification_kind"),
+        CheckConstraint(
+            "kind IN ('result', 'duel_matched', 'referral_qualified', 'duel_reveal_soon')",
+            name="notification_kind",
+        ),
         Index("ix_notification_outbox_due", "state", "next_attempt_at"),
     )
 

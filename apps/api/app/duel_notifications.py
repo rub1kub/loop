@@ -11,6 +11,8 @@ from .bot import main_app_deep_link
 from .config import Settings
 
 KIND_DUEL_MATCHED = "duel_matched"
+KIND_DUEL_REVEAL_SOON = "duel_reveal_soon"
+KIND_REFERRAL_QUALIFIED = "referral_qualified"
 
 
 def minutes_left(deadline: datetime, now: datetime) -> int:
@@ -43,4 +45,30 @@ def match_notification_markup(settings: Settings) -> InlineKeyboardMarkup:
                 )
             ]
         ]
+    )
+
+
+def reveal_reminder_text(payload: dict[str, Any], now: datetime) -> str:
+    """The last call before a duel expires unplayed.
+
+    Missing the window is not a loss, it is a duel that never happened: both
+    stakes go back and the match is void. Worth one message.
+    """
+    deadline = datetime.fromisoformat(str(payload["reveal_deadline"]))
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=UTC)
+    left = minutes_left(deadline, now)
+    window = "меньше минуты" if left == 0 else f"{left} мин"
+    return (
+        "Ты ещё не открыл свою дуэль.\n\n"
+        f"Осталось {window}. Если не откроет никто, ставки вернутся "
+        "и дуэли не будет."
+    )
+
+
+def referral_text(payload: dict[str, Any]) -> str:
+    confirmed = int(payload.get("qualified", 0))
+    return (
+        "Твой друг сделал первый взнос.\n\n"
+        f"Подтверждённых приглашений: {confirmed}."
     )

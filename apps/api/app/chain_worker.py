@@ -10,12 +10,17 @@ import httpx
 import structlog
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from tonsdk.boc import Cell  # type: ignore[import-untyped]
 
 from .config import get_settings
 from .control_state import contract_control_key
 from .database import create_database
-from .duel_notifications import KIND_DUEL_MATCHED
+from .duel_notifications import (
+    KIND_DUEL_MATCHED,
+    KIND_DUEL_REVEAL_SOON,
+    KIND_REFERRAL_QUALIFIED,
+)
 from .models import (
     AdminAuditEvent,
     ChainCheckpoint,
@@ -718,6 +723,34 @@ async def qualify_referral(
     attribution.status = "qualified"
     attribution.qualified_tx_hash = tx_hash
     attribution.qualified_at = datetime.now(UTC)
+    # Until now this only showed up in the profile if you went looking. The
+    # person who brought a friend in should hear about it.
+    qualified_count = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(ReferralAttribution)
+            .where(
+                ReferralAttribution.inviter_user_id == attribution.inviter_user_id,
+                ReferralAttribution.status == "qualified",
+            )
+        )
+        or 0
+    )
+    try:
+        async with db.begin_nested():
+            db.add(
+                NotificationOutbox(
+                    user_id=attribution.inviter_user_id,
+                    kind=KIND_REFERRAL_QUALIFIED,
+                    dedupe_key=f"referral:{attribution.id}",
+                    payload_json=json.dumps(
+                        {"qualified": qualified_count}, separators=(",", ":")
+                    ),
+                )
+            )
+            await db.flush()
+    except IntegrityError:
+        pass
     existing = await db.scalar(
         select(ReferralReward.id).where(
             ReferralReward.attribution_id == attribution.id,
@@ -1214,6 +1247,52 @@ async def apply_duel_transaction(
     return ProjectionResult.APPLIED
 
 
+async def warn_unrevealed_duels(db: AsyncSession) -> None:
+    """One last call before a duel expires unplayed.
+
+    Missing the reveal window is not a loss — both stakes go back and the match
+    is void, which is worse than either outcome. The warning goes out with a
+    minute or so left, and only to players who have not revealed yet.
+    """
+    now = datetime.now(UTC)
+    duels = (
+        await db.scalars(
+            select(Duel).where(
+                Duel.state == "revealing",
+                Duel.reveal_deadline > now,
+                Duel.reveal_deadline < now + timedelta(seconds=90),
+            )
+        )
+    ).all()
+    for duel in duels:
+        revealed = set(
+            await db.scalars(select(DuelReveal.offer_id).where(DuelReveal.duel_id == duel.id))
+        )
+        players = (
+            await db.scalars(select(DuelPlayer).where(DuelPlayer.duel_id == duel.id))
+        ).all()
+        for player in players:
+            if player.user_id is None or player.offer_id in revealed:
+                continue
+            payload = json.dumps(
+                {"duel_id": duel.id, "reveal_deadline": duel.reveal_deadline.isoformat()},
+                separators=(",", ":"),
+            )
+            try:
+                async with db.begin_nested():
+                    db.add(
+                        NotificationOutbox(
+                            user_id=player.user_id,
+                            kind=KIND_DUEL_REVEAL_SOON,
+                            dedupe_key=f"reveal_soon:{duel.id}:{player.user_id}",
+                            payload_json=payload,
+                        )
+                    )
+                    await db.flush()
+            except IntegrityError:
+                continue
+
+
 async def apply_transaction(
     db: Any,
     settings: Any,
@@ -1318,6 +1397,7 @@ async def run_contract_once(
                 failure_reason="funding intent expired before on-chain confirmation",
             )
         )
+        await warn_unrevealed_duels(db)
         await db.execute(
             update(MatchmakingOffer)
             .where(
