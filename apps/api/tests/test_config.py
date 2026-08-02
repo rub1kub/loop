@@ -40,6 +40,17 @@ def test_production_testnet_remains_enabled_without_mainnet_gate() -> None:
     assert not settings.mainnet_enabled
 
 
+def test_bank_debug_progress_is_scoped_by_telegram_id() -> None:
+    settings = Settings(
+        _env_file=None,
+        bank_debug_telegram_ids="123, 456",
+        bank_debug_progress_bps=6_200,
+    )
+    assert settings.bank_debug_progress_for(123) == 6_200
+    assert settings.bank_debug_progress_for(456) == 6_200
+    assert settings.bank_debug_progress_for(789) is None
+
+
 def test_production_cors_is_pinned_to_the_public_origin() -> None:
     with pytest.raises(ValidationError, match="CORS"):
         Settings(
@@ -73,6 +84,25 @@ def test_mainnet_requires_the_audited_release_and_canary() -> None:
                 mainnet_release_commit=commit,
                 mainnet_audited_commit=commit,
                 mainnet_audit_report_sha256="b" * 64,
+            ),
+        )
+
+
+def test_mainnet_rejects_bank_debug_progress() -> None:
+    commit = "a" * 40
+    with pytest.raises(ValidationError, match="BANK debug"):
+        Settings(
+            _env_file=None,
+            **production_settings(
+                ton_network_id=MAINNET_NETWORK_ID,
+                toncenter_url="https://toncenter.com",
+                mainnet_enabled=True,
+                mainnet_release_commit=commit,
+                mainnet_audited_commit=commit,
+                mainnet_audit_report_sha256="b" * 64,
+                require_duel_canary=True,
+                bank_debug_telegram_ids="123",
+                bank_debug_progress_bps=6_200,
             ),
         )
 

@@ -94,3 +94,11 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   each token's natural in-plane rotation.
 - Removed face-on perspective compression: every small token now keeps a complete, recognisable
   mark instead of occasionally collapsing it into a line.
+
+## 2026-08-03: account-scoped BANK preview
+
+- Added an opt-in, Telegram-ID-scoped BANK progress preview for persistent production UI testing.
+- The preview is calculated only while serialising API responses: PostgreSQL, the chain worker,
+  contract state, queue order and payouts remain authoritative and untouched.
+- Real progress above the preview always wins, and the mainnet configuration gate rejects the
+  override entirely.

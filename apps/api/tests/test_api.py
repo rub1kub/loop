@@ -172,6 +172,55 @@ async def test_bank_quote_is_testnet_only_and_requires_verified_wallet(client, a
     ] == 1001
 
 
+@pytest.mark.asyncio
+async def test_bank_debug_progress_is_scoped_and_never_persisted(client, app) -> None:
+    from app.modules.bank.models import BankPosition, BankPositionStatus
+
+    telegram_id = 777000111
+    settings = get_settings()
+    settings.bank_debug_telegram_ids = str(telegram_id)
+    settings.bank_debug_progress_bps = 6_200
+    headers = await authenticate(client, telegram_id)
+    wallet = await add_wallet(app, telegram_id)
+
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == telegram_id))
+        assert user is not None
+        position = BankPosition(
+            position_id=1062,
+            query_id=1062,
+            user_id=user.id,
+            wallet_id=wallet.id,
+            owner_wallet=wallet.address,
+            network=settings.ton_network_id,
+            contract_address=settings.bank_contract_address,
+            principal_nano=1_000_000_000,
+            multiplier_bps=12_500,
+            target_payout_nano=1_250_000_000,
+            funded_amount_nano=0,
+            remaining_amount_nano=1_250_000_000,
+            current_status=BankPositionStatus.QUEUED.value,
+        )
+        db.add(position)
+        await db.commit()
+        position_id = position.id
+
+    current = await client.get("/api/v1/bank/positions/current", headers=headers)
+    assert current.status_code == 200
+    assert current.json()["progress_bps"] == 6_200
+    assert current.json()["funded_amount_nano"] == 775_000_000
+    assert current.json()["remaining_amount_nano"] == 475_000_000
+    history = await client.get("/api/v1/bank/positions", headers=headers)
+    assert history.json()[0]["progress_bps"] == 6_200
+    assert settings.bank_debug_progress_for(telegram_id + 1) is None
+
+    async with app.state.session_factory() as db:
+        stored = await db.get(BankPosition, position_id)
+        assert stored is not None
+        assert stored.funded_amount_nano == 0
+        assert stored.remaining_amount_nano == 1_250_000_000
+
+
 @pytest.mark.parametrize(
     ("completed", "current", "next_limit", "remaining"),
     [

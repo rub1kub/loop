@@ -6,7 +6,7 @@ from typing import Literal
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 TESTNET_NETWORK_ID = -3
@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     bank_position_gas_nano: int = 80_000_000
     bank_min_principal_nano: int = 1_000_000_000
     bank_max_principal_nano: int = 100_000_000_000
+    # Response-only test aid. It never changes the chain projection or payout
+    # logic and is forbidden by the mainnet gate below.
+    bank_debug_telegram_ids: str = ""
+    bank_debug_progress_bps: int = Field(default=0, ge=0, le=9_999)
     duel_contract_address: str = ""
     duel_contract_code_hash: str = ""
     duel_fee_bps: int = 1000
@@ -109,6 +113,24 @@ class Settings(BaseSettings):
                 raise ValueError(f"invalid telegram id in closed beta list: {chunk!r}") from exc
         return frozenset(allowed)
 
+    @property
+    def bank_debug_ids(self) -> frozenset[int]:
+        allowed = set()
+        for chunk in self.bank_debug_telegram_ids.split(","):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            try:
+                allowed.add(int(chunk))
+            except ValueError as exc:
+                raise ValueError(f"invalid Telegram id in BANK debug list: {chunk!r}") from exc
+        return frozenset(allowed)
+
+    def bank_debug_progress_for(self, telegram_id: int) -> int | None:
+        if self.bank_debug_progress_bps and telegram_id in self.bank_debug_ids:
+            return self.bank_debug_progress_bps
+        return None
+
     def app_open_for(self, telegram_id: int, now: datetime | None = None) -> bool:
         """Whether this person gets the product, or the waiting screen."""
         allowed = self.closed_beta_ids
@@ -141,6 +163,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production(self) -> "Settings":
+        debug_ids = self.bank_debug_ids
         if self.app_env != "production":
             return self
         if self.ton_network_id not in SUPPORTED_TON_NETWORK_IDS:
@@ -203,6 +226,8 @@ class Settings(BaseSettings):
         except ValueError as exc:
             raise ValueError("DUEL invite signing key pair is invalid") from exc
         if self.ton_network_id == MAINNET_NETWORK_ID:
+            if self.bank_debug_progress_bps or debug_ids:
+                raise ValueError("mainnet forbids BANK debug progress overrides")
             if not self.mainnet_enabled:
                 raise ValueError("mainnet requires LOOP_MAINNET_ENABLED=true")
             if not self.require_duel_canary:

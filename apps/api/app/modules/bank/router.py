@@ -99,11 +99,27 @@ async def validate_principal(db: Db, settings: Config, principal_nano: int) -> B
     return limit
 
 
-async def position_view(db: Db, position: BankPosition) -> BankPositionView:
+async def position_view(
+    db: Db,
+    position: BankPosition,
+    *,
+    debug_progress_bps: int | None = None,
+) -> BankPositionView:
     progress = min(
         position.funded_amount_nano * 10_000 // max(position.target_payout_nano, 1),
         10_000,
     )
+    funded_amount = position.funded_amount_nano
+    remaining_amount = position.remaining_amount_nano
+    if debug_progress_bps is not None and position.current_status in ACTIVE_POSITION_STATES:
+        # Debug progress is a response projection only. Never hide real chain
+        # progress if it has already moved beyond the configured preview.
+        progress = max(progress, debug_progress_bps)
+        funded_amount = max(
+            funded_amount,
+            position.target_payout_nano * progress // 10_000,
+        )
+        remaining_amount = max(position.target_payout_nano - funded_amount, 0)
     proof_hash = position.payout_transaction or position.funding_transaction
     queue_position: int | None = None
     if position.queue_index is not None and position.current_status in ACTIVE_POSITION_STATES:
@@ -126,8 +142,8 @@ async def position_view(db: Db, position: BankPosition) -> BankPositionView:
         principal_nano=position.principal_nano,
         multiplier_bps=position.multiplier_bps,
         target_payout_nano=position.target_payout_nano,
-        funded_amount_nano=position.funded_amount_nano,
-        remaining_amount_nano=position.remaining_amount_nano,
+        funded_amount_nano=funded_amount,
+        remaining_amount_nano=remaining_amount,
         progress_bps=progress,
         queue_index=position.queue_index,
         queue_position=queue_position,
@@ -322,7 +338,15 @@ async def current_position(
         )
         .order_by(BankPosition.created_at.desc())
     )
-    return await position_view(db, position) if position else None
+    return (
+        await position_view(
+            db,
+            position,
+            debug_progress_bps=settings.bank_debug_progress_for(user.telegram_id),
+        )
+        if position
+        else None
+    )
 
 
 @router.get("/positions", response_model=list[BankPositionView])
@@ -343,4 +367,8 @@ async def list_positions(
             .limit(50)
         )
     ).all()
-    return [await position_view(db, position) for position in positions]
+    debug_progress = settings.bank_debug_progress_for(user.telegram_id)
+    return [
+        await position_view(db, position, debug_progress_bps=debug_progress)
+        for position in positions
+    ]
