@@ -91,4 +91,6 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Replaced the ambiguous filled TON-like triangle on every BANK token with the current official
   GRAM diamond-and-spark geometry from TON's media asset pack.
 - Kept the mark as a monochrome material stamp so it follows LOOP's visual system while retaining
-  each token's rotation, face direction and edge-on glint.
+  each token's natural in-plane rotation.
+- Removed face-on perspective compression: every small token now keeps a complete, recognisable
+  mark instead of occasionally collapsing it into a line.

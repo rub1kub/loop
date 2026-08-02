@@ -73,30 +73,12 @@ export function JarBalls({ fill }: { fill: number }) {
 
     /** The official GRAM diamond and spark, stamped into a physical token. */
     const stampGram = (ball: Ball) => {
-      const facing = Math.cos(ball.facePhase);
-      const visibility = Math.abs(facing);
-      // An almost edge-on engraving becomes a narrow glint instead of an
-      // impossibly readable logo. A negative scale naturally mirrors the
-      // reverse side and makes part of the pile face away from the viewer.
-      if (visibility < 0.14) {
-        context.save();
-        context.translate(ball.x, ball.y);
-        context.rotate(ball.angle);
-        context.beginPath();
-        context.moveTo(0, -ball.r * 0.48);
-        context.lineTo(0, ball.r * 0.48);
-        context.lineWidth = Math.max(0.6, ball.r * 0.08);
-        context.strokeStyle = 'rgba(255, 255, 255, 0.28)';
-        context.stroke();
-        context.restore();
-        return;
-      }
-
       context.save();
       context.translate(ball.x, ball.y);
       context.rotate(ball.angle);
-      context.scale(facing, 1);
-      context.globalAlpha = facing < 0 ? 0.2 + visibility * 0.16 : 0.28 + visibility * 0.28;
+      // Tokens turn freely in the screen plane, but the stamp never collapses
+      // into an edge-on line: at this size that reads as a broken logo.
+      context.globalAlpha = 0.62;
       const markScale = (ball.r * 1.16) / 100;
       context.scale(markScale, markScale);
       context.translate(-50, -52);
