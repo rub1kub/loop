@@ -67,3 +67,24 @@ export type ControlTransaction = {
   query_id: number;
   network: number;
 };
+
+export type ControlParticipant = {
+  telegram_id: number;
+  username: string | null;
+  first_name: string;
+  wallet: string | null;
+  joined_at: string;
+  bank_positions: number;
+  bank_active: number;
+  bank_deposited_nano: number;
+  bank_received_nano: number;
+  duel_offers: number;
+  duel_settled: number;
+  referrals_qualified: number;
+};
+
+export type ControlParticipants = {
+  participants: ControlParticipant[];
+  total: number;
+  generated_at: string;
+};

@@ -7,7 +7,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from tonsdk.boc import Cell  # type: ignore[import-untyped]
 from tonsdk.utils import Address  # type: ignore[import-untyped]
 
@@ -19,10 +19,12 @@ from .models import (
     ApplicationControl,
     ChainCheckpoint,
     ContractControl,
+    ReferralAttribution,
     User,
+    Wallet,
 )
 from .modules.bank.models import BankPosition, BankPositionStatus
-from .modules.duel.models import Duel, DuelOffer, DuelState
+from .modules.duel.models import Duel, DuelOffer, DuelState, OfferState
 from .schemas import WalletChallengeResponse, WalletVerifyRequest
 from .security import (
     AuthenticationError,
@@ -130,6 +132,27 @@ class ControlOverviewView(BaseModel):
     metrics: ControlMetricsView
     contracts: list[ControlContractView]
     audit: list[ControlAuditView]
+    generated_at: datetime
+
+
+class ControlParticipantView(BaseModel):
+    telegram_id: int
+    username: str | None
+    first_name: str
+    wallet: str | None
+    joined_at: datetime
+    bank_positions: int
+    bank_active: int
+    bank_deposited_nano: int
+    bank_received_nano: int
+    duel_offers: int
+    duel_settled: int
+    referrals_qualified: int
+
+
+class ControlParticipantsView(BaseModel):
+    participants: list[ControlParticipantView]
+    total: int
     generated_at: datetime
 
 
@@ -478,6 +501,115 @@ async def control_overview(
             )
             for event in events
         ],
+        generated_at=datetime.now(UTC),
+    )
+
+
+@router.get("/participants", response_model=ControlParticipantsView)
+async def control_participants(
+    wallet: ControlWallet,
+    db: Db,
+    settings: Config,
+    limit: int = 100,
+) -> ControlParticipantsView:
+    """Who is taking part, and what each of them has actually done.
+
+    Counted per user rather than per wallet: a participant who relinked keeps
+    one row. Only the current network is counted, so figures left behind on a
+    network the application has moved away from do not inflate anyone's totals.
+    """
+    del wallet
+    network = settings.ton_network_id
+    limit = max(1, min(limit, 500))
+
+    active_bank_states = [
+        BankPositionStatus.PENDING_CONFIRMATION.value,
+        BankPositionStatus.QUEUED.value,
+        BankPositionStatus.PARTIALLY_FUNDED.value,
+        BankPositionStatus.COMPLETED.value,
+    ]
+    bank = (
+        select(
+            BankPosition.user_id.label("user_id"),
+            func.count().label("positions"),
+            func.sum(
+                case((BankPosition.current_status.in_(active_bank_states), 1), else_=0)
+            ).label("active"),
+            func.sum(BankPosition.principal_nano).label("deposited"),
+            func.sum(
+                case(
+                    (
+                        BankPosition.current_status == BankPositionStatus.PAYOUT_SENT.value,
+                        BankPosition.target_payout_nano,
+                    ),
+                    else_=0,
+                )
+            ).label("received"),
+        )
+        .where(BankPosition.network == network, BankPosition.user_id.is_not(None))
+        .group_by(BankPosition.user_id)
+        .subquery()
+    )
+    duel = (
+        select(
+            DuelOffer.user_id.label("user_id"),
+            func.count().label("offers"),
+            func.sum(case((DuelOffer.state == OfferState.SETTLED.value, 1), else_=0)).label(
+                "settled"
+            ),
+        )
+        .where(DuelOffer.network == network, DuelOffer.user_id.is_not(None))
+        .group_by(DuelOffer.user_id)
+        .subquery()
+    )
+    referrals = (
+        select(
+            ReferralAttribution.inviter_user_id.label("user_id"),
+            func.count().label("qualified"),
+        )
+        .where(ReferralAttribution.status == "qualified")
+        .group_by(ReferralAttribution.inviter_user_id)
+        .subquery()
+    )
+    wallets = (
+        select(Wallet.user_id.label("user_id"), Wallet.address.label("address"))
+        .where(Wallet.active.is_(True), Wallet.network == network)
+        .subquery()
+    )
+
+    total = int(await db.scalar(select(func.count()).select_from(User)) or 0)
+    rows = (
+        await db.execute(
+            select(User, wallets.c.address, bank, duel, referrals.c.qualified)
+            .outerjoin(wallets, wallets.c.user_id == User.id)
+            .outerjoin(bank, bank.c.user_id == User.id)
+            .outerjoin(duel, duel.c.user_id == User.id)
+            .outerjoin(referrals, referrals.c.user_id == User.id)
+            .order_by(User.created_at.desc())
+            .limit(limit)
+        )
+    ).all()
+
+    participants = [
+        ControlParticipantView(
+            telegram_id=row[0].telegram_id,
+            username=row[0].username,
+            first_name=row[0].first_name,
+            wallet=row[1],
+            joined_at=row[0].created_at,
+            bank_positions=int(row[3] or 0),
+            bank_active=int(row[4] or 0),
+            bank_deposited_nano=int(row[5] or 0),
+            bank_received_nano=int(row[6] or 0),
+            duel_offers=int(row[8] or 0),
+            duel_settled=int(row[9] or 0),
+            referrals_qualified=int(row[10] or 0),
+        )
+        for row in rows
+    ]
+    return ControlParticipantsView(
+        participants=participants,
+        total=total,
         generated_at=datetime.now(UTC),
     )
 

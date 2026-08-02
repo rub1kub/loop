@@ -1499,3 +1499,121 @@ input:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+.participants-disclosure {
+  margin-bottom: 1rem;
+}
+
+.participants-body {
+  border-top: 1px solid #242424;
+}
+
+.participants-controls {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+}
+
+.participants-controls input {
+  width: 100%;
+  height: 2.7rem;
+  border: 1px solid #262626;
+  border-radius: 0.7rem;
+  background: #0d0d0d;
+  color: #eee;
+  font-size: 0.85rem;
+  padding: 0 0.8rem;
+}
+
+.participants-controls input::placeholder {
+  color: #5a5a5a;
+}
+
+.participants-sorts {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.participants-sorts button {
+  flex: 1;
+  height: 2.2rem;
+  border: 1px solid #262626;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: #7d7d7d;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.participants-sorts button.active {
+  border-color: #4a4a4a;
+  background: #171717;
+  color: #eee;
+}
+
+.participants-list article {
+  border-top: 1px solid #1d1d1d;
+  padding: 0.95rem 1rem;
+}
+
+.participants-list header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.participants-list header strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.participants-list header small {
+  color: #6c6c6c;
+  font-size: 0.7rem;
+}
+
+.participant-flag {
+  border: 1px solid #383838;
+  border-radius: 0.4rem;
+  padding: 0.2rem 0.4rem;
+  color: #cfcfcf;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.participants-list dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.55rem 0.8rem;
+  margin: 0.75rem 0 0;
+}
+
+.participants-list dt {
+  color: #666;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.participants-list dd {
+  margin: 0.15rem 0 0;
+  color: #e6e6e6;
+  font-size: 0.82rem;
+}
+
+.participant-wallet {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem !important;
+}
+
+.link-button {
+  border: 0;
+  background: none;
+  color: #ddd;
+  font-size: inherit;
+  text-decoration: underline;
+}

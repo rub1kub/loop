@@ -2,6 +2,7 @@ import type {
   ApplicationControl,
   ControlActionInput,
   ControlOverview,
+  ControlParticipants,
   ControlTransaction,
 } from './types';
 
@@ -60,6 +61,10 @@ export const controlApi = {
 
   overview(): Promise<ControlOverview> {
     return request('/overview');
+  },
+
+  participants(limit = 100): Promise<ControlParticipants> {
+    return request(`/participants?limit=${limit}`);
   },
 
   updateApplication(input: Partial<ApplicationControl>): Promise<ApplicationControl> {

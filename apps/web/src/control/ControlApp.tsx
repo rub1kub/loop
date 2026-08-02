@@ -27,6 +27,7 @@ import type {
   ContractControl,
   ControlActionInput,
   ControlOverview,
+  ControlParticipant,
 } from './types';
 
 const NANO = 1_000_000_000;
@@ -636,6 +637,160 @@ function AppSwitch({
   );
 }
 
+type ParticipantSort = 'joined' | 'deposited' | 'received';
+
+const PARTICIPANT_SORTS: Array<{ key: ParticipantSort; label: string }> = [
+  { key: 'joined', label: 'Новые' },
+  { key: 'deposited', label: 'Внесли' },
+  { key: 'received', label: 'Получили' },
+];
+
+/**
+ * The people behind the numbers, loaded only when the section is opened.
+ *
+ * The overview counts users; this answers who they are and what each of them
+ * put in and took out — the question that comes up the moment something needs
+ * to be returned to somebody by hand.
+ */
+function ParticipantsSection({ total }: { total: number }) {
+  const [people, setPeople] = useState<ControlParticipant[] | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [sort, setSort] = useState<ParticipantSort>('joined');
+  const [query, setQuery] = useState('');
+
+  const load = useCallback(() => {
+    setFailure(null);
+    controlApi
+      .participants()
+      .then((result) => setPeople(result.participants))
+      .catch((reason: unknown) =>
+        setFailure(reason instanceof Error ? reason.message : 'Не удалось загрузить участников'),
+      );
+  }, []);
+
+  const needle = query.trim().toLowerCase();
+  const shown = (people ?? [])
+    .filter((person) =>
+      needle === ''
+        ? true
+        : `${person.first_name} ${person.username ?? ''} ${person.telegram_id} ${person.wallet ?? ''}`
+            .toLowerCase()
+            .includes(needle),
+    )
+    .sort((left, right) => {
+      if (sort === 'deposited') return right.bank_deposited_nano - left.bank_deposited_nano;
+      if (sort === 'received') return right.bank_received_nano - left.bank_received_nano;
+      return Date.parse(right.joined_at) - Date.parse(left.joined_at);
+    });
+
+  return (
+    <details
+      id="participants"
+      className="history-section history-disclosure participants-disclosure"
+      onToggle={(event) => {
+        if (event.currentTarget.open && people === null && failure === null) load();
+      }}
+    >
+      <summary>
+        <div>
+          <span className="eyebrow">ЛЮДИ</span>
+          <strong>Участники</strong>
+          <small>{total === 0 ? 'Пока никого' : `Всего ${total}`}</small>
+        </div>
+        <CaretDown size={20} />
+      </summary>
+
+      <div className="participants-body">
+        <div className="participants-controls">
+          <input
+            type="search"
+            value={query}
+            placeholder="Имя, @ник, ID или кошелёк"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <div className="participants-sorts">
+            {PARTICIPANT_SORTS.map((option) => (
+              <button
+                key={option.key}
+                className={sort === option.key ? 'active' : ''}
+                onClick={() => setSort(option.key)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {failure ? (
+          <p className="empty-history">
+            {failure}{' '}
+            <button className="link-button" onClick={load}>
+              Повторить
+            </button>
+          </p>
+        ) : people === null ? (
+          <p className="empty-history">Загружаем…</p>
+        ) : shown.length === 0 ? (
+          <p className="empty-history">
+            {people.length === 0 ? 'Участников пока нет.' : 'Никто не подходит под запрос.'}
+          </p>
+        ) : (
+          <div className="participants-list">
+            {shown.map((person) => (
+              <article key={person.telegram_id}>
+                <header>
+                  <div>
+                    <strong>{person.first_name || 'Без имени'}</strong>
+                    <small>
+                      {person.username ? `@${person.username}` : `ID ${person.telegram_id}`} ·{' '}
+                      {new Date(person.joined_at).toLocaleDateString('ru-RU')}
+                    </small>
+                  </div>
+                  {person.bank_active > 0 && <span className="participant-flag">В ПИРАМИДЕ</span>}
+                </header>
+                <dl>
+                  <div>
+                    <dt>Внёс</dt>
+                    <dd>{gram(person.bank_deposited_nano)} GRAM</dd>
+                  </div>
+                  <div>
+                    <dt>Получил</dt>
+                    <dd>{gram(person.bank_received_nano)} GRAM</dd>
+                  </div>
+                  <div>
+                    <dt>Позиций</dt>
+                    <dd>
+                      {person.bank_positions}
+                      {person.bank_active > 0 ? ` · ${person.bank_active} в работе` : ''}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Дуэлей</dt>
+                    <dd>
+                      {person.duel_offers}
+                      {person.duel_settled > 0 ? ` · ${person.duel_settled} сыграно` : ''}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Привёл</dt>
+                    <dd>{person.referrals_qualified}</dd>
+                  </div>
+                  <div>
+                    <dt>Кошелёк</dt>
+                    <dd className="participant-wallet">
+                      {person.wallet ? shortAddress(person.wallet) : 'не привязан'}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 export default function ControlApp() {
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
@@ -1076,6 +1231,8 @@ export default function ControlApp() {
             </div>
           )}
         </section>
+
+        <ParticipantsSection total={overview.metrics.users} />
 
         <details id="history" className="history-section history-disclosure">
           <summary>

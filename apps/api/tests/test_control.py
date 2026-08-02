@@ -190,3 +190,88 @@ async def test_withdrawal_carries_the_gas_the_contract_demands(client, app) -> N
     )
     assert pause.status_code == 200, pause.text
     assert int(pause.json()["amount_nano"]) == 30_000_000
+
+
+@pytest.mark.asyncio
+async def test_participants_report_what_each_person_actually_did(client, app) -> None:
+    """The panel lists people, not rows.
+
+    A participant who relinked a wallet, or who left a position behind on a
+    network the application has since moved away from, must still appear once
+    with figures that match this network.
+    """
+    from app.models import ReferralAttribution, User, Wallet
+    from app.modules.bank.models import BankPosition, BankPositionStatus
+
+    settings = get_settings()
+    async with app.state.session_factory() as db:
+        inviter = User(id="u-inviter", telegram_id=501, first_name="Roma", username="akxiemy")
+        invitee = User(id="u-invitee", telegram_id=502, first_name="Flayni")
+        db.add_all([inviter, invitee])
+        db.add(
+            Wallet(
+                user_id=inviter.id,
+                network=settings.ton_network_id,
+                address="0:" + "33" * 32,
+                public_key="cc" * 32,
+                active=True,
+            )
+        )
+        db.add(
+            ReferralAttribution(
+                inviter_user_id=inviter.id,
+                invitee_user_id=invitee.id,
+                code="LOOP1",
+                status="qualified",
+            )
+        )
+        for index, (status, network) in enumerate(
+            (
+                (BankPositionStatus.PAYOUT_SENT, settings.ton_network_id),
+                (BankPositionStatus.QUEUED, settings.ton_network_id),
+                (BankPositionStatus.QUEUED, settings.ton_network_id + 1),
+            )
+        ):
+            db.add(
+                BankPosition(
+                    position_id=900 + index,
+                    user_id=inviter.id,
+                    owner_wallet="0:" + "33" * 32,
+                    network=network,
+                    contract_address="0:" + "12" * 32,
+                    query_id=900 + index,
+                    principal_nano=1_000_000_000,
+                    multiplier_bps=12_500,
+                    target_payout_nano=1_250_000_000,
+                    remaining_amount_nano=0,
+                    current_status=status.value,
+                )
+            )
+        await db.commit()
+
+    authorize_control(client)
+    response = await client.get("/api/v1/control/participants")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total"] == 2
+
+    people = {row["telegram_id"]: row for row in body["participants"]}
+    roma = people[501]
+    assert roma["username"] == "akxiemy"
+    assert roma["wallet"] == "0:" + "33" * 32
+    assert roma["bank_positions"] == 2, "the other network's position must not count"
+    assert roma["bank_active"] == 1
+    assert roma["bank_deposited_nano"] == 2_000_000_000
+    assert roma["bank_received_nano"] == 1_250_000_000
+    assert roma["referrals_qualified"] == 1
+
+    flayni = people[502]
+    assert flayni["bank_positions"] == 0
+    assert flayni["wallet"] is None
+    assert flayni["referrals_qualified"] == 0
+
+
+@pytest.mark.asyncio
+async def test_participants_stay_behind_the_owner_session(client, app) -> None:
+    app.state.ton_client = FakeControlTonClient()
+    assert (await client.get("/api/v1/control/participants")).status_code == 401
