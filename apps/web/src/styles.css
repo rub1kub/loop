@@ -532,9 +532,12 @@ summary:focus-visible .disclosure-indicator {
   transform: translateY(100%);
 }
 
+/* Only where the tab bar's strip is genuinely free: the keyboard covers it,
+   and the deposit flow replaces the whole screen. A sheet or a result card is
+   a fixed overlay on top, so handing its 70px to the screen underneath makes
+   the page behind it grow — most visibly the jar, which flexes into whatever
+   height is left. */
 .keyboard-open .screen-stage,
-.app-shell:has(.sheet-backdrop) .screen-stage,
-.app-shell:has(.result-overlay) .screen-stage,
 .app-shell:has(.bank-flow-screen) .screen-stage {
   height: 100%;
 }
