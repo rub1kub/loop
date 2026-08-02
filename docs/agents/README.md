@@ -5,19 +5,24 @@
 репозитория. Детали разнесены по связанным разделам, чтобы не восстанавливать контекст из
 истории чата.
 
-| Поле                         | Значение                                      |
-| ---------------------------- | --------------------------------------------- |
-| Статус базы знаний           | активная                                      |
-| Последняя полная сверка      | 2026-07-26 16:32 UTC                          |
-| Проверенный runtime baseline | `fc9f786d4954ab538bf095c0518064ac5dc57516`    |
-| Основная ветка               | `main`                                        |
-| Публичный лендинг            | <https://app.tonsuite.org>                    |
-| Telegram Mini App            | <https://t.me/getloopbot?startapp>            |
-| Управление владельца         | <https://app.tonsuite.org/control>            |
-| Telegram                     | [@getloopbot](https://t.me/getloopbot)        |
-| Финансовая сеть              | TON testnet, global ID `-3`                   |
-| Контракты                    | `BankQueue 1.3.0`, `DuelEscrow 1.3.0`         |
-| Mainnet                      | готов к аудиту, не готов к реальным средствам |
+> **Читай [current-state.md](current-state.md) первым.** 1–2 августа 2026 проект перешёл в
+> mainnet, переразвернул BANK и открыл вход всем до запуска. Разделы этой базы, написанные в июле,
+> описывают тот же продукт, но в testnet и с другими лимитами: где они расходятся со снимком,
+> прав снимок.
+
+| Поле                         | Значение                                   |
+| ---------------------------- | ------------------------------------------ |
+| Статус базы знаний           | активная                                   |
+| Последняя полная сверка      | 2026-08-02 19:10 UTC                       |
+| Проверенный runtime baseline | `22fa53a9d79804622c45b5d43ff0c6d50b696e68` |
+| Основная ветка               | `main`                                     |
+| Публичный лендинг            | <https://app.tonsuite.org>                 |
+| Telegram Mini App            | <https://t.me/getloopbot?startapp>         |
+| Управление владельца         | <https://app.tonsuite.org/control>         |
+| Telegram                     | [@getloopbot](https://t.me/getloopbot)     |
+| Финансовая сеть              | TON **mainnet**, global ID `-239`          |
+| Контракты                    | `BankQueue 1.4.0`, `DuelEscrow 1.5.0`      |
+| Открытие для всех            | 2026-08-05 19:30 МСК, по часам сервера     |
 
 Дата и хеш — это снимок, а не вечная истина. Перед эксплуатационным действием повторно проверь
 ветку, публичные health endpoints, живое состояние контрактов и манифесты.
@@ -129,6 +134,7 @@ Telegram Mini App                         Browser /control
 | [configuration.md](configuration.md)                 | полный безопасный справочник environment и validators         |
 | [operations.md](operations.md)                       | тесты, release, rollback, monitoring и диагностика            |
 | [decisions-and-risks.md](decisions-and-risks.md)     | решения, owner powers, риски и mainnet GO/NO-GO               |
+| [launch-and-referrals.md](launch-and-referrals.md)   | предзапуск, гейт по часам, реферальная экономика и карточки   |
 | [agent-playbooks.md](agent-playbooks.md)             | карта файлов и минимальные проверки для конкретного изменения |
 
 Профильные `docs/*.md` остаются пользовательской и операторской документацией. База
@@ -145,7 +151,8 @@ Telegram Mini App                         Browser /control
 | API, модели, миграции                   | [architecture-and-data.md](architecture-and-data.md)                     |
 | BANK                                    | [product-and-ux.md](product-and-ux.md), [blockchain.md](blockchain.md)   |
 | DUEL                                    | [product-and-ux.md](product-and-ux.md), [blockchain.md](blockchain.md)   |
-| Рейтинг или рефералы                    | [product-and-ux.md](product-and-ux.md), `apps/api/app/rating.py`         |
+| Рейтинг                                 | [product-and-ux.md](product-and-ux.md), `apps/api/app/rating.py`         |
+| Рефералы, предзапуск, открытие          | [launch-and-referrals.md](launch-and-referrals.md)                       |
 | Tolk/Acton/контракт                     | [blockchain.md](blockchain.md), `docs/contracts.md`                      |
 | Панель владельца                        | [architecture-and-data.md](architecture-and-data.md), `docs/security.md` |
 | Тесты, CI, релиз, диагностика           | [operations.md](operations.md)                                           |
