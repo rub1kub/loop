@@ -284,7 +284,8 @@ export function BankScreen({
                   потребуется; выплата не гарантирована.
                 </p>
                 <button className="primary-button" onClick={() => void showConfirmation()}>
-                  ПРОВЕРИТЬ
+                  ДАЛЬШЕ
+                  <ArrowRight aria-hidden="true" />
                 </button>
               </>
             )}
