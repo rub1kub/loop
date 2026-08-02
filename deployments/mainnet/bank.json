@@ -1,17 +1,18 @@
 {
   "contract": "BankQueue",
-  "address": "EQDy9lB3yFbqncwY0jHtoKuUVPXIEKYv0wauZMHkxawhahKn",
+  "address": "EQDnfQuYXg2V-IyQ39L9qmkiCYKgNra7s3QZhADvaLQHt8Mn",
   "network": "mainnet",
   "workchain": 0,
-  "deployed_at": "2026-08-01T18:01:08Z",
-  "deploy_transaction": "3Syz5eiAE9wNDwHgCjW+QpTVHnmRg51mMA+5Gqnvr+I=",
-  "deploy_transaction_lt": 93972926000001,
-  "deploy_masterchain_seqno": 83367043,
-  "code_hash": "0FF2E5136C4186BEA8269D426E31FAA9E7D4B8BEBF5BAEFB13B3118F677560ED",
+  "deployed_at": "2026-08-02T15:26:08Z",
+  "deploy_transaction": "s4/7Qr9m8muS+IZoovACVmF56E3o4PmUF+8zg5YZ1NU=",
+  "deploy_transaction_lt": 94159958000011,
+  "deploy_masterchain_seqno": 83542671,
+  "code_hash": "5F6E4DD83A7A38E4486B7A9C5C649B18CDE35093B7E53C6905BEF2DCD8DEF834",
   "data_hash": "D35FAADACEDB3FA939DFE3D46D090D4F59A7C0900BE1EAE3FF891590E2812250",
-  "source_commit": "904010e8b0c1651a26bd94fd44e3c66f606890a3",
+  "source_commit": "9cba3424e55f392bd87dc7e92365aa22f59be2b3",
   "compiler_version": "Tolk 1.4.0",
   "acton_version": "1.0.0",
+  "supersedes": "deployments/mainnet/bank.v1.4.0-2026-08-01.json",
   "configuration": {
     "version": "1.4.0",
     "owner": "EQBwDl1aiPL8-Yx2a1VJgkapvFIZGUB5dViMJSNnpYxzI1w8",
@@ -19,67 +20,123 @@
     "fee_bps": 1000,
     "paused": true,
     "completed_positions": 0,
-    "principal_limit_nano": 5000000000,
+    "principal_limit_nano": 1000000000,
     "locked_nano": 0,
     "min_retained_reserve_nano": 200000000,
     "min_principal_nano": 1000000000,
     "max_principal_nano": 100000000000,
+    "completions_per_gram": 5,
+    "ladder_rungs_gram": [
+      1,
+      2,
+      3,
+      5,
+      7,
+      10,
+      15,
+      20,
+      30,
+      50,
+      75,
+      100
+    ],
     "maturity_limits": [
       {
         "completed_positions": 0,
-        "principal_limit_nano": 5000000000
+        "principal_limit_nano": 1000000000
+      },
+      {
+        "completed_positions": 10,
+        "principal_limit_nano": 2000000000
+      },
+      {
+        "completed_positions": 15,
+        "principal_limit_nano": 3000000000
       },
       {
         "completed_positions": 25,
+        "principal_limit_nano": 5000000000
+      },
+      {
+        "completed_positions": 35,
+        "principal_limit_nano": 7000000000
+      },
+      {
+        "completed_positions": 50,
         "principal_limit_nano": 10000000000
       },
       {
-        "completed_positions": 100,
+        "completed_positions": 75,
         "principal_limit_nano": 15000000000
+      },
+      {
+        "completed_positions": 100,
+        "principal_limit_nano": 20000000000
+      },
+      {
+        "completed_positions": 150,
+        "principal_limit_nano": 30000000000
+      },
+      {
+        "completed_positions": 250,
+        "principal_limit_nano": 50000000000
+      },
+      {
+        "completed_positions": 375,
+        "principal_limit_nano": 75000000000
+      },
+      {
+        "completed_positions": 500,
+        "principal_limit_nano": 100000000000
       }
     ],
-    "expansion_every_completions": 250,
-    "expansion_step_nano": 5000000000,
-    "multipliers_bps": [12500, 15000, 20000],
+    "multipliers_bps": [
+      12500,
+      15000,
+      20000
+    ],
     "settled_positions_pruned": true,
-    "worst_case_cascade_gas": 861439,
+    "owner_can_refund_position_while_paused": true,
+    "owner_withdrawal_floor_nano": 200000000,
+    "worst_case_cascade_gas": 872935,
     "head_queue_index": 0,
     "next_queue_index": 0
   },
   "verified_smoke": {
-    "contract_address": "EQDdtkj66p1JMsZLhrKfBYqV-sXD95OSTvCpyA7_QoguydM6",
+    "contract_address": "EQA2fwwUGQmTSoLpw4bcF_UK0FLo1XvRaXLdL10RkV4oKHz2",
     "treasury": "EQBUzqN8CxhWPtJ1vjsTl5LenJHnFOoCT6qbrvwOBU4Iog7e",
     "first_wallet": "EQASGkgGzIZ-Jx1-6SLTYhc8HtASTbR2UwB7LCYhWFwoi4fk",
     "second_wallet": "EQBUzqN8CxhWPtJ1vjsTl5LenJHnFOoCT6qbrvwOBU4Iog7e",
-    "position_id": 901,
+    "position_id": 9401,
     "principal_nano": 1000000000,
     "multiplier_bps": 12500,
     "gas_nano": 80000000,
     "fee_nano": 100000000,
-    "first_transaction": "5vtyOPRJS4QQEvCTp/Z/9dhtR/HuO0mLINICKECO67k=",
-    "first_transaction_lt": 93975126000003,
-    "first_masterchain_seqno": 83369130,
-    "funding_position_id": 902,
+    "first_transaction": "YurmBvrQTCoir4dPLiVI8He77YG45IiIJHEgFm+mGAg=",
+    "first_transaction_lt": 94163600000003,
+    "first_masterchain_seqno": 83546219,
+    "funding_position_id": 9402,
     "funding_principal_nano": 1000000000,
     "funding_multiplier_bps": 12500,
     "funding_gas_nano": 80000000,
     "funding_fee_nano": 100000000,
-    "funding_transaction": "GpwC8yQ88FaiK2+f4jggqWbX4kXg6cKBaFzr1A9rQrQ=",
-    "funding_transaction_lt": 93975142000003,
-    "funding_masterchain_seqno": 83369151,
+    "funding_transaction": "0fWlSYPqXMrfpGggQvb4yNnN58F/WLkwyCcorkd5CDs=",
+    "funding_transaction_lt": 94163613000009,
+    "funding_masterchain_seqno": 83546228,
     "payout_nano": 1250000000,
     "remaining_funding_nano": 550000000
   },
   "source_verification": {
     "verified": true,
-    "url": "https://verifier.ton.org/EQDy9lB3yFbqncwY0jHtoKuUVPXIEKYv0wauZMHkxawhahKn",
+    "url": "https://verifier.ton.org/EQDnfQuYXg2V-IyQ39L9qmkiCYKgNra7s3QZhADvaLQHt8Mn",
     "verifier": "verifier.ton.org",
-    "verifier_id": "0x7494b4c0aca9820e02a5024a9009a84321bd379467c8be09c9d25a26f18d0b87",
-    "compiler": "tolk 1.4",
-    "verified_at": "2026-08-01T19:14:42Z",
-    "proof_transaction": "Yu9PUMCzIrZ7otby39FxUG7NDRRvYVNbcxkVJEAltg8=",
-    "proof_transaction_lt": 93983473000018,
-    "proof_masterchain_seqno": 83376958,
+    "backend": "https://verifier-mainnet.tonstudio.io/source",
+    "compiler": "tolk 1.4.0",
+    "verified_at": "2026-08-02T15:57:15Z",
+    "proof_transaction": "AuxlEueJOlixxEuRBCDR1N3QLCEcjXEha+xz5u179Rc=",
+    "proof_transaction_lt": 94164576000009,
+    "proof_masterchain_seqno": 83547168,
+    "sources_registry_item": "0:FE049495509BE2B9DFD0BFB6267DDDEACD776B995E76E5EDD80F3590A0720088",
     "published_sources": [
       "contracts/bank/BankQueue.tolk",
       "contracts/bank/errors.tolk",
@@ -87,5 +144,5 @@
       "contracts/bank/storage.tolk"
     ]
   },
-  "explorer_url": "https://tonviewer.com/EQDy9lB3yFbqncwY0jHtoKuUVPXIEKYv0wauZMHkxawhahKn"
+  "explorer_url": "https://tonviewer.com/EQDnfQuYXg2V-IyQ39L9qmkiCYKgNra7s3QZhADvaLQHt8Mn"
 }
