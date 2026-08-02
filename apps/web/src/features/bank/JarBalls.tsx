@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 
 import { telegram } from '../../telegram';
-import { createPile, pour, stepPile, targetCount } from './jarPhysics';
+import { createPile, placeSettled, pour, stepPile, targetCount } from './jarPhysics';
+import type { Ball } from './jarPhysics';
 
-const SHADES = ['#f2f2f2', '#d8d8d8', '#b9b9b9', '#969696', '#7a7a7a'];
+const NEW_TOKEN_INTERVAL = 0.095;
 
 /**
  * The jar's contents: a pit of grey balls that settles like a liquid. Gravity
@@ -31,15 +32,32 @@ export function JarBalls({ fill }: { fill: number }) {
     const pile = createPile(0, 0);
     let dpr = 1;
     let raf = 0;
+    let pourClock = 0;
 
     const resize = () => {
       const box = canvas.getBoundingClientRect();
       if (!box.width || !box.height) return;
+      const previousWidth = pile.width;
+      const previousHeight = pile.height;
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       pile.width = box.width;
       pile.height = box.height;
       canvas.width = Math.round(pile.width * dpr);
       canvas.height = Math.round(pile.height * dpr);
+
+      if (pile.balls.length && previousWidth > 0 && previousHeight > 0) {
+        const scaleX = pile.width / previousWidth;
+        const scaleY = pile.height / previousHeight;
+        for (const ball of pile.balls) {
+          ball.x *= scaleX;
+          ball.px *= scaleX;
+          ball.y *= scaleY;
+          ball.py *= scaleY;
+          ball.r *= scaleX;
+          ball.vx *= scaleX;
+          ball.vy *= scaleY;
+        }
+      }
     };
     resize();
 
@@ -51,61 +69,106 @@ export function JarBalls({ fill }: { fill: number }) {
      * pixel ratio. Flat top, point at the bottom, centre seam — the silhouette
      * is what reads at this size, so nothing finer is worth the fill.
      */
-    const stampGram = (x: number, y: number, r: number) => {
-      const s = r * 0.56;
+    const stampGram = (ball: Ball) => {
+      const facing = Math.cos(ball.facePhase);
+      const visibility = Math.abs(facing);
+      // An almost edge-on engraving becomes a narrow glint instead of an
+      // impossibly readable logo. A negative scale naturally mirrors the
+      // reverse side and makes part of the pile face away from the viewer.
+      if (visibility < 0.14) {
+        context.save();
+        context.translate(ball.x, ball.y);
+        context.rotate(ball.angle);
+        context.beginPath();
+        context.moveTo(0, -ball.r * 0.48);
+        context.lineTo(0, ball.r * 0.48);
+        context.lineWidth = Math.max(0.6, ball.r * 0.08);
+        context.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+        context.stroke();
+        context.restore();
+        return;
+      }
+
+      const s = ball.r * 0.56;
       const top = -s * 0.62;
+      context.save();
+      context.translate(ball.x, ball.y);
+      context.rotate(ball.angle);
+      context.scale(facing, 1);
+      context.globalAlpha = facing < 0 ? 0.2 + visibility * 0.16 : 0.28 + visibility * 0.28;
       context.beginPath();
-      context.moveTo(x - s, y + top);
-      context.lineTo(x + s, y + top);
-      context.lineTo(x, y + s);
+      context.moveTo(-s, top);
+      context.lineTo(s, top);
+      context.lineTo(0, s);
       context.closePath();
-      context.fillStyle = 'rgba(0, 0, 0, 0.34)';
+      context.fillStyle = 'rgba(0, 0, 0, 0.62)';
       context.fill();
       context.beginPath();
-      context.moveTo(x, y + top);
-      context.lineTo(x, y + s);
-      context.lineWidth = Math.max(0.6, r * 0.09);
-      context.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      context.moveTo(0, top);
+      context.lineTo(0, s);
+      context.lineWidth = Math.max(0.6, ball.r * 0.08);
+      context.strokeStyle = 'rgba(255, 255, 255, 0.3)';
       context.stroke();
+      context.restore();
+    };
+
+    const drawToken = (ball: Ball) => {
+      // One light source belongs to the whole jar. Material variation is kept
+      // deliberately narrow; it stops the GRAMчики looking cloned without
+      // reverting to the old random checkerboard of unrelated shades.
+      const lightX = pile.width ? 1 - ball.x / pile.width : 0.5;
+      const lightY = pile.height ? 1 - ball.y / pile.height : 0.5;
+      const grey = Math.round(151 + lightX * 45 + lightY * 12 + ball.material * 10);
+
+      context.beginPath();
+      context.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+      context.fillStyle = `rgb(${grey}, ${grey}, ${grey})`;
+      context.globalAlpha = 0.96;
+      context.fill();
+
+      context.beginPath();
+      context.arc(ball.x - ball.r * 0.08, ball.y - ball.r * 0.08, ball.r * 0.78, 3.55, 5.2);
+      context.lineWidth = Math.max(0.55, ball.r * 0.075);
+      context.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+      context.stroke();
+
+      context.beginPath();
+      context.arc(ball.x + ball.r * 0.08, ball.y + ball.r * 0.08, ball.r * 0.82, 0.15, 1.78);
+      context.lineWidth = Math.max(0.65, ball.r * 0.1);
+      context.strokeStyle = 'rgba(0, 0, 0, 0.28)';
+      context.stroke();
+
+      stampGram(ball);
     };
 
     const draw = () => {
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, pile.width, pile.height);
-      for (const ball of pile.balls) {
-        context.beginPath();
-        context.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-        context.fillStyle = ball.shade;
-        context.globalAlpha = 0.92;
-        context.fill();
-        stampGram(ball.x, ball.y, ball.r);
-      }
+      // Tokens lower in the pile sit visually in front of those above them.
+      // Sorting only the draw order does not interfere with the physics.
+      for (const ball of [...pile.balls].sort((a, b) => a.y - b.y)) drawToken(ball);
       context.globalAlpha = 1;
+      canvas.dataset.ballCount = String(pile.balls.length);
+      canvas.dataset.targetCount = String(targetCount(pile, fillRef.current));
     };
 
     const settleStatic = () => {
       // Reduced motion: lay the balls out settled, no simulation.
       pile.balls.length = 0;
       for (let i = 0; i < 400 && pile.balls.length < targetCount(pile, fillRef.current); i += 1) {
-        pour(pile, fillRef.current, SHADES);
+        pour(pile, fillRef.current);
       }
-      const sorted = [...pile.balls];
-      let x = 0;
-      let y = pile.height;
-      let rowHeight = 0;
-      for (const ball of sorted) {
-        if (x + ball.r * 2 > pile.width) {
-          x = 0;
-          y -= rowHeight * 1.72;
-          rowHeight = 0;
-        }
-        ball.x = x + ball.r;
-        ball.y = y - ball.r;
-        ball.px = ball.x;
-        ball.py = ball.y;
-        x += ball.r * 2;
-        rowHeight = Math.max(rowHeight, ball.r);
-      }
+      placeSettled(pile);
+      draw();
+    };
+
+    const settleInitialFill = () => {
+      const target = targetCount(pile, fillRef.current);
+      pour(pile, fillRef.current, Math.random, target);
+      // The first frame must tell the truth immediately. Existing progress is
+      // pre-settled off-screen; only later confirmed additions enter through
+      // the neck and visibly disturb the pile.
+      placeSettled(pile);
       draw();
     };
 
@@ -113,7 +176,18 @@ export function JarBalls({ fill }: { fill: number }) {
     const frame = (now: number) => {
       const dt = Math.min((now - last) / 1000, 1 / 30);
       last = now;
-      pour(pile, fillRef.current, SHADES);
+      const target = targetCount(pile, fillRef.current);
+      if (pile.balls.length > target) {
+        pour(pile, fillRef.current, Math.random, 0);
+      } else if (pile.balls.length < target) {
+        pourClock += dt;
+        if (pourClock >= NEW_TOKEN_INTERVAL) {
+          pour(pile, fillRef.current, Math.random, 1);
+          pourClock = 0;
+        }
+      } else {
+        pourClock = 0;
+      }
       stepPile(pile, dt);
       draw();
       raf = window.requestAnimationFrame(frame);
@@ -154,7 +228,10 @@ export function JarBalls({ fill }: { fill: number }) {
     }
 
     if (reducedMotion) settleStatic();
-    else raf = window.requestAnimationFrame(frame);
+    else {
+      settleInitialFill();
+      raf = window.requestAnimationFrame(frame);
+    }
 
     return () => {
       window.cancelAnimationFrame(raf);

@@ -72,3 +72,16 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Collapsed the boost form behind one optional `УСИЛИТЬ СВОЮ СТОРОНУ` action.
 - Replaced the user-facing reveal terminology with `ОТКРЫТЬ РЕЗУЛЬТАТ` and `ОТКРЫТЬ ДО`.
 - Kept every confirmed boost available in the collapsed `ХОД ДУЭЛИ` history.
+
+## 2026-08-02: physical BANK GRAM tokens
+
+- The BANK fill remains a collection of GRAMчики, not sand: every token now owns its engraved
+  mark, in-plane rotation, face direction and damped angular motion.
+- A shared jar light replaces random checkerboard shades; near-edge and reverse-facing marks
+  are deliberately less readable, while live additions fall through the neck one at a time.
+- Replaced the blocking 360-frame startup fast-forward with immediate random-drop placement.
+  This removes the extra startup long task and prevents equal spheres crystallising into rows.
+- Token radii vary within one recognisable set, initial placement is overlap-free, and the live
+  physics still settles without permanent jitter.
+- Targeted physics tests and mobile Chromium visual inspection cover orientation, resting,
+  overlap, fill count, viewport fit and console errors.

@@ -30,7 +30,14 @@ export interface Ball {
   vx: number;
   vy: number;
   r: number;
-  shade: string;
+  /** Rotation of the physical token and its engraved mark, in radians. */
+  angle: number;
+  angularVelocity: number;
+  /** A second axis makes some marks face away or appear almost edge-on. */
+  facePhase: number;
+  faceVelocity: number;
+  /** Small material variation; lighting itself is derived from position. */
+  material: number;
 }
 
 export interface Pile {
@@ -60,21 +67,22 @@ export function targetCount(pile: Pile, fillPercent: number): number {
  *
  * Spawning a whole fill at once packs the drop zone several times over, and
  * the solver spends the next second shoving the overlap apart. A trickle also
- * reads as sand being poured. The stream is spread across most of the jar and
- * the drop heights are staggered: down one narrow column, three balls a frame
- * land inside each other and arrive already tangled.
+ * lets each new GRAMчик be noticed. The stream is spread across most of the
+ * jar and the drop heights are staggered: down one narrow column, three balls
+ * a frame land inside each other and arrive already tangled.
  */
 export function pour(
   pile: Pile,
   fillPercent: number,
-  shades: readonly string[],
   random: () => number = Math.random,
   perFrame = 3,
 ): void {
   const target = targetCount(pile, fillPercent);
   let poured = 0;
   while (pile.balls.length < target && poured < perFrame) {
-    const r = nominalRadius(pile.width) * (0.82 + random() * 0.42);
+    // GRAMчики belong to one physical set. A controlled tolerance keeps the pile
+    // organic without turning it into unrelated large and small bubbles.
+    const r = nominalRadius(pile.width) * (0.88 + random() * 0.24);
     const x = pile.width * (0.2 + random() * 0.6);
     const y = -r - random() * r * 8;
     pile.balls.push({
@@ -85,11 +93,63 @@ export function pour(
       vx: (random() - 0.5) * 60,
       vy: 40,
       r,
-      shade: shades[Math.floor(random() * shades.length)],
+      angle: random() * Math.PI * 2,
+      angularVelocity: (random() - 0.5) * 9,
+      facePhase: random() * Math.PI * 2,
+      faceVelocity: (random() - 0.5) * 2.4,
+      material: random() - 0.5,
     });
     poured += 1;
   }
   if (pile.balls.length > target) pile.balls.length = target;
+}
+
+/**
+ * Places an existing fill as if every token had already fallen vertically.
+ *
+ * A short physics fast-forward used to do this before the first paint. Apart
+ * from blocking slower phones, equal-sized circles had enough simulated time
+ * to crystallise into conspicuous diagonal rows. Trying several random drop
+ * points per token produces a loose, non-overlapping pile immediately. Live
+ * additions still use `pour` and enter through the open top.
+ */
+export function placeSettled(pile: Pile, random: () => number = Math.random): void {
+  const placed: Ball[] = [];
+  const order = [...pile.balls].sort((a, b) => b.r - a.r);
+
+  for (const ball of order) {
+    let bestX = pile.width / 2;
+    let bestY = -Infinity;
+
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const x = ball.r + random() * Math.max(0, pile.width - ball.r * 2);
+      let y = pile.height - ball.r;
+
+      for (const other of placed) {
+        const dx = x - other.x;
+        const distance = ball.r + other.r;
+        if (Math.abs(dx) >= distance) continue;
+        const supportY = other.y - Math.sqrt(distance * distance - dx * dx);
+        y = Math.min(y, supportY);
+      }
+
+      // Greater y is the lower, more stable landing point on canvas.
+      if (y > bestY) {
+        bestX = x;
+        bestY = y;
+      }
+    }
+
+    ball.x = bestX;
+    ball.y = bestY;
+    ball.px = bestX;
+    ball.py = bestY;
+    ball.vx = 0;
+    ball.vy = 0;
+    ball.angularVelocity = 0;
+    ball.faceVelocity = 0;
+    placed.push(ball);
+  }
 }
 
 type Grid = Map<number, number[]>;
@@ -186,8 +246,20 @@ export function stepPile(pile: Pile, frameDt: number): void {
       solveWalls(pile);
     }
     for (const ball of pile.balls) {
+      const travelX = ball.x - ball.px;
+      const travel = Math.hypot(travelX, ball.y - ball.py);
       ball.vx = (ball.x - ball.px) / dt;
       ball.vy = (ball.y - ball.py) / dt;
+
+      // The token rolls with its solved movement, including displacement from
+      // neighbours. Free spin fades out once the pile comes to rest, so the
+      // marks settle with the balls instead of hovering upright or shivering.
+      ball.angularVelocity += (travelX / Math.max(ball.r, 1)) * 12;
+      ball.angle += ball.angularVelocity * dt + travelX / Math.max(ball.r, 1);
+      ball.facePhase += ball.faceVelocity * dt + (travel / Math.max(ball.r, 1)) * 0.18;
+      const angularDrag = Math.pow(0.965, dt * 60);
+      ball.angularVelocity *= angularDrag;
+      ball.faceVelocity *= angularDrag;
     }
   }
 }
