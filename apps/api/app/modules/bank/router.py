@@ -57,6 +57,16 @@ async def bank_limit(db: Db, settings: Config) -> BankLimitView:
         or 0
     )
     current, next_limit, remaining = maturity_limit(completed)
+    # What the screen shows must be what validation enforces: the smaller of
+    # the contract's maturity limit and the application's launch cap. While the
+    # cap is the binding one, growth is not reachable, so it is not promised.
+    cap = settings.bank_max_principal_nano
+    if cap:
+        current = min(current, cap)
+        if next_limit is not None:
+            next_limit = min(next_limit, cap)
+            if next_limit <= current:
+                next_limit, remaining = None, None
     return BankLimitView(
         completed_positions=completed,
         principal_limit_nano=current,
@@ -193,7 +203,9 @@ async def quote_position(
             BankPosition.network == settings.ton_network_id,
             BankPosition.contract_address == settings.bank_contract_address,
             BankPosition.current_status == BankPositionStatus.PENDING_CONFIRMATION.value,
-            BankPosition.created_at < datetime.now(UTC) - timedelta(minutes=15),
+            # The quote's valid_until is five minutes; past six the intent is
+            # unsignable and only blocks the wallet's single position slot.
+            BankPosition.created_at < datetime.now(UTC) - timedelta(minutes=6),
         )
         .values(
             current_status=BankPositionStatus.FAILED.value,

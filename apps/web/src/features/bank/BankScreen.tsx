@@ -44,7 +44,7 @@ export function BankScreen({
   const [tonConnectUI] = useTonConnectUI();
   const [wizard, setWizard] = useState<WizardStep | null>(null);
   const [details, setDetails] = useState(false);
-  const [amount, setAmount] = useState('2');
+  const [amount, setAmount] = useState('1');
   const [multiplier, setMultiplier] = useState<(typeof multipliers)[number]>(15000);
   const [fetchedPreview, setFetchedPreview] = useState<BankPreview | null>(null);
   const [limit, setLimit] = useState<BankLimit | null>(
@@ -186,7 +186,6 @@ export function BankScreen({
       await tonConnectUI.sendTransaction(
         buildBankPositionTransaction(quote, wallet.account.address, wallet.account.chain),
       );
-      setMessage('Взнос отправлен. Ждём подтверждение сети.');
       await onRefresh();
       haptic('success');
     } catch (error) {
@@ -196,6 +195,14 @@ export function BankScreen({
     } finally {
       locked.current = false;
     }
+  }
+
+  // The deposit is confirmed the moment the position stops being a pending
+  // intent. Leaving the waiting screen up past that point showed "ждём
+  // подтверждение сети" over a confirmation that had already arrived. A
+  // render-phase reset, since this is state derived from the position prop.
+  if (wizard === 'waiting' && position && position.current_status !== 'pending_confirmation') {
+    setWizard(null);
   }
 
   const progress = position?.progress_bps ?? 0;
@@ -241,8 +248,8 @@ export function BankScreen({
                   <span>GRAM</span>
                 </label>
                 <p className="form-note">
-                  От 1 до {formatGram(limit?.principal_limit_nano ?? 5_000_000_000, 0)} GRAM. Лимит
-                  растёт вместе с завершёнными позициями.
+                  От 1 до {formatGram(limit?.principal_limit_nano ?? 5_000_000_000, 0)} GRAM.
+                  {limit?.next_limit_nano ? ' Лимит растёт вместе с завершёнными позициями.' : ''}
                 </p>
                 {message && (
                   <p className="form-note is-error" role="alert">
@@ -305,7 +312,6 @@ export function BankScreen({
                   <span className="waiting-ring" />
                   <h3>Ждём подтверждение сети</h3>
                   <p>Может занять пару минут — можно закрыть и вернуться позже.</p>
-                  {message && <p className="form-note">{message}</p>}
                 </div>
                 <button className="secondary-button" onClick={() => setWizard(null)}>
                   ЗАКРЫТЬ
@@ -327,7 +333,14 @@ export function BankScreen({
 
       <button
         className={`bank-object ${position ? 'is-active' : 'is-empty'}`}
-        onClick={() => (position ? setDetails(true) : setWizard('amount'))}
+        onClick={() => {
+          if (position) {
+            setDetails(true);
+          } else {
+            setMessage('');
+            setWizard('amount');
+          }
+        }}
         aria-label={
           position
             ? `Открыть позицию BANK, собрано ${Math.round(progressPercent)}%`
@@ -356,7 +369,6 @@ export function BankScreen({
       {position ? (
         <div className="bank-state bank-active-state">
           <strong>{Math.round(progressPercent)}%</strong>
-          <span>{statusCopy[position.current_status]}</span>
           <p>{fundingCopy}</p>
           <div className="bank-cycle-metrics">
             <CycleMetric
@@ -375,7 +387,13 @@ export function BankScreen({
             <CycleMetric value={pulse?.active_bank ?? '—'} label="В ОЧЕРЕДИ" />
             <CycleMetric value={pulse?.active_participants ?? '—'} label="СЕЙЧАС В LOOP" />
           </div>
-          <button className="primary-button" onClick={() => setWizard('amount')}>
+          <button
+            className="primary-button"
+            onClick={() => {
+              setMessage('');
+              setWizard('amount');
+            }}
+          >
             СОЗДАТЬ ПОЗИЦИЮ
           </button>
         </div>

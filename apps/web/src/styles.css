@@ -601,7 +601,7 @@ summary:focus-visible .disclosure-indicator {
   inset: 0;
   overflow: hidden;
   transform: translate3d(0, calc(100% - var(--bank-fill, 0%)), 0);
-  transition: transform 28s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 6s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
 }
 
@@ -615,7 +615,7 @@ summary:focus-visible .disclosure-indicator {
   max-width: none;
   object-fit: cover;
   object-position: center top;
-  animation: bank-sand-drift 72s ease-in-out infinite alternate;
+  animation: bank-sand-drift 9s ease-in-out infinite alternate;
   pointer-events: none;
   user-select: none;
   will-change: transform;
@@ -623,13 +623,13 @@ summary:focus-visible .disclosure-indicator {
 
 @keyframes bank-sand-drift {
   0% {
-    transform: translate3d(-2.5%, 1px, 0) rotate(-0.08deg);
+    transform: translate3d(-4%, 3px, 0) rotate(-0.35deg);
   }
   50% {
-    transform: translate3d(0, -1px, 0) rotate(0.04deg);
+    transform: translate3d(0, -3px, 0) rotate(0.2deg);
   }
   100% {
-    transform: translate3d(2.5%, 1px, 0) rotate(0.1deg);
+    transform: translate3d(4%, 3px, 0) rotate(0.4deg);
   }
 }
 
@@ -1279,9 +1279,19 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .waiting-step {
+  display: grid;
   justify-items: center;
+  gap: 14px;
   padding: 24px 0 4px;
   text-align: center;
+}
+
+.waiting-step h3 {
+  margin: 0;
+}
+
+.waiting-step p {
+  margin: 0;
 }
 
 .waiting-step p {
@@ -1292,6 +1302,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .waiting-ring {
+  display: block;
   width: 48px;
   height: 48px;
   border: 1px solid var(--line);

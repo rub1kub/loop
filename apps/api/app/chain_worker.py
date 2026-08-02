@@ -1310,7 +1310,8 @@ async def run_contract_once(
             update(BankPosition)
             .where(
                 BankPosition.current_status == BankPositionStatus.PENDING_CONFIRMATION.value,
-                BankPosition.created_at < datetime.now(UTC) - timedelta(minutes=15),
+                # Matches the quote's five-minute signing window plus grace.
+                BankPosition.created_at < datetime.now(UTC) - timedelta(minutes=6),
             )
             .values(
                 current_status=BankPositionStatus.FAILED.value,
