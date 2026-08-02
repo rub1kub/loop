@@ -5,7 +5,6 @@ import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../api';
-import { DisclosureIndicator } from '../../components/DisclosureIndicator';
 import { haptic, isMockTelegram, setBackAction } from '../../telegram';
 import {
   buildBankPositionTransaction,
@@ -258,7 +257,7 @@ export function BankScreen({
             )}
             {wizard === 'multiplier' && (
               <>
-                <p className="eyebrow">ШАГ 2 ИЗ 2 · ЦЕЛЬ И ИТОГ</p>
+                <p className="eyebrow">ШАГ 2 ИЗ 2 · ЦЕЛЬ</p>
                 <h3>Выбери целевую выплату.</h3>
                 <div className="choice-list">
                   {multipliers.map((value) => (
@@ -280,52 +279,6 @@ export function BankScreen({
                   Ранние позиции наполняются первыми. Чем выше цель, тем больше новых взносов
                   потребуется; выплата не гарантирована.
                 </p>
-                {preview ? (
-                  <>
-                    <dl className="detail-list">
-                      <Detail
-                        label="К оплате в кошельке"
-                        value={`${formatGram(preview.transaction_amount_nano, 3)} GRAM`}
-                      />
-                      <Detail
-                        label="Твой взнос"
-                        value={`${formatGram(preview.principal_nano, 3)} GRAM`}
-                      />
-                      <Detail
-                        label="Целевая выплата"
-                        value={`${formatGram(preview.target_payout_nano, 3)} GRAM`}
-                      />
-                      <Detail label="Комиссия" value={`${formatGram(preview.fee_nano, 4)} GRAM`} />
-                      <Detail
-                        label="Запас на проведение"
-                        value={`${formatGram(preview.gas_nano, 3)} GRAM`}
-                      />
-                    </dl>
-                    <div className="contract-truth bank-risk-disclosure">
-                      <strong>Что произойдёт</strong>
-                      <p>
-                        Комиссия удержится из взноса. Остаток пойдёт ранним позициям; если что-то
-                        останется — начнёт наполнять твою.
-                      </p>
-                      <p>
-                        Выплата зависит от будущих взносов и может не наступить. Подписанный взнос
-                        вернуть нельзя.
-                      </p>
-                    </div>
-                    <details className="technical-details">
-                      <summary>
-                        <span>ДАННЫЕ ДЛЯ ПРОВЕРКИ</span>
-                        <DisclosureIndicator />
-                      </summary>
-                      <dl className="detail-list">
-                        <Detail
-                          label="Адрес BANK"
-                          value={`${preview.contract_address.slice(0, 7)}…${preview.contract_address.slice(-5)}`}
-                        />
-                      </dl>
-                    </details>
-                  </>
-                ) : null}
                 {message && (
                   <p className="form-note is-error" role="alert">
                     {message}
