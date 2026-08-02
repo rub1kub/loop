@@ -88,7 +88,7 @@ canary обязателен и остальные production validators прох
 не выше `10 GRAM`, а audit scope и release example рекомендуют `5 GRAM`. Post-deploy gate требует
 точного совпадения application cap с audited `release.json`.
 Debug progress меняет только API-представление активной позиции, не БД и не расчёты контракта;
-mainnet validator запрещает непустую debug-конфигурацию.
+он должен быть привязан к конкретным Telegram ID операторов и не влияет на readiness gates.
 
 ## DUEL
 

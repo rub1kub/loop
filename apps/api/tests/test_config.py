@@ -88,25 +88,6 @@ def test_mainnet_requires_the_audited_release_and_canary() -> None:
         )
 
 
-def test_mainnet_rejects_bank_debug_progress() -> None:
-    commit = "a" * 40
-    with pytest.raises(ValidationError, match="BANK debug"):
-        Settings(
-            _env_file=None,
-            **production_settings(
-                ton_network_id=MAINNET_NETWORK_ID,
-                toncenter_url="https://toncenter.com",
-                mainnet_enabled=True,
-                mainnet_release_commit=commit,
-                mainnet_audited_commit=commit,
-                mainnet_audit_report_sha256="b" * 64,
-                require_duel_canary=True,
-                bank_debug_telegram_ids="123",
-                bank_debug_progress_bps=6_200,
-            ),
-        )
-
-
 def test_mainnet_accepts_only_the_exact_audited_commit() -> None:
     commit = "a" * 40
     settings = Settings(

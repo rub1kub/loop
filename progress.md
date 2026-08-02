@@ -100,7 +100,7 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Added an opt-in, Telegram-ID-scoped BANK progress preview for persistent production UI testing.
 - The preview is calculated only while serialising API responses: PostgreSQL, the chain worker,
   contract state, queue order and payouts remain authoritative and untouched.
-- Real progress above the preview always wins, and the mainnet configuration gate rejects the
-  override entirely.
+- Real progress above the preview always wins; the override remains safe on either network because
+  no transaction builder, chain projection or contract state consumes the displayed value.
 - The VPS deploy helper now detects a pending production environment before its same-commit
   shortcut, so configuration-only releases are applied atomically instead of being skipped.

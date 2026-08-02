@@ -163,7 +163,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production(self) -> "Settings":
-        debug_ids = self.bank_debug_ids
+        _ = self.bank_debug_ids
         if self.app_env != "production":
             return self
         if self.ton_network_id not in SUPPORTED_TON_NETWORK_IDS:
@@ -226,8 +226,6 @@ class Settings(BaseSettings):
         except ValueError as exc:
             raise ValueError("DUEL invite signing key pair is invalid") from exc
         if self.ton_network_id == MAINNET_NETWORK_ID:
-            if self.bank_debug_progress_bps or debug_ids:
-                raise ValueError("mainnet forbids BANK debug progress overrides")
             if not self.mainnet_enabled:
                 raise ValueError("mainnet requires LOOP_MAINNET_ENABLED=true")
             if not self.require_duel_canary:
