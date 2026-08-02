@@ -13,6 +13,7 @@ import type {
   Invite,
   Offer,
   OfferQuote,
+  Prelaunch,
   Profile,
   PreparedResultShare,
   Rating,
@@ -51,6 +52,25 @@ const profileSchema = z.object({
     duel_fee_bps: z.number(),
     fee_discount_active: z.boolean(),
   }),
+  app_open: z.boolean(),
+  launch_at: z.string().nullable(),
+});
+
+const prelaunchSchema = z.object({
+  launch_at: z.string().nullable(),
+  referral_code: z.string(),
+  referral_url: z.string(),
+  invited: z.number(),
+  rank: z.number().nullable(),
+  leaderboard: z.array(
+    z.object({
+      first_name: z.string(),
+      username: z.string().nullable(),
+      invited: z.number(),
+      is_me: z.boolean(),
+    }),
+  ),
+  participants: z.number(),
 });
 
 const bankPositionSchema = z.object({
@@ -377,6 +397,10 @@ export const api = {
 
   async referrals(): Promise<Referral> {
     return await request('/referrals');
+  },
+
+  async prelaunch(): Promise<Prelaunch> {
+    return prelaunchSchema.parse(await request<unknown>('/prelaunch'));
   },
 
   async rating(): Promise<Rating> {

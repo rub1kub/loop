@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { api } from './api';
 import { InlineDuelPreview } from './components/InlineDuelPreview';
 import { Loader } from './components/Loader';
+import { PrelaunchScreen } from './components/PrelaunchScreen';
 import { Onboarding } from './components/Onboarding';
 import { ProfileScreen } from './components/ProfileScreen';
 import { Celebration } from './components/Celebration';
@@ -162,22 +163,8 @@ export default function App() {
 
   if (state.loading) return <Loader />;
 
-  if (state.error === 'closed_beta' && !state.profile) {
-    return (
-      <main className="fatal-screen closed-screen">
-        <img className="fatal-mark" src="/assets/loop-loader.webp" alt="" />
-        <h1>Ещё пилю</h1>
-        <p>Приложение закрыто, пока идёт разработка. Открытие скорее всего на выходных.</p>
-        <a
-          className="closed-source-link"
-          href="https://github.com/rub1kub/loop"
-          target="_blank"
-          rel="noreferrer"
-        >
-          КОД ОТКРЫТ ЦЕЛИКОМ
-        </a>
-      </main>
-    );
+  if (state.profile && !state.profile.app_open && state.prelaunch) {
+    return <PrelaunchScreen profile={state.profile} prelaunch={state.prelaunch} />;
   }
 
   if (state.error && !state.profile) {

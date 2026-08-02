@@ -105,6 +105,9 @@ class ProfileView(BaseModel):
     bank: ModeStatsView
     duel: ModeStatsView
     plush_brick: PlushBrickView
+    # False puts the client on the waiting screen: signed in, counting down.
+    app_open: bool = True
+    launch_at: datetime | None = None
 
 
 class BankPositionQuoteRequest(BaseModel):
@@ -351,6 +354,7 @@ class ActionIntent(BaseModel):
 class ReferralRewardView(BaseModel):
     cause: str
     reward_points: int
+    reward_nano: int
     payout_tx_hash: str | None
     created_at: datetime
 
@@ -361,7 +365,25 @@ class ReferralView(BaseModel):
     invited: int
     qualified: int
     reward_points: int
+    reward_nano: int
     history: list[ReferralRewardView]
+
+
+class PrelaunchLeaderView(BaseModel):
+    first_name: str
+    username: str | None
+    invited: int
+    is_me: bool
+
+
+class PrelaunchView(BaseModel):
+    launch_at: datetime | None
+    referral_code: str
+    referral_url: str
+    invited: int
+    rank: int | None
+    leaderboard: list[PrelaunchLeaderView]
+    participants: int
 
 
 class RatingFormulaItem(BaseModel):

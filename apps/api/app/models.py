@@ -190,6 +190,9 @@ class ReferralReward(Base):
     )
     cause: Mapped[str] = mapped_column(String(64), nullable=False)
     reward_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # The inviter's share of the fee from one confirmed deposit, in nanoGRAM.
+    # Accrued here, paid from the treasury; payout_tx_hash закрывает строку.
+    reward_nano: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     payout_tx_hash: Mapped[str | None] = mapped_column(String(96), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 

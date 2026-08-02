@@ -1171,3 +1171,78 @@ async def test_funding_projects_the_observed_contract_fee_not_the_quote(app) -> 
         # settlement forever, because the contract pays 1.90.
         assert offer.fee_bps == 500
         assert offer.payout_nano == 1_900_000_000
+
+
+@pytest.mark.asyncio
+async def test_confirmed_referred_deposit_accrues_the_inviter_fee_share(app) -> None:
+    """2% of every confirmed deposit by an invited person, funded by the fee.
+
+    Accrued at confirmation rather than promised at sign-up: a fake account
+    has to move real money and pay a real fee before a single nanoGRAM lands.
+    Replays of the same deposit must not double the accrual.
+    """
+    settings = get_settings()
+    async with app.state.session_factory() as db:
+        inviter = User(telegram_id=3101, first_name="Inviter")
+        invitee = User(telegram_id=3102, first_name="Invitee")
+        db.add_all([inviter, invitee])
+        await db.flush()
+        invitee_wallet = Wallet(
+            user_id=invitee.id,
+            network=-3,
+            address="0:" + "7d" * 32,
+            public_key="8d" * 32,
+            active=True,
+        )
+        db.add(invitee_wallet)
+        db.add(ReferralCode(code="feeshare", owner_user_id=inviter.id))
+        await db.flush()
+        db.add(
+            ReferralAttribution(
+                inviter_user_id=inviter.id,
+                invitee_user_id=invitee.id,
+                code="feeshare",
+            )
+        )
+        position = BankPosition(
+            position_id=310,
+            query_id=310,
+            user_id=invitee.id,
+            wallet_id=invitee_wallet.id,
+            owner_wallet=invitee_wallet.address,
+            network=-3,
+            contract_address=settings.bank_contract_address,
+            principal_nano=2_000_000_000,
+            multiplier_bps=12_500,
+            target_payout_nano=2_500_000_000,
+            remaining_amount_nano=2_500_000_000,
+        )
+        db.add(position)
+        await db.commit()
+
+        tx = transaction(
+            settings.bank_contract_address,
+            invitee_wallet.address,
+            60,
+            bank_create_body(310, 2_000_000_000, 12_500),
+            2_080_000_000,
+        )
+        assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.APPLIED
+        await db.commit()
+
+        reward = await db.scalar(
+            select(ReferralReward).where(ReferralReward.cause == f"fee_share:{position.id}")
+        )
+        assert reward is not None
+        assert reward.reward_nano == 40_000_000  # 2% of 2 GRAM
+        assert reward.reward_points == 0
+
+        # The same transaction seen again accrues nothing new.
+        assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.IGNORED
+        await db.commit()
+        total = await db.scalar(
+            select(func.count())
+            .select_from(ReferralReward)
+            .where(ReferralReward.cause == f"fee_share:{position.id}")
+        )
+        assert total == 1

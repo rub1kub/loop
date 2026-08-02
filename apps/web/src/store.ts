@@ -7,7 +7,17 @@ import {
   telegramInitData,
   telegramStartParam,
 } from './telegram';
-import type { BankPosition, Duel, Invite, Offer, Profile, Rating, ResultCard, Tab } from './types';
+import type {
+  BankPosition,
+  Duel,
+  Invite,
+  Offer,
+  Prelaunch,
+  Profile,
+  Rating,
+  ResultCard,
+  Tab,
+} from './types';
 
 const mockParameters = new URLSearchParams(window.location.search);
 const mockScreen = mockParameters.get('screen');
@@ -48,6 +58,8 @@ const demoProfile: Profile = {
     duel_fee_bps: 250,
     fee_discount_active: false,
   },
+  app_open: true,
+  launch_at: null,
 };
 
 const demoBank: BankPosition = {
@@ -263,6 +275,7 @@ interface LoopState {
   loading: boolean;
   activeTab: Tab;
   profile: Profile | null;
+  prelaunch: Prelaunch | null;
   bankPosition: BankPosition | null;
   bankHistory: BankPosition[];
   offers: Offer[];
@@ -290,6 +303,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   loading: true,
   activeTab: initialTab,
   profile: null,
+  prelaunch: null,
   bankPosition: null,
   bankHistory: [],
   offers: [],
@@ -315,6 +329,30 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         await new Promise((resolve) =>
           setTimeout(resolve, Math.max(0, 650 - (performance.now() - started))),
         );
+        if (mockScreen === 'prelaunch') {
+          set({
+            profile: {
+              ...demoProfile,
+              app_open: false,
+              launch_at: '2026-08-08T16:00:00Z',
+            },
+            prelaunch: {
+              launch_at: '2026-08-08T16:00:00Z',
+              referral_code: 'demo1234',
+              referral_url: 'https://t.me/getloopbot?startapp=ref_demo1234',
+              invited: 4,
+              rank: 2,
+              leaderboard: [
+                { first_name: 'roma', username: 'akxiemy', invited: 7, is_me: false },
+                { first_name: 'Дмитрий', username: 'loop_demo', invited: 4, is_me: true },
+                { first_name: 'I love', username: 'iloveflopp', invited: 2, is_me: false },
+              ],
+              participants: 87,
+            },
+            loading: false,
+          });
+          return;
+        }
         const empty = mockScreen === 'bank-empty';
         set({
           profile: demoProfile,
@@ -342,6 +380,10 @@ export const useLoopStore = create<LoopState>((set, get) => ({
       const initData = telegramInitData();
       if (!initData) throw new Error('Откройте LOOP внутри Telegram');
       const profile = (await api.authenticate(initData)).profile;
+      if (!profile.app_open) {
+        set({ profile, prelaunch: await api.prelaunch(), loading: false });
+        return;
+      }
       const [bankPosition, bankHistory, offers, duels, rating, results] = await Promise.all([
         api.currentBankPosition(),
         api.bankPositions(),

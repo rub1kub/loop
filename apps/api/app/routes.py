@@ -33,6 +33,8 @@ from .schemas import (
     JettonBalanceView,
     ModeStatsView,
     PlushBrickView,
+    PrelaunchLeaderView,
+    PrelaunchView,
     ProfileView,
     RatingView,
     ReferralRewardView,
@@ -131,10 +133,10 @@ async def authenticate(body: TelegramAuthRequest, db: Db, settings: Config) -> A
     except AuthenticationError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
 
-    allowed = settings.closed_beta_ids
-    if allowed and identity.telegram_id not in allowed:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "closed_beta")
-
+    # Everyone signs in, whitelisted or not: recording who invited whom only
+    # happens here, and a closed door would leave the whole warm-up week
+    # counting nothing. What the whitelist still gates is the product — see
+    # require_full_access.
     user = await db.scalar(select(User).where(User.telegram_id == identity.telegram_id))
     if user is None:
         user = User(
@@ -264,6 +266,8 @@ async def get_me(user: CurrentUser, db: Db, request: Request, settings: Config) 
     )
     return ProfileView(
         user=user_view(user),
+        app_open=settings.app_open_for(user.telegram_id),
+        launch_at=settings.launch_at,
         wallet=(
             WalletView(
                 address=wallet.address,
@@ -623,15 +627,71 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
         invited=invited or 0,
         qualified=qualified or 0,
         reward_points=sum(reward.reward_points for reward in rewards),
+        reward_nano=sum(reward.reward_nano for reward in rewards),
         history=[
             ReferralRewardView(
                 cause=reward.cause,
                 reward_points=reward.reward_points,
+                reward_nano=reward.reward_nano,
                 payout_tx_hash=reward.payout_tx_hash,
                 created_at=reward.created_at,
             )
             for reward in rewards
         ],
+    )
+
+
+@router.get("/prelaunch", response_model=PrelaunchView)
+async def prelaunch(user: CurrentUser, db: Db, settings: Config) -> PrelaunchView:
+    """Everything the waiting screen shows: the clock, my link, the race.
+
+    Deliberately reachable by people the whitelist keeps out of the product —
+    they are exactly who it is for.
+    """
+    try:
+        referral = await get_or_create_referral_code(db, user.id)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "could not create referral code",
+        ) from exc
+    counts = (
+        await db.execute(
+            select(
+                ReferralAttribution.inviter_user_id,
+                func.count().label("invited"),
+            ).group_by(ReferralAttribution.inviter_user_id)
+        )
+    ).all()
+    by_inviter = {row[0]: int(row[1]) for row in counts}
+    mine = by_inviter.get(user.id, 0)
+    top_ids = sorted(by_inviter, key=lambda key: (-by_inviter[key], key))[:10]
+    leaders = {
+        leader.id: leader
+        for leader in (
+            await db.scalars(select(User).where(User.id.in_(top_ids)))
+        ).all()
+    }
+    participants = int(await db.scalar(select(func.count()).select_from(User)) or 0)
+    return PrelaunchView(
+        launch_at=settings.launch_at,
+        referral_code=referral.code,
+        referral_url=f"https://t.me/{settings.bot_username}?startapp=ref_{referral.code}",
+        invited=mine,
+        rank=(
+            sum(1 for count in by_inviter.values() if count > mine) + 1 if mine > 0 else None
+        ),
+        leaderboard=[
+            PrelaunchLeaderView(
+                first_name=leaders[leader_id].first_name,
+                username=leaders[leader_id].username,
+                invited=by_inviter[leader_id],
+                is_me=leader_id == user.id,
+            )
+            for leader_id in top_ids
+            if leader_id in leaders
+        ],
+        participants=participants,
     )
 
 

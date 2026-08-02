@@ -1,5 +1,6 @@
 import re
 import secrets
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Literal
 
@@ -58,6 +59,10 @@ class Settings(BaseSettings):
     duel_contract_code_hash: str = ""
     duel_fee_bps: int = 1000
     closed_beta_telegram_ids: str = ""
+    # When set, the whitelist above is a head start rather than a wall: anyone
+    # may sign in and wait, and at this moment the app opens for everyone with
+    # no deploy — the launch happens by clock, not by somebody at a keyboard.
+    launch_at: datetime | None = None
     # Telegram publishes no list of message effects, and the community ones
     # disagree, so this is configurable and its failure is never fatal.
     result_effect_id: str = "5046509860389126442"
@@ -103,6 +108,18 @@ class Settings(BaseSettings):
             except ValueError as exc:
                 raise ValueError(f"invalid telegram id in closed beta list: {chunk!r}") from exc
         return frozenset(allowed)
+
+    def app_open_for(self, telegram_id: int, now: datetime | None = None) -> bool:
+        """Whether this person gets the product, or the waiting screen."""
+        allowed = self.closed_beta_ids
+        if not allowed or telegram_id in allowed:
+            return True
+        if self.launch_at is None:
+            return False
+        launch = self.launch_at
+        if launch.tzinfo is None:
+            launch = launch.replace(tzinfo=UTC)
+        return (now or datetime.now(UTC)) >= launch
 
     @property
     def cors_origin_list(self) -> list[str]:

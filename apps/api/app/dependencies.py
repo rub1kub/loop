@@ -40,6 +40,21 @@ async def current_user(
 CurrentUser = Annotated[User, Depends(current_user)]
 
 
+async def require_full_access(user: CurrentUser, settings: Config) -> User:
+    """The product itself, as opposed to signing in.
+
+    Before launch anyone may authenticate — that is how a referral gets
+    recorded and how the waiting screen knows who you are — but BANK and DUEL
+    stay behind the whitelist until the clock opens them for everyone.
+    """
+    if not settings.app_open_for(user.telegram_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "prelaunch")
+    return user
+
+
+FullAccessUser = Annotated[User, Depends(require_full_access)]
+
+
 async def current_control_wallet(request: Request, settings: Config) -> str:
     token = request.cookies.get("loop_control")
     if not token:

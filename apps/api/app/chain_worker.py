@@ -651,6 +651,7 @@ async def apply_bank_transaction(
     )
     position.confirmed_at = datetime.fromtimestamp(int(transaction["now"]), UTC)
     position.funding_transaction = tx_hash
+    await accrue_referral_fee_share(db, position=position)
     ahead = await db.scalar(
         select(func.count())
         .select_from(BankPosition)
@@ -690,6 +691,48 @@ async def apply_bank_transaction(
     )
     db.add(event)
     return ProjectionResult.APPLIED
+
+
+# Из десяти процентов комиссии двадцатая часть взноса уходит пригласившему:
+# 2% с каждого подтверждённого депозита приведённого человека, навсегда.
+REFERRAL_FEE_SHARE_BPS = 200
+
+
+async def accrue_referral_fee_share(db: Any, *, position: Any) -> None:
+    """Credit the inviter with their share of one confirmed deposit.
+
+    Funded by the protocol fee rather than by promises, so a fake account has
+    to deposit real money and pay a real fee before anything accrues. The
+    position's uuid keys the cause, making the accrual idempotent per deposit
+    under the (attribution, cause) unique constraint.
+    """
+    if position.user_id is None:
+        return
+    attribution = await db.scalar(
+        select(ReferralAttribution).where(
+            ReferralAttribution.invitee_user_id == position.user_id,
+            ReferralAttribution.status.in_(("pending", "qualified")),
+        )
+    )
+    if attribution is None:
+        return
+    reward = position.principal_nano * REFERRAL_FEE_SHARE_BPS // 10_000
+    if reward <= 0:
+        return
+    cause = f"fee_share:{position.id}"
+    try:
+        async with db.begin_nested():
+            db.add(
+                ReferralReward(
+                    attribution_id=attribution.id,
+                    cause=cause,
+                    reward_points=0,
+                    reward_nano=reward,
+                )
+            )
+            await db.flush()
+    except IntegrityError:
+        pass
 
 
 async def qualify_referral(

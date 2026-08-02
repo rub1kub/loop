@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, update
 
 from ...control_state import effective_contract_fee, ensure_mode_enabled
-from ...dependencies import Config, CurrentUser, Db
+from ...dependencies import Config, CurrentUser, Db, require_full_access
 from ...models import Wallet
 from ...schemas import (
     BankContractCall,
@@ -18,7 +18,12 @@ from ...schemas import (
 from ...ton import explorer_transaction_url
 from .models import BankPayout, BankPosition, BankPositionStatus
 
-router = APIRouter(prefix="/bank", tags=["BANK"])
+router = APIRouter(
+    prefix="/bank",
+    tags=["BANK"],
+    # Signing in is open to everyone before launch; the product is not.
+    dependencies=[Depends(require_full_access)],
+)
 
 
 ACTIVE_POSITION_STATES = [

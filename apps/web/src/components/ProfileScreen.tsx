@@ -35,6 +35,7 @@ const demoReferral: Referral = {
   invited: 3,
   qualified: 1,
   reward_points: 100,
+  reward_nano: 0,
   history: [],
 };
 

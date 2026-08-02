@@ -89,7 +89,12 @@ def test_control_session_has_separate_audience_and_expiry() -> None:
 
 
 @pytest.mark.asyncio
-async def test_closed_beta_admits_only_the_listed_telegram_ids(client, monkeypatch) -> None:
+async def test_closed_beta_gates_the_product_but_not_the_door(client, monkeypatch) -> None:
+    """Anyone signs in; the whitelist decides who gets past the waiting screen.
+
+    Rejecting the sign-in itself would leave the warm-up week recording no
+    referrals at all — attribution happens at first authentication.
+    """
     from app.config import get_settings
 
     def init_data_for(telegram_id: int) -> str:
@@ -99,24 +104,40 @@ async def test_closed_beta_admits_only_the_listed_telegram_ids(client, monkeypat
             user=json.dumps({"id": telegram_id, "first_name": "Loop"}, separators=(",", ":")),
         )
 
+    def headers_for(response) -> dict[str, str]:
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
     monkeypatch.setenv("LOOP_CLOSED_BETA_TELEGRAM_IDS", "1084693264")
+    monkeypatch.setenv("LOOP_LAUNCH_AT", "2100-01-01T00:00:00Z")
     get_settings.cache_clear()
 
-    denied = await client.post(
+    waiting = await client.post(
         "/api/v1/auth/telegram", json={"init_data": init_data_for(555_001)}
     )
-    assert denied.status_code == 403
-    assert denied.json()["detail"] == "closed_beta"
+    assert waiting.status_code == 200, waiting.text
+    me = await client.get("/api/v1/me", headers=headers_for(waiting))
+    assert me.json()["app_open"] is False
+    assert me.json()["launch_at"] == "2100-01-01T00:00:00Z"
+
+    blocked = await client.get("/api/v1/bank/limits", headers=headers_for(waiting))
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"] == "prelaunch"
+    # The waiting screen's own data stays reachable.
+    assert (await client.get("/api/v1/prelaunch", headers=headers_for(waiting))).status_code == 200
+    assert (await client.get("/api/v1/referrals", headers=headers_for(waiting))).status_code == 200
 
     allowed = await client.post(
         "/api/v1/auth/telegram", json={"init_data": init_data_for(1_084_693_264)}
     )
-    assert allowed.status_code == 200
+    assert (await client.get("/api/v1/me", headers=headers_for(allowed))).json()["app_open"] is True
+
+    # The launch happens by clock, with no deploy at the stroke of the hour.
+    monkeypatch.setenv("LOOP_LAUNCH_AT", "2020-01-01T00:00:00Z")
+    get_settings.cache_clear()
+    assert (await client.get("/api/v1/me", headers=headers_for(waiting))).json()["app_open"] is True
+    limits = await client.get("/api/v1/bank/limits", headers=headers_for(waiting))
+    assert limits.status_code == 200
 
     monkeypatch.delenv("LOOP_CLOSED_BETA_TELEGRAM_IDS", raising=False)
+    monkeypatch.delenv("LOOP_LAUNCH_AT", raising=False)
     get_settings.cache_clear()
-
-    reopened = await client.post(
-        "/api/v1/auth/telegram", json={"init_data": init_data_for(555_002)}
-    )
-    assert reopened.status_code == 200

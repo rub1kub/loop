@@ -30,6 +30,8 @@ const profile: Profile = {
     duel_fee_bps: 250,
     fee_discount_active: false,
   },
+  app_open: true,
+  launch_at: null,
 };
 
 const position: BankPosition = {

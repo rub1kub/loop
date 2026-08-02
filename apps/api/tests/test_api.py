@@ -16,7 +16,12 @@ from app.modules.duel.models import Duel, DuelOffer, DuelState, OfferState
 from app.ton import ContractState, JettonWalletState, verify_holder_fee_permit
 
 
-def signed_init_data(telegram_id: int = 777000111, *, photo_url: str | None = None) -> str:
+def signed_init_data(
+    telegram_id: int = 777000111,
+    *,
+    photo_url: str | None = None,
+    start_param: str | None = None,
+) -> str:
     user = {"id": telegram_id, "first_name": "Loop"}
     if photo_url:
         user["photo_url"] = photo_url
@@ -25,6 +30,8 @@ def signed_init_data(telegram_id: int = 777000111, *, photo_url: str | None = No
         "query_id": f"AAE-api-{telegram_id}",
         "user": json.dumps(user, separators=(",", ":")),
     }
+    if start_param:
+        values["start_param"] = start_param
     check = "\n".join(f"{key}={values[key]}" for key in sorted(values))
     secret = hmac.new(b"WebAppData", b"123456:test-token", hashlib.sha256).digest()
     values["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
@@ -653,3 +660,40 @@ async def test_queue_size_counts_only_the_contract_people_can_join(client, app) 
     rating = await client.get("/api/v1/rating", headers=headers)
     assert rating.status_code == 200, rating.text
     assert rating.json()["pulse"]["active_bank"] == 0
+
+
+@pytest.mark.asyncio
+async def test_prelaunch_ranks_inviters_and_accrues_nothing_for_zero(client, app) -> None:
+    """The waiting screen's race: counted by invitations, ranked honestly."""
+    inviter_headers = await authenticate(client)
+    async with app.state.session_factory() as db:
+        inviter = await db.scalar(select(User).where(User.telegram_id == 777000111))
+        assert inviter is not None
+        from app.referrals import get_or_create_referral_code
+
+        code = (await get_or_create_referral_code(db, inviter.id)).code
+        await db.commit()
+
+    # Two people arrive through the link, a third arrives on their own.
+    for invitee_id in (555_100, 555_101):
+        response = await client.post(
+            "/api/v1/auth/telegram",
+            json={"init_data": signed_init_data(invitee_id, start_param=f"ref_{code}")},
+        )
+        assert response.status_code == 200, response.text
+    await client.post(
+        "/api/v1/auth/telegram", json={"init_data": signed_init_data(555_102)}
+    )
+
+    view = (await client.get("/api/v1/prelaunch", headers=inviter_headers)).json()
+    assert view["invited"] == 2
+    assert view["rank"] == 1
+    assert view["participants"] == 4
+    top = view["leaderboard"][0]
+    assert top["is_me"] is True and top["invited"] == 2
+
+    # Somebody who invited nobody is unranked rather than tied for first.
+    other = await authenticate(client, 555_102)
+    other_view = (await client.get("/api/v1/prelaunch", headers=other)).json()
+    assert other_view["rank"] is None
+    assert other_view["invited"] == 0

@@ -1,12 +1,12 @@
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import aliased
 
 from ...control_state import effective_contract_fee, ensure_mode_enabled
-from ...dependencies import Config, CurrentUser, Db
+from ...dependencies import Config, CurrentUser, Db, require_full_access
 from ...models import Wallet
 from ...schemas import (
     ActionIntent,
@@ -36,7 +36,12 @@ from .models import (
     OfferState,
 )
 
-router = APIRouter(prefix="/duels", tags=["DUEL"])
+router = APIRouter(
+    prefix="/duels",
+    tags=["DUEL"],
+    # Signing in is open to everyone before launch; the product is not.
+    dependencies=[Depends(require_full_access)],
+)
 ACTION_GAS_NANO = 30_000_000
 BOOST_GAS_NANO = 50_000_000
 MAX_DUEL_CHANCE_BPS = 9_000

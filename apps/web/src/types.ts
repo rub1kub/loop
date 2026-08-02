@@ -132,6 +132,26 @@ export interface Profile {
   bank: ModeStats;
   duel: ModeStats;
   plush_brick: PlushBrick;
+  /** False keeps the client on the waiting screen: signed in, counting down. */
+  app_open: boolean;
+  launch_at: string | null;
+}
+
+export interface PrelaunchLeader {
+  first_name: string;
+  username: string | null;
+  invited: number;
+  is_me: boolean;
+}
+
+export interface Prelaunch {
+  launch_at: string | null;
+  referral_code: string;
+  referral_url: string;
+  invited: number;
+  rank: number | null;
+  leaderboard: PrelaunchLeader[];
+  participants: number;
 }
 
 export type BankStatus =
@@ -315,9 +335,11 @@ export interface Referral {
   invited: number;
   qualified: number;
   reward_points: number;
+  reward_nano: number;
   history: {
     cause: string;
     reward_points: number;
+    reward_nano: number;
     payout_tx_hash: string | null;
     created_at: string;
   }[];
