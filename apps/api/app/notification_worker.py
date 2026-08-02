@@ -11,6 +11,7 @@ from aiogram.exceptions import (
     TelegramForbiddenError,
     TelegramRetryAfter,
 )
+from aiogram.types import Message
 from anyio import Path
 from sqlalchemy import select, update
 
@@ -218,7 +219,7 @@ async def deliver_one(
     celebratory = card.mode != "bank_entry" and card.payout_nano > card.contributed_nano
     effect_id = settings.result_effect_id.strip() if celebratory else ""
 
-    async def send(with_effect: bool):
+    async def send(with_effect: bool) -> Message:
         return await bot.send_photo(
             chat_id=user.telegram_id,
             photo=result_card_image_url(settings, card),
@@ -228,7 +229,7 @@ async def deliver_one(
                 settings,
                 referral.code if referral else None,
             ),
-            **({"message_effect_id": effect_id} if with_effect else {}),
+            message_effect_id=effect_id if with_effect else None,
         )
 
     try:
