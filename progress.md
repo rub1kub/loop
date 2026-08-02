@@ -63,3 +63,12 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   settled without leaving locked value.
 - API (82), web (57), security (13), fresh migration, and four repeated viewport/keyboard
   stress modes pass.
+
+## 2026-08-02: simplified DUEL surface
+
+- Kept the DuelEscrow flow and all recovery actions unchanged; this iteration is frontend-only.
+- Reduced the idle screen to stake, equal start, winner payout and one plain-language rule.
+- Moved fee, pool math and timeout details behind `КАК ЭТО РАБОТАЕТ`.
+- Collapsed the boost form behind one optional `УСИЛИТЬ СВОЮ СТОРОНУ` action.
+- Replaced the user-facing reveal terminology with `ОТКРЫТЬ РЕЗУЛЬТАТ` and `ОТКРЫТЬ ДО`.
+- Kept every confirmed boost available in the collapsed `ХОД ДУЭЛИ` history.

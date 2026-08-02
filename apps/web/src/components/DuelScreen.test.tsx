@@ -109,24 +109,18 @@ describe('DuelScreen', () => {
     );
 
     expect(screen.getByText('50/50')).toBeInTheDocument();
-    expect(screen.getByText('РАВНЫЕ УСЛОВИЯ')).toBeInTheDocument();
+    expect(screen.getByText('РАВНЫЙ СТАРТ')).toBeInTheDocument();
     expect(screen.getByLabelText('Ставка в GRAM')).toBeInTheDocument();
     expect(screen.getByText('ВВЕДИ СУММУ')).toBeInTheDocument();
-    expect(screen.getByText('Ставки')).toBeInTheDocument();
-    expect(screen.getByText('1 + 1 GRAM')).toBeInTheDocument();
+    expect(screen.getByText('Твоя ставка')).toBeInTheDocument();
+    expect(screen.getByText('1 GRAM')).toBeInTheDocument();
     expect(screen.getByText('Победитель получит')).toBeInTheDocument();
-    expect(screen.getByText('0,05 GRAM')).toBeInTheDocument();
-    expect(screen.getByText(/Старт 50\/50/)).toBeVisible();
-    expect(
-      screen.getByText(
-        /есть минута на усиление; каждое усиление продлевает её, но не дольше трёх минут/,
-      ),
-    ).toBeVisible();
-    expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
-    expect(screen.getByText('ВОЗВРАТ И ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
-    expect(screen.queryByText('Твоя ставка')).not.toBeInTheDocument();
-    expect(screen.queryByText(/После ставки своё число изменить нельзя/)).not.toBeVisible();
-    expect(screen.getByText(/Откроет только соперник — он забирает весь пул/)).toBeInTheDocument();
+    expect(screen.getByText(/Старт — 50\/50/)).toBeVisible();
+    expect(screen.getByText(/каждый может увеличить свою долю/)).toBeVisible();
+    expect(screen.getByText('КАК ЭТО РАБОТАЕТ').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('КАК ЭТО РАБОТАЕТ').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
+    expect(screen.getByText('Комиссия')).not.toBeVisible();
+    expect(screen.getByText(/Если результат откроет только один игрок/)).not.toBeVisible();
     expect(screen.queryByText(/Можно закрыть приложение/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeInTheDocument();
     expect(screen.queryByText(/Одинаковая ставка/)).not.toBeInTheDocument();
@@ -141,8 +135,10 @@ describe('DuelScreen', () => {
     );
 
     expect(screen.getByText(/ВЫЗОВ ОТ МИША/)).toBeInTheDocument();
-    expect(screen.getByText('1 + 1 GRAM')).toBeInTheDocument();
-    expect(screen.getByText('0,05 GRAM')).toBeInTheDocument();
+    expect(screen.getByText('Твоя ставка')).toBeInTheDocument();
+    expect(screen.getByText('1 GRAM')).toBeInTheDocument();
+    expect(screen.getByText('1,95 GRAM')).toBeInTheDocument();
+    expect(screen.getByText('Комиссия')).not.toBeVisible();
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
   });
 
@@ -196,12 +192,17 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(
-      screen.getByText('Соперник найден. Усилиться может каждый — твой шанс может и упасть.'),
-    ).toBeVisible();
+    expect(screen.getByText('Можно подождать или увеличить свою долю.')).toBeVisible();
+    expect(screen.getByText('50 / 50')).toBeVisible();
+    expect(screen.queryByLabelText('Сумма усиления в GRAM')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'УСИЛИТЬ СВОЮ СТОРОНУ' }));
+
     expect(screen.getByLabelText('Сумма усиления в GRAM')).toHaveValue('0.5');
-    expect(screen.getByText('После подтверждения:')).toHaveTextContent('60,0%');
-    expect(screen.getByRole('button', { name: 'УСИЛИТЬ' })).toBeVisible();
+    expect(screen.getByText('Твоя доля станет')).toHaveTextContent('60,0%');
+    expect(screen.getByRole('button', { name: 'ПОДТВЕРДИТЬ УСИЛЕНИЕ' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'НЕ СЕЙЧАС' }));
+    expect(screen.queryByLabelText('Сумма усиления в GRAM')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).not.toBeInTheDocument();
   });
 

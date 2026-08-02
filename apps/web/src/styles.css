@@ -1709,28 +1709,10 @@ details[open] > summary .disclosure-indicator svg {
   text-align: left;
 }
 
-.duel-chance-labels {
-  display: flex;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 760;
-  letter-spacing: 0.1em;
-}
-
-.duel-chance-track {
-  overflow: hidden;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--line);
-}
-
-.duel-chance-track span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--ink);
-  transition: width 500ms var(--ease-apple);
+.duel-boost-toggle {
+  width: min(100%, 360px);
+  min-height: 48px;
+  margin-top: 16px;
 }
 
 .boost-input {
@@ -1799,10 +1781,34 @@ details[open] > summary .disclosure-indicator svg {
   text-align: center;
 }
 
+.duel-boost-dismiss {
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.1em;
+}
+
+.duel-events-details {
+  width: min(100%, 360px);
+  margin-top: 8px;
+  border-bottom: 0;
+}
+
+.duel-events-details summary {
+  min-height: 42px;
+}
+
+.duel-events-details[open] {
+  padding-bottom: 4px;
+}
+
 .duel-boost-events {
   display: grid;
   gap: 6px;
-  margin: 1px 0 0;
+  margin: 2px 0 0;
   padding: 0;
   list-style: none;
 }

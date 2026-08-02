@@ -78,6 +78,7 @@ export function DuelScreen({
   const chance = invite?.chance_bps ?? DEFAULT_CHANCE_BPS;
   const [mode, setMode] = useState<'afk' | 'direct'>(invite ? 'direct' : 'afk');
   const [busy, setBusy] = useState(false);
+  const [boostPanelDuelId, setBoostPanelDuelId] = useState<string | null>(null);
   const [mockSearching, setMockSearching] = useState(false);
   const [mockExpiresAt, setMockExpiresAt] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'error' }>(() => ({
@@ -114,6 +115,7 @@ export function DuelScreen({
   const duelBoosting = Boolean(
     activeDuel && activeDuel.state === 'boosting' && boostDeadline && boostDeadline >= now,
   );
+  const boostPanelOpen = Boolean(activeDuel && duelBoosting && boostPanelDuelId === activeDuel.id);
 
   useEffect(() => {
     if (!activeDuel) {
@@ -259,11 +261,11 @@ export function DuelScreen({
           ...(acceptedInvite ? { counterOfferId: acceptedInvite.counter_offer_id } : {}),
         });
         await storeDuelSecret(offerId, secret.toString(16).padStart(64, '0'));
-        setMessage('Подпиши ставку во внешнем кошельке.');
+        setMessage('Подтверди ставку в кошельке.');
         await tonConnectUI.sendTransaction(
           buildOpenOfferTransaction(quote, wallet.account.address, wallet.account.chain),
         );
-        setMessage('Проверяем ставку. Кошелёк её отправил — сеть ещё не подтвердила.');
+        setMessage('Кошелёк отправил ставку. Ждём подтверждение.');
         await onRefresh();
         haptic('success');
       } catch (error) {
@@ -385,7 +387,8 @@ export function DuelScreen({
           contractAddress: contract.address,
         }),
       );
-      setMessage('Усиление отправлено. Шанс изменится после подтверждения.');
+      setMessage('Ждём подтверждение. После него шанс изменится.');
+      setBoostPanelDuelId(null);
       await onRefresh();
       haptic('success');
     } catch (error) {
@@ -426,7 +429,7 @@ export function DuelScreen({
   const activeActionLabel = activeOffer
     ? activeOffer.state === 'matched'
       ? duelExpired
-        ? 'ЗАВЕРШИТЬ ПО ТАЙМАУТУ'
+        ? 'ЗАВЕРШИТЬ ДУЭЛЬ'
         : duelBoosting || activeDuel?.own_revealed
           ? null
           : 'ОТКРЫТЬ РЕЗУЛЬТАТ'
@@ -450,7 +453,7 @@ export function DuelScreen({
   return (
     <section className="screen duel-screen" aria-labelledby="duel-title">
       <header className="mode-header">
-        <p className="eyebrow">ВЫЗОВ 1 НА 1</p>
+        <p className="eyebrow">ИГРА 1 НА 1</p>
         <h1 id="duel-title">DUEL</h1>
       </header>
 
@@ -501,39 +504,39 @@ export function DuelScreen({
               </label>
               <div className="duel-equal-rule">
                 <strong>50/50</strong>
-                <span>РАВНЫЕ УСЛОВИЯ</span>
+                <span>РАВНЫЙ СТАРТ</span>
               </div>
             </>
           )}
 
-          <dl className="duel-terms duel-primary-terms" aria-label="Расчёт DUEL">
-            <Term
-              label="Ставки"
-              value={`${formatGram(terms.stake, 3)} + ${formatGram(terms.opponentStake, 3)} GRAM`}
-            />
+          <dl className="duel-terms duel-primary-terms" aria-label="Главные условия DUEL">
+            <Term label="Твоя ставка" value={`${formatGram(terms.stake, 3)} GRAM`} />
             <Term label="Победитель получит" value={`${formatGram(payoutNano, 3)} GRAM`} />
-            <Term label="Комиссия" value={`${formatGram(feeNano, 4)} GRAM`} />
           </dl>
           <p className="duel-deadline-rule">
             <ShieldCheck aria-hidden="true" />
-            Старт 50/50. После пары есть минута на усиление; каждое усиление продлевает её, но не
-            дольше трёх минут.
+            Старт — 50/50. Пока идёт таймер, каждый может увеличить свою долю. Победитель получает
+            общий банк.
           </p>
           <details className="technical-details duel-breakdown">
             <summary>
-              <span>ВОЗВРАТ И ПРАВИЛА</span>
+              <span>КАК ЭТО РАБОТАЕТ</span>
               <DisclosureIndicator />
             </summary>
             <p>
-              После ставки своё число изменить нельзя. Результат нужно открыть самому, и на это есть
-              пять минут после конца усиления. Откроют оба — забирает победитель. Откроет только
-              соперник — он забирает весь пул. Не откроет никто — обе ставки вернутся.
+              Соперник ставит столько же. После встречи у вас есть минута: можно подождать или
+              добавить GRAM к своей стороне. Затем каждый открывает результат в кошельке. Если этого
+              не сделает никто, ставки вернутся.
             </p>
             <dl className="detail-list">
-              <Term label="Общая сумма" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
-              <Term label="Чистый результат победы" value={`+${formatGram(profitNano, 3)} GRAM`} />
+              <Term label="Общий банк" value={`${formatGram(terms.totalPool, 3)} GRAM`} />
+              <Term label="Комиссия" value={`${formatGram(feeNano, 4)} GRAM`} />
+              <Term label="Разница при победе" value={`+${formatGram(profitNano, 3)} GRAM`} />
             </dl>
-            <p>Поиск можно остановить и вернуть ставку — возврат подписывается в кошельке.</p>
+            <p>
+              Если результат откроет только один игрок, он победит. До встречи поиск можно
+              остановить и вернуть ставку через кошелёк.
+            </p>
           </details>
         </div>
       )}
@@ -552,20 +555,22 @@ export function DuelScreen({
           <strong>
             {status === 'matched'
               ? duelBoosting
-                ? 'Соперник найден. Усилиться может каждый — твой шанс может и упасть.'
-                : 'Усиление закрыто. Открывай результат: не откроешь — пул заберёт соперник один.'
+                ? 'Можно подождать или увеличить свою долю.'
+                : 'Время вышло. Открой результат.'
               : offerExpired
-                ? 'Соперник не нашёлся, срок вызова истёк. Ставка цела — забери её кнопкой ниже.'
-                : 'Ищем соперника с такой же ставкой. Ставка уже списана. Найдётся — вернись и открой результат: не откроешь сам, пул заберёт он один.'}
+                ? 'Вызов закончился. Ставка цела.'
+                : mode === 'direct'
+                  ? 'Вызов готов. Отправь его другу.'
+                  : 'Ищем игрока с такой же ставкой.'}
           </strong>
           <div className="duel-live-numbers">
             <span>
               <b>
                 {status === 'matched' && activeDuel
-                  ? `${(activeDuel.chance_bps / 100).toFixed(1).replace('.', ',')}%`
+                  ? `${Math.round(activeDuel.chance_bps / 100)} / ${Math.round((10_000 - activeDuel.chance_bps) / 100)}`
                   : `${formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM`}
               </b>
-              <small>{status === 'matched' ? 'ТВОЙ ШАНС' : 'ТВОЯ СТАВКА'}</small>
+              <small>{status === 'matched' ? 'ТЫ / СОПЕРНИК' : 'ТВОЯ СТАВКА'}</small>
             </span>
             <span>
               <b>{timeLeft(activeDeadline, now)}</b>
@@ -573,71 +578,96 @@ export function DuelScreen({
                 {status === 'matched'
                   ? duelBoosting
                     ? 'НА УСИЛЕНИЕ'
-                    : 'НА РАСКРЫТИЕ'
+                    : 'ОТКРЫТЬ ДО'
                   : 'ДО ИСТЕЧЕНИЯ'}
               </small>
             </span>
           </div>
           {status === 'matched' && activeDuel && duelBoosting && (
-            <div className="duel-boost-panel">
-              <div className="duel-chance-labels">
-                <span>ТЫ {Math.round(activeDuel.chance_bps / 100)}%</span>
-                <span>СОПЕРНИК {Math.round((10_000 - activeDuel.chance_bps) / 100)}%</span>
-              </div>
-              <div className="duel-chance-track" aria-label="Текущие шансы">
-                <span style={{ width: `${activeDuel.chance_bps / 100}%` }} />
-              </div>
-              <label className="boost-input">
-                <span>УСИЛИТЬ НА</span>
-                <div>
-                  <input
-                    inputMode="decimal"
-                    value={boostAmount}
-                    onChange={(event) => setBoostAmount(event.target.value)}
-                    aria-label="Сумма усиления в GRAM"
-                  />
-                  <b>GRAM</b>
-                </div>
-              </label>
-              <div className="boost-quick-values">
-                {['0.1', '0.5', '1'].map((value) => (
-                  <button
-                    key={value}
-                    className={boostAmount === value ? 'active' : ''}
-                    onClick={() => setBoostAmount(value)}
-                  >
-                    +{value}
-                  </button>
-                ))}
-              </div>
-              <p>
-                После подтверждения:{' '}
-                <strong>{(boostedChanceBps / 100).toFixed(1).replace('.', ',')}%</strong>
-              </p>
-              <button className="primary-button" disabled={busy} onClick={() => void boostDuel()}>
-                {busy ? 'ОТПРАВЛЯЕМ…' : 'УСИЛИТЬ'}
-              </button>
-              {activeDuel.boost_events.length > 0 && (
-                <ol className="duel-boost-events" aria-label="Подтверждённые усиления">
-                  {activeDuel.boost_events
-                    .slice(-4)
-                    .reverse()
-                    .map((event) => (
-                      <li key={event.tx_hash}>
-                        <span>{event.side === 'you' ? 'Ты' : 'Соперник'}</span>
-                        <strong>
-                          +{formatGram(event.amount_nano, 3)} GRAM ·{' '}
-                          {(event.chance_bps / 100).toFixed(1).replace('.', ',')}%
-                        </strong>
-                      </li>
-                    ))}
-                </ol>
+            <>
+              {!boostPanelOpen && (
+                <button
+                  className="secondary-button duel-boost-toggle"
+                  onClick={() => {
+                    setBoostPanelDuelId(activeDuel.id);
+                    haptic('selection');
+                  }}
+                >
+                  УСИЛИТЬ СВОЮ СТОРОНУ
+                </button>
               )}
-            </div>
+              {boostPanelOpen && (
+                <motion.div
+                  className="duel-boost-panel"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <label className="boost-input">
+                    <span>СКОЛЬКО ДОБАВИТЬ</span>
+                    <div>
+                      <input
+                        inputMode="decimal"
+                        value={boostAmount}
+                        onChange={(event) => setBoostAmount(event.target.value)}
+                        aria-label="Сумма усиления в GRAM"
+                      />
+                      <b>GRAM</b>
+                    </div>
+                  </label>
+                  <div className="boost-quick-values">
+                    {['0.1', '0.5', '1'].map((value) => (
+                      <button
+                        key={value}
+                        className={boostAmount === value ? 'active' : ''}
+                        onClick={() => setBoostAmount(value)}
+                      >
+                        +{value}
+                      </button>
+                    ))}
+                  </div>
+                  <p>
+                    Твоя доля станет{' '}
+                    <strong>{(boostedChanceBps / 100).toFixed(1).replace('.', ',')}%</strong>
+                  </p>
+                  <button
+                    className="primary-button"
+                    disabled={busy}
+                    onClick={() => void boostDuel()}
+                  >
+                    {busy ? 'ОТПРАВЛЯЕМ…' : 'ПОДТВЕРДИТЬ УСИЛЕНИЕ'}
+                  </button>
+                  <button className="duel-boost-dismiss" onClick={() => setBoostPanelDuelId(null)}>
+                    НЕ СЕЙЧАС
+                  </button>
+                </motion.div>
+              )}
+              {activeDuel.boost_events.length > 0 && !boostPanelOpen && (
+                <details className="technical-details duel-events-details">
+                  <summary>
+                    <span>ХОД ДУЭЛИ · {activeDuel.boost_events.length}</span>
+                    <DisclosureIndicator />
+                  </summary>
+                  <ol className="duel-boost-events" aria-label="Подтверждённые усиления">
+                    {activeDuel.boost_events
+                      .slice()
+                      .reverse()
+                      .map((event) => (
+                        <li key={event.tx_hash}>
+                          <span>{event.side === 'you' ? 'Ты' : 'Соперник'}</span>
+                          <strong>
+                            +{formatGram(event.amount_nano, 3)} GRAM ·{' '}
+                            {(event.chance_bps / 100).toFixed(1).replace('.', ',')}%
+                          </strong>
+                        </li>
+                      ))}
+                  </ol>
+                </details>
+              )}
+            </>
           )}
           {status === 'searching' && !offerExpired && (
             <p className="duel-live-help">
-              Остановить поиск можно в любой момент. Возврат нужно подписать в кошельке.
+              Поиск можно остановить. Ставка вернётся после подтверждения в кошельке.
             </p>
           )}
         </div>
@@ -736,7 +766,7 @@ export function DuelScreen({
         {(activeOffer?.mode === 'direct' || (mockSearching && mode === 'direct')) &&
           status === 'searching' && (
             <button className="primary-button" onClick={inviteToTelegram}>
-              ПРИГЛАСИТЬ В TELEGRAM <ArrowRight aria-hidden="true" />
+              ОТПРАВИТЬ ДРУГУ <ArrowRight aria-hidden="true" />
             </button>
           )}
         {activeActionLabel && (

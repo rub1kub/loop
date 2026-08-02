@@ -128,16 +128,16 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await stakeInput.blur();
   await page.setViewportSize(initialViewport);
   await expect(page.getByText('50/50', { exact: true })).toBeVisible();
-  await expect(page.getByText('РАВНЫЕ УСЛОВИЯ')).toBeVisible();
-  await expect(page.locator('.duel-terms')).toContainText(/1 \+ 1 GRAM/);
+  await expect(page.getByText('РАВНЫЙ СТАРТ')).toBeVisible();
+  await expect(page.locator('.duel-terms')).toContainText(/Твоя ставка1 GRAM/);
   await expect(page.locator('.duel-terms')).toContainText(/1[,.]95 GRAM/);
-  await expect(page.locator('.duel-terms')).toContainText(/0[,.]05 GRAM/);
+  await expect(page.getByText('Комиссия')).toBeHidden();
   await expect(page.locator('.duel-primary-terms > div').first()).toHaveCSS(
     'border-bottom-width',
     '0px',
   );
-  await expect(page.getByText(/Старт 50\/50/i)).toBeVisible();
-  await expect(page.getByText(/минута на усиление/i)).toBeVisible();
+  await expect(page.getByText(/Старт — 50\/50/i)).toBeVisible();
+  await expect(page.getByText(/увеличить свою долю/i)).toBeVisible();
   expect(
     await page
       .locator('.duel-deadline-rule')
@@ -148,9 +148,9 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   const duelDisclosure = page.locator('.duel-breakdown summary');
   await duelDisclosure.focus();
   await expect(duelDisclosure).toHaveCSS('outline-color', 'rgb(245, 245, 247)');
-  await page.getByText('ВОЗВРАТ И ПРАВИЛА').click();
+  await page.getByText('КАК ЭТО РАБОТАЕТ').click();
   await expect(page.locator('.duel-breakdown .disclosure-close-label')).toBeVisible();
-  await expect(page.getByText('Общая сумма')).toBeVisible();
+  await expect(page.getByText('Общий банк')).toBeVisible();
   await expect(page.getByText('2 GRAM')).toBeVisible();
   await page.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }).click();
   await expect(page.getByText('ПОИСК СОПЕРНИКА')).toBeVisible();
@@ -159,14 +159,16 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
 
   await page.goto('/?screen=duel-boost');
   await emulateFullscreenControls();
-  await expect(
-    page.getByText('Соперник найден. Усилиться может каждый — твой шанс может и упасть.'),
-  ).toBeVisible();
-  await expect(page.getByText('ТЫ 60%')).toBeVisible();
-  await expect(page.getByText('СОПЕРНИК 40%')).toBeVisible();
+  await expect(page.getByText('Можно подождать или увеличить свою долю.')).toBeVisible();
+  await expect(page.getByText('60 / 40')).toBeVisible();
+  await expect(page.getByLabel('Сумма усиления в GRAM')).toHaveCount(0);
+  await page.getByRole('button', { name: 'УСИЛИТЬ СВОЮ СТОРОНУ' }).click();
   await expect(page.getByLabel('Сумма усиления в GRAM')).toBeVisible();
-  await expect(page.getByText(/После подтверждения:/)).toContainText('66,7%');
-  await expect(page.getByRole('button', { name: 'УСИЛИТЬ' })).toBeVisible();
+  await expect(page.getByText(/Твоя доля станет/)).toContainText('66,7%');
+  await expect(page.getByRole('button', { name: 'ПОДТВЕРДИТЬ УСИЛЕНИЕ' })).toBeVisible();
+  await page.getByRole('button', { name: 'НЕ СЕЙЧАС' }).click();
+  await expect(page.getByText('ХОД ДУЭЛИ · 1')).toBeVisible();
+  await page.getByText('ХОД ДУЭЛИ · 1').click();
   await expect(page.getByText(/\+0[,.]5 GRAM · 60[,.]0%/)).toBeVisible();
 
   await page.goto('/?screen=rating');
