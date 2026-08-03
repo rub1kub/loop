@@ -206,11 +206,23 @@ def validate_release_evidence(release: dict[str, Any], release_file: Path) -> st
         if isinstance(release.get("external_audit"), dict)
         else UNREVIEWED_VALUE_CAP_NANO
     )
-    for key in ("bank_max_principal_nano", "duel_max_pool_nano"):
+    # The cap is what one participant may lose, and a BANK principal is exactly
+    # that. A DUEL pool is two participants' opening stakes, so measuring the
+    # pool against a per-person cap made DUEL twice as strict as BANK for no
+    # stated reason. Compared per participant they now mean the same thing.
+    #
+    # Boosts are not covered by this figure and cannot be: a player who keeps
+    # raising can hold up to the contract's 90% chance ceiling of the pool. That
+    # is money added deliberately, after seeing the odds, and it is disclosed —
+    # the cap governs what a duel costs to enter, not what someone chooses to
+    # pour into one.
+    per_participant = {"bank_max_principal_nano": 1, "duel_max_pool_nano": 2}
+    for key, participants in per_participant.items():
         value = limits.get(key)
-        if not isinstance(value, int) or value <= 0 or value > cap:
+        if not isinstance(value, int) or value <= 0 or value > cap * participants:
             raise ReadinessError(
-                f"{key} must be within the {cap // 1_000_000_000} GRAM launch cap"
+                f"{key} must be within the {cap // 1_000_000_000} GRAM launch cap "
+                f"per participant"
             )
     if release_file.parent != ROOT / "deployments" / "mainnet":
         raise ReadinessError("release evidence must live under deployments/mainnet")

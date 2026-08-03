@@ -3,7 +3,7 @@
   "self_reviewed": {
     "acknowledgement": "NO INDEPENDENT AUDIT - OWNER ACCEPTS THE RISK",
     "disclosure_path": "docs/no-audit-disclosure.md",
-    "disclosure_sha256": "0300c91b96f9e9217b2918db6d57103cddeaede34fa55e49b0ab9dca8e70770c",
+    "disclosure_sha256": "0830abd6b5114e24e054bb737f729cbff7c8fc9c80aa3ae1ae7a8337e5dc6277",
     "adversarial_review_path": "docs/reviews/internal-review-2026-07-26.md",
     "bounty_policy_path": "docs/security-bounty.md",
     "bounty_contact": "https://t.me/rub1kub",

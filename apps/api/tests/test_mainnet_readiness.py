@@ -370,6 +370,29 @@ def test_unreviewed_release_caps_value_ten_times_lower(monkeypatch) -> None:
     with pytest.raises(readiness.ReadinessError, match="1 GRAM launch cap"):
         readiness.validate_release_evidence(over_cap, release_dir / "release.json")
 
+    # The cap is per participant, and a DUEL pool holds two of them: measured
+    # against the pool it made DUEL twice as strict as BANK for no reason.
+    two_players = {
+        **base,
+        "initial_limits": {
+            "bank_max_principal_nano": 1_000_000_000,
+            "duel_max_pool_nano": 2_000_000_000,
+        },
+    }
+    assert (
+        readiness.validate_release_evidence(two_players, release_dir / "release.json") == "a" * 40
+    )
+
+    three_players = {
+        **base,
+        "initial_limits": {
+            "bank_max_principal_nano": 1_000_000_000,
+            "duel_max_pool_nano": 3_000_000_000,
+        },
+    }
+    with pytest.raises(readiness.ReadinessError, match="1 GRAM launch cap"):
+        readiness.validate_release_evidence(three_players, release_dir / "release.json")
+
     within_cap = {
         **base,
         "initial_limits": {
