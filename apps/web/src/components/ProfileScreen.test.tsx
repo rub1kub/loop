@@ -47,6 +47,7 @@ const profile: Profile = {
     duel_fee_bps: 250,
     fee_discount_active: false,
   },
+  duel_stake: { min_stake_nano: 500000000, max_stake_nano: 500000000 },
   app_open: true,
   launch_at: null,
 };

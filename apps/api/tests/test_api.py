@@ -787,3 +787,56 @@ async def test_invite_card_is_public_and_keyed_by_referral_code(client, app, mon
 
     monkeypatch.delenv("LOOP_LAUNCH_AT", raising=False)
     get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_duel_stake_bounds_follow_the_pool_cap(client, app, monkeypatch) -> None:
+    """The interface must never offer a stake the contract cap forbids.
+
+    With the launch cap the pool bounds meet, so exactly one stake is possible —
+    and the field that offered a round 1 GRAM produced a rejected quote every
+    time. Both ends now come from the same place the check does.
+    """
+    from app.config import get_settings
+
+    headers = await authenticate(client)
+    await add_wallet(app, 777000111)
+
+    # Production runs the launch cap, where both ends of the pool meet.
+    monkeypatch.setenv("LOOP_MAX_POOL_NANO", "1000000000")
+    get_settings.cache_clear()
+    limits = (await client.get("/api/v1/me", headers=headers)).json()["duel_stake"]
+    assert limits == {"min_stake_nano": 500_000_000, "max_stake_nano": 500_000_000}
+
+    denied = await client.post(
+        "/api/v1/duels/offers/quote",
+        headers=headers,
+        json={
+            "offer_id": 9101,
+            "stake_nano": 1_000_000_000,
+            "chance_bps": 5_000,
+            "commitment_hex": "ab" * 32,
+        },
+    )
+    assert denied.status_code == 422
+    assert denied.json()["detail"] == "Сейчас ставка — ровно 0,5 GRAM"
+
+    # Raising the cap widens both the published bounds and the refusal.
+    monkeypatch.setenv("LOOP_MAX_POOL_NANO", "10000000000")
+    get_settings.cache_clear()
+    widened = (await client.get("/api/v1/me", headers=headers)).json()["duel_stake"]
+    assert widened == {"min_stake_nano": 500_000_000, "max_stake_nano": 5_000_000_000}
+    too_big = await client.post(
+        "/api/v1/duels/offers/quote",
+        headers=headers,
+        json={
+            "offer_id": 9102,
+            "stake_nano": 9_000_000_000,
+            "chance_bps": 5_000,
+            "commitment_hex": "cd" * 32,
+        },
+    )
+    assert too_big.json()["detail"] == "Ставка должна быть от 0,5 до 5 GRAM"
+
+    monkeypatch.delenv("LOOP_MAX_POOL_NANO", raising=False)
+    get_settings.cache_clear()

@@ -34,6 +34,7 @@ const profile: Profile = {
     duel_fee_bps: 250,
     fee_discount_active: false,
   },
+  duel_stake: { min_stake_nano: 500000000, max_stake_nano: 500000000 },
   app_open: true,
   launch_at: null,
 };
@@ -231,8 +232,10 @@ describe('DuelScreen', () => {
     fireEvent.change(screen.getByLabelText('Ставка в GRAM'), { target: { value: '0.1' } });
     fireEvent.click(screen.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }));
 
+    // The launch cap pins both ends together, so the refusal names the one
+    // amount that works instead of only the floor.
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent('Минимальная ставка — 0,5 GRAM');
+    expect(alert).toHaveTextContent('Сейчас ставка — ровно 0,5 GRAM');
     expect(alert).toHaveClass('is-error');
   });
 
@@ -334,7 +337,7 @@ describe('DuelScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'ЗАКРЫТЬ' }));
 
-    expect(screen.getByLabelText('Ставка в GRAM')).toHaveValue('0.5');
+    expect(screen.getByLabelText('Ставка в GRAM')).toHaveValue('0,5');
   });
 
   it('drops the waiting metaphor once the duel is settled', () => {

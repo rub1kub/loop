@@ -80,6 +80,7 @@ const demoProfile: Profile = {
     duel_fee_bps: 250,
     fee_discount_active: false,
   },
+  duel_stake: { min_stake_nano: 500_000_000, max_stake_nano: 500_000_000 },
   app_open: true,
   launch_at: null,
 };

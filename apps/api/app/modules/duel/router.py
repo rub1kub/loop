@@ -36,6 +36,12 @@ from .models import (
     OfferState,
 )
 
+
+def _format_gram(nano: int) -> str:
+    rendered = f"{nano / 1_000_000_000:.3f}".rstrip("0").rstrip(".")
+    return rendered.replace(".", ",")
+
+
 router = APIRouter(
     prefix="/duels",
     tags=["DUEL"],
@@ -124,7 +130,15 @@ async def create_offer_quote(
         )
     stake, opponent_stake, total_pool = canonical_duel_terms(body.stake_nano, body.chance_bps)
     if not settings.min_pool_nano <= total_pool <= settings.max_pool_nano:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "pool is outside limits")
+        # This reaches the player, so it says what to do rather than what failed.
+        low = _format_gram(2 * ((settings.min_pool_nano + 3) // 4))
+        high = _format_gram(2 * (settings.max_pool_nano // 4))
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"Сейчас ставка — ровно {low} GRAM"
+            if low == high
+            else f"Ставка должна быть от {low} до {high} GRAM",
+        )
     wallet = await db.scalar(
         select(Wallet).where(
             Wallet.user_id == user.id,

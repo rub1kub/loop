@@ -71,7 +71,13 @@ export function DuelScreen({
 }) {
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
-  const [stake, setStake] = useState(() => (invite ? formatGram(invite.stake_nano, 3) : '1'));
+  // The launch cap can make the pool bounds meet, and then exactly one stake is
+  // possible. Offering anything else guarantees a rejected quote, so the field
+  // starts at the smallest allowed amount rather than at a round number.
+  const minStake = profile.duel_stake.min_stake_nano;
+  const maxStake = profile.duel_stake.max_stake_nano;
+  const stakeFixed = minStake === maxStake;
+  const [stake, setStake] = useState(() => formatGram(invite ? invite.stake_nano : minStake, 3));
   const [boostAmount, setBoostAmount] = useState('0.5');
   const chance = invite?.chance_bps ?? DEFAULT_CHANCE_BPS;
   const [mode, setMode] = useState<'afk' | 'direct'>(invite ? 'direct' : 'afk');
@@ -203,7 +209,13 @@ export function DuelScreen({
       setBusy(true);
       setMode(selectedMode);
       try {
-        if (requestedStake < 500_000_000) throw new Error('Минимальная ставка — 0,5 GRAM');
+        if (requestedStake < minStake || requestedStake > maxStake) {
+          throw new Error(
+            stakeFixed
+              ? `Сейчас ставка — ровно ${formatGram(minStake, 3)} GRAM`
+              : `Ставка должна быть от ${formatGram(minStake, 3)} до ${formatGram(maxStake, 3)} GRAM`,
+          );
+        }
         if (isMockTelegram()) {
           setMockSearching(true);
           setMockExpiresAt(Date.now() + 15 * 60_000);
@@ -283,10 +295,13 @@ export function DuelScreen({
       chance,
       failed,
       invite,
+      maxStake,
+      minStake,
       onRefresh,
       profile.wallet,
       requestedStake,
       setMessage,
+      stakeFixed,
       terms.stake,
       terms.opponentStake,
       terms.totalPool,
@@ -525,6 +540,11 @@ export function DuelScreen({
               <label className="stake-input">
                 <span className="stake-input-heading">
                   <span>СТАВКА</span>
+                  <span className="stake-edit-cue">
+                    {stakeFixed
+                      ? `РОВНО ${formatGram(minStake, 3)}`
+                      : `${formatGram(minStake, 3)}–${formatGram(maxStake, 3)}`}
+                  </span>
                 </span>
                 <div>
                   <input
@@ -727,7 +747,7 @@ export function DuelScreen({
                 markDuelSeen(latestDuel.id);
                 setSeenDuelId(latestDuel.id);
                 setMessage('');
-                if (!resultWon) setStake('0.5');
+                if (!resultWon) setStake(formatGram(minStake, 3));
                 haptic('selection');
               }}
             >

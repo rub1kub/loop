@@ -32,6 +32,7 @@ from .result_cards import INVITE_VARIANTS, build_invite_inline, render_invite_ca
 from .schemas import (
     AuthResponse,
     ContractStateView,
+    DuelStakeLimitsView,
     InviteView,
     JettonBalanceView,
     ModeStatsView,
@@ -290,6 +291,12 @@ async def get_me(user: CurrentUser, db: Db, request: Request, settings: Config) 
             active=duel_active or 0,
             completed=duel_completed or 0,
             total=duel_total or 0,
+        ),
+        duel_stake=DuelStakeLimitsView(
+            # An equal duel pools four quarter units, so a stake always lands on
+            # an even number of them; round the bounds onto that grid.
+            min_stake_nano=2 * ((settings.min_pool_nano + 3) // 4),
+            max_stake_nano=2 * (settings.max_pool_nano // 4),
         ),
         plush_brick=PlushBrickView(
             verified=plush_verified,

@@ -99,12 +99,24 @@ class PlushBrickView(BaseModel):
     fee_discount_active: bool
 
 
+class DuelStakeLimitsView(BaseModel):
+    """What one player may stake right now, at the equal 50/50 terms.
+
+    Derived from the pool bounds rather than restated, so raising the launch cap
+    is one environment value and the interface follows without a release.
+    """
+
+    min_stake_nano: int
+    max_stake_nano: int
+
+
 class ProfileView(BaseModel):
     user: UserView
     wallet: WalletView | None
     bank: ModeStatsView
     duel: ModeStatsView
     plush_brick: PlushBrickView
+    duel_stake: DuelStakeLimitsView
     # False puts the client on the waiting screen: signed in, counting down.
     app_open: bool = True
     launch_at: datetime | None = None

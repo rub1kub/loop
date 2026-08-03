@@ -132,6 +132,7 @@ export interface Profile {
   bank: ModeStats;
   duel: ModeStats;
   plush_brick: PlushBrick;
+  duel_stake: { min_stake_nano: number; max_stake_nano: number };
   /** False keeps the client on the waiting screen: signed in, counting down. */
   app_open: boolean;
   launch_at: string | null;

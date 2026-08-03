@@ -52,6 +52,7 @@ const profileSchema = z.object({
     duel_fee_bps: z.number(),
     fee_discount_active: z.boolean(),
   }),
+  duel_stake: z.object({ min_stake_nano: z.number(), max_stake_nano: z.number() }),
   app_open: z.boolean(),
   launch_at: z.string().nullable(),
 });
