@@ -12,6 +12,10 @@ import {
 } from './jarPhysics';
 
 const FRAME = 1 / 60;
+// Settling a jar takes thousands of solver passes. That is fast on its own and
+// slow when sixteen test files share the machine, so the heavy cases say how
+// long they may take instead of flaking under load.
+const SETTLE_TIMEOUT_MS = 30_000;
 
 /** A deterministic stand-in for Math.random, so a failure is reproducible. */
 function seeded(seed: number): () => number {
@@ -33,25 +37,31 @@ function settledPile(fill: number) {
 }
 
 describe('jar physics', () => {
-  it('comes to rest instead of shivering forever', () => {
-    const pile = settledPile(62);
-    expect(pile.balls.length).toBeGreaterThan(40);
+  it(
+    'comes to rest instead of shivering forever',
+    () => {
+      const pile = settledPile(62);
+      expect(pile.balls.length).toBeGreaterThan(40);
 
-    // Resolving contacts by reflecting velocities left every ball in the pile
-    // bouncing a little every frame, and the whole fill visibly trembled. A
-    // pile that has stopped must read as stopped.
-    expect(fastestSpeed(pile)).toBeLessThan(1);
+      // Resolving contacts by reflecting velocities left every ball in the pile
+      // bouncing a little every frame, and the whole fill visibly trembled. A
+      // pile that has stopped must read as stopped.
+      expect(fastestSpeed(pile)).toBeLessThan(1);
 
-    const before = pile.balls.map((ball) => ({ x: ball.x, y: ball.y }));
-    for (let frame = 0; frame < 120; frame += 1) stepPile(pile, FRAME);
-    const travelled = pile.balls.reduce(
-      (worst, ball, index) =>
-        Math.max(worst, Math.hypot(ball.x - before[index].x, ball.y - before[index].y)),
-      0,
-    );
-    expect(travelled).toBeLessThan(0.5);
-    expect(Math.max(...pile.balls.map((ball) => Math.abs(ball.angularVelocity)))).toBeLessThan(0.1);
-  });
+      const before = pile.balls.map((ball) => ({ x: ball.x, y: ball.y }));
+      for (let frame = 0; frame < 120; frame += 1) stepPile(pile, FRAME);
+      const travelled = pile.balls.reduce(
+        (worst, ball, index) =>
+          Math.max(worst, Math.hypot(ball.x - before[index].x, ball.y - before[index].y)),
+        0,
+      );
+      expect(travelled).toBeLessThan(0.5);
+      expect(Math.max(...pile.balls.map((ball) => Math.abs(ball.angularVelocity)))).toBeLessThan(
+        0.1,
+      );
+    },
+    SETTLE_TIMEOUT_MS,
+  );
 
   it('creates one coherent set of tokens with varied physical orientations', () => {
     const pile = createPile(200, 260);
@@ -102,20 +112,24 @@ describe('jar physics', () => {
     );
   });
 
-  it('keeps balls out of each other and inside the jar', () => {
-    const pile = settledPile(85);
+  it(
+    'keeps balls out of each other and inside the jar',
+    () => {
+      const pile = settledPile(85);
 
-    // Overlap is what made them look tangled: a ball sunk into its neighbour
-    // is drawn inside it, and the solver keeps flinging the pair apart.
-    const smallest = Math.min(...pile.balls.map((ball) => ball.r));
-    expect(worstOverlap(pile)).toBeLessThan(smallest * 0.15);
+      // Overlap is what made them look tangled: a ball sunk into its neighbour
+      // is drawn inside it, and the solver keeps flinging the pair apart.
+      const smallest = Math.min(...pile.balls.map((ball) => ball.r));
+      expect(worstOverlap(pile)).toBeLessThan(smallest * 0.15);
 
-    for (const ball of pile.balls) {
-      expect(ball.x).toBeGreaterThanOrEqual(ball.r - 0.01);
-      expect(ball.x).toBeLessThanOrEqual(pile.width - ball.r + 0.01);
-      expect(ball.y).toBeLessThanOrEqual(pile.height - ball.r + 0.01);
-    }
-  });
+      for (const ball of pile.balls) {
+        expect(ball.x).toBeGreaterThanOrEqual(ball.r - 0.01);
+        expect(ball.x).toBeLessThanOrEqual(pile.width - ball.r + 0.01);
+        expect(ball.y).toBeLessThanOrEqual(pile.height - ball.r + 0.01);
+      }
+    },
+    SETTLE_TIMEOUT_MS,
+  );
 
   it('pours the fill in gradually rather than all at once', () => {
     const pile = createPile(200, 260);
@@ -124,58 +138,70 @@ describe('jar physics', () => {
     expect(pile.balls.length).toBe(3);
   });
 
-  it('drops the surface when the fill falls', () => {
-    const pile = settledPile(85);
-    const high = Math.min(...pile.balls.map((ball) => ball.y));
-    const random = seeded(11);
-    for (let frame = 0; frame < 300; frame += 1) {
-      pour(pile, 20, random);
-      stepPile(pile, FRAME);
-    }
-    expect(Math.min(...pile.balls.map((ball) => ball.y))).toBeGreaterThan(high);
-  });
+  it(
+    'drops the surface when the fill falls',
+    () => {
+      const pile = settledPile(85);
+      const high = Math.min(...pile.balls.map((ball) => ball.y));
+      const random = seeded(11);
+      for (let frame = 0; frame < 300; frame += 1) {
+        pour(pile, 20, random);
+        stepPile(pile, FRAME);
+      }
+      expect(Math.min(...pile.balls.map((ball) => ball.y))).toBeGreaterThan(high);
+    },
+    SETTLE_TIMEOUT_MS,
+  );
 });
 
 describe('cursor', () => {
-  it('carves a hole and lets the pile close it again', () => {
-    const pile = settledPile(85);
-    const radius = pointerRadius(pile.width);
-    const spot = { x: pile.width / 2, y: pile.height - radius };
-    const inside = () =>
-      pile.balls.filter((ball) => Math.hypot(ball.x - spot.x, ball.y - spot.y) < radius).length;
+  it(
+    'carves a hole and lets the pile close it again',
+    () => {
+      const pile = settledPile(85);
+      const radius = pointerRadius(pile.width);
+      const spot = { x: pile.width / 2, y: pile.height - radius };
+      const inside = () =>
+        pile.balls.filter((ball) => Math.hypot(ball.x - spot.x, ball.y - spot.y) < radius).length;
 
-    expect(inside()).toBeGreaterThan(0);
+      expect(inside()).toBeGreaterThan(0);
 
-    pile.pointer = { ...spot, radius };
-    for (let frame = 0; frame < 30; frame += 1) stepPile(pile, FRAME);
+      pile.pointer = { ...spot, radius };
+      for (let frame = 0; frame < 30; frame += 1) stepPile(pile, FRAME);
 
-    // Nothing may remain inside the cursor while it is there.
-    expect(inside()).toBe(0);
-    // The shove is real motion, not a teleport: the pile is visibly alive.
-    expect(fastestSpeed(pile)).toBeGreaterThan(1);
+      // Nothing may remain inside the cursor while it is there.
+      expect(inside()).toBe(0);
+      // The shove is real motion, not a teleport: the pile is visibly alive.
+      expect(fastestSpeed(pile)).toBeGreaterThan(1);
 
-    pile.pointer = null;
-    // Measured: the disturbance is gone by frame 300 and dead by 450.
-    for (let frame = 0; frame < 450; frame += 1) stepPile(pile, FRAME);
+      pile.pointer = null;
+      // Measured: the disturbance is gone by frame 300 and dead by 450.
+      for (let frame = 0; frame < 450; frame += 1) stepPile(pile, FRAME);
 
-    // And once the cursor leaves, the pile settles as if nothing happened.
-    expect(fastestSpeed(pile)).toBeLessThan(1);
-    const smallest = Math.min(...pile.balls.map((ball) => ball.r));
-    expect(worstOverlap(pile)).toBeLessThan(smallest * 0.15);
-  });
+      // And once the cursor leaves, the pile settles as if nothing happened.
+      expect(fastestSpeed(pile)).toBeLessThan(1);
+      const smallest = Math.min(...pile.balls.map((ball) => ball.r));
+      expect(worstOverlap(pile)).toBeLessThan(smallest * 0.15);
+    },
+    SETTLE_TIMEOUT_MS,
+  );
 
-  it('never launches a ball when the cursor sweeps across the jar', () => {
-    const pile = settledPile(62);
-    const radius = pointerRadius(pile.width);
-    for (let frame = 0; frame < 60; frame += 1) {
-      // A full sweep in one second — faster than any hand moves over a phone.
-      pile.pointer = { x: (pile.width * frame) / 59, y: pile.height * 0.75, radius };
-      stepPile(pile, FRAME);
-      for (const ball of pile.balls) {
-        expect(ball.x).toBeGreaterThanOrEqual(ball.r - 0.01);
-        expect(ball.x).toBeLessThanOrEqual(pile.width - ball.r + 0.01);
-        expect(ball.y).toBeLessThanOrEqual(pile.height - ball.r + 0.01);
+  it(
+    'never launches a ball when the cursor sweeps across the jar',
+    () => {
+      const pile = settledPile(62);
+      const radius = pointerRadius(pile.width);
+      for (let frame = 0; frame < 60; frame += 1) {
+        // A full sweep in one second — faster than any hand moves over a phone.
+        pile.pointer = { x: (pile.width * frame) / 59, y: pile.height * 0.75, radius };
+        stepPile(pile, FRAME);
+        for (const ball of pile.balls) {
+          expect(ball.x).toBeGreaterThanOrEqual(ball.r - 0.01);
+          expect(ball.x).toBeLessThanOrEqual(pile.width - ball.r + 0.01);
+          expect(ball.y).toBeLessThanOrEqual(pile.height - ball.r + 0.01);
+        }
       }
-    }
-  });
+    },
+    SETTLE_TIMEOUT_MS,
+  );
 });

@@ -3,7 +3,7 @@
   "self_reviewed": {
     "acknowledgement": "NO INDEPENDENT AUDIT - OWNER ACCEPTS THE RISK",
     "disclosure_path": "docs/no-audit-disclosure.md",
-    "disclosure_sha256": "4d47f7648851ee686fe14d27949244e5e7a58f6d53ad84d4a7ffae6fc4b637d4",
+    "disclosure_sha256": "0300c91b96f9e9217b2918db6d57103cddeaede34fa55e49b0ab9dca8e70770c",
     "adversarial_review_path": "docs/reviews/internal-review-2026-07-26.md",
     "bounty_policy_path": "docs/security-bounty.md",
     "bounty_contact": "https://t.me/rub1kub",
@@ -14,6 +14,6 @@
   "duel_invite_signer_public_key": "4071653b6203e099b7a47c116a12a75272383f9f2018da86b200ff8fae79bb93",
   "initial_limits": {
     "bank_max_principal_nano": 1000000000,
-    "duel_max_pool_nano": 1000000000
+    "duel_max_pool_nano": 2000000000
   }
 }
