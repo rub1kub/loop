@@ -128,6 +128,7 @@ summary:focus-visible .disclosure-indicator {
   width: 100%;
   max-width: min(430px, 100%);
   min-width: 0;
+  margin-inline: auto;
   height: min(var(--loop-stable-height, var(--tg-viewport-stable-height, 100dvh)), 932px);
   max-height: 932px;
   background: var(--bg);

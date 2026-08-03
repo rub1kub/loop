@@ -116,3 +116,12 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   constraint instead of allowing a transaction that the service would reject.
 - Focused component tests and mobile Chromium/WebKit DUEL flows pass; desktop and 390 px visual
   inspections cover idle, rules, searching, matched, add-GRAM, invite and result states.
+
+## 2026-08-03: centred tablet surfaces
+
+- Centred every phone-width Mini App surface inside the full Telegram viewport instead of relying
+  on the full-width root container to position its child.
+- Added portrait and landscape tablet regression coverage for the prelaunch screen, plus the
+  prelaunch state to the narrow-screen overflow suite.
+- Browser checks at 800 × 1280 and 1024 × 768 confirm a centred 430 px surface with no horizontal
+  page overflow.

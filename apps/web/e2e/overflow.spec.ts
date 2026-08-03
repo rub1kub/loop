@@ -12,6 +12,7 @@ const screens = [
   'profile',
   'settings',
   'onboarding',
+  'prelaunch',
 ];
 
 type Overflow = { selector: string; scroll: number; client: number };
@@ -22,7 +23,7 @@ test.describe('narrow phone', () => {
   for (const screen of screens) {
     test(`${screen} fits a 320px column without horizontal overflow`, async ({ page }) => {
       await page.goto(`/?screen=${screen}`);
-      await page.waitForSelector('.app-shell, .onboarding, .inline-preview');
+      await page.waitForSelector('.app-shell, .onboarding, .prelaunch, .inline-preview');
       await page.waitForTimeout(400);
 
       const bodyOverflow = await page.evaluate(
@@ -47,6 +48,31 @@ test.describe('narrow phone', () => {
       });
 
       expect(clipped, JSON.stringify(clipped, null, 2)).toEqual([]);
+    });
+  }
+});
+
+test.describe('tablet', () => {
+  for (const viewport of [
+    { name: 'portrait', width: 800, height: 1280 },
+    { name: 'landscape', width: 1024, height: 768 },
+  ]) {
+    test(`prelaunch is centred in ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto('/?screen=prelaunch');
+      await page.waitForSelector('.prelaunch');
+
+      const layout = await page.locator('.prelaunch').evaluate((screen) => {
+        const bounds = screen.getBoundingClientRect();
+        return {
+          centre: bounds.left + bounds.width / 2,
+          viewportCentre: window.innerWidth / 2,
+          pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+
+      expect(Math.abs(layout.centre - layout.viewportCentre)).toBeLessThanOrEqual(1);
+      expect(layout.pageOverflow).toBeLessThanOrEqual(0);
     });
   }
 });
