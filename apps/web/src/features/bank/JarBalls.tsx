@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { telegram } from '../../telegram';
-import { createPile, placeSettled, pour, stepPile, targetCount } from './jarPhysics';
+import { createPile, placeSettled, pointerRadius, pour, stepPile, targetCount } from './jarPhysics';
 import type { Ball } from './jarPhysics';
 
 const NEW_TOKEN_INTERVAL = 0.095;
@@ -170,6 +170,34 @@ export function JarBalls({ fill }: { fill: number }) {
       raf = window.requestAnimationFrame(frame);
     };
 
+    // The jar is a button and the chamber above the canvas takes no pointer
+    // events, so the cursor is tracked on the window and converted to canvas
+    // coordinates. That also lets the balls react while the cursor merely
+    // passes over the glass, which is the whole point of the effect.
+    const trackPointer = (event: PointerEvent) => {
+      if (reducedMotion || !pile.width) return;
+      const box = canvas.getBoundingClientRect();
+      const x = event.clientX - box.left;
+      const y = event.clientY - box.top;
+      const radius = pointerRadius(pile.width);
+      const outside =
+        x < -radius || y < -radius || x > box.width + radius || y > box.height + radius;
+      pile.pointer = outside ? null : { x, y, radius };
+    };
+    const dropPointer = () => {
+      pile.pointer = null;
+    };
+    // A finger leaving the glass is gone; a mouse button coming back up is not,
+    // and clearing on it would kill the effect for everyone who taps the jar.
+    const releasePointer = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') dropPointer();
+    };
+    window.addEventListener('pointermove', trackPointer, { passive: true });
+    window.addEventListener('pointerdown', trackPointer, { passive: true });
+    window.addEventListener('pointerup', releasePointer, { passive: true });
+    window.addEventListener('pointercancel', dropPointer, { passive: true });
+    window.addEventListener('blur', dropPointer);
+
     const observer =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
@@ -212,6 +240,11 @@ export function JarBalls({ fill }: { fill: number }) {
 
     return () => {
       window.cancelAnimationFrame(raf);
+      window.removeEventListener('pointermove', trackPointer);
+      window.removeEventListener('pointerdown', trackPointer);
+      window.removeEventListener('pointerup', releasePointer);
+      window.removeEventListener('pointercancel', dropPointer);
+      window.removeEventListener('blur', dropPointer);
       observer?.disconnect();
       if (tiltStarted) orientation?.stop();
       app?.offEvent?.('deviceOrientationChanged', onTilt);

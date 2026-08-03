@@ -40,15 +40,29 @@ export interface Ball {
   material: number;
 }
 
+/** Where the cursor is, in canvas pixels, while it is over the jar. */
+export interface Pointer {
+  x: number;
+  y: number;
+  radius: number;
+}
+
 export interface Pile {
   balls: Ball[];
   width: number;
   height: number;
   gravity: { x: number; y: number };
+  /** Null whenever the cursor is away; the balls then simply settle again. */
+  pointer: Pointer | null;
 }
 
 export function createPile(width: number, height: number): Pile {
-  return { balls: [], width, height, gravity: { x: 0, y: 1 } };
+  return { balls: [], width, height, gravity: { x: 0, y: 1 }, pointer: null };
+}
+
+/** How wide a hole the cursor carves, relative to the jar. */
+export function pointerRadius(width: number): number {
+  return Math.max(width, 120) * 0.15;
 }
 
 export function nominalRadius(width: number): number {
@@ -206,6 +220,37 @@ function solveContacts(pile: Pile, grid: Grid, cell: number): void {
   });
 }
 
+/**
+ * The cursor as a solid disc the balls cannot enter.
+ *
+ * Resolved by moving them, like every other contact here, which is why no force
+ * needed tuning: velocity is read back from the distance actually travelled, so
+ * a ball shoved aside carries exactly the speed the shove gave it and settles
+ * back on its own once the cursor leaves.
+ */
+function solvePointer(pile: Pile): void {
+  const pointer = pile.pointer;
+  if (!pointer) return;
+  for (const ball of pile.balls) {
+    const dx = ball.x - pointer.x;
+    const dy = ball.y - pointer.y;
+    const min = pointer.radius + ball.r;
+    const sq = dx * dx + dy * dy;
+    if (sq >= min * min) continue;
+    if (sq === 0) {
+      // Dead centre has no direction to leave by; up is the way out of a pile.
+      ball.y -= Math.min(min, ball.r);
+      continue;
+    }
+    const dist = Math.sqrt(sq);
+    // A fast sweep would otherwise teleport a ball clear across the jar and the
+    // derived velocity would launch it. Move it at most its own radius a step.
+    const push = Math.min(min - dist, ball.r);
+    ball.x += (dx / dist) * push;
+    ball.y += (dy / dist) * push;
+  }
+}
+
 function solveWalls(pile: Pile): void {
   const { balls, width, height, gravity } = pile;
   for (const ball of balls) {
@@ -243,6 +288,7 @@ export function stepPile(pile: Pile, frameDt: number): void {
     const { grid, cell } = buildGrid(pile);
     for (let pass = 0; pass < SOLVER_PASSES; pass += 1) {
       solveContacts(pile, grid, cell);
+      solvePointer(pile);
       solveWalls(pile);
     }
     for (const ball of pile.balls) {

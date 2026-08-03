@@ -5,6 +5,7 @@ import {
   fastestSpeed,
   nominalRadius,
   placeSettled,
+  pointerRadius,
   pour,
   stepPile,
   worstOverlap,
@@ -132,5 +133,49 @@ describe('jar physics', () => {
       stepPile(pile, FRAME);
     }
     expect(Math.min(...pile.balls.map((ball) => ball.y))).toBeGreaterThan(high);
+  });
+});
+
+describe('cursor', () => {
+  it('carves a hole and lets the pile close it again', () => {
+    const pile = settledPile(85);
+    const radius = pointerRadius(pile.width);
+    const spot = { x: pile.width / 2, y: pile.height - radius };
+    const inside = () =>
+      pile.balls.filter((ball) => Math.hypot(ball.x - spot.x, ball.y - spot.y) < radius).length;
+
+    expect(inside()).toBeGreaterThan(0);
+
+    pile.pointer = { ...spot, radius };
+    for (let frame = 0; frame < 30; frame += 1) stepPile(pile, FRAME);
+
+    // Nothing may remain inside the cursor while it is there.
+    expect(inside()).toBe(0);
+    // The shove is real motion, not a teleport: the pile is visibly alive.
+    expect(fastestSpeed(pile)).toBeGreaterThan(1);
+
+    pile.pointer = null;
+    // Measured: the disturbance is gone by frame 300 and dead by 450.
+    for (let frame = 0; frame < 450; frame += 1) stepPile(pile, FRAME);
+
+    // And once the cursor leaves, the pile settles as if nothing happened.
+    expect(fastestSpeed(pile)).toBeLessThan(1);
+    const smallest = Math.min(...pile.balls.map((ball) => ball.r));
+    expect(worstOverlap(pile)).toBeLessThan(smallest * 0.15);
+  });
+
+  it('never launches a ball when the cursor sweeps across the jar', () => {
+    const pile = settledPile(62);
+    const radius = pointerRadius(pile.width);
+    for (let frame = 0; frame < 60; frame += 1) {
+      // A full sweep in one second — faster than any hand moves over a phone.
+      pile.pointer = { x: (pile.width * frame) / 59, y: pile.height * 0.75, radius };
+      stepPile(pile, FRAME);
+      for (const ball of pile.balls) {
+        expect(ball.x).toBeGreaterThanOrEqual(ball.r - 0.01);
+        expect(ball.x).toBeLessThanOrEqual(pile.width - ball.r + 0.01);
+        expect(ball.y).toBeLessThanOrEqual(pile.height - ball.r + 0.01);
+      }
+    }
   });
 });
