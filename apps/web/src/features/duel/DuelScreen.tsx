@@ -98,6 +98,20 @@ export function DuelScreen({
   const lastBoostRevision = useRef<number | null>(null);
   /** The quote holding this wallet's offer slot until the wallet answers. */
   const quotedOffer = useRef<number | null>(null);
+  /** Null until the contract has been asked; then whether it accepts deposits. */
+  const [duelClosed, setDuelClosed] = useState<boolean | null>(null);
+  /** Set the moment the wallet accepts, so the screen stops asking for a signature. */
+  const [signedOffer, setSignedOffer] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isMockTelegram()) return;
+    // Asked once on arrival so a closed DUEL is a closed screen, not a form
+    // that takes a stake and then refuses it.
+    void api
+      .contractState('duel')
+      .then((contract) => setDuelClosed(contract.paused !== false))
+      .catch(() => setDuelClosed(null));
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -243,6 +257,10 @@ export function DuelScreen({
         ) {
           throw new Error('DUEL временно недоступен: проверка не пройдена');
         }
+        // A paused contract rejects every deposit and bounces the stake back
+        // minus gas. Never ask for a signature over one.
+        setDuelClosed(contract.paused !== false);
+        if (contract.paused !== false) throw new Error('DUEL сейчас закрыт');
         const offerId = newOfferId();
         const secret = newSecret();
         const commitment = commitmentForOffer(
@@ -283,6 +301,7 @@ export function DuelScreen({
           buildOpenOfferTransaction(quote, wallet.account.address, wallet.account.chain),
         );
         quotedOffer.current = null;
+        setSignedOffer(offerId);
         setMessage('Кошелёк отправил ставку. Ждём подтверждение.');
         await onRefresh();
         haptic('success');
@@ -322,6 +341,26 @@ export function DuelScreen({
       tonConnectUI,
       wallet,
     ],
+  );
+
+  const abandonQuote = useCallback(
+    async (offerId: number) => {
+      setBusy(true);
+      try {
+        await api.discardOffer(offerId);
+        setSignedOffer(null);
+        setMessage('');
+        await onRefresh();
+        haptic('success');
+      } catch {
+        // Funded offers belong to the chain; the wallet has to cancel those.
+        failed('Ставка уже ушла в сеть — дождись подтверждения');
+        haptic('error');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [failed, onRefresh, setMessage],
   );
 
   const runActiveAction = useCallback(async () => {
@@ -505,7 +544,9 @@ export function DuelScreen({
   // Only the boost phase has a second, absolute end to drain against: the hard
   // cap the contract will not extend past however many boosts arrive.
   const liveEyebrow = awaitingSignature
-    ? 'ЖДЁМ ПОДПИСЬ В КОШЕЛЬКЕ'
+    ? signedOffer === activeOffer?.onchain_offer_id
+      ? 'ЖДЁМ ПОДТВЕРЖДЕНИЕ СЕТИ'
+      : 'ЖДЁМ ПОДПИСЬ В КОШЕЛЬКЕ'
     : status === 'matched'
       ? duelBoosting
         ? 'СОПЕРНИК НАЙДЕН'
@@ -550,7 +591,16 @@ export function DuelScreen({
         }
       />
 
-      {status === 'idle' && (
+      {status === 'idle' && duelClosed && (
+        <div className="duel-form duel-closed">
+          <p>
+            DUEL сейчас закрыт: контракт не принимает ставки. Здесь ничего не потеряешь — просто
+            заходи позже.
+          </p>
+        </div>
+      )}
+
+      {status === 'idle' && !duelClosed && (
         <div className="duel-form">
           {invite ? (
             <div className="invite-banner">
@@ -791,7 +841,7 @@ export function DuelScreen({
             )}
           </>
         )}
-        {status === 'idle' && (
+        {status === 'idle' && !duelClosed && (
           <>
             <button
               className="primary-button"
@@ -817,6 +867,15 @@ export function DuelScreen({
               ОТПРАВИТЬ ДРУГУ <ArrowRight aria-hidden="true" />
             </button>
           )}
+        {awaitingSignature && activeOffer && (
+          <button
+            className="secondary-button"
+            disabled={busy}
+            onClick={() => void abandonQuote(activeOffer.onchain_offer_id)}
+          >
+            ОТМЕНИТЬ
+          </button>
+        )}
         {activeActionLabel && (
           <button
             className={status === 'matched' ? 'primary-button' : 'secondary-button'}

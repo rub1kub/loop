@@ -268,6 +268,8 @@ export interface ContractState {
   balance_nano: number;
   code_hash: string;
   code_hash_matches: boolean;
+  /** Null when the contract could not be asked; treat that as closed. */
+  paused: boolean | null;
   last_transaction_hash: string | null;
   last_transaction_url: string | null;
   wallet_balance_nano: number | null;

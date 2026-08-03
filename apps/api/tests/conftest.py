@@ -29,6 +29,7 @@ from httpx import ASGITransport, AsyncClient
 from app.config import get_settings
 from app.main import create_app
 from app.nonce_store import MemoryChallengeStore
+from app.ton import TonClient
 
 
 @pytest.fixture(autouse=True)
@@ -36,11 +37,37 @@ def reset_settings() -> None:
     get_settings.cache_clear()
 
 
+class OpenContractsTonClient(TonClient):
+    """The real client, with one answer replaced: the contracts are open.
+
+    Quoting now refuses when the contract is paused — and fails closed when it
+    cannot ask — so tests need a provider that answers this one question.
+    Everything else stays the real implementation, which tests already patch or
+    replace where they need to.
+    """
+
+    async def get_contract_admin_state(self, mode: str, address: str):
+        from app.ton import ContractAdminState
+
+        del mode, address
+        return ContractAdminState(
+            owner="0:" + "11" * 32,
+            treasury="0:" + "11" * 32,
+            fee_bps=1000,
+            paused=False,
+            locked_nano=0,
+            extended_controls=True,
+        )
+
+
 @pytest_asyncio.fixture
 async def app():
     application = create_app()
     async with application.router.lifespan_context(application):
         application.state.challenge_store = MemoryChallengeStore()
+        application.state.ton_client = OpenContractsTonClient(
+            application.state.http, get_settings()
+        )
         yield application
 
 

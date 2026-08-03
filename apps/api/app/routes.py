@@ -526,6 +526,14 @@ async def contract_state(
         )
     except TonProviderError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    try:
+        paused: bool | None = (
+            await request.app.state.ton_client.get_contract_admin_state(mode, address)
+        ).paused
+    except TonProviderError:
+        # Reported as unknown rather than as open: the caller decides how much
+        # to trust a contract it could not ask.
+        paused = None
     expected_hash = expected.removeprefix("0x").upper()
     return ContractStateView(
         mode=mode,
@@ -536,6 +544,7 @@ async def contract_state(
         code_hash=contract.code_hash,
         code_hash_matches=bool(expected_hash)
         and secrets.compare_digest(contract.code_hash, expected_hash),
+        paused=paused,
         last_transaction_hash=contract.last_transaction_hash,
         last_transaction_url=(
             explorer_transaction_url(settings.ton_network_id, contract.last_transaction_hash)

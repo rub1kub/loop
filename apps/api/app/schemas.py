@@ -338,6 +338,9 @@ class ContractStateView(BaseModel):
     balance_nano: int
     code_hash: str
     code_hash_matches: bool
+    # None only when the contract could not be asked; a paused contract rejects
+    # every deposit, so the interface must never invite a signature over it.
+    paused: bool | None
     last_transaction_hash: str | None
     last_transaction_url: str | None
     wallet_balance_nano: int | None

@@ -123,6 +123,20 @@ async def create_offer_quote(
     contract_address = settings.effective_duel_contract_address
     if not contract_address:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "DUEL contract is not configured")
+    # A paused contract rejects every deposit with exit code 101 and bounces the
+    # stake back minus gas. Quoting one builds a transaction that cannot succeed,
+    # so this refuses before a wallet is ever opened. Fail closed: a contract we
+    # could not ask is treated as closed rather than assumed open.
+    try:
+        admin = await request.app.state.ton_client.get_contract_admin_state(
+            "duel", contract_address
+        )
+    except TonProviderError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "DUEL временно недоступен"
+        ) from exc
+    if admin.paused:
+        raise HTTPException(status.HTTP_409_CONFLICT, "DUEL сейчас закрыт")
     if body.chance_bps != 5_000 and not body.challenge_code:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,

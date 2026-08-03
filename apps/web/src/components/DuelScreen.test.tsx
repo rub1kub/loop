@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DuelScreen } from '../features/duel/DuelScreen';
@@ -7,6 +7,13 @@ import type { Duel, Invite, Offer, Profile } from '../types';
 const tonConnect = vi.hoisted(() => ({
   openModal: vi.fn(() => new Promise<void>(() => undefined)),
 }));
+
+const apiMocks = vi.hoisted(() => ({
+  contractState: vi.fn(() => Promise.resolve({ paused: false })),
+  discardOffer: vi.fn(() => Promise.resolve(undefined)),
+}));
+
+vi.mock('../api', () => ({ api: apiMocks }));
 
 vi.mock('@tonconnect/ui-react', () => ({
   useTonConnectUI: () => [tonConnect],
@@ -88,6 +95,7 @@ describe('DuelScreen', () => {
   });
 
   beforeEach(() => {
+    apiMocks.contractState.mockResolvedValue({ paused: false });
     tonConnect.openModal.mockClear();
   });
 
@@ -402,5 +410,25 @@ describe('DuelScreen', () => {
 
     expect(screen.getByText('ЖДЁМ ПОДПИСЬ В КОШЕЛЬКЕ')).toBeVisible();
     expect(screen.queryByText('ИЩЕМ СОПЕРНИКА')).not.toBeInTheDocument();
+  });
+
+  it('shows a closed DUEL as closed instead of taking a stake for it', async () => {
+    // A paused contract rejects every deposit and bounces the stake back minus
+    // gas. The screen used to accept a stake, open the wallet and let the
+    // player sign a transaction that could only fail.
+    apiMocks.contractState.mockResolvedValue({ paused: true });
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText(/DUEL сейчас закрыт/)).toBeVisible());
+    expect(screen.queryByRole('button', { name: 'НАЙТИ СОПЕРНИКА' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
   });
 });

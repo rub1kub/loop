@@ -13,7 +13,12 @@ from app.config import get_settings
 from app.models import User, Wallet
 from app.modules.bank.router import GRAM, maturity_limit
 from app.modules.duel.models import Duel, DuelOffer, DuelState, OfferState
-from app.ton import ContractState, JettonWalletState, verify_holder_fee_permit
+from app.ton import (
+    ContractAdminState,
+    ContractState,
+    JettonWalletState,
+    verify_holder_fee_permit,
+)
 
 
 def signed_init_data(
@@ -479,6 +484,17 @@ async def test_onchain_diagnostics_are_scoped_by_mode_and_network(client, app) -
                 balance_nano=789,
             )
 
+        async def get_contract_admin_state(self, mode: str, address: str) -> ContractAdminState:
+            del mode, address
+            return ContractAdminState(
+                owner="0:" + "1" * 64,
+                treasury="0:" + "1" * 64,
+                fee_bps=1000,
+                paused=False,
+                locked_nano=0,
+                extended_controls=True,
+            )
+
     fake = FakeTonClient()
     app.state.ton_client = fake
     app.state.plush_ton_client = fake
@@ -894,3 +910,52 @@ async def test_a_refused_signature_frees_the_wallet_immediately(client, app) -> 
         await db.commit()
     funded = await client.post("/api/v1/duels/offers/31339/discard", headers=headers)
     assert funded.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_a_paused_duel_contract_is_never_offered_for_signature(client, app) -> None:
+    """A paused contract rejects every deposit and bounces the stake back.
+
+    Quoting one builds a transaction that cannot succeed, so the refusal has to
+    happen before a wallet is ever opened — and a contract we cannot ask counts
+    as closed, not as open.
+    """
+    from app.ton import ContractAdminState, TonProviderError
+
+    headers = await authenticate(client)
+    await add_wallet(app, 777000111)
+    body = {
+        "offer_id": 41000,
+        "chance_bps": 5000,
+        "stake_nano": 1_000_000_000,
+        "commitment_hex": "ab" * 32,
+        "mode": "afk",
+    }
+
+    class PausedTonClient:
+        async def get_contract_admin_state(self, mode: str, address: str) -> ContractAdminState:
+            del mode, address
+            return ContractAdminState(
+                owner="0:" + "1" * 64,
+                treasury="0:" + "1" * 64,
+                fee_bps=1000,
+                paused=True,
+                locked_nano=0,
+                extended_controls=True,
+            )
+
+    class UnreachableTonClient:
+        async def get_contract_admin_state(self, mode: str, address: str) -> ContractAdminState:
+            raise TonProviderError("provider is down")
+
+    app.state.ton_client = PausedTonClient()
+    paused = await client.post("/api/v1/duels/offers/quote", headers=headers, json=body)
+    assert paused.status_code == 409
+    assert paused.json()["detail"] == "DUEL сейчас закрыт"
+
+    app.state.ton_client = UnreachableTonClient()
+    unknown = await client.post("/api/v1/duels/offers/quote", headers=headers, json=body)
+    assert unknown.status_code == 503
+
+    # Nothing was reserved by either refusal.
+    assert (await client.get("/api/v1/duels/offers", headers=headers)).json() == []
