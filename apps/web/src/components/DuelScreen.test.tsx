@@ -108,10 +108,11 @@ describe('DuelScreen', () => {
       <DuelScreen profile={profile} offers={[]} duels={[]} invite={null} onRefresh={vi.fn()} />,
     );
 
-    expect(screen.getByText('50/50')).toBeInTheDocument();
-    expect(screen.getByText('РАВНЫЙ СТАРТ')).toBeInTheDocument();
+    // Равный старт теперь показывает сама шкала, а не подпись под ней.
+    expect(screen.getByRole('img', { name: 'Твой шанс 50 процентов' })).toBeInTheDocument();
+    expect(screen.queryByText('РАВНЫЙ СТАРТ')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Ставка в GRAM')).toBeInTheDocument();
-    expect(screen.getByText('ВВЕДИ СУММУ')).toBeInTheDocument();
+    expect(screen.queryByText('ВВЕДИ СУММУ')).not.toBeInTheDocument();
     expect(screen.getByText(/Соперник внесёт столько же/)).toBeVisible();
     expect(screen.getByText('ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
@@ -189,7 +190,7 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByText('50 / 50')).toBeVisible();
+    expect(screen.getByRole('img', { name: 'Твой шанс 50 процентов' })).toBeVisible();
     expect(screen.getByText('ДО КОНЦА СТАВОК')).toBeVisible();
     expect(screen.queryByLabelText('Сумма усиления в GRAM')).not.toBeInTheDocument();
 
@@ -246,7 +247,8 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'ПОРАЖЕНИЕ' })).toBeVisible();
+    expect(screen.getByRole('img', { name: 'Поражение: банк ушёл сопернику' })).toBeVisible();
+    expect(screen.getByText('ПОРАЖЕНИЕ')).toBeVisible();
     expect(screen.getByText('−1 GRAM')).toBeVisible();
     expect(screen.getByText(/Ставка 1 GRAM ушла сопернику/)).toBeVisible();
     expect(screen.queryByText(/1,95/)).not.toBeInTheDocument();
@@ -264,7 +266,8 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'ПОБЕДА' })).toBeVisible();
+    expect(screen.getByRole('img', { name: 'Победа: банк твой' })).toBeVisible();
+    expect(screen.getByText('ПОБЕДА')).toBeVisible();
     expect(screen.getByText('+0,95 GRAM')).toBeVisible();
     expect(screen.getByText(/В кошелёк пришло 1,95 GRAM/)).toBeVisible();
   });
@@ -283,7 +286,7 @@ describe('DuelScreen', () => {
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'ЗАКРЫТЬ' }));
 
-    expect(screen.queryByRole('heading', { name: 'ПОРАЖЕНИЕ' })).not.toBeInTheDocument();
+    expect(screen.queryByText('ПОРАЖЕНИЕ')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Ставка в GRAM')).toBeVisible();
     expect(screen.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' })).toBeVisible();
   });

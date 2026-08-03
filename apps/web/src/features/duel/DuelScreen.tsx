@@ -37,6 +37,7 @@ import type { Duel, Invite, Offer, Profile } from '../../types';
 import { sameAddress } from '../../address';
 
 import { celebrate } from '../../celebrate';
+import { ChanceBar, type ChancePhase } from './ChanceBar';
 
 const DEFAULT_CHANCE_BPS = 5000;
 
@@ -182,7 +183,11 @@ export function DuelScreen({
   useEffect(() => {
     if (status !== 'result' || !latestDuel || celebratedDuel.current === latestDuel.id) return;
     celebratedDuel.current = latestDuel.id;
-    if (resultWon) celebrate();
+    if (!resultWon) return;
+    // The bar takes half a second to claim the whole pool. Fire on its landing,
+    // not on its start — otherwise the burst celebrates something still moving.
+    const burst = window.setTimeout(() => celebrate(), 460);
+    return () => window.clearTimeout(burst);
   }, [latestDuel, resultWon, status]);
 
   const resultDeltaNano = latestDuel
@@ -448,12 +453,61 @@ export function DuelScreen({
         : mockExpiresAt;
   const liveMode = activeOffer?.mode ?? mode;
 
+  // Everything the bar shows, derived once. `live` covers both the boost window
+  // and the reveal window: in both the odds are settled facts and the clock is
+  // the thing under pressure.
+  const chancePhase: ChancePhase =
+    status === 'result' ? (resultWon ? 'won' : 'lost') : status === 'matched' ? 'live' : status;
+  const chanceShare =
+    status === 'matched' && activeDuel ? activeDuel.chance_bps / 10_000 : chance / 10_000;
+  const chanceWindowMs =
+    status === 'matched' && activeDeadline ? Math.max(0, activeDeadline - now) : null;
+  // Only the boost phase has a second, absolute end to drain against: the hard
+  // cap the contract will not extend past however many boosts arrive.
+  const liveEyebrow =
+    status === 'matched'
+      ? duelBoosting
+        ? 'СОПЕРНИК НАЙДЕН'
+        : activeDuel?.own_revealed
+          ? 'РЕЗУЛЬТАТ ОТКРЫТ'
+          : 'ВРЕМЯ ВЫШЛО'
+      : status === 'searching'
+        ? offerExpired
+          ? 'СРОК ВЫЗОВА ИСТЁК'
+          : liveMode === 'direct'
+            ? 'ПРЯМОЙ ВЫЗОВ'
+            : 'ИЩЕМ СОПЕРНИКА'
+        : null;
+  const chanceDrain =
+    duelBoosting && activeDuel?.boost_deadline && activeDuel.hard_deadline
+      ? (Date.parse(activeDuel.boost_deadline) - now) /
+        Math.max(1000, Date.parse(activeDuel.hard_deadline) - now)
+      : null;
+
   return (
     <section className="screen duel-screen" aria-labelledby="duel-title">
-      <header className="mode-header">
-        <p className="eyebrow">ИГРА 1 НА 1</p>
+      <header className={`mode-header${status === 'idle' ? '' : ' is-compact'}`}>
+        {status === 'idle' && <p className="eyebrow">ИГРА 1 НА 1</p>}
         <h1 id="duel-title">DUEL</h1>
       </header>
+
+      {liveEyebrow && <p className="duel-live-eyebrow">{liveEyebrow}</p>}
+
+      <ChanceBar
+        mine={chanceShare}
+        phase={chancePhase}
+        remainingMs={chanceWindowMs}
+        drain={chanceDrain}
+        caption={
+          status === 'matched'
+            ? duelBoosting
+              ? 'ДО КОНЦА СТАВОК'
+              : activeDuel?.own_revealed
+                ? 'ЖДЁМ СОПЕРНИКА'
+                : 'ОТКРЫТЬ РЕЗУЛЬТАТ'
+            : undefined
+        }
+      />
 
       {status === 'idle' && (
         <div className="duel-form">
@@ -471,7 +525,6 @@ export function DuelScreen({
               <label className="stake-input">
                 <span className="stake-input-heading">
                   <span>СТАВКА</span>
-                  <span className="stake-edit-cue">ВВЕДИ СУММУ</span>
                 </span>
                 <div>
                   <input
@@ -483,10 +536,6 @@ export function DuelScreen({
                   <b>GRAM</b>
                 </div>
               </label>
-              <div className="duel-equal-rule">
-                <strong>50/50</strong>
-                <span>РАВНЫЙ СТАРТ</span>
-              </div>
             </>
           )}
 
@@ -498,43 +547,13 @@ export function DuelScreen({
 
       {(status === 'searching' || status === 'matched') && (
         <div className="duel-live-state">
-          <p className="eyebrow">
-            {status === 'matched'
-              ? duelBoosting
-                ? 'СОПЕРНИК НАЙДЕН'
-                : activeDuel?.own_revealed
-                  ? 'РЕЗУЛЬТАТ ОТКРЫТ'
-                  : 'ВРЕМЯ ВЫШЛО'
-              : offerExpired
-                ? 'СРОК ВЫЗОВА ИСТЁК'
-                : liveMode === 'direct'
-                  ? 'ПРЯМОЙ ВЫЗОВ'
-                  : 'ИЩЕМ СОПЕРНИКА'}
-          </p>
-          <div className="duel-live-focus">
-            <strong>
-              {status === 'matched' && activeDuel
-                ? `${Math.round(activeDuel.chance_bps / 100)} / ${Math.round((10_000 - activeDuel.chance_bps) / 100)}`
-                : `${formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM`}
-            </strong>
-            <span>{status === 'matched' ? 'ТЫ / СОПЕРНИК' : 'ТВОЯ СТАВКА'}</span>
-          </div>
-          <p className="duel-live-timer">
-            <strong>{timeLeft(activeDeadline, now)}</strong>
-            <span>
-              {status === 'matched'
-                ? duelBoosting
-                  ? 'ДО КОНЦА СТАВОК'
-                  : activeDuel?.own_revealed
-                    ? 'ЖДЁМ СОПЕРНИКА'
-                    : 'ОТКРЫТЬ РЕЗУЛЬТАТ'
-                : offerExpired
-                  ? 'СТАВКУ МОЖНО ВЕРНУТЬ'
-                  : liveMode === 'direct'
-                    ? 'ВЫЗОВ ГОТОВ'
-                    : 'ПОИСК ИДЁТ'}
-            </span>
-          </p>
+          {status === 'searching' && (
+            <div className="duel-live-focus">
+              <strong>{`${formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM`}</strong>
+              <span>{timeLeft(activeDeadline, now)}</span>
+            </div>
+          )}
+
           {status === 'matched' && activeDuel && duelBoosting && (
             <>
               {!boostPanelOpen && (
@@ -598,7 +617,7 @@ export function DuelScreen({
         </div>
       )}
 
-      {status !== 'result' && !boostPanelOpen && (
+      {status === 'idle' && !boostPanelOpen && (
         <details className="technical-details duel-rules">
           <summary>
             <span>ПРАВИЛА</span>
@@ -659,8 +678,7 @@ export function DuelScreen({
 
       {status === 'result' && latestDuel && (
         <div className="duel-result">
-          <p className="eyebrow">РЕЗУЛЬТАТ ПОДТВЕРЖДЁН</p>
-          <h2>{resultWon ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ'}</h2>
+          <p className="eyebrow">{resultWon ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ'}</p>
           <strong>{`${resultWon ? '+' : '−'}${formatGram(resultDeltaNano, 3)} GRAM`}</strong>
           <p className="duel-result-note">
             {resultWon

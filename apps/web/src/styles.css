@@ -1789,11 +1789,17 @@ details[open] > summary .disclosure-indicator svg {
   padding: 0;
 }
 
-.duel-form,
-.duel-live-state,
-.duel-result {
+.duel-form {
   flex: 1 1 auto;
   align-content: center;
+}
+
+/* The bar above them is the subject now; these blocks caption it. */
+.duel-live-state,
+.duel-result {
+  flex: 0 0 auto;
+  align-content: start;
+  margin-top: 4px;
 }
 
 .duel-actions svg {
@@ -3241,4 +3247,163 @@ details[open] > summary .disclosure-indicator svg {
   letter-spacing: 0.1em;
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+/* ---------- DUEL: the chance bar ---------- */
+
+.chance-bar {
+  display: grid;
+  width: 100%;
+  gap: 12px;
+  /* The screen is a centred flex column, so the bar has to claim the width
+     rather than shrink to its own content. */
+  align-self: stretch;
+  margin: 26px 0 22px;
+}
+
+.chance-bar-track {
+  position: relative;
+  overflow: hidden;
+  height: 74px;
+  border: 1px solid var(--edge);
+  border-radius: 18px;
+  /* The opponent's ground: everything the bar is not yet yours. */
+  background: #101010;
+}
+
+.chance-bar-mine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(180deg, #f4f4f4, #c9c9c9);
+}
+
+.chance-bar-split {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+  box-shadow: 0 0 12px rgb(255 255 255 / 55%);
+}
+
+.chance-bar-scan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 12%), transparent);
+}
+
+.chance-bar-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 730;
+  letter-spacing: -0.02em;
+}
+
+.chance-bar-readout b {
+  color: var(--ink);
+}
+
+.chance-bar-readout i {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.chance-bar-readout span {
+  color: var(--dim);
+}
+
+.chance-bar-clock {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+}
+
+.chance-bar-clock span {
+  position: relative;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 730;
+}
+
+.chance-bar-drain {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: rgb(255 255 255 / 55%);
+  transform-origin: left center;
+  transition: transform 900ms linear;
+}
+
+/* The last ten seconds stop being information and start being pressure. */
+.chance-bar.is-urgent .chance-bar-drain,
+.chance-bar.is-urgent .chance-bar-clock span {
+  animation: chance-urgent 1s ease-in-out infinite;
+}
+
+.chance-bar.is-urgent .chance-bar-drain {
+  background: var(--ink);
+}
+
+@keyframes chance-urgent {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.42;
+  }
+}
+
+.chance-bar.phase-won .chance-bar-track {
+  border-color: var(--ink);
+}
+
+.chance-bar.phase-lost .chance-bar-track {
+  border-color: #2a2a2a;
+}
+
+.duel-live-eyebrow {
+  margin: 0;
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: 0.16em;
+  text-align: center;
+}
+
+.duel-live-eyebrow + .chance-bar {
+  margin-top: 12px;
+}
+
+.mode-header.is-compact {
+  margin-bottom: 0;
+}
+
+.mode-header.is-compact h1 {
+  font-size: 30px;
+}
+
+.chance-bar-clock span b {
+  color: var(--ink);
+  font-weight: 730;
+}
+
+.chance-bar-clock span {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 780;
+  letter-spacing: 0.1em;
 }
