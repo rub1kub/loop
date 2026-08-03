@@ -1,7 +1,7 @@
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import aliased
 
@@ -565,6 +565,38 @@ async def reveal_intent(
         offer_id=offer.onchain_offer_id,
         duel_id=duel.onchain_duel_id,
     )
+
+
+@router.post("/offers/{offer_id}/discard", status_code=status.HTTP_204_NO_CONTENT)
+async def discard_unfunded_offer(
+    offer_id: int,
+    user: CurrentUser,
+    db: Db,
+    settings: Config,
+) -> Response:
+    """Drop a quote the player never signed.
+
+    A quote reserves the wallet's single offer slot before the wallet is even
+    opened, so a declined signature used to leave the player "searching" for
+    fifteen minutes against nothing, unable to start again. Refusing in the
+    wallet must cost nothing, and it costs nothing to undo: without a funding
+    transaction this row has no counterpart on chain.
+    """
+    offer = await db.scalar(
+        select(DuelOffer).where(
+            DuelOffer.onchain_offer_id == offer_id,
+            DuelOffer.user_id == user.id,
+            DuelOffer.network == settings.ton_network_id,
+        )
+    )
+    if offer is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "offer not found")
+    # Anything the chain has already seen belongs to the chain, not to a button.
+    if offer.state != OfferState.PENDING_FUNDING.value or offer.funding_tx_hash:
+        raise HTTPException(status.HTTP_409_CONFLICT, "offer is already funded")
+    offer.state = OfferState.EXPIRED.value
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/offers/{offer_id}/cancel-intent", response_model=ActionIntent)

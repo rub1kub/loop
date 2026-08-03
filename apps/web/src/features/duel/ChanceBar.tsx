@@ -113,7 +113,7 @@ export function ChanceBar({
         </div>
       )}
 
-      {!settled && (
+      {!settled && phase !== 'searching' && (
         <div className="chance-bar-readout">
           <b>{Math.round(share * 100)}</b>
           <i>/</i>

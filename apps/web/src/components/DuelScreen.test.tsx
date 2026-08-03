@@ -367,4 +367,40 @@ describe('DuelScreen', () => {
 
     expect(screen.queryByText(/ЕЩЁ РАЗ|ОТЫГРАТЬСЯ|РЕВАНШ|СЫГРАТЬ СНОВА/i)).not.toBeInTheDocument();
   });
+
+  it('calls an unsigned quote a pending signature rather than a search', () => {
+    // The quote holds the wallet's slot before the wallet has answered. Calling
+    // that "ИЩЕМ СОПЕРНИКА" told the player a duel existed when none did.
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[
+          {
+            id: 'quote',
+            onchain_offer_id: 900,
+            chance_bps: 5_000,
+            total_pool_nano: 2_000_000_000,
+            stake_nano: 1_000_000_000,
+            opponent_stake_nano: 1_000_000_000,
+            fee_bps: 250,
+            fee_exempt: false,
+            payout_nano: 1_950_000_000,
+            net_profit_nano: 950_000_000,
+            mode: 'afk',
+            direct_opponent_wallet: null,
+            state: 'pending_funding',
+            expires_at: new Date(Date.now() + 900_000).toISOString(),
+            funding_tx_hash: null,
+            funding_proof_url: null,
+          },
+        ]}
+        duels={[]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('ЖДЁМ ПОДПИСЬ В КОШЕЛЬКЕ')).toBeVisible();
+    expect(screen.queryByText('ИЩЕМ СОПЕРНИКА')).not.toBeInTheDocument();
+  });
 });

@@ -382,6 +382,10 @@ export const api = {
     });
   },
 
+  async discardOffer(offerId: number): Promise<void> {
+    await request(`/duels/offers/${offerId}/discard`, { method: 'POST', body: '{}' });
+  },
+
   async cancelOfferIntent(offerId: number): Promise<ActionIntent> {
     return await request(`/duels/offers/${offerId}/cancel-intent`, {
       method: 'POST',

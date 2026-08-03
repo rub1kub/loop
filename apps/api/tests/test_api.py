@@ -840,3 +840,57 @@ async def test_duel_stake_bounds_follow_the_pool_cap(client, app, monkeypatch) -
 
     monkeypatch.delenv("LOOP_MAX_POOL_NANO", raising=False)
     get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_a_refused_signature_frees_the_wallet_immediately(client, app) -> None:
+    """Declining in the wallet must cost nothing, including the next fifteen minutes.
+
+    A quote reserves the wallet's single offer slot before the wallet is even
+    opened. Left behind, it showed the player a search for a duel that does not
+    exist and refused every attempt to start another.
+    """
+    headers = await authenticate(client)
+    await add_wallet(app, 777000111)
+    body = {
+        "offer_id": 31337,
+        "chance_bps": 5000,
+        "stake_nano": 1_000_000_000,
+        "commitment_hex": "ab" * 32,
+        "mode": "afk",
+    }
+    assert (
+        await client.post("/api/v1/duels/offers/quote", headers=headers, json=body)
+    ).status_code == 201
+
+    # The slot is taken while the wallet is being asked.
+    blocked = await client.post(
+        "/api/v1/duels/offers/quote", headers=headers, json={**body, "offer_id": 31338}
+    )
+    assert blocked.status_code == 409
+
+    discarded = await client.post("/api/v1/duels/offers/31337/discard", headers=headers)
+    assert discarded.status_code == 204
+    # History keeps the row; what matters is that nothing is active any more,
+    # which is exactly the set the interface treats as a live duel.
+    listed = (await client.get("/api/v1/duels/offers", headers=headers)).json()
+    assert [offer["state"] for offer in listed] == ["expired"]
+    active = {"pending_funding", "open", "reserved", "matched"}
+    assert not [offer for offer in listed if offer["state"] in active]
+
+    # And the player can start again at once.
+    again = await client.post(
+        "/api/v1/duels/offers/quote", headers=headers, json={**body, "offer_id": 31339}
+    )
+    assert again.status_code == 201
+
+    # What the chain has seen is not a button's to undo.
+    async with app.state.session_factory() as db:
+        from app.modules.duel.models import DuelOffer
+
+        offer = await db.scalar(select(DuelOffer).where(DuelOffer.onchain_offer_id == 31339))
+        assert offer is not None
+        offer.funding_tx_hash = "ab" * 32
+        await db.commit()
+    funded = await client.post("/api/v1/duels/offers/31339/discard", headers=headers)
+    assert funded.status_code == 409

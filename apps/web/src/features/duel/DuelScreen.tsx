@@ -96,6 +96,8 @@ export function DuelScreen({
   const [seenDuelId, setSeenDuelId] = useState(() => readSeenDuelId());
   const locked = useRef(false);
   const lastBoostRevision = useRef<number | null>(null);
+  /** The quote holding this wallet's offer slot until the wallet answers. */
+  const quotedOffer = useRef<number | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -250,6 +252,7 @@ export function DuelScreen({
           contract.network,
           contract.address,
         );
+        quotedOffer.current = offerId;
         const quote = await api.quoteOffer({
           offer_id: offerId,
           chance_bps: chance,
@@ -279,10 +282,21 @@ export function DuelScreen({
         await tonConnectUI.sendTransaction(
           buildOpenOfferTransaction(quote, wallet.account.address, wallet.account.chain),
         );
+        quotedOffer.current = null;
         setMessage('Кошелёк отправил ставку. Ждём подтверждение.');
         await onRefresh();
         haptic('success');
       } catch (error) {
+        // A refused signature must leave the screen exactly as it was. The
+        // quote already holds this wallet's only offer slot, so it has to go
+        // before anything else — otherwise the player watches a search for a
+        // duel that does not exist and cannot start another for fifteen minutes.
+        const abandoned = quotedOffer.current;
+        quotedOffer.current = null;
+        if (abandoned !== null) {
+          await api.discardOffer(abandoned).catch(() => undefined);
+          await onRefresh().catch(() => undefined);
+        }
         failed(error instanceof Error ? error.message : 'Не удалось создать DUEL');
         haptic('error');
       } finally {
@@ -471,16 +485,28 @@ export function DuelScreen({
   // Everything the bar shows, derived once. `live` covers both the boost window
   // and the reveal window: in both the odds are settled facts and the clock is
   // the thing under pressure.
+  // A quote holds the wallet's offer slot before the wallet has answered,
+  // and that is not a search: nothing is on chain to find an opponent for.
+  const awaitingSignature = activeOffer?.state === 'pending_funding';
   const chancePhase: ChancePhase =
-    status === 'result' ? (resultWon ? 'won' : 'lost') : status === 'matched' ? 'live' : status;
+    status === 'result'
+      ? resultWon
+        ? 'won'
+        : 'lost'
+      : status === 'matched'
+        ? 'live'
+        : awaitingSignature
+          ? 'idle'
+          : status;
   const chanceShare =
     status === 'matched' && activeDuel ? activeDuel.chance_bps / 10_000 : chance / 10_000;
   const chanceWindowMs =
     status === 'matched' && activeDeadline ? Math.max(0, activeDeadline - now) : null;
   // Only the boost phase has a second, absolute end to drain against: the hard
   // cap the contract will not extend past however many boosts arrive.
-  const liveEyebrow =
-    status === 'matched'
+  const liveEyebrow = awaitingSignature
+    ? 'ЖДЁМ ПОДПИСЬ В КОШЕЛЬКЕ'
+    : status === 'matched'
       ? duelBoosting
         ? 'СОПЕРНИК НАЙДЕН'
         : activeDuel?.own_revealed
