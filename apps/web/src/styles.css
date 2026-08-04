@@ -3439,3 +3439,7 @@ details[open] > summary .disclosure-indicator svg {
   font-size: 13px;
   line-height: 1.55;
 }
+
+.bank-flow-summary {
+  margin: 18px 0 4px;
+}

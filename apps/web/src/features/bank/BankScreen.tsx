@@ -23,6 +23,12 @@ import { celebrate } from '../../celebrate';
 type WizardStep = 'amount' | 'multiplier' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
 
+/** The fee as a percentage, so it is a rate and not just an unexplained subtraction. */
+function feePercentOf(feeNano: number, principalNano: number): string {
+  if (principalNano <= 0) return '';
+  return `${((feeNano * 100) / principalNano).toFixed(1).replace('.', ',').replace(',0', '')}%`;
+}
+
 const statusCopy: Record<BankPosition['current_status'], string> = {
   pending_confirmation: 'Проверяем взнос в сети',
   queued: 'Позиция ждёт новых взносов',
@@ -50,7 +56,7 @@ export function BankScreen({
   const [wizard, setWizard] = useState<WizardStep | null>(null);
   const [details, setDetails] = useState(false);
   const [amount, setAmount] = useState('1');
-  const [multiplier, setMultiplier] = useState<(typeof multipliers)[number]>(15000);
+  const [multiplier, setMultiplier] = useState<(typeof multipliers)[number]>(12500);
   const [fetchedPreview, setFetchedPreview] = useState<BankPreview | null>(null);
   const [limit, setLimit] = useState<BankLimit | null>(
     isMockTelegram()
@@ -92,6 +98,11 @@ export function BankScreen({
   }, []);
 
   function continueFromAmount() {
+    if (!/^\d+([.,]\d+)?$/.test(amount.trim())) {
+      setMessage('Введи сумму цифрами, например 1');
+      haptic('warning');
+      return;
+    }
     if (principalNano < 1_000_000_000) {
       setMessage('Минимальная сумма — 1 GRAM');
       haptic('warning');
@@ -325,9 +336,22 @@ export function BankScreen({
                     </button>
                   ))}
                 </div>
+                <dl className="detail-list bank-flow-summary">
+                  <Detail label="Ты платишь" value={`${formatGram(principalNano, 3)} GRAM`} />
+                  {preview && (
+                    <Detail
+                      label={`Комиссия ${feePercentOf(preview.fee_nano, preview.principal_nano)}`}
+                      value={`−${formatGram(preview.fee_nano, 3)} GRAM`}
+                    />
+                  )}
+                  <Detail
+                    label="Цель"
+                    value={`${formatGram((principalNano * multiplier) / 10_000, 3)} GRAM`}
+                  />
+                </dl>
                 <p className="form-note">
-                  Ранние позиции наполняются первыми. Чем выше цель, тем больше новых взносов
-                  потребуется; выплата не гарантирована.
+                  Взнос вернуть нельзя: досрочной отмены нет. Позицию наполняют новые участники —
+                  если они не придут, выплата не наступит.
                 </p>
                 {message && (
                   <p className="form-note is-error" role="alert">
@@ -458,7 +482,8 @@ export function BankScreen({
             >
               <SheetTitle title="Позиция BANK" onClose={() => setDetails(false)} />
               <p className="bank-details-intro">
-                Банка — сколько новых взносов уже пришло в твою позицию.
+                Банка — сколько собрано в твою позицию. Первым в неё попадает остаток твоего взноса
+                за вычетом комиссии, дальше её наполняют новые участники.
               </p>
               <div className="big-progress">{Math.round(progressPercent)}%</div>
               <div className="progress-track">
@@ -474,7 +499,7 @@ export function BankScreen({
                   value={`${formatGram(position.target_payout_nano, 3)} GRAM`}
                 />
                 <Detail
-                  label="Уже собрано"
+                  label="Собрано, включая твой взнос"
                   value={`${formatGram(position.funded_amount_nano, 3)} GRAM`}
                 />
                 <Detail
