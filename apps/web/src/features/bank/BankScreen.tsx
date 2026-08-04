@@ -64,6 +64,8 @@ export function BankScreen({
   );
   const [message, setMessage] = useState('');
   const locked = useRef(false);
+  /** The quote holding this wallet's position slot until the wallet answers. */
+  const quoted = useRef<number | null>(null);
 
   const principalNano = useMemo(() => {
     try {
@@ -182,18 +184,30 @@ export function BankScreen({
       if (!wallet || !isSupportedTonNetwork(wallet.account.chain)) {
         throw new Error('Подключите поддерживаемый внешний кошелёк');
       }
+      const positionId = newOfferId();
       const quote = await api.quoteBankPosition({
-        position_id: newOfferId(),
+        position_id: positionId,
         principal_nano: preview.principal_nano,
         multiplier_bps: preview.multiplier_bps,
       });
+      quoted.current = positionId;
       setWizard('waiting');
       await tonConnectUI.sendTransaction(
         buildBankPositionTransaction(quote, wallet.account.address, wallet.account.chain),
       );
+      quoted.current = null;
       await onRefresh();
       haptic('success');
     } catch (error) {
+      // The quote already holds this wallet's only position slot, so a refused
+      // signature has to give it back — otherwise the next six minutes answer
+      // "у тебя уже есть открытая позиция" to someone who signed nothing.
+      const abandoned = quoted.current;
+      quoted.current = null;
+      if (abandoned !== null) {
+        await api.discardBankPosition(abandoned).catch(() => undefined);
+        await onRefresh().catch(() => undefined);
+      }
       setMessage(error instanceof Error ? error.message : 'Не удалось создать позицию');
       setWizard('multiplier');
       haptic('error');

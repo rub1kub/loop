@@ -959,3 +959,81 @@ async def test_a_paused_duel_contract_is_never_offered_for_signature(client, app
 
     # Nothing was reserved by either refusal.
     assert (await client.get("/api/v1/duels/offers", headers=headers)).json() == []
+
+
+@pytest.mark.asyncio
+async def test_a_paused_bank_is_never_offered_for_signature(client, app) -> None:
+    """Pausing BANK is routine — the panel demands it to change fee or withdraw.
+
+    Every deposit signed meanwhile bounces with exit code 101, so the refusal
+    has to happen before a wallet opens, and an unreachable contract counts as
+    closed rather than open.
+    """
+    from app.ton import ContractAdminState, TonProviderError
+
+    headers = await authenticate(client)
+    await add_wallet(app, 777000111)
+    body = {"position_id": 51000, "principal_nano": 1_000_000_000, "multiplier_bps": 12_500}
+
+    class PausedTonClient:
+        async def get_contract_admin_state(self, mode: str, address: str) -> ContractAdminState:
+            del mode, address
+            return ContractAdminState(
+                owner="0:" + "1" * 64,
+                treasury="0:" + "1" * 64,
+                fee_bps=1000,
+                paused=True,
+                locked_nano=0,
+                extended_controls=True,
+            )
+
+    class UnreachableTonClient:
+        async def get_contract_admin_state(self, mode: str, address: str) -> ContractAdminState:
+            raise TonProviderError("provider is down")
+
+    app.state.ton_client = PausedTonClient()
+    paused = await client.post("/api/v1/bank/positions/quote", headers=headers, json=body)
+    assert paused.status_code == 409
+    assert paused.json()["detail"] == "BANK сейчас закрыт"
+
+    app.state.ton_client = UnreachableTonClient()
+    assert (
+        await client.post("/api/v1/bank/positions/quote", headers=headers, json=body)
+    ).status_code == 503
+
+    assert (await client.get("/api/v1/bank/positions", headers=headers)).json() == []
+
+
+@pytest.mark.asyncio
+async def test_a_refused_bank_signature_frees_the_slot_at_once(client, app) -> None:
+    """Declining in the wallet must not cost the next six minutes."""
+    headers = await authenticate(client)
+    await add_wallet(app, 777000111)
+    body = {"position_id": 52000, "principal_nano": 1_000_000_000, "multiplier_bps": 12_500}
+
+    assert (
+        await client.post("/api/v1/bank/positions/quote", headers=headers, json=body)
+    ).status_code == 201
+    blocked = await client.post(
+        "/api/v1/bank/positions/quote", headers=headers, json={**body, "position_id": 52001}
+    )
+    assert blocked.status_code == 409
+
+    discarded = await client.post("/api/v1/bank/positions/52000/discard", headers=headers)
+    assert discarded.status_code == 204
+
+    again = await client.post(
+        "/api/v1/bank/positions/quote", headers=headers, json={**body, "position_id": 52002}
+    )
+    assert again.status_code == 201
+
+    # What the chain has seen is not a button's to undo.
+    async with app.state.session_factory() as db:
+        from app.modules.bank.models import BankPosition
+
+        position = await db.scalar(select(BankPosition).where(BankPosition.position_id == 52002))
+        assert position is not None
+        position.funding_transaction = "ab" * 32
+        await db.commit()
+    funded = await client.post("/api/v1/bank/positions/52002/discard", headers=headers)
+    assert funded.status_code == 409

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select, update
 
 from ...control_state import effective_contract_fee, ensure_mode_enabled
@@ -15,7 +15,7 @@ from ...schemas import (
     BankPositionQuoteResponse,
     BankPositionView,
 )
-from ...ton import explorer_transaction_url
+from ...ton import TonProviderError, explorer_transaction_url
 from .models import BankPayout, BankPosition, BankPositionStatus
 
 router = APIRouter(
@@ -214,6 +214,7 @@ async def quote_position(
     body: BankPositionQuoteRequest,
     user: CurrentUser,
     db: Db,
+    request: Request,
     settings: Config,
 ) -> BankPositionQuoteResponse:
     await ensure_mode_enabled(db, "bank")
@@ -223,6 +224,20 @@ async def quote_position(
         )
     if not settings.bank_contract_address:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "BANK contract is not configured")
+    # A paused contract rejects every deposit and bounces it back minus gas.
+    # Pausing is a routine owner action — the panel requires it to change the
+    # fee, the treasury or to withdraw — so this must refuse before a wallet is
+    # ever opened. Fail closed: a contract we could not ask counts as closed.
+    try:
+        admin = await request.app.state.ton_client.get_contract_admin_state(
+            "bank", settings.bank_contract_address
+        )
+    except TonProviderError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "BANK временно недоступен"
+        ) from exc
+    if admin.paused:
+        raise HTTPException(status.HTTP_409_CONFLICT, "BANK сейчас закрыт")
     await validate_principal(db, settings, body.principal_nano)
     wallet = await active_wallet(db, user.id, settings.ton_network_id)
     await db.execute(
@@ -308,6 +323,41 @@ async def quote_position(
             fee_nano=str(fee),
         ),
     )
+
+
+@router.post("/positions/{position_id}/discard", status_code=status.HTTP_204_NO_CONTENT)
+async def discard_unfunded_position(
+    position_id: int,
+    user: CurrentUser,
+    db: Db,
+    settings: Config,
+) -> Response:
+    """Drop a quote the player never signed.
+
+    A quote takes the wallet's only position slot before the wallet is even
+    opened. Refusing in the wallet has to cost nothing, and it costs nothing to
+    undo: without a funding transaction this row has no counterpart on chain.
+    """
+    position = await db.scalar(
+        select(BankPosition).where(
+            BankPosition.position_id == position_id,
+            BankPosition.user_id == user.id,
+            BankPosition.network == settings.ton_network_id,
+            BankPosition.contract_address == settings.bank_contract_address,
+        )
+    )
+    if position is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "position not found")
+    # Anything the chain has already seen belongs to the chain, not to a button.
+    if (
+        position.current_status != BankPositionStatus.PENDING_CONFIRMATION.value
+        or position.funding_transaction
+    ):
+        raise HTTPException(status.HTTP_409_CONFLICT, "position is already funded")
+    position.current_status = BankPositionStatus.FAILED.value
+    position.failure_reason = "wallet signature declined"
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/limits", response_model=BankLimitView)

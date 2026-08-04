@@ -155,7 +155,7 @@ const ratingSchema = z.object({
   ),
 });
 
-const IDEMPOTENT_POSTS = /^\/results\/[^/]+\/seen$/;
+const IDEMPOTENT_POSTS = /^\/(results\/[^/]+\/seen|bank\/positions\/\d+\/discard)$/;
 
 async function restoreSession(): Promise<boolean> {
   const initData = telegramInitData();
@@ -406,6 +406,10 @@ export const api = {
 
   async referrals(): Promise<Referral> {
     return await request('/referrals');
+  },
+
+  async discardBankPosition(positionId: number): Promise<void> {
+    await request(`/bank/positions/${positionId}/discard`, { method: 'POST', body: '{}' });
   },
 
   async prelaunch(): Promise<Prelaunch> {
