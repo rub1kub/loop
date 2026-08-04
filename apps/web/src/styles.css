@@ -3299,17 +3299,30 @@ details[open] > summary .disclosure-indicator svg {
 
 .chance-bar-readout {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 10px;
   font-size: 15px;
   font-variant-numeric: tabular-nums;
   font-weight: 730;
   letter-spacing: -0.02em;
 }
 
-.chance-bar-readout b {
+.chance-bar-side {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--dim);
+}
+
+.chance-bar-side.is-mine b {
   color: var(--ink);
+}
+
+.chance-bar-side small {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
 }
 
 .chance-bar-readout i {
@@ -3336,13 +3349,20 @@ details[open] > summary .disclosure-indicator svg {
   font-weight: 730;
 }
 
-.chance-bar-drain {
+/* Full width so the remaining time reads as a bar emptying, not as a stray
+   stub of colour a tester mistook for a rendering fault. */
+.chance-bar-drain-track {
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
   height: 3px;
-  background: rgb(255 255 255 / 55%);
+  background: rgb(255 255 255 / 12%);
+}
+
+.chance-bar-drain {
+  height: 100%;
+  background: rgb(255 255 255 / 62%);
   transform-origin: left center;
   transition: transform 900ms linear;
 }

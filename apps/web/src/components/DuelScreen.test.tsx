@@ -125,8 +125,8 @@ describe('DuelScreen', () => {
     expect(screen.getByText(/Соперник внесёт столько же/)).toBeVisible();
     expect(screen.getByText('ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
-    expect(screen.getByText('Комиссия')).not.toBeVisible();
-    expect(screen.getByText(/Открыл один — он выигрывает/)).not.toBeVisible();
+    expect(screen.getByText(/^Комиссия /)).not.toBeVisible();
+    expect(screen.getByText(/Открыл только один — он и выигрывает/)).not.toBeVisible();
     expect(screen.queryByText(/Можно закрыть приложение/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeInTheDocument();
     expect(screen.queryByText(/Одинаковая ставка/)).not.toBeInTheDocument();
@@ -140,12 +140,13 @@ describe('DuelScreen', () => {
       <DuelScreen profile={profile} offers={[]} duels={[]} invite={invite} onRefresh={vi.fn()} />,
     );
 
-    expect(screen.getByText(/ВЫЗОВ ОТ МИША/)).toBeInTheDocument();
-    expect(screen.getByText('1 GRAM')).toBeInTheDocument();
-    expect(screen.getByText('ТВОЯ СТАВКА')).toBeInTheDocument();
+    expect(screen.getByText(/ТЕБЯ ВЫЗЫВАЕТ МИША/)).toBeInTheDocument();
+    // The rules card now names the stake too, so the banner is asserted on
+    // directly rather than by a text that appears in both.
+    expect(screen.getByText('ТВОЯ СТАВКА').previousElementSibling).toHaveTextContent('1 GRAM');
     fireEvent.click(screen.getByText('ПРАВИЛА'));
     expect(screen.getByText('1,95 GRAM')).toBeVisible();
-    expect(screen.getByText('Комиссия')).toBeVisible();
+    expect(screen.getByText(/^Комиссия /)).toBeVisible();
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
   });
 
@@ -206,8 +207,8 @@ describe('DuelScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'УВЕЛИЧИТЬ ШАНС' }));
 
     expect(screen.getByLabelText('Сумма усиления в GRAM')).toHaveValue('0.5');
-    expect(screen.getByText('Твоя доля станет')).toHaveTextContent('60,0%');
-    expect(screen.getByRole('button', { name: 'ДОБАВИТЬ GRAM' })).toBeInTheDocument();
+    expect(screen.getByText('Станет').nextElementSibling).toHaveTextContent('60,0%');
+    expect(screen.getByRole('button', { name: /^ДОБАВИТЬ / })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'НЕ СЕЙЧАС' }));
     expect(screen.queryByLabelText('Сумма усиления в GRAM')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).not.toBeInTheDocument();

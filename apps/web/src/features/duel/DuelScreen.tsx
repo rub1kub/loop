@@ -40,6 +40,12 @@ import { celebrate } from '../../celebrate';
 import { ChanceBar, type ChancePhase } from './ChanceBar';
 
 const DEFAULT_CHANCE_BPS = 5000;
+// Four digits everywhere on the money card: at three, a 0,01 stake rounded the
+// payout up to the whole bank and the card claimed the fee was both taken and
+// not taken at the same time.
+const MONEY_DIGITS = 4;
+// The contract refuses to push either side past ninety percent.
+const MAX_CHANCE_BPS = 9000;
 
 function canonicalTerms(requestedStake: number, chanceBps: number) {
   const quarterUnits = chanceBps / 2500;
@@ -47,6 +53,14 @@ function canonicalTerms(requestedStake: number, chanceBps: number) {
   const stake = quarterUnits * poolUnit;
   const opponentStake = (4 - quarterUnits) * poolUnit;
   return { stake, opponentStake, totalPool: 4 * poolUnit };
+}
+
+/** Keeps a money field to digits and a single separator, as it is typed. */
+function sanitizeAmount(value: string): string {
+  const cleaned = value.replace(/[^\d.,]/g, '').replace(/[.,]/g, ',');
+  const [whole, ...rest] = cleaned.split(',');
+  const fraction = rest.join('').slice(0, 9);
+  return rest.length ? `${whole.slice(0, 12)},${fraction}` : whole.slice(0, 12);
 }
 
 function timeLeft(until: number | null, now: number): string {
@@ -173,7 +187,6 @@ export function DuelScreen({
     ? 0
     : (terms.totalPool * profile.plush_brick.duel_fee_bps) / 10_000;
   const payoutNano = terms.totalPool - feeNano;
-  const profitNano = payoutNano - terms.stake;
   const boostNano = useMemo(() => {
     try {
       return parseGram(boostAmount);
@@ -182,10 +195,14 @@ export function DuelScreen({
     }
   }, [boostAmount]);
   const boostedChanceBps = activeDuel
-    ? Math.floor(
-        ((activeDuel.stake_nano + boostNano) * 10_000) / (activeDuel.total_pool_nano + boostNano),
+    ? Math.min(
+        MAX_CHANCE_BPS,
+        Math.floor(
+          ((activeDuel.stake_nano + boostNano) * 10_000) / (activeDuel.total_pool_nano + boostNano),
+        ),
       )
     : 0;
+  const boostHitsCeiling = activeDuel !== undefined && boostedChanceBps >= MAX_CHANCE_BPS;
 
   const status =
     activeOffer?.state === 'matched'
@@ -225,7 +242,7 @@ export function DuelScreen({
       setBusy(true);
       setMode(selectedMode);
       try {
-        if (requestedStake < minStake || requestedStake > maxStake) {
+        if (!invite && (requestedStake < minStake || requestedStake > maxStake)) {
           throw new Error(
             stakeFixed
               ? `Сейчас ставка — ровно ${formatGram(minStake, 3)} GRAM`
@@ -235,7 +252,7 @@ export function DuelScreen({
         if (isMockTelegram()) {
           setMockSearching(true);
           setMockExpiresAt(Date.now() + 15 * 60_000);
-          setMessage(selectedMode === 'afk' ? '' : 'Вызов создан. Отправь его через Telegram.');
+          setMessage(selectedMode === 'afk' ? '' : 'Вызов создан. Отправь его другу.');
           haptic('success');
           return;
         }
@@ -543,6 +560,13 @@ export function DuelScreen({
     status === 'matched' && activeDeadline ? Math.max(0, activeDeadline - now) : null;
   // Only the boost phase has a second, absolute end to drain against: the hard
   // cap the contract will not extend past however many boosts arrive.
+  // Four digits everywhere: at three a 0,01 stake rounded the payout up to the
+  // bank and the card claimed the fee was both taken and not taken.
+  const shownPool = activeDuel?.total_pool_nano ?? activeOffer?.total_pool_nano ?? terms.totalPool;
+  const shownPayout = activeDuel?.payout_nano ?? activeOffer?.payout_nano ?? payoutNano;
+  const shownFee = Math.max(0, shownPool - shownPayout);
+  const shownStake = activeDuel?.stake_nano ?? activeOffer?.stake_nano ?? terms.stake;
+  const feePercentText = `${((shownFee * 100) / Math.max(1, shownPool)).toFixed(1).replace('.', ',').replace(',0', '')}%`;
   const liveEyebrow = awaitingSignature
     ? signedOffer === activeOffer?.onchain_offer_id
       ? 'ЖДЁМ ПОДТВЕРЖДЕНИЕ СЕТИ'
@@ -551,7 +575,7 @@ export function DuelScreen({
       ? duelBoosting
         ? 'СОПЕРНИК НАЙДЕН'
         : activeDuel?.own_revealed
-          ? 'РЕЗУЛЬТАТ ОТКРЫТ'
+          ? 'ТЫ ОТКРЫЛ РЕЗУЛЬТАТ'
           : 'ВРЕМЯ ВЫШЛО'
       : status === 'searching'
         ? offerExpired
@@ -605,7 +629,7 @@ export function DuelScreen({
           {invite ? (
             <div className="invite-banner">
               <p className="eyebrow">
-                ВЫЗОВ ОТ {invite.creator_name.toUpperCase()} · {chance / 100}/
+                ТЕБЯ ВЫЗЫВАЕТ {invite.creator_name.toUpperCase()} · {chance / 100}/
                 {(10_000 - chance) / 100}
               </p>
               <strong>{formatGram(terms.stake, 3)} GRAM</strong>
@@ -626,7 +650,7 @@ export function DuelScreen({
                   <input
                     inputMode="decimal"
                     value={stake}
-                    onChange={(event) => setStake(event.target.value)}
+                    onChange={(event) => setStake(sanitizeAmount(event.target.value))}
                     aria-label="Ставка в GRAM"
                   />
                   <b>GRAM</b>
@@ -636,7 +660,8 @@ export function DuelScreen({
           )}
 
           <p className="duel-simple-rule">
-            Соперник внесёт столько же. Победитель заберёт общий банк.
+            Соперник внесёт столько же. Победитель забирает банк за вычетом комиссии{' '}
+            {feePercentText}.
           </p>
         </div>
       )}
@@ -675,33 +700,44 @@ export function DuelScreen({
                       <input
                         inputMode="decimal"
                         value={boostAmount}
-                        onChange={(event) => setBoostAmount(event.target.value)}
+                        onChange={(event) => setBoostAmount(sanitizeAmount(event.target.value))}
                         aria-label="Сумма усиления в GRAM"
                       />
                       <b>GRAM</b>
                     </div>
                   </label>
                   <div className="boost-quick-values">
-                    {['0.1', '0.5', '1'].map((value) => (
+                    {[100_000_000, 500_000_000, 1_000_000_000].map((step) => (
                       <button
-                        key={value}
-                        className={boostAmount === value ? 'active' : ''}
-                        onClick={() => setBoostAmount(value)}
+                        key={step}
+                        onClick={() => setBoostAmount(formatGram(boostNano + step, MONEY_DIGITS))}
                       >
-                        +{value}
+                        +{formatGram(step, MONEY_DIGITS)}
                       </button>
                     ))}
                   </div>
-                  <p>
-                    Твоя доля станет{' '}
-                    <strong>{(boostedChanceBps / 100).toFixed(1).replace('.', ',')}%</strong>
-                  </p>
+                  <dl className="detail-list boost-terms">
+                    <Term
+                      label="Сейчас твой шанс"
+                      value={`${(activeDuel.chance_bps / 100).toFixed(1).replace('.', ',')}%`}
+                    />
+                    <Term
+                      label="Станет"
+                      value={`${(boostedChanceBps / 100).toFixed(1).replace('.', ',')}%${
+                        boostHitsCeiling ? ' (потолок)' : ''
+                      }`}
+                    />
+                    <Term
+                      label="Банк станет"
+                      value={`${formatGram(activeDuel.total_pool_nano + boostNano, MONEY_DIGITS)} GRAM`}
+                    />
+                  </dl>
                   <button
                     className="primary-button"
                     disabled={busy}
                     onClick={() => void boostDuel()}
                   >
-                    {busy ? 'ОТПРАВЛЯЕМ…' : 'ДОБАВИТЬ GRAM'}
+                    {busy ? 'ОТПРАВЛЯЕМ…' : `ДОБАВИТЬ ${formatGram(boostNano, MONEY_DIGITS)} GRAM`}
                   </button>
                   <button className="duel-boost-dismiss" onClick={() => setBoostPanelDuelId(null)}>
                     НЕ СЕЙЧАС
@@ -725,29 +761,26 @@ export function DuelScreen({
               шанс.
             </p>
             <dl className="detail-list">
+              <Term label="Твоя ставка" value={`${formatGram(shownStake, MONEY_DIGITS)} GRAM`} />
+              <Term label="Общий банк" value={`${formatGram(shownPool, MONEY_DIGITS)} GRAM`} />
               <Term
-                label="Общий банк"
-                value={`${formatGram(activeDuel?.total_pool_nano ?? activeOffer?.total_pool_nano ?? terms.totalPool, 3)} GRAM`}
+                label={`Комиссия ${feePercentText}`}
+                value={`−${formatGram(shownFee, MONEY_DIGITS)} GRAM`}
               />
               <Term
                 label="Победитель получит"
-                value={`${formatGram(activeDuel?.payout_nano ?? activeOffer?.payout_nano ?? payoutNano, 3)} GRAM`}
+                value={`${formatGram(shownPayout, MONEY_DIGITS)} GRAM`}
               />
               <Term
-                label="Комиссия"
-                value={`${formatGram(
-                  (activeDuel?.total_pool_nano ?? activeOffer?.total_pool_nano ?? terms.totalPool) -
-                    (activeDuel?.payout_nano ?? activeOffer?.payout_nano ?? payoutNano),
-                  4,
-                )} GRAM`}
+                label="При победе"
+                value={`+${formatGram(shownPayout - shownStake, MONEY_DIGITS)} GRAM`}
               />
-              {status === 'idle' && (
-                <Term label="Разница при победе" value={`+${formatGram(profitNano, 3)} GRAM`} />
-              )}
+              <Term label="При проигрыше" value={`−${formatGram(shownStake, MONEY_DIGITS)} GRAM`} />
             </dl>
             <p>
-              Затем каждый открывает результат. Открыл один — он выигрывает. Не открыл никто —
-              ставки возвращаются.
+              Затем каждый открывает результат. Открыли оба — выигрывает тот, кому выпал его шанс.
+              Открыл только один — он и выигрывает. Не открыл никто — ставки возвращаются целиком,
+              без комиссии.
             </p>
             {activeDuel && activeDuel.boost_events.length > 0 && (
               <>

@@ -86,7 +86,9 @@ export function ChanceBar({
           />
         )}
         {drain != null && (
-          <div className="chance-bar-drain" style={{ transform: `scaleX(${left})` }} />
+          <div className="chance-bar-drain-track" aria-hidden="true">
+            <div className="chance-bar-drain" style={{ transform: `scaleX(${left})` }} />
+          </div>
         )}
         <motion.div
           className="chance-bar-split"
@@ -113,11 +115,19 @@ export function ChanceBar({
         </div>
       )}
 
+      {/* Every one of four blind testers asked whose half was whose, and one
+          tried to drag the bar like a slider. The shape needs its sides named. */}
       {!settled && phase !== 'searching' && (
         <div className="chance-bar-readout">
-          <b>{Math.round(share * 100)}</b>
+          <span className="chance-bar-side is-mine">
+            <b>{Math.round(share * 100)}</b>
+            <small>ТЫ</small>
+          </span>
           <i>/</i>
-          <span>{100 - Math.round(share * 100)}</span>
+          <span className="chance-bar-side">
+            <b>{100 - Math.round(share * 100)}</b>
+            <small>СОПЕРНИК</small>
+          </span>
         </div>
       )}
     </div>
