@@ -41,6 +41,9 @@ import { humanError } from '../../errors';
 import { ChanceBar, type ChancePhase } from './ChanceBar';
 
 const DEFAULT_CHANCE_BPS = 5000;
+const FUNDING_BROADCAST_NOTICE = 'Ставка отправлена. Проверяем, что контракт её получил.';
+const FUNDING_CONFIRMED_NOTICE = 'Ставка подтверждена. Ищем соперника.';
+const DIRECT_FUNDING_CONFIRMED_NOTICE = 'Ставка подтверждена. Отправь вызов другу.';
 // Four digits everywhere on the money card: at three, a 0,01 stake rounded the
 // payout up to the whole bank and the card claimed the fee was both taken and
 // not taken at the same time.
@@ -112,7 +115,6 @@ export function DuelScreen({
     text: invite ? `${invite.creator_name} бросил тебе вызов.` : '',
     tone: 'info',
   }));
-  const message = notice.text;
   const setMessage = useCallback((text: string) => setNotice({ text, tone: 'info' }), []);
   const failed = useCallback((text: string) => setNotice({ text, tone: 'error' }), []);
   const [now, setNow] = useState(() => Date.now());
@@ -144,6 +146,37 @@ export function DuelScreen({
   const activeOffer = offers.find((offer) =>
     ['pending_funding', 'open', 'reserved', 'matched'].includes(offer.state),
   );
+
+  // TON Connect resolves when the wallet broadcasts the external message,
+  // not when the DUEL contract has processed the internal one. Derive the
+  // visible copy from the chain projection so a broadcast notice cannot stay
+  // behind after an offer is already open.
+  const message =
+    notice.text === FUNDING_BROADCAST_NOTICE
+      ? activeOffer?.state === 'open' || activeOffer?.state === 'reserved'
+        ? activeOffer.mode === 'direct'
+          ? DIRECT_FUNDING_CONFIRMED_NOTICE
+          : FUNDING_CONFIRMED_NOTICE
+        : activeOffer?.state === 'matched' || (!activeOffer && signedOffer === null)
+          ? ''
+          : notice.text
+      : notice.text;
+
+  useEffect(() => {
+    if (
+      signedOffer === null ||
+      activeOffer?.onchain_offer_id !== signedOffer ||
+      !['open', 'reserved', 'matched'].includes(activeOffer.state)
+    ) {
+      return;
+    }
+    const confirmation = window.setTimeout(() => {
+      setSignedOffer(null);
+      haptic('success');
+    }, 0);
+    return () => window.clearTimeout(confirmation);
+  }, [activeOffer, signedOffer]);
+
   const activeDuel = activeOffer
     ? duels.find(
         (duel) =>
@@ -329,7 +362,7 @@ export function DuelScreen({
         );
         quotedOffer.current = null;
         setSignedOffer(offerId);
-        setMessage('Кошелёк отправил ставку. Ждём подтверждение.');
+        setMessage(FUNDING_BROADCAST_NOTICE);
         await onRefresh();
         haptic('success');
       } catch (error) {
@@ -589,7 +622,7 @@ export function DuelScreen({
   const feePercentText = `${((shownFee * 100) / Math.max(1, shownPool)).toFixed(1).replace('.', ',').replace(',0', '')}%`;
   const liveEyebrow = awaitingSignature
     ? signedOffer === activeOffer?.onchain_offer_id
-      ? 'ЖДЁМ ПОДТВЕРЖДЕНИЕ СЕТИ'
+      ? 'ПРОВЕРЯЕМ СТАВКУ В СЕТИ'
       : 'ЖДЁМ ПОДПИСЬ В КОШЕЛЬКЕ'
     : status === 'matched'
       ? duelBoosting

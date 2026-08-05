@@ -1,8 +1,18 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DuelScreen } from '../features/duel/DuelScreen';
+import { COMMITMENT_DOMAIN } from '../ton';
 import type { Duel, Invite, Offer, Profile } from '../types';
+
+type ContractStateMock = {
+  paused: boolean;
+  network?: number;
+  address?: string;
+  status?: string;
+  code_hash_matches?: boolean;
+};
 
 const tonConnect = vi.hoisted(() => ({
   openModal: vi.fn(() => new Promise<void>(() => undefined)),
@@ -16,7 +26,7 @@ const walletState = vi.hoisted(() => ({
 }));
 
 const apiMocks = vi.hoisted(() => ({
-  contractState: vi.fn(() => Promise.resolve({ paused: false })),
+  contractState: vi.fn<() => Promise<ContractStateMock>>(() => Promise.resolve({ paused: false })),
   discardOffer: vi.fn(() => Promise.resolve(undefined)),
   quoteOffer: vi.fn(),
 }));
@@ -105,7 +115,7 @@ describe('DuelScreen', () => {
   beforeEach(() => {
     walletState.current = null;
     apiMocks.contractState.mockResolvedValue({ paused: false });
-    apiMocks.quoteOffer.mockClear();
+    apiMocks.quoteOffer.mockReset();
     tonConnect.openModal.mockClear();
     tonConnect.sendTransaction.mockClear();
   });
@@ -146,6 +156,109 @@ describe('DuelScreen', () => {
     ).toBeVisible();
     expect(apiMocks.quoteOffer).not.toHaveBeenCalled();
     expect(tonConnect.sendTransaction).not.toHaveBeenCalled();
+  });
+
+  it('replaces broadcast waiting copy when the contract confirms the stake', async () => {
+    const walletAddress = `0:${'11'.repeat(32)}`;
+    const contractAddress = `0:${'22'.repeat(32)}`;
+    walletState.current = {
+      account: { address: walletAddress, chain: '-3' },
+    };
+    apiMocks.contractState.mockResolvedValue({
+      network: -3,
+      address: contractAddress,
+      status: 'active',
+      code_hash_matches: true,
+      paused: false,
+    });
+
+    let projectedOffer: Offer | null = null;
+    apiMocks.quoteOffer.mockImplementation(
+      (request: { offer_id: number; commitment_hex: string }) => {
+        projectedOffer = {
+          id: 'offer',
+          onchain_offer_id: request.offer_id,
+          chance_bps: 5_000,
+          total_pool_nano: 1_000_000_000,
+          stake_nano: 500_000_000,
+          opponent_stake_nano: 500_000_000,
+          fee_bps: 250,
+          fee_exempt: false,
+          payout_nano: 975_000_000,
+          net_profit_nano: 475_000_000,
+          mode: 'afk',
+          direct_opponent_wallet: null,
+          state: 'pending_funding',
+          expires_at: new Date(Date.now() + 900_000).toISOString(),
+          funding_tx_hash: null,
+          funding_proof_url: null,
+        };
+        return Promise.resolve({
+          offer: projectedOffer,
+          transaction: {
+            operation: 'open_offer',
+            query_id: request.offer_id,
+            offer_id: request.offer_id,
+            counter_offer_id: 0,
+            contract_address: contractAddress,
+            amount_nano: '550000000',
+            valid_until: Math.floor(Date.now() / 1000) + 300,
+            network: -3,
+            chance_bps: 5_000,
+            stake_nano: '500000000',
+            opponent_stake_nano: '500000000',
+            total_pool_nano: '1000000000',
+            commitment_hex: request.commitment_hex,
+            expires_at: Math.floor(Date.now() / 1000) + 900,
+            commitment_domain: COMMITMENT_DOMAIN,
+            fee_bps: 250,
+            invite_id_hex: null,
+            direct_counter_offer_id: 0,
+            direct_valid_until: 0,
+            direct_signature_hex: null,
+            holder_fee_supported: false,
+            holder_valid_until: 0,
+            holder_signature_hex: null,
+          },
+        });
+      },
+    );
+    tonConnect.sendTransaction.mockResolvedValue({ boc: 'signed-message' });
+
+    function ConfirmedOffer() {
+      const [offers, setOffers] = useState<Offer[]>([]);
+      const onRefresh = () => {
+        if (projectedOffer) {
+          setOffers([
+            {
+              ...projectedOffer,
+              state: 'open',
+              funding_tx_hash: 'confirmed',
+              funding_proof_url: 'https://tonviewer.com/transaction/confirmed',
+            },
+          ]);
+        }
+        return Promise.resolve();
+      };
+      return (
+        <DuelScreen
+          profile={{ ...profile, wallet: walletOf(walletAddress) }}
+          offers={offers}
+          duels={[]}
+          invite={null}
+          onRefresh={onRefresh}
+        />
+      );
+    }
+    render(<ConfirmedOffer />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('Ставка подтверждена. Ищем соперника.')).toBeVisible(),
+    );
+    expect(screen.queryByText(/Ждём подтверждение/)).not.toBeInTheDocument();
+    expect(screen.getByText('ИЩЕМ СОПЕРНИКА')).toBeVisible();
   });
 
   it('presents one equal 50/50 rule without probability controls', () => {
