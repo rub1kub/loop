@@ -30,7 +30,9 @@ export function sameWalletConnection(
   connected: { address: string; chain: string } | null | undefined,
 ): boolean {
   if (!linked || !connected) return false;
-  return linked.network === Number(connected.chain) && sameAddress(linked.address, connected.address);
+  return (
+    linked.network === Number(connected.chain) && sameAddress(linked.address, connected.address)
+  );
 }
 
 /**

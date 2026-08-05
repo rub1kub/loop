@@ -1,8 +1,4 @@
-import {
-  useIsConnectionRestored,
-  useTonConnectUI,
-  useTonWallet,
-} from '@tonconnect/ui-react';
+import { useIsConnectionRestored, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useRef } from 'react';
 
@@ -124,15 +120,7 @@ export default function App() {
       .finally(() => {
         if (verificationInFlight.current === sessionKey) verificationInFlight.current = null;
       });
-  }, [
-    connectionRestored,
-    refresh,
-    setError,
-    state.loading,
-    state.profile,
-    tonConnectUI,
-    wallet,
-  ]);
+  }, [connectionRestored, refresh, setError, state.loading, state.profile, tonConnectUI, wallet]);
 
   useEffect(() => {
     const bankActive =
