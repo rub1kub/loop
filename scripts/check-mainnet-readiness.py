@@ -20,7 +20,13 @@ DEFAULT_RELEASE_FILE = ROOT / "deployments" / "mainnet" / "release.json"
 COMMIT = re.compile(r"[0-9a-f]{40}", re.IGNORECASE)
 HASH = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
 INITIAL_VALUE_CAP_NANO = 10_000_000_000
-UNREVIEWED_VALUE_CAP_NANO = 1_000_000_000
+# Raised from 1 GRAM to 2 on 2026-08-05 by the owner, after the contract's own
+# ladder had reached 3 GRAM on 21 completed positions and the queue had paid out
+# 45 GRAM without a contract fault. Still an owner's decision rather than a
+# review: nothing was independently audited between the two numbers, so what
+# changed is the appetite, not the evidence. Whoever raises it next should be
+# able to say the same sentence out loud.
+UNREVIEWED_VALUE_CAP_NANO = 2_000_000_000
 
 
 class ReadinessError(RuntimeError):
