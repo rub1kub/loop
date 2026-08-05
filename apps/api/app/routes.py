@@ -414,7 +414,9 @@ async def wallet_verify(
         select(Wallet).where(Wallet.network == body.network, Wallet.address == address)
     )
     if existing and existing.user_id != user.id:
-        raise HTTPException(status.HTTP_409_CONFLICT, "wallet is bound to another account")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Этот кошелёк уже привязан к другому аккаунту"
+        )
     current = await db.scalar(
         select(Wallet).where(Wallet.user_id == user.id, Wallet.active.is_(True)).with_for_update()
     )
@@ -453,9 +455,17 @@ async def wallet_verify(
             )
         )
         if bank_active or duel_active:
+            # Written in Russian on purpose: the interface only shows a message
+            # it recognises as written for people, and an English one arrived as
+            # the blank "не удалось подтвердить кошелёк". A refusal this
+            # legitimate has to say which side is holding the wallet.
+            waiting = " и ".join(
+                name for name, held in (("BANK", bank_active), ("DUEL", duel_active)) if held
+            )
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                "finish active BANK and DUEL operations before changing wallet",
+                f"Кошелёк занят: {waiting} ещё не завершён. "
+                "Дождись выплаты или расчёта, потом меняй кошелёк.",
             )
         current.active = False
         # One active wallet per user is a unique index, and a single flush lets

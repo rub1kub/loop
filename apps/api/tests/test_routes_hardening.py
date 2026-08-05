@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.models import ReferralAttribution, ReferralCode, User, Wallet
+from app.modules.bank.models import BankPosition, BankPositionStatus
 from app.modules.duel.models import DuelInvitation, DuelOffer, OfferState
 from app.ton import verify_direct_accept_permit
 
@@ -461,3 +462,75 @@ async def test_switching_wallets_releases_the_old_one_before_claiming_the_new(
             )
         ).all()
     assert [wallet.address for wallet in active] == [new_address.upper()]
+
+
+async def test_a_wallet_held_by_a_live_position_says_so(app, client, monkeypatch) -> None:
+    # Refusing the switch is right — the queue owes money to the wallet that
+    # bought the place. But the refusal used to be English, and the interface
+    # only shows a message it recognises as written for a person, so it arrived
+    # as the blank "не удалось подтвердить кошелёк" and a tester spent an
+    # evening thinking his wallet would not connect.
+    settings = get_settings()
+    old_address = "0:" + "e1" * 32
+    new_address = "0:" + "e2" * 32
+    headers = await auth_headers(client, 700_099)
+
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == 700_099))
+        wallet = Wallet(
+            user_id=user.id,
+            network=settings.ton_network_id,
+            address=old_address.upper(),
+            public_key="c1" * 32,
+        )
+        db.add(wallet)
+        await db.flush()
+        db.add(
+            BankPosition(
+                position_id=990_001,
+                query_id=990_001,
+                user_id=user.id,
+                wallet_id=wallet.id,
+                owner_wallet=old_address.upper(),
+                network=settings.ton_network_id,
+                contract_address=settings.bank_contract_address,
+                principal_nano=1_000_000_000,
+                multiplier_bps=20_000,
+                target_payout_nano=2_000_000_000,
+                remaining_amount_nano=2_000_000_000,
+                current_status=BankPositionStatus.QUEUED.value,
+            )
+        )
+        await db.commit()
+
+    challenge = await client.post("/api/v1/wallet/challenge", headers=headers, json={})
+    payload = challenge.json()["payload"]
+
+    async def public_key(_address: str) -> str:
+        return "d2" * 32
+
+    monkeypatch.setattr(app.state.ton_client, "get_wallet_public_key", public_key)
+    monkeypatch.setattr("app.routes.verify_ton_proof", lambda **_kwargs: new_address.upper())
+
+    response = await client.post(
+        "/api/v1/wallet/verify",
+        headers=headers,
+        json={
+            "address": new_address,
+            "network": settings.ton_network_id,
+            "publicKey": "d2" * 32,
+            "proof": {
+                "timestamp": int(datetime.now(UTC).timestamp()),
+                "domain": {"lengthBytes": 9, "value": "loop.test"},
+                "signature": "s" * 88,
+                "payload": payload,
+            },
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert "BANK" in detail
+    assert "DUEL" not in detail  # only the side actually holding it
+    # Cyrillic is what makes the interface show it instead of a fallback.
+    assert any("Ѐ" <= character <= "ӿ" for character in detail)
