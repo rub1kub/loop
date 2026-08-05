@@ -358,7 +358,7 @@ def test_unreviewed_release_caps_value_below_a_reviewed_one(monkeypatch) -> None
         "treasury": MAINNET_ADDRESS,
         "duel_invite_signer_public_key": "b" * 64,
     }
-    # A reviewed release may carry 10 GRAM; an unreviewed one is held at 2,
+    # A reviewed release may carry 10 GRAM; an unreviewed one is held at 3,
     # raised from 1 by the owner on 2026-08-05. The cap is the compensating
     # control rather than a formality, so the gate still has to bite.
     over_cap = {
@@ -368,13 +368,13 @@ def test_unreviewed_release_caps_value_below_a_reviewed_one(monkeypatch) -> None
             "duel_max_pool_nano": 1_000_000_000,
         },
     }
-    with pytest.raises(readiness.ReadinessError, match="2 GRAM launch cap"):
+    with pytest.raises(readiness.ReadinessError, match="3 GRAM launch cap"):
         readiness.validate_release_evidence(over_cap, release_dir / "release.json")
 
     at_cap = {
         **base,
         "initial_limits": {
-            "bank_max_principal_nano": 2_000_000_000,
+            "bank_max_principal_nano": 3_000_000_000,
             "duel_max_pool_nano": 1_000_000_000,
         },
     }
@@ -383,11 +383,11 @@ def test_unreviewed_release_caps_value_below_a_reviewed_one(monkeypatch) -> None
     just_over = {
         **base,
         "initial_limits": {
-            "bank_max_principal_nano": 3_000_000_000,
+            "bank_max_principal_nano": 4_000_000_000,
             "duel_max_pool_nano": 1_000_000_000,
         },
     }
-    with pytest.raises(readiness.ReadinessError, match="2 GRAM launch cap"):
+    with pytest.raises(readiness.ReadinessError, match="3 GRAM launch cap"):
         readiness.validate_release_evidence(just_over, release_dir / "release.json")
 
     # The cap is per participant, and a DUEL pool holds two of them: measured
@@ -395,8 +395,8 @@ def test_unreviewed_release_caps_value_below_a_reviewed_one(monkeypatch) -> None
     two_players = {
         **base,
         "initial_limits": {
-            "bank_max_principal_nano": 2_000_000_000,
-            "duel_max_pool_nano": 4_000_000_000,
+            "bank_max_principal_nano": 3_000_000_000,
+            "duel_max_pool_nano": 6_000_000_000,
         },
     }
     assert (
@@ -406,11 +406,11 @@ def test_unreviewed_release_caps_value_below_a_reviewed_one(monkeypatch) -> None
     three_players = {
         **base,
         "initial_limits": {
-            "bank_max_principal_nano": 2_000_000_000,
-            "duel_max_pool_nano": 5_000_000_000,
+            "bank_max_principal_nano": 3_000_000_000,
+            "duel_max_pool_nano": 7_000_000_000,
         },
     }
-    with pytest.raises(readiness.ReadinessError, match="2 GRAM launch cap"):
+    with pytest.raises(readiness.ReadinessError, match="3 GRAM launch cap"):
         readiness.validate_release_evidence(three_players, release_dir / "release.json")
 
     within_cap = {
@@ -454,3 +454,81 @@ def test_attestation_may_sit_one_commit_above_the_tree_it_attests(monkeypatch) -
         readiness.validate_release_evidence(
             {**release, "audited_commit": "short"}, release_dir / "release.json"
         )
+
+
+def test_a_recorded_chain_reading_lets_the_ceiling_follow_the_ladder(tmp_path: Path) -> None:
+    # The configuration block is frozen at activation, when the ladder stood on
+    # its first rung. Judged against it, the application ceiling could never
+    # rise however far the contract actually climbed. A recorded live reading
+    # is what the ceiling is measured against — and it has to carry a
+    # masterchain seqno, so the claim can be checked rather than believed.
+    readiness = load_script("check-mainnet-readiness.py")
+    commit = "a" * 40
+    release = {
+        "owner": MAINNET_ADDRESS,
+        "treasury": MAINNET_ADDRESS,
+        "initial_limits": {
+            "bank_max_principal_nano": 3_000_000_000,
+            "duel_max_pool_nano": 2_000_000_000,
+        },
+    }
+    manifest = {
+        "contract": "BankQueue",
+        "address": MAINNET_ADDRESS,
+        "network": "mainnet",
+        "source_commit": commit,
+        "configuration": {
+            "owner": MAINNET_ADDRESS,
+            "treasury": MAINNET_ADDRESS,
+            "paused": True,
+            "locked_nano": 0,
+            "completed_positions": 0,
+            "head_queue_index": 0,
+            "next_queue_index": 0,
+            "principal_limit_nano": 1_000_000_000,
+        },
+        "verified_smoke": {
+            "contract_address": MAINNET_ZERO_ADDRESS,
+            "treasury": MAINNET_ADDRESS,
+            "first_wallet": MAINNET_ADDRESS,
+            "second_wallet": MAINNET_ZERO_ADDRESS,
+            "position_id": 1,
+            "principal_nano": 1,
+            "first_transaction": "first",
+            "first_transaction_lt": 1,
+            "first_masterchain_seqno": 1,
+            "funding_position_id": 2,
+            "funding_principal_nano": 1,
+            "funding_transaction": "second",
+            "funding_transaction_lt": 2,
+            "funding_masterchain_seqno": 2,
+            "payout_nano": 1,
+        },
+        "source_verification": {"verified": True, "url": "https://verifier.ton.org/proof"},
+    }
+    path = tmp_path / "bank.json"
+    path.write_text(json.dumps(manifest))
+
+    # Without a reading, the frozen rung still governs and 3 GRAM is refused.
+    with pytest.raises(readiness.ReadinessError, match="exceeds the contract limit"):
+        readiness.validate_manifest(
+            path, contract="BankQueue", release=release, audited_commit=commit
+        )
+
+    # A reading without provenance is not evidence.
+    manifest["observed_state"] = {"principal_limit_nano": 7_000_000_000}
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(readiness.ReadinessError, match="masterchain seqno"):
+        readiness.validate_manifest(
+            path, contract="BankQueue", release=release, audited_commit=commit
+        )
+
+    manifest["observed_state"] = {
+        "principal_limit_nano": 7_000_000_000,
+        "masterchain_seqno": 84188447,
+        "completed_positions": 38,
+    }
+    path.write_text(json.dumps(manifest))
+    readiness.validate_manifest(
+        path, contract="BankQueue", release=release, audited_commit=commit
+    )

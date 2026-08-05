@@ -85,6 +85,18 @@
     "head_queue_index": 0,
     "next_queue_index": 0
   },
+  "observed_state": {
+    "note": "Live reading of the deployed contract. The configuration block above is frozen at activation and says nothing about how far the ladder has since climbed; this is what the application limit is allowed to be measured against.",
+    "observed_at": "2026-08-05T17:55:00Z",
+    "masterchain_seqno": 84188447,
+    "method": "runGetMethod contractConfig via toncenter",
+    "completed_positions": 38,
+    "principal_limit_nano": 7000000000,
+    "head_queue_index": 38,
+    "next_queue_index": 78,
+    "locked_nano": 350000000,
+    "paused": false
+  },
   "verified_smoke": {
     "contract_address": "EQA2fwwUGQmTSoLpw4bcF_UK0FLo1XvRaXLdL10RkV4oKHz2",
     "treasury": "EQBUzqN8CxhWPtJ1vjsTl5LenJHnFOoCT6qbrvwOBU4Iog7e",

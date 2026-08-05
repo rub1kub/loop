@@ -20,13 +20,13 @@ DEFAULT_RELEASE_FILE = ROOT / "deployments" / "mainnet" / "release.json"
 COMMIT = re.compile(r"[0-9a-f]{40}", re.IGNORECASE)
 HASH = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
 INITIAL_VALUE_CAP_NANO = 10_000_000_000
-# Raised from 1 GRAM to 2 on 2026-08-05 by the owner, after the contract's own
-# ladder had reached 3 GRAM on 21 completed positions and the queue had paid out
-# 45 GRAM without a contract fault. Still an owner's decision rather than a
-# review: nothing was independently audited between the two numbers, so what
-# changed is the appetite, not the evidence. Whoever raises it next should be
-# able to say the same sentence out loud.
-UNREVIEWED_VALUE_CAP_NANO = 2_000_000_000
+# Raised from 1 GRAM to 3 on 2026-08-05 by the owner, on the evening the product
+# opened, after the contract's own ladder had climbed to 7 GRAM on 38 completed
+# positions and the queue had paid out 45 GRAM without a contract fault. Still an
+# owner's decision rather than a review: nothing was independently audited
+# between the two numbers, so what changed is the appetite, not the evidence.
+# Whoever raises it next should be able to say the same sentence out loud.
+UNREVIEWED_VALUE_CAP_NANO = 3_000_000_000
 
 
 class ReadinessError(RuntimeError):
@@ -317,9 +317,19 @@ def validate_manifest(
             f"{contract}: locked value must be zero at application activation"
         )
     limits = release["initial_limits"]
-    if contract == "BankQueue" and int(
-        configuration.get("principal_limit_nano", 0)
-    ) < int(limits["bank_max_principal_nano"]):
+    # The configuration block is frozen at activation, where the ladder stood on
+    # its first rung. Measuring a later application limit against it would mean
+    # the ceiling could never rise, however far the contract had actually
+    # climbed. A live reading may be recorded as `observed_state`, and then it
+    # is what counts — someone has to look at the chain and write down what they
+    # saw, with the masterchain seqno that makes the claim checkable.
+    observed = manifest.get("observed_state")
+    contract_limit = int(configuration.get("principal_limit_nano", 0))
+    if isinstance(observed, dict) and observed.get("principal_limit_nano") is not None:
+        if not str(observed.get("masterchain_seqno", "")).isdigit():
+            raise ReadinessError(f"{contract}: observed state needs a masterchain seqno")
+        contract_limit = max(contract_limit, int(observed["principal_limit_nano"]))
+    if contract == "BankQueue" and contract_limit < int(limits["bank_max_principal_nano"]):
         raise ReadinessError("BankQueue: application limit exceeds the contract limit")
     if contract == "BankQueue" and any(
         int(configuration.get(name, -1)) != 0
