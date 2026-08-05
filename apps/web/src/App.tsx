@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import { api } from './api';
 import { InlineDuelPreview } from './components/InlineDuelPreview';
+import { humanError } from './errors';
 import { Loader } from './components/Loader';
 import { PrelaunchScreen } from './components/PrelaunchScreen';
 import { Onboarding } from './components/Onboarding';
@@ -72,9 +73,7 @@ export default function App() {
       })
       .catch((error: unknown) => {
         proofConfigured.current = false;
-        setError(
-          error instanceof Error ? error.message : 'Не удалось подготовить подключение кошелька',
-        );
+        setError(humanError(error, 'Не удалось подготовить подключение кошелька') ?? '');
       });
   }, [setError, state.loading, state.profile, tonConnectUI]);
 
@@ -96,7 +95,7 @@ export default function App() {
       })
       .then(() => refresh())
       .catch((error: unknown) => {
-        setError(error instanceof Error ? error.message : 'Подпись в кошельке отклонена');
+        setError(humanError(error, 'Не удалось подтвердить кошелёк'));
         void tonConnectUI.disconnect();
       });
   }, [refresh, setError, state.profile?.wallet?.address, tonConnectUI, wallet]);
@@ -120,7 +119,7 @@ export default function App() {
     const tick = () => {
       if (document.visibilityState === 'hidden') return;
       void refresh().catch((error: unknown) => {
-        setError(error instanceof Error ? error.message : 'Не удалось обновить данные');
+        setError(humanError(error, 'Не удалось обновить данные'));
       });
     };
     const timer = window.setInterval(tick, period);
@@ -218,9 +217,7 @@ export default function App() {
           try {
             await state.setResultNotificationsEnabled(enabled);
           } catch (error) {
-            state.setError(
-              error instanceof Error ? error.message : 'Не удалось изменить настройку',
-            );
+            state.setError(humanError(error, 'Не удалось изменить настройку') ?? '');
           }
         }}
       />

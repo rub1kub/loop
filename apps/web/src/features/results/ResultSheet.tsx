@@ -14,6 +14,7 @@ import { formatGram } from '../../ton';
 import type { ResultCard } from '../../types';
 
 import { celebrate } from '../../celebrate';
+import { humanError } from '../../errors';
 
 export function ResultSheet({
   card,
@@ -58,7 +59,7 @@ export function ResultSheet({
       haptic('success');
     } catch (error) {
       haptic('error');
-      onError(error instanceof Error ? error.message : 'Не удалось поделиться результатом');
+      onError(humanError(error, 'Не удалось поделиться результатом') ?? '');
     } finally {
       setSharing(false);
     }

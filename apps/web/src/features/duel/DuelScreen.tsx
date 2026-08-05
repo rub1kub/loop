@@ -37,6 +37,7 @@ import type { Duel, Invite, Offer, Profile } from '../../types';
 import { sameAddress } from '../../address';
 
 import { celebrate } from '../../celebrate';
+import { humanError } from '../../errors';
 import { ChanceBar, type ChancePhase } from './ChanceBar';
 
 const DEFAULT_CHANCE_BPS = 5000;
@@ -341,8 +342,10 @@ export function DuelScreen({
           await api.discardOffer(abandoned).catch(() => undefined);
           await onRefresh().catch(() => undefined);
         }
-        failed(error instanceof Error ? error.message : 'Не удалось создать DUEL');
-        haptic('error');
+        const notice = humanError(error, 'Не удалось создать DUEL');
+        if (notice) failed(notice);
+        else setMessage('');
+        haptic(notice ? 'error' : 'selection');
       } finally {
         locked.current = false;
         setBusy(false);
@@ -422,8 +425,10 @@ export function DuelScreen({
       await onRefresh();
       haptic('success');
     } catch (error) {
-      failed(error instanceof Error ? error.message : 'Действие не выполнено');
-      haptic('error');
+      const notice = humanError(error, 'Действие не выполнено');
+      if (notice) failed(notice);
+      else setMessage('');
+      haptic(notice ? 'error' : 'selection');
     } finally {
       locked.current = false;
       setBusy(false);
@@ -487,8 +492,10 @@ export function DuelScreen({
       await onRefresh();
       haptic('success');
     } catch (error) {
-      failed(error instanceof Error ? error.message : 'Не удалось усилить DUEL');
-      haptic('error');
+      const notice = humanError(error, 'Не удалось усилить DUEL');
+      if (notice) failed(notice);
+      else setMessage('');
+      haptic(notice ? 'error' : 'selection');
     } finally {
       locked.current = false;
       setBusy(false);

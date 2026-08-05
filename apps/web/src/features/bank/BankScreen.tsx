@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../api';
+import { humanError } from '../../errors';
 import { haptic, isMockTelegram, setBackAction } from '../../telegram';
 import {
   buildBankPositionTransaction,
@@ -153,7 +154,7 @@ export function BankScreen({
       })
       .catch((error: unknown) => {
         if (!active) return;
-        setMessage(error instanceof Error ? error.message : 'Не удалось рассчитать позицию');
+        setMessage(humanError(error, 'Не удалось рассчитать позицию') ?? '');
       });
     return () => {
       active = false;
@@ -219,7 +220,7 @@ export function BankScreen({
         await api.discardBankPosition(abandoned).catch(() => undefined);
         await onRefresh().catch(() => undefined);
       }
-      setMessage(error instanceof Error ? error.message : 'Не удалось создать позицию');
+      setMessage(humanError(error, 'Не удалось создать позицию') ?? '');
       setWizard('multiplier');
       haptic('error');
     } finally {
