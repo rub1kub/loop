@@ -302,7 +302,11 @@ export function BankScreen({
                   <span>GRAM</span>
                 </label>
                 <p className="form-note">
-                  От 1 до {formatGram(limit?.principal_limit_nano ?? 5_000_000_000, 0)} GRAM.
+                  {/* At launch the ladder's first rung makes the floor and the
+                      ceiling meet, and "От 1 до 1 GRAM" reads as a mistake. */}
+                  {(limit?.principal_limit_nano ?? 5_000_000_000) <= 1_000_000_000
+                    ? 'Сейчас можно внести ровно 1 GRAM.'
+                    : `От 1 до ${formatGram(limit?.principal_limit_nano ?? 5_000_000_000, 0)} GRAM.`}
                   {limit?.next_limit_nano ? ' Лимит растёт вместе с завершёнными позициями.' : ''}
                 </p>
                 {message && (
