@@ -26,6 +26,9 @@ router = APIRouter(
 )
 
 
+# Past eight hours an estimate is a scare rather than information.
+ETA_HORIZON_SECONDS = 8 * 3600
+
 ACTIVE_POSITION_STATES = [
     BankPositionStatus.PENDING_CONFIRMATION.value,
     BankPositionStatus.QUEUED.value,
@@ -169,27 +172,42 @@ async def queue_outlook(db: Db, position: BankPosition) -> tuple[int, int, int, 
     travelled = 10_000 if still_needed <= 0 else covered * 10_000 // (covered + still_needed)
     travelled = min(max(travelled, 0), 10_000)
 
-    # The rate people actually deposit at, over the last hour, minus the fee
-    # that never reaches the queue. Anything slower than a trickle is not worth
-    # turning into a promise about minutes.
-    hour_ago = datetime.now(UTC) - timedelta(hours=1)
-    arrived = await db.scalar(
-        select(func.coalesce(func.sum(BankPosition.principal_nano), 0)).where(
-            *scope,
-            BankPosition.created_at >= hour_ago,
-            BankPosition.current_status.in_(
-                [
-                    BankPositionStatus.QUEUED.value,
-                    BankPositionStatus.PARTIALLY_FUNDED.value,
-                    BankPositionStatus.PAYOUT_SENT.value,
-                ]
-            ),
+    # How fast money actually arrives, minus the fee that never reaches the
+    # queue. Measured over one hour alone, the first quiet night turned the
+    # estimate into days: a nearly empty hour divides into a very large number
+    # and the screen starts promising something nobody can keep. Six hours of
+    # history steadies it, and the faster of the two windows wins, so a morning
+    # surge shows up within the hour instead of being averaged away by the night
+    # behind it.
+    now = datetime.now(UTC)
+
+    async def arrived_since(hours: int) -> int:
+        total = await db.scalar(
+            select(func.coalesce(func.sum(BankPosition.principal_nano), 0)).where(
+                *scope,
+                BankPosition.created_at >= now - timedelta(hours=hours),
+                BankPosition.current_status.in_(
+                    [
+                        BankPositionStatus.QUEUED.value,
+                        BankPositionStatus.PARTIALLY_FUNDED.value,
+                        BankPositionStatus.PAYOUT_SENT.value,
+                    ]
+                ),
+            )
         )
+        return int(total or 0)
+
+    per_second = max(
+        (await arrived_since(1)) * 9 // 10 / 3600,
+        (await arrived_since(6)) * 9 // 10 / (6 * 3600),
     )
-    distributable_per_second = int(arrived or 0) * 9 // 10 / 3600
     eta_seconds: int | None = None
-    if distributable_per_second > 0.0:
-        eta_seconds = int(int(ahead_nano or 0) / distributable_per_second)
+    if per_second > 0.0:
+        estimate = int(int(ahead_nano or 0) / per_second)
+        # Beyond a working day the number stops being information and becomes a
+        # scare. Past it the screen says how much has to arrive and nothing
+        # about when — which is the honest answer at four in the morning.
+        eta_seconds = estimate if estimate <= ETA_HORIZON_SECONDS else None
     return int(ahead_now or 0), int(ahead_nano or 0), travelled, eta_seconds
 
 

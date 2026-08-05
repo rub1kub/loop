@@ -1180,3 +1180,65 @@ async def test_an_announcement_reaches_only_the_audience_it_names(client) -> Non
     assert (await client.get("/api/v1/me", headers=headers)).json()["announcement"] is None
     settings.announcement_telegram_ids = ""
     settings.announcement_url = ""
+
+
+@pytest.mark.asyncio
+async def test_a_quiet_night_produces_no_estimate_rather_than_days(client, app) -> None:
+    # The first night showed how a one-hour window fails: almost nothing arrives,
+    # a small number divides into a very large one, and the screen starts
+    # promising days. Past a working day the honest answer is how much has to
+    # arrive and nothing at all about when.
+    from app.modules.bank.models import BankPosition, BankPositionStatus
+
+    telegram_id = 777000444
+    settings = get_settings()
+    headers = await authenticate(client, telegram_id)
+    wallet = await add_wallet(app, telegram_id)
+
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == telegram_id))
+        common = {
+            "network": settings.ton_network_id,
+            "contract_address": settings.bank_contract_address,
+            "principal_nano": 1_000_000_000,
+            "multiplier_bps": 20_000,
+            "target_payout_nano": 2_000_000_000,
+        }
+        # A hundred GRAM owed in front, and one lonely deposit all night.
+        db.add(
+            BankPosition(
+                position_id=6_001,
+                query_id=6_001,
+                owner_wallet="0:" + "aa" * 32,
+                funded_amount_nano=0,
+                remaining_amount_nano=100_000_000_000,
+                target_payout_nano=100_000_000_000,
+                queue_index=0,
+                created_at=datetime.now(UTC) - timedelta(hours=8),
+                current_status=BankPositionStatus.QUEUED.value,
+                **{key: value for key, value in common.items() if key != "target_payout_nano"},
+            )
+        )
+        db.add(
+            BankPosition(
+                position_id=6_002,
+                query_id=6_002,
+                user_id=user.id,
+                wallet_id=wallet.id,
+                owner_wallet=wallet.address,
+                funded_amount_nano=0,
+                remaining_amount_nano=2_000_000_000,
+                queue_index=1,
+                created_at=datetime.now(UTC) - timedelta(hours=7),
+                current_status=BankPositionStatus.QUEUED.value,
+                **common,
+            )
+        )
+        await db.commit()
+
+    body = (await client.get("/api/v1/bank/positions/current", headers=headers)).json()
+
+    assert body["queue_ahead"] == 1
+    assert body["queue_ahead_nano"] == 100_000_000_000
+    # It still says how far off it is; it refuses to say when.
+    assert body["queue_eta_seconds"] is None
