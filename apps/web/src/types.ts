@@ -176,6 +176,11 @@ export interface BankPosition {
   progress_bps: number;
   queue_index: number | null;
   queue_position: number | null;
+  /** How much of the money that must arrive before this payout already has. */
+  queue_progress_bps: number;
+  queue_ahead: number;
+  queue_ahead_nano: number;
+  queue_eta_seconds: number | null;
   current_status: BankStatus;
   funding_transaction: string | null;
   payout_transaction: string | null;

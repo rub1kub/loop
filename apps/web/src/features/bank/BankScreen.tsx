@@ -17,6 +17,7 @@ import {
 import type { BankLimit, BankPosition, BankPreview, Profile, RatingPulse } from '../../types';
 
 import { JarBalls } from './JarBalls';
+import { queueNote } from './queueNote';
 
 import { useCountUp } from '../../useCountUp';
 
@@ -182,6 +183,10 @@ export function BankScreen({
           progress_bps: Math.floor((initialFunding * 10_000) / preview.target_payout_nano),
           queue_index: 18,
           queue_position: 19,
+          queue_progress_bps: 0,
+          queue_ahead: 0,
+          queue_ahead_nano: 0,
+          queue_eta_seconds: null,
           current_status: 'partially_funded',
           funding_transaction: 'demo-bank-transaction',
           payout_transaction: null,
@@ -263,8 +268,16 @@ export function BankScreen({
     wasFull.current = full;
   }, [position?.progress_bps]);
 
-  const progress = position?.progress_bps ?? 0;
+  // The jar measures the whole wait, not the last stretch of it. A deposit
+  // fills the head of the queue to the brim before a nanogram reaches anyone
+  // behind, so one's own funding sits at zero until one's turn — a jar that
+  // never moved for almost everybody. The queue figure counts the same journey
+  // in money: of everything that must arrive before this payout, how much has.
+  const progress = Math.max(position?.queue_progress_bps ?? 0, position?.progress_bps ?? 0);
   const progressPercent = Math.min(100, Math.max(0, progress / 100));
+  const ahead = position?.queue_ahead ?? 0;
+  const aheadNano = position?.queue_ahead_nano ?? 0;
+  const etaSeconds = position?.queue_eta_seconds ?? null;
   // Other people's deposits move this while the screen is open, so it counts
   // across rather than snapping to the new figure.
   const shownPercent = useCountUp(progressPercent);
@@ -441,6 +454,7 @@ export function BankScreen({
       {position ? (
         <div className="bank-state bank-active-state">
           <strong>{Math.round(shownPercent)}%</strong>
+          <p className="bank-queue-note">{queueNote(ahead, aheadNano, etaSeconds, position)}</p>
           <div className="bank-cycle-metrics">
             <CycleMetric
               value={position.queue_position ? `#${position.queue_position}` : '—'}

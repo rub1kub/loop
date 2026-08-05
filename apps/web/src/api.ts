@@ -86,6 +86,12 @@ const bankPositionSchema = z.object({
   progress_bps: z.number(),
   queue_index: z.number().nullable(),
   queue_position: z.number().nullable(),
+  // Defaulted rather than required: a screen already open when this shipped
+  // keeps polling with the older shape, and a jar is not worth an exception.
+  queue_progress_bps: z.number().default(0),
+  queue_ahead: z.number().default(0),
+  queue_ahead_nano: z.number().default(0),
+  queue_eta_seconds: z.number().nullable().default(null),
   current_status: z.enum([
     'pending_confirmation',
     'queued',

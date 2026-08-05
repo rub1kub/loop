@@ -1037,3 +1037,109 @@ async def test_a_refused_bank_signature_frees_the_slot_at_once(client, app) -> N
         await db.commit()
     funded = await client.post("/api/v1/bank/positions/52002/discard", headers=headers)
     assert funded.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_the_jar_shows_the_queue_coming_towards_you_not_a_flat_zero(client, app) -> None:
+    # A deposit fills the head to the brim before a single nanogram reaches the
+    # position behind it. Shown as one's own fill, ninety-eight people watched a
+    # jar frozen at zero on opening night — accurate and worthless. What moves
+    # for all of them, on every deposit anybody makes, is the distance from the
+    # head, and that is what the jar must show until their own turn arrives.
+    from app.modules.bank.models import BankPosition, BankPositionStatus
+
+    telegram_id = 777000222
+    settings = get_settings()
+    headers = await authenticate(client, telegram_id)
+    wallet = await add_wallet(app, telegram_id)
+    opened_at = datetime.now(UTC) - timedelta(hours=2)
+
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == telegram_id))
+        assert user is not None
+        common = {
+            "network": settings.ton_network_id,
+            "contract_address": settings.bank_contract_address,
+            "principal_nano": 1_000_000_000,
+            "multiplier_bps": 20_000,
+            "target_payout_nano": 2_000_000_000,
+        }
+        # Ten positions were already paid before this one opened, four of them
+        # only afterwards — so ten stood ahead at the time, six stand there now.
+        for index in range(14):
+            db.add(
+                BankPosition(
+                    position_id=5_000 + index,
+                    query_id=5_000 + index,
+                    owner_wallet="0:" + f"{index:02x}" * 32,
+                    funded_amount_nano=2_000_000_000,
+                    remaining_amount_nano=0,
+                    queue_index=index,
+                    created_at=opened_at - timedelta(minutes=10),
+                    current_status=BankPositionStatus.PAYOUT_SENT.value,
+                    completed_at=(
+                        opened_at - timedelta(minutes=1)
+                        if index < 10
+                        else datetime.now(UTC) - timedelta(minutes=1)
+                    ),
+                    **common,
+                )
+            )
+        # Two positions still waiting in front, each needing a whole GRAM more.
+        for index in (14, 15):
+            db.add(
+                BankPosition(
+                    position_id=5_000 + index,
+                    query_id=5_000 + index,
+                    owner_wallet="0:" + f"{index:02x}" * 32,
+                    funded_amount_nano=1_000_000_000,
+                    remaining_amount_nano=1_000_000_000,
+                    queue_index=index,
+                    created_at=opened_at - timedelta(minutes=5),
+                    current_status=BankPositionStatus.QUEUED.value,
+                    **common,
+                )
+            )
+        db.add(
+            BankPosition(
+                position_id=5_016,
+                query_id=5_016,
+                user_id=user.id,
+                wallet_id=wallet.id,
+                owner_wallet=wallet.address,
+                funded_amount_nano=0,
+                remaining_amount_nano=2_000_000_000,
+                queue_index=16,
+                created_at=opened_at,
+                current_status=BankPositionStatus.QUEUED.value,
+                **common,
+            )
+        )
+        for index in (17, 18, 19):
+            db.add(
+                BankPosition(
+                    position_id=5_000 + index,
+                    query_id=5_000 + index,
+                    owner_wallet="0:" + f"{index:02x}" * 32,
+                    funded_amount_nano=0,
+                    remaining_amount_nano=2_000_000_000,
+                    queue_index=index,
+                    current_status=BankPositionStatus.QUEUED.value,
+                    **common,
+                )
+            )
+        await db.commit()
+
+    body = (await client.get("/api/v1/bank/positions/current", headers=headers)).json()
+
+    # Nothing has reached it yet, and the old jar would have shown exactly this.
+    assert body["funded_amount_nano"] == 0
+    assert body["progress_bps"] == 0
+
+    # Two positions still stand in front needing a GRAM each, and this one is
+    # owed two: four GRAM must still arrive. Three GRAM was deposited after it
+    # opened and nine tenths of that reached the queue, so the journey stands at
+    # 2.7 of 6.7 — moving, while the position itself is still funded by nothing.
+    assert body["queue_ahead"] == 2
+    assert body["queue_ahead_nano"] == 2_000_000_000
+    assert body["queue_progress_bps"] == 4_029

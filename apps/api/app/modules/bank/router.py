@@ -99,6 +99,100 @@ async def validate_principal(db: Db, settings: Config, principal_nano: int) -> B
     return limit
 
 
+async def queue_outlook(db: Db, position: BankPosition) -> tuple[int, int, int, int | None]:
+    """How far the queue has travelled towards this position, and what is left.
+
+    A deposit fills the head of the queue to the brim before any of it reaches
+    the position behind it, so everybody except the head owns a position funded
+    by exactly zero. Shown as one's own fill, the jar was empty for ninety-eight
+    people at once and never moved — true, and useless.
+
+    The waiting has two halves that the old jar treated as one: the queue
+    walking towards you, and then your own position filling. Measured in money
+    rather than in places they are the same journey, and it can be stated
+    without a word of flattery: of everything that has to arrive before you are
+    paid, this much has arrived. It only reaches the brim when nothing is owed
+    ahead of you and nothing is owed to you, and it never goes backwards.
+
+    Returns positions ahead, the GRAM they still need, that fraction in basis
+    points, and seconds at the current rate of arrival.
+    """
+    if position.queue_index is None or position.current_status not in ACTIVE_POSITION_STATES:
+        return 0, 0, 0, None
+    scope = (
+        BankPosition.network == position.network,
+        BankPosition.contract_address == position.contract_address,
+    )
+    ahead_nano = await db.scalar(
+        select(
+            func.coalesce(
+                func.sum(BankPosition.target_payout_nano - BankPosition.funded_amount_nano), 0
+            )
+        ).where(
+            *scope,
+            BankPosition.current_status.in_(ACTIVE_POSITION_STATES),
+            BankPosition.queue_index.is_not(None),
+            BankPosition.queue_index < position.queue_index,
+        )
+    )
+    ahead_now = await db.scalar(
+        select(func.count())
+        .select_from(BankPosition)
+        .where(
+            *scope,
+            BankPosition.current_status.in_(ACTIVE_POSITION_STATES),
+            BankPosition.queue_index.is_not(None),
+            BankPosition.queue_index < position.queue_index,
+        )
+    )
+    funded_statuses = [
+        BankPositionStatus.QUEUED.value,
+        BankPositionStatus.PARTIALLY_FUNDED.value,
+        BankPositionStatus.PAYOUT_SENT.value,
+    ]
+    # Everything that reached the queue after this position opened went into
+    # positions at or ahead of it, because the contract fills strictly in order
+    # and would only pass this one by paying it first. So the distance covered
+    # is measurable exactly, in money, without storing anything at open time.
+    arrived_since_open = await db.scalar(
+        select(func.coalesce(func.sum(BankPosition.principal_nano), 0)).where(
+            *scope,
+            BankPosition.created_at > position.created_at,
+            BankPosition.current_status.in_(funded_statuses),
+        )
+    )
+    covered = int(arrived_since_open or 0) * 9 // 10
+    still_needed = int(ahead_nano or 0) + max(position.remaining_amount_nano, 0)
+    # One continuous scale across both halves of the wait: the queue walking
+    # towards you, then your own position filling. It can only reach the brim
+    # when nothing is owed ahead of you and nothing is owed to you.
+    travelled = 10_000 if still_needed <= 0 else covered * 10_000 // (covered + still_needed)
+    travelled = min(max(travelled, 0), 10_000)
+
+    # The rate people actually deposit at, over the last hour, minus the fee
+    # that never reaches the queue. Anything slower than a trickle is not worth
+    # turning into a promise about minutes.
+    hour_ago = datetime.now(UTC) - timedelta(hours=1)
+    arrived = await db.scalar(
+        select(func.coalesce(func.sum(BankPosition.principal_nano), 0)).where(
+            *scope,
+            BankPosition.created_at >= hour_ago,
+            BankPosition.current_status.in_(
+                [
+                    BankPositionStatus.QUEUED.value,
+                    BankPositionStatus.PARTIALLY_FUNDED.value,
+                    BankPositionStatus.PAYOUT_SENT.value,
+                ]
+            ),
+        )
+    )
+    distributable_per_second = int(arrived or 0) * 9 // 10 / 3600
+    eta_seconds: int | None = None
+    if distributable_per_second > 0.0:
+        eta_seconds = int(int(ahead_nano or 0) / distributable_per_second)
+    return int(ahead_now or 0), int(ahead_nano or 0), travelled, eta_seconds
+
+
 async def position_view(
     db: Db,
     position: BankPosition,
@@ -135,6 +229,9 @@ async def position_view(
             )
         )
         queue_position = int(ahead or 0) + 1
+    queue_ahead, queue_ahead_nano, queue_progress_bps, queue_eta_seconds = await queue_outlook(
+        db, position
+    )
     return BankPositionView(
         id=position.id,
         position_id=position.position_id,
@@ -147,6 +244,10 @@ async def position_view(
         progress_bps=progress,
         queue_index=position.queue_index,
         queue_position=queue_position,
+        queue_ahead=queue_ahead,
+        queue_ahead_nano=queue_ahead_nano,
+        queue_progress_bps=queue_progress_bps,
+        queue_eta_seconds=queue_eta_seconds,
         current_status=position.current_status,
         funding_transaction=position.funding_transaction,
         payout_transaction=position.payout_transaction,

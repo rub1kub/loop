@@ -190,6 +190,13 @@ class BankPositionView(BaseModel):
     progress_bps: int
     queue_index: int | None
     queue_position: int | None
+    # How far the queue has come towards this position, as opposed to how full
+    # the position itself is: everyone but the head is funded by zero until
+    # their turn arrives, and a jar stuck at zero tells them nothing.
+    queue_ahead: int = 0
+    queue_ahead_nano: int = 0
+    queue_progress_bps: int = 0
+    queue_eta_seconds: int | None = None
     current_status: str
     funding_transaction: str | None
     payout_transaction: str | None
