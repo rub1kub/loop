@@ -567,3 +567,67 @@ async def test_a_duel_shared_to_a_friend_finally_credits_the_player(app, client)
             )
         ).all()
     assert sorted(credited) == [700_302, 700_303, 700_304]
+
+
+async def test_an_expired_stake_is_named_as_something_to_take_back(
+    app, client, monkeypatch
+) -> None:
+    # Telling a player to wait for a duel whose clock ran out hours ago is
+    # telling them to wait forever. The stake is theirs, and taking it back
+    # needs a signature from the very wallet they are trying to replace — so
+    # the refusal has to name the way out, not just the wall.
+    settings = get_settings()
+    old_address = "0:" + "f1" * 32
+    new_address = "0:" + "f2" * 32
+    headers = await auth_headers(client, 700_401)
+
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == 700_401))
+        wallet = Wallet(
+            user_id=user.id,
+            network=settings.ton_network_id,
+            address=old_address.upper(),
+            public_key="c9" * 32,
+        )
+        db.add(wallet)
+        await db.flush()
+        offer = offer_for(
+            user, wallet, 990_401, chance_bps=5_000, stake_nano=1_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+        )
+        offer.network = settings.ton_network_id
+        offer.expires_at = datetime.now(UTC) - timedelta(hours=6)
+        db.add(offer)
+        await db.commit()
+
+    challenge = await client.post("/api/v1/wallet/challenge", headers=headers, json={})
+    payload = challenge.json()["payload"]
+
+    async def public_key(_address: str) -> str:
+        return "d9" * 32
+
+    monkeypatch.setattr(app.state.ton_client, "get_wallet_public_key", public_key)
+    monkeypatch.setattr("app.routes.verify_ton_proof", lambda **_kwargs: new_address.upper())
+
+    response = await client.post(
+        "/api/v1/wallet/verify",
+        headers=headers,
+        json={
+            "address": new_address,
+            "network": settings.ton_network_id,
+            "publicKey": "d9" * 32,
+            "proof": {
+                "timestamp": int(datetime.now(UTC).timestamp()),
+                "domain": {"lengthBytes": 9, "value": "loop.test"},
+                "signature": "s" * 88,
+                "payload": payload,
+            },
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert "просрочена" in detail
+    assert "Верни" in detail
+    # Never the advice that cannot work.
+    assert "Дождись" not in detail

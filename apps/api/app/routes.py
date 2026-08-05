@@ -464,7 +464,7 @@ async def wallet_verify(
         # away from blocks the user from ever linking a wallet again — and it
         # cannot be settled, because nothing here talks to that network anymore.
         duel_active = await db.scalar(
-            select(MatchmakingOffer.id).where(
+            select(MatchmakingOffer).where(
                 MatchmakingOffer.wallet_id == current.id,
                 MatchmakingOffer.network == settings.ton_network_id,
                 MatchmakingOffer.state.in_(
@@ -482,6 +482,17 @@ async def wallet_verify(
             # it recognises as written for people, and an English one arrived as
             # the blank "не удалось подтвердить кошелёк". A refusal this
             # legitimate has to say which side is holding the wallet.
+            #
+            # And it has to say the right thing to do. An offer whose time has
+            # run out is never going to settle, so telling that player to wait
+            # is telling them to wait forever: the stake is theirs to take back,
+            # with a signature from the wallet that placed it.
+            if duel_active is not None and as_utc(duel_active.expires_at) <= datetime.now(UTC):
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "Ставка в DUEL просрочена и ждёт возврата. Верни её на этот кошелёк "
+                    "в разделе DUEL, потом подключай новый.",
+                )
             waiting = " и ".join(
                 name for name, held in (("BANK", bank_active), ("DUEL", duel_active)) if held
             )
