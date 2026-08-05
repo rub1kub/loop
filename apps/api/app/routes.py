@@ -1,4 +1,5 @@
 import secrets
+import time
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 
@@ -66,6 +67,10 @@ from .security import (
 from .ton import TonProviderError, explorer_transaction_url
 
 router = APIRouter(prefix="/api/v1")
+# How long a confirmed PLUSH BRICK balance answers for the profile before the
+# indexer is asked again. Long enough to keep polling clients off the rate
+# limit, short enough that a fresh purchase shows within a minute.
+PLUSH_HOLDER_CACHE_TTL = 60.0
 MAX_TELEGRAM_AVATAR_BYTES = 1_000_000
 TELEGRAM_PHOTO_HOSTS = ("t.me", "telegram.me", "telegram.org", "telesco.pe", "cdn-telegram.org")
 
@@ -271,14 +276,32 @@ async def get_me(user: CurrentUser, db: Db, request: Request, settings: Config) 
     plush_balance = 0
     plush_verified = False
     if wallet is not None and hasattr(request.app.state, "plush_ton_client"):
-        try:
-            plush = await request.app.state.plush_ton_client.get_jetton_wallet(
-                wallet.address, settings.plush_brick_master
-            )
-            plush_balance = plush.balance_nano
-            plush_verified = True
-        except TonProviderError:
-            pass
+        # Every open client polls this endpoint every few seconds, and each
+        # poll used to ask the indexer afresh. Past a handful of users that is
+        # a rate limit, the lookup fails, and the failure silently erased the
+        # holder flag: a person whose duels genuinely settle fee-free watched
+        # the screen claim 10% off them. Money never moved wrongly — the quote
+        # path verifies on its own — but a display should not flicker between
+        # truths depending on the provider's mood. So the last confirmed answer
+        # is kept per wallet: served while fresh, refreshed after a minute, and
+        # held onto when the provider fails, because ownership of a token does
+        # not vanish with a timeout.
+        cache: dict[str, tuple[float, int]] = request.app.state.plush_holder_cache
+        cached = cache.get(wallet.address)
+        age = (time.monotonic() - cached[0]) if cached else None
+        if cached is not None and age is not None and age < PLUSH_HOLDER_CACHE_TTL:
+            plush_balance, plush_verified = cached[1], True
+        else:
+            try:
+                plush = await request.app.state.plush_ton_client.get_jetton_wallet(
+                    wallet.address, settings.plush_brick_master
+                )
+                plush_balance = plush.balance_nano
+                plush_verified = True
+                cache[wallet.address] = (time.monotonic(), plush_balance)
+            except TonProviderError:
+                if cached is not None:
+                    plush_balance, plush_verified = cached[1], True
     holder = plush_verified and plush_balance >= settings.holder_min_balance_nano
     duel_fee_bps = await effective_contract_fee(
         db,

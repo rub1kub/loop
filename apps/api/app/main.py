@@ -53,6 +53,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings,
         base_url=settings.plush_brick_toncenter_url,
     )
+    # Last confirmed PLUSH BRICK balance per wallet, so the profile neither
+    # hammers the indexer on every poll nor forgets a holder when it times out.
+    app.state.plush_holder_cache = {}
     if settings.app_env == "production":
         contracts = {
             "BANK": (settings.bank_contract_address, settings.bank_contract_code_hash),

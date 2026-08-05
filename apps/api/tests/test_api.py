@@ -1242,3 +1242,51 @@ async def test_a_quiet_night_produces_no_estimate_rather_than_days(client, app) 
     assert body["queue_ahead_nano"] == 100_000_000_000
     # It still says how far off it is; it refuses to say when.
     assert body["queue_eta_seconds"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_provider_timeout_does_not_erase_a_confirmed_holder(client, app) -> None:
+    # Every open client polls /me every few seconds, and each poll used to ask
+    # the indexer afresh. Past a handful of users that is a rate limit, and the
+    # failure silently flipped holder to false: a player whose duels genuinely
+    # settle fee-free watched the screen claim 10% off them. Ownership of a
+    # token does not vanish with a timeout.
+    from app.routes import PLUSH_HOLDER_CACHE_TTL
+    from app.ton import JettonWalletState, TonProviderError
+
+    calls = {"count": 0}
+
+    class FlakyPlushClient:
+        async def get_jetton_wallet(self, owner_address: str, jetton_master: str):
+            del owner_address, jetton_master
+            calls["count"] += 1
+            if calls["count"] > 1:
+                raise TonProviderError("rate limited")
+            return JettonWalletState(
+                owner_address="0:" + "5" * 64,
+                jetton_master="master",
+                wallet_address="0:" + "e" * 64,
+                balance_nano=10_054_226_191,
+            )
+
+    app.state.plush_ton_client = FlakyPlushClient()
+    app.state.plush_holder_cache = {}
+    headers = await authenticate(client, 777000555)
+    await add_wallet(app, 777000555, byte="5")
+
+    first = (await client.get("/api/v1/me", headers=headers)).json()
+    assert first["plush_brick"]["holder"] is True
+
+    # Within the TTL the cache answers and the indexer is left alone.
+    second = (await client.get("/api/v1/me", headers=headers)).json()
+    assert second["plush_brick"]["holder"] is True
+    assert calls["count"] == 1
+
+    # Past the TTL the refresh fails — and the last confirmed answer stands.
+    for entry in list(app.state.plush_holder_cache):
+        stamp, balance = app.state.plush_holder_cache[entry]
+        app.state.plush_holder_cache[entry] = (stamp - PLUSH_HOLDER_CACHE_TTL - 1, balance)
+    third = (await client.get("/api/v1/me", headers=headers)).json()
+    assert calls["count"] == 2
+    assert third["plush_brick"]["holder"] is True
+    assert third["plush_brick"]["balance_nano"] == 10_054_226_191
