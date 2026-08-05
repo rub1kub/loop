@@ -3,8 +3,7 @@ import { useEffect, useState } from 'react';
 import { haptic, openPlatformLink } from '../telegram';
 import type { Announcement as AnnouncementData } from '../types';
 
-const READ_KEY = 'loop:announcement-read';
-const HIDDEN_KEY = 'loop:announcement-hidden';
+const SEEN_KEY = 'loop:announcement-read';
 
 /**
  * A note from the channel, shown where the bot is not allowed to write.
@@ -19,21 +18,18 @@ const HIDDEN_KEY = 'loop:announcement-hidden';
  * in a way a truncating ellipsis is not — nothing is hidden, the road simply
  * continues elsewhere.
  *
- * Closing it and reading it are different answers and are remembered
- * differently. The cross means "not now" and lasts until the app is opened
- * again; following the link means it has done its job, and it never returns.
+ * Once dismissed it is gone for good, whichever way it was dismissed. Closing
+ * it is an answer too, and asking the same question again every time the app
+ * opens is how a note stops being read and starts being swatted. The next
+ * announcement is a different message and shows up on its own.
  */
 export function Announcement({ data }: { data: AnnouncementData }) {
-  const [open, setOpen] = useState(
-    () =>
-      window.localStorage.getItem(READ_KEY) !== data.text &&
-      window.sessionStorage.getItem(HIDDEN_KEY) !== data.text,
-  );
+  const [open, setOpen] = useState(() => window.localStorage.getItem(SEEN_KEY) !== data.text);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') hideForNow();
+      if (event.key === 'Escape') dismiss();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -42,23 +38,22 @@ export function Announcement({ data }: { data: AnnouncementData }) {
 
   if (!open) return null;
 
-  function hideForNow() {
+  function dismiss() {
     // Remembered by the text, so the next announcement is a new question.
-    window.sessionStorage.setItem(HIDDEN_KEY, data.text);
+    window.localStorage.setItem(SEEN_KEY, data.text);
     setOpen(false);
   }
 
   function read() {
     haptic('selection');
-    window.localStorage.setItem(READ_KEY, data.text);
-    setOpen(false);
+    dismiss();
     // A t.me address belongs to Telegram's own viewer: opened in a browser tab
     // the reader arrives at the channel signed out and cannot subscribe.
     if (data.url) openPlatformLink(data.url, data.url.includes('t.me/'));
   }
 
   return (
-    <div className="announcement-backdrop" onClick={hideForNow}>
+    <div className="announcement-backdrop" onClick={dismiss}>
       <div
         className="announcement-sheet"
         role="dialog"
@@ -66,12 +61,7 @@ export function Announcement({ data }: { data: AnnouncementData }) {
         aria-label="Сообщение из канала"
         onClick={(event) => event.stopPropagation()}
       >
-        <button
-          type="button"
-          className="announcement-close"
-          aria-label="Закрыть"
-          onClick={hideForNow}
-        >
+        <button type="button" className="announcement-close" aria-label="Закрыть" onClick={dismiss}>
           ✕
         </button>
         <div className="announcement-head">

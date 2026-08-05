@@ -36,20 +36,17 @@ describe('the note from the channel', () => {
     expect(screen.queryByText(note.text)).toBeNull();
   });
 
-  it('treats the cross as "not now" and asks again next time the app opens', () => {
+  it('never returns after the cross either — closing is an answer', () => {
+    // Asking the same question every time the app opens is how a note stops
+    // being read and starts being swatted.
     const first = render(<Announcement data={note} />);
     fireEvent.click(screen.getByLabelText('Закрыть'));
     expect(screen.queryByText(note.text)).toBeNull();
     first.unmount();
 
-    // Same session: still out of the way.
-    const second = render(<Announcement data={note} />);
-    expect(screen.queryByText(note.text)).toBeNull();
-    second.unmount();
-
     window.sessionStorage.clear();
     render(<Announcement data={note} />);
-    expect(screen.getByText(note.text)).toBeTruthy();
+    expect(screen.queryByText(note.text)).toBeNull();
   });
 
   it('lets the next announcement through on its own', () => {
