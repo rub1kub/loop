@@ -1357,3 +1357,31 @@ async def test_a_broken_bank_transaction_still_lets_duels_settle(app, monkeypatc
         await chain_worker.run_once(_Http([]), app.state.session_factory, settings)
 
     assert attempted == ["bank", "duel"]
+
+
+async def test_the_alert_never_becomes_the_reason_the_worker_dies() -> None:
+    # The alert exists because an hour passed with nobody told. It must not
+    # turn a projection failure into a crashed worker on top of it.
+    from app import chain_worker
+
+    settings = get_settings().model_copy(update={"alert_chat_id": 1084693264})
+
+    class _Falling:
+        async def post(self, _url: str, **_kwargs: object) -> None:
+            raise RuntimeError("telegram is unreachable")
+
+    await chain_worker.announce(_Falling(), settings, "воркер встал")
+
+
+async def test_no_alert_target_means_no_call_at_all() -> None:
+    from app import chain_worker
+
+    settings = get_settings().model_copy(update={"alert_chat_id": 0})
+    calls: list[str] = []
+
+    class _Counting:
+        async def post(self, url: str, **_kwargs: object) -> None:
+            calls.append(url)
+
+    await chain_worker.announce(_Counting(), settings, "воркер встал")
+    assert calls == []

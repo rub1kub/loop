@@ -118,6 +118,24 @@ class ProjectionResult(enum.StrEnum):
     RETRY = "retry"
 
 
+ALERT_AFTER_FAILURES = 3
+
+
+async def announce(http: httpx.AsyncClient, settings: Any, text: str) -> None:
+    """Tell a human the projection stopped. Never the reason the worker dies."""
+    chat_id = getattr(settings, "alert_chat_id", 0)
+    token = settings.bot_token.get_secret_value()
+    if not chat_id or not token:
+        return
+    try:
+        await http.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text},
+        )
+    except Exception as exc:  # noqa: BLE001 — an unsent alert must not stop the retry loop
+        logger.warning("chain_worker_alert_failed", error=type(exc).__name__, detail=str(exc))
+
+
 class ProjectionFailure(Exception):
     """One transaction the projection could not write down, and which one.
 
@@ -1616,10 +1634,16 @@ async def main() -> None:
     async with httpx.AsyncClient(timeout=timeout) as http:
         await attest_contracts(http, settings)
         retry_delay = 5
+        consecutive_failures = 0
+        reported = False
         while True:
             try:
                 await run_once(http, session_factory, settings)
                 retry_delay = 5
+                consecutive_failures = 0
+                if reported:
+                    reported = False
+                    await announce(http, settings, "✅ Чтение цепи восстановлено.")
             except Exception as exc:
                 # The class name alone sent a whole outage to the Postgres log
                 # to be diagnosed. Say what happened and where.
@@ -1629,7 +1653,20 @@ async def main() -> None:
                     detail=str(exc),
                     exc_info=exc,
                 )
+                consecutive_failures += 1
                 retry_delay = min(retry_delay * 2, 60)
+                # One failure can be a provider hiccup; three in a row is the
+                # queue standing still while deposits keep arriving. Say it
+                # once, not every minute for an hour.
+                if consecutive_failures >= ALERT_AFTER_FAILURES and not reported:
+                    reported = True
+                    await announce(
+                        http,
+                        settings,
+                        "🛑 Воркер перестал читать цепь.\n\n"
+                        f"{type(exc).__name__}: {exc}\n\n"
+                        "Взносы и ставки сейчас не подтверждаются.",
+                    )
             await asyncio.sleep(retry_delay)
     await engine.dispose()
 

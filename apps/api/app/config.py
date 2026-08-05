@@ -97,6 +97,11 @@ class Settings(BaseSettings):
     holder_min_balance_nano: int = 1
     plush_brick_fee_bps: int = 0
 
+    # Where the chain worker reports that it has stopped reading the chain.
+    # Left at zero it says nothing, which is how an hour passed on 2026-08-05
+    # before anyone noticed: the container went unhealthy and no one was told.
+    alert_chat_id: int = 0
+
     webhook_path: str = "/api/internal/telegram/webhook"
     metrics_token: SecretStr = SecretStr("")
 
