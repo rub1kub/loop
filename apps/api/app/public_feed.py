@@ -94,7 +94,7 @@ async def enqueue_public_feed(
     if not settings.public_feed_chat_id or user_id is None:
         return None
     dedupe_key = f"public_feed:{event_key}"
-    existing = await db.scalar(
+    existing: NotificationOutbox | None = await db.scalar(
         select(NotificationOutbox).where(NotificationOutbox.dedupe_key == dedupe_key)
     )
     if existing is not None:
@@ -117,9 +117,10 @@ async def enqueue_public_feed(
             db.add(item)
             await db.flush()
     except IntegrityError:
-        return await db.scalar(
+        raced: NotificationOutbox | None = await db.scalar(
             select(NotificationOutbox).where(NotificationOutbox.dedupe_key == dedupe_key)
         )
+        return raced
     return item
 
 
