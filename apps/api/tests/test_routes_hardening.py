@@ -631,3 +631,52 @@ async def test_an_expired_stake_is_named_as_something_to_take_back(
     assert "Верни" in detail
     # Never the advice that cannot work.
     assert "Дождись" not in detail
+
+
+async def test_a_shared_challenge_previews_from_the_receivers_side(app, client) -> None:
+    # The card's button says "принять вызов", so the person who tapped it gets
+    # the exact challenge: whose call, what it asks of THEM, and whether it is
+    # still standing — an answered challenge says so instead of pretending.
+    settings = get_settings()
+    await auth_headers(client, 700_501)
+    receiver_headers = await auth_headers(client, 700_502)
+
+    async with app.state.session_factory() as db:
+        creator = await db.scalar(select(User).where(User.telegram_id == 700_501))
+        creator.first_name = "Иван"
+        creator.username = "ivan_loop"
+        wallet = Wallet(
+            user_id=creator.id,
+            network=settings.ton_network_id,
+            address="0:" + "d5" * 32,
+            public_key="e5" * 32,
+        )
+        db.add(wallet)
+        await db.flush()
+        offer = offer_for(
+            creator, wallet, 990_501, chance_bps=5_000, stake_nano=1_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+        )
+        offer.network = settings.ton_network_id
+        db.add(offer)
+        await db.commit()
+
+    body = (
+        await client.get("/api/v1/duels/offers/990501/preview", headers=receiver_headers)
+    ).json()
+    assert body == {
+        "creator_first_name": "Иван",
+        "creator_username": "ivan_loop",
+        "stake_nano": 1_000_000_000,
+        "receiver_chance_bps": 5_000,
+        "open": True,
+    }
+
+    async with app.state.session_factory() as db:
+        stored = await db.scalar(select(DuelOffer).where(DuelOffer.onchain_offer_id == 990_501))
+        stored.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+        await db.commit()
+    gone = (
+        await client.get("/api/v1/duels/offers/990501/preview", headers=receiver_headers)
+    ).json()
+    assert gone["open"] is False
