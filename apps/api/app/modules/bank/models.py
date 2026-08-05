@@ -38,16 +38,19 @@ class BankPosition(Base):
             "network", "contract_address", "position_id", name="bank_position_chain_id"
         ),
         UniqueConstraint("network", "contract_address", "query_id", name="bank_position_query_id"),
-        # One open position per wallet *per contract*, which is what the
-        # contract itself enforces. Keyed on the wallet alone, a position left
-        # behind on a contract the application has moved away from blocked that
-        # wallet from ever opening one on the new contract.
+        # Looking up a wallet's open position, not forbidding a second one. The
+        # contract does not forbid it either: it took a second deposit from a
+        # wallet that already had a position, and a unique index here meant the
+        # chain projection could not write down what had already happened. One
+        # refused row failed the whole worker transaction and stopped
+        # confirmations for everybody. The product rule lives in the position
+        # endpoint, where it can answer with a 409 before any money moves.
         Index(
-            "uq_active_bank_position_wallet",
+            "ix_open_bank_position_wallet",
             "wallet_id",
             "network",
             "contract_address",
-            unique=True,
+            unique=False,
             postgresql_where=text(
                 "current_status IN "
                 "('pending_confirmation', 'queued', 'partially_funded', 'completed')"
