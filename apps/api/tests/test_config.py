@@ -149,3 +149,30 @@ def test_mainnet_rejects_launch_limits_above_ten_gram() -> None:
                 max_pool_nano=10_000_000_001,
             ),
         )
+
+
+def test_an_announcement_about_tonight_stops_appearing_in_the_morning() -> None:
+    # A note about the first night is worth less than nothing by tomorrow
+    # afternoon, and taking it down by hand means remembering to at six in the
+    # morning. The hour is part of the announcement, not a chore beside it.
+    from datetime import UTC, datetime
+
+    from app.config import Settings
+
+    settings = Settings(
+        announcement_text="LOOP. ПЕРВАЯ НОЧЬ.",
+        announcement_url="https://t.me/rubikub/5158",
+        announcement_telegram_ids="*",
+        announcement_until=datetime(2026, 8, 6, 3, 0, tzinfo=UTC),  # 6:00 МСК
+    )
+
+    late_night = datetime(2026, 8, 6, 2, 59, tzinfo=UTC)
+    assert settings.announcement_for(777, now=late_night) is not None
+
+    six_sharp = datetime(2026, 8, 6, 3, 0, tzinfo=UTC)
+    assert settings.announcement_for(777, now=six_sharp) is None
+    assert settings.announcement_for(777, now=datetime(2026, 8, 6, 9, 0, tzinfo=UTC)) is None
+
+    # Without an hour it simply stays until the text is cleared.
+    forever = settings.model_copy(update={"announcement_until": None})
+    assert forever.announcement_for(777, now=datetime(2027, 1, 1, tzinfo=UTC)) is not None

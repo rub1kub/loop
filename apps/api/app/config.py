@@ -106,6 +106,10 @@ class Settings(BaseSettings):
     # not reach three hundred people because a text field was filled in first.
     # "*" is everyone; otherwise a list of telegram ids.
     announcement_telegram_ids: str = ""
+    # When it should stop appearing. An announcement about tonight is worth
+    # less than nothing by tomorrow afternoon, and taking it down by hand means
+    # remembering to; unset, it stays until someone clears the text.
+    announcement_until: datetime | None = None
 
     # Where the chain worker reports that it has stopped reading the chain.
     # Left at zero it says nothing, which is how an hour passed on 2026-08-05
@@ -115,16 +119,25 @@ class Settings(BaseSettings):
     webhook_path: str = "/api/internal/telegram/webhook"
     metrics_token: SecretStr = SecretStr("")
 
-    def announcement_for(self, telegram_id: int) -> tuple[str, str] | None:
+    def announcement_for(
+        self, telegram_id: int, now: datetime | None = None
+    ) -> tuple[str, str] | None:
         """The announcement this person should see, if any.
 
         Silence is the default in every direction: no text, no announcement; no
-        audience, no announcement. Widening it to everybody has to be typed out
-        as `*`, so it cannot happen by leaving a field half-filled.
+        audience, no announcement; past its hour, no announcement. Widening it
+        to everybody has to be typed out as `*`, so it cannot happen by leaving
+        a field half-filled.
         """
         text = self.announcement_text.strip()
         if not text:
             return None
+        if self.announcement_until is not None:
+            deadline = self.announcement_until
+            if deadline.tzinfo is None:
+                deadline = deadline.replace(tzinfo=UTC)
+            if (now or datetime.now(UTC)) >= deadline:
+                return None
         audience = self.announcement_telegram_ids.strip()
         if not audience:
             return None
