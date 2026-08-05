@@ -9,6 +9,7 @@ import { Loader } from './components/Loader';
 import { PrelaunchScreen } from './components/PrelaunchScreen';
 import { Onboarding } from './components/Onboarding';
 import { ProfileScreen } from './components/ProfileScreen';
+import { Announcement } from './components/Announcement';
 import { Celebration } from './components/Celebration';
 import { TabBar } from './components/TabBar';
 import { BankScreen } from './features/bank/BankScreen';
@@ -282,6 +283,7 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      {state.profile?.announcement && <Announcement data={state.profile.announcement} />}
       <AnimatePresence mode="wait">
         <motion.div
           key={state.activeTab}

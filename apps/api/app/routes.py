@@ -30,6 +30,7 @@ from .rating import build_rating
 from .referrals import get_or_create_referral_code
 from .result_cards import INVITE_VARIANTS, build_invite_inline, render_invite_card
 from .schemas import (
+    AnnouncementView,
     AuthResponse,
     ContractStateView,
     DuelStakeLimitsView,
@@ -291,6 +292,11 @@ async def get_me(user: CurrentUser, db: Db, request: Request, settings: Config) 
             active=duel_active or 0,
             completed=duel_completed or 0,
             total=duel_total or 0,
+        ),
+        announcement=(
+            AnnouncementView(text=announcement[0], url=announcement[1] or None)
+            if (announcement := settings.announcement_for(user.telegram_id))
+            else None
         ),
         duel_stake=DuelStakeLimitsView(
             # An equal duel pools four quarter units, so a stake always lands on

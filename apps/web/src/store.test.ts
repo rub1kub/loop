@@ -49,6 +49,7 @@ const baseProfile: Profile = {
     fee_discount_active: false,
   },
   duel_stake: { min_stake_nano: 500_000_000, max_stake_nano: 500_000_000 },
+  announcement: null,
   app_open: false,
   launch_at: '2026-08-05T16:30:00Z',
 };

@@ -1143,3 +1143,40 @@ async def test_the_jar_shows_the_queue_coming_towards_you_not_a_flat_zero(client
     assert body["queue_ahead"] == 2
     assert body["queue_ahead_nano"] == 2_000_000_000
     assert body["queue_progress_bps"] == 4_029
+
+
+@pytest.mark.asyncio
+async def test_an_announcement_reaches_only_the_audience_it_names(client) -> None:
+    # Two thirds of the audience never pressed Start, so Telegram forbids the
+    # bot from writing to them and the app is the only way to say anything.
+    # That reach is exactly why widening it must be deliberate: silence is the
+    # default in both directions, and "everybody" has to be typed out.
+    settings = get_settings()
+    headers = await authenticate(client, 777000333)
+    profile = await client.get("/api/v1/me", headers=headers)
+    assert profile.json()["announcement"] is None
+
+    settings.announcement_text = "Первая ночь. 575 GRAM отправлено людям."
+    settings.announcement_url = "https://t.me/rubikub/5158"
+
+    # Text alone changes nothing while no audience is named.
+    assert (await client.get("/api/v1/me", headers=headers)).json()["announcement"] is None
+
+    settings.announcement_telegram_ids = "1084693264"
+    assert (await client.get("/api/v1/me", headers=headers)).json()["announcement"] is None
+
+    settings.announcement_telegram_ids = "1084693264, 777000333"
+    shown = (await client.get("/api/v1/me", headers=headers)).json()["announcement"]
+    assert shown == {
+        "text": "Первая ночь. 575 GRAM отправлено людям.",
+        "url": "https://t.me/rubikub/5158",
+    }
+
+    settings.announcement_telegram_ids = "*"
+    assert (await client.get("/api/v1/me", headers=headers)).json()["announcement"] is not None
+
+    # Emptying the text takes it down again without touching the audience.
+    settings.announcement_text = ""
+    assert (await client.get("/api/v1/me", headers=headers)).json()["announcement"] is None
+    settings.announcement_telegram_ids = ""
+    settings.announcement_url = ""

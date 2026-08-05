@@ -97,6 +97,16 @@ class Settings(BaseSettings):
     holder_min_balance_nano: int = 1
     plush_brick_fee_bps: int = 0
 
+    # The in-app announcement. Two thirds of the audience opens the mini app
+    # straight from a link and never presses Start in the bot, so Telegram
+    # forbids writing to them at all; inside the app there is no such wall.
+    announcement_text: str = ""
+    announcement_url: str = ""
+    # Who sees it. Empty shows it to nobody — a half-written announcement must
+    # not reach three hundred people because a text field was filled in first.
+    # "*" is everyone; otherwise a list of telegram ids.
+    announcement_telegram_ids: str = ""
+
     # Where the chain worker reports that it has stopped reading the chain.
     # Left at zero it says nothing, which is how an hour passed on 2026-08-05
     # before anyone noticed: the container went unhealthy and no one was told.
@@ -104,6 +114,25 @@ class Settings(BaseSettings):
 
     webhook_path: str = "/api/internal/telegram/webhook"
     metrics_token: SecretStr = SecretStr("")
+
+    def announcement_for(self, telegram_id: int) -> tuple[str, str] | None:
+        """The announcement this person should see, if any.
+
+        Silence is the default in every direction: no text, no announcement; no
+        audience, no announcement. Widening it to everybody has to be typed out
+        as `*`, so it cannot happen by leaving a field half-filled.
+        """
+        text = self.announcement_text.strip()
+        if not text:
+            return None
+        audience = self.announcement_telegram_ids.strip()
+        if not audience:
+            return None
+        if audience != "*":
+            allowed = {chunk.strip() for chunk in audience.split(",") if chunk.strip()}
+            if str(telegram_id) not in allowed:
+                return None
+        return text, self.announcement_url.strip()
 
     @property
     def closed_beta_ids(self) -> frozenset[int]:

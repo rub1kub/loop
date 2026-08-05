@@ -45,6 +45,11 @@ const profileSchema = z.object({
     .nullable(),
   bank: modeStatsSchema,
   duel: modeStatsSchema,
+  // Absent on an older server, and a missing note is simply no note.
+  announcement: z
+    .object({ text: z.string(), url: z.string().nullable().default(null) })
+    .nullable()
+    .default(null),
   plush_brick: z.object({
     verified: z.boolean(),
     balance_nano: z.number(),

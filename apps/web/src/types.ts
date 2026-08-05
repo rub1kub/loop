@@ -139,6 +139,7 @@ export interface Profile {
   duel: ModeStats;
   plush_brick: PlushBrick;
   duel_stake: { min_stake_nano: number; max_stake_nano: number };
+  announcement: Announcement | null;
   /** False keeps the client on the waiting screen: signed in, counting down. */
   app_open: boolean;
   launch_at: string | null;
@@ -159,6 +160,11 @@ export interface Prelaunch {
   rank: number | null;
   leaderboard: PrelaunchLeader[];
   participants: number;
+}
+
+export interface Announcement {
+  text: string;
+  url: string | null;
 }
 
 export type BankStatus =

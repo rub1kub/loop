@@ -110,6 +110,13 @@ class DuelStakeLimitsView(BaseModel):
     max_stake_nano: int
 
 
+class AnnouncementView(BaseModel):
+    """A note from the channel, shown where the bot is not allowed to write."""
+
+    text: str
+    url: str | None = None
+
+
 class ProfileView(BaseModel):
     user: UserView
     wallet: WalletView | None
@@ -117,6 +124,7 @@ class ProfileView(BaseModel):
     duel: ModeStatsView
     plush_brick: PlushBrickView
     duel_stake: DuelStakeLimitsView
+    announcement: AnnouncementView | None = None
     # False puts the client on the waiting screen: signed in, counting down.
     app_open: bool = True
     launch_at: datetime | None = None
