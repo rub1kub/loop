@@ -3569,3 +3569,53 @@ details[open] > summary .disclosure-indicator svg {
   line-height: 1;
   cursor: pointer;
 }
+
+/* МОИ ЛЮДИ: the earned figure carries the section, the feed proves it drips. */
+.referral-earnings {
+  display: grid;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  gap: 4px;
+}
+
+.referral-earnings > strong {
+  font-size: 28px;
+  letter-spacing: 0.01em;
+}
+
+.referral-earnings > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.referral-earnings > small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.referral-feed {
+  display: grid;
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 0;
+  gap: 6px;
+  list-style: none;
+}
+
+.referral-feed li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.referral-feed li > b {
+  flex-shrink: 0;
+  color: var(--text, #fff);
+  font-size: 12px;
+}

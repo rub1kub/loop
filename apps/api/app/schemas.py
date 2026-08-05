@@ -387,6 +387,11 @@ class ReferralRewardView(BaseModel):
     reward_nano: int
     payout_tx_hash: str | None
     created_at: datetime
+    # Who this line of the feed is about. "Иван внёс 3 GRAM → тебе +0,06" is
+    # what makes the two percent feel real; a bare cause string is bookkeeping.
+    invitee_first_name: str | None = None
+    invitee_username: str | None = None
+    deposit_nano: int = 0
 
 
 class ReferralView(BaseModel):

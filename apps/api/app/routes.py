@@ -696,25 +696,61 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
             ReferralAttribution.status == "qualified",
         )
     )
-    rewards = (
-        await db.scalars(
-            select(ReferralReward)
+    # Totals over everything ever accrued. They used to be summed over the
+    # fifty rows the feed happens to show, so the headline figure silently
+    # stopped growing at whatever the fifty-first reward brought.
+    totals = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(ReferralReward.reward_points), 0),
+                func.coalesce(func.sum(ReferralReward.reward_nano), 0),
+            )
+            .select_from(ReferralReward)
             .join(
                 ReferralAttribution,
                 ReferralReward.attribution_id == ReferralAttribution.id,
             )
             .where(ReferralAttribution.inviter_user_id == user.id)
+        )
+    ).one()
+    rewards = (
+        await db.execute(
+            select(ReferralReward, User)
+            .join(
+                ReferralAttribution,
+                ReferralReward.attribution_id == ReferralAttribution.id,
+            )
+            .join(User, User.id == ReferralAttribution.invitee_user_id)
+            .where(ReferralAttribution.inviter_user_id == user.id)
             .order_by(ReferralReward.created_at.desc())
             .limit(50)
         )
     ).all()
+    # A fee-share reward is caused by one confirmed deposit, and naming that
+    # deposit is what turns the feed from bookkeeping into proof: "Иван внёс
+    # 3 GRAM → тебе +0,06". The cause carries the position id.
+    position_ids = [
+        reward.cause.removeprefix("fee_share:")
+        for reward, _ in rewards
+        if reward.cause.startswith("fee_share:")
+    ]
+    principals: dict[str, int] = {}
+    if position_ids:
+        rows = (
+            await db.execute(
+                select(BankPosition.id, BankPosition.principal_nano).where(
+                    BankPosition.id.in_(position_ids)
+                )
+            )
+        ).all()
+        principals = {row[0]: row[1] for row in rows}
     return ReferralView(
         code=referral.code,
         url=f"https://t.me/{settings.bot_username}?startapp=ref_{referral.code}",
         invited=invited or 0,
         qualified=qualified or 0,
-        reward_points=sum(reward.reward_points for reward in rewards),
-        reward_nano=sum(reward.reward_nano for reward in rewards),
+        reward_points=int(totals[0]),
+        reward_nano=int(totals[1]),
         history=[
             ReferralRewardView(
                 cause=reward.cause,
@@ -722,8 +758,11 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
                 reward_nano=reward.reward_nano,
                 payout_tx_hash=reward.payout_tx_hash,
                 created_at=reward.created_at,
+                invitee_first_name=invitee.first_name,
+                invitee_username=invitee.username,
+                deposit_nano=principals.get(reward.cause.removeprefix("fee_share:"), 0),
             )
-            for reward in rewards
+            for reward, invitee in rewards
         ],
     )
 

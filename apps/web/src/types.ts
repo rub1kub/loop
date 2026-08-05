@@ -362,6 +362,9 @@ export interface Referral {
     reward_nano: number;
     payout_tx_hash: string | null;
     created_at: string;
+    invitee_first_name: string | null;
+    invitee_username: string | null;
+    deposit_nano: number;
   }[];
 }
 

@@ -17,7 +17,14 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../api';
-import { haptic, isHapticsEnabled, isMockTelegram, setHapticsEnabled, telegram } from '../telegram';
+import {
+  haptic,
+  isHapticsEnabled,
+  isMockTelegram,
+  setHapticsEnabled,
+  sharePreparedResult,
+  telegram,
+} from '../telegram';
 import { formatGram } from '../ton';
 import type { BankPosition, Duel, Profile, Rating, Referral } from '../types';
 import { DisclosureIndicator } from './DisclosureIndicator';
@@ -33,10 +40,31 @@ const demoReferral: Referral = {
   code: 'LOOPDEMO',
   url: 'https://t.me/getloopbot?startapp=ref_LOOPDEMO',
   invited: 3,
-  qualified: 1,
-  reward_points: 100,
-  reward_nano: 0,
-  history: [],
+  qualified: 2,
+  reward_points: 200,
+  reward_nano: 160_000_000,
+  history: [
+    {
+      cause: 'fee_share:demo-1',
+      reward_points: 0,
+      reward_nano: 100_000_000,
+      payout_tx_hash: null,
+      created_at: new Date().toISOString(),
+      invitee_first_name: 'Иван',
+      invitee_username: 'ivan_loop',
+      deposit_nano: 5_000_000_000,
+    },
+    {
+      cause: 'fee_share:demo-2',
+      reward_points: 0,
+      reward_nano: 60_000_000,
+      payout_tx_hash: null,
+      created_at: new Date(Date.now() - 3_600_000).toISOString(),
+      invitee_first_name: 'Мария',
+      invitee_username: null,
+      deposit_nano: 3_000_000_000,
+    },
+  ],
 };
 
 export function ProfileScreen({
@@ -96,6 +124,14 @@ export function ProfileScreen({
   async function shareReferral() {
     if (!referral) return;
     haptic('light');
+    // The same one-tap card the prelaunch screen sends: chat picker over the
+    // app, referral code baked in. The bare link stays as the desktop fallback.
+    try {
+      const prepared = await api.prepareInviteShare();
+      if (await sharePreparedResult(prepared.prepared_message_id, prepared.fallback_query)) return;
+    } catch {
+      // The card is a nicety; the link below still carries the code.
+    }
     const url = `https://t.me/share/url?url=${encodeURIComponent(referral.url)}&text=${encodeURIComponent('Попробуй BANK и DUEL в LOOP.')}`;
     if (telegram()) telegram()?.openTelegramLink(url);
     else await navigator.clipboard.writeText(referral.url);
@@ -168,23 +204,51 @@ export function ProfileScreen({
         {/* The referral reward history and the monthly LOOP score are two
             different counters. Showing both as "ОЧКОВ" next to СЧЁТ LOOP read
             as one metric, so friends are reported as friends. */}
-        <span>ТВОИ ДРУЗЬЯ</span>
+        <span>МОИ ЛЮДИ</span>
         <small>ПОДТВЕРЖДЕНО: {referral?.qualified ?? 0}</small>
+      </div>
+      <div className="referral-earnings">
+        <strong>{formatGram(referral?.reward_nano ?? 0, 2)} GRAM</strong>
+        <span>заработано на 2% со взносов приглашённых — навсегда</span>
+        {(referral?.reward_nano ?? 0) > 0 && (
+          <small>Выплата пока вручную: напиши в чат @getloopchat</small>
+        )}
       </div>
       <button className="profile-row" onClick={() => void shareReferral()} disabled={!referral}>
         <span className="row-icon">
           <UsersThree />
         </span>
         <div>
-          <b>Пригласить в LOOP</b>
+          <b>Позвать в LOOP</b>
           <small>
             {referral
-              ? `${referral.qualified} подтверждено из ${referral.invited}`
+              ? `${referral.qualified} внесли из ${referral.invited} приглашённых`
               : 'Загружаем ссылку'}
           </small>
         </div>
         <PaperPlaneTilt aria-hidden="true" />
       </button>
+      {referral !== null && referral.history.length > 0 && (
+        <ul className="referral-feed">
+          {referral.history.slice(0, 8).map((entry) => (
+            <li key={`${entry.cause}-${entry.created_at}`}>
+              <span>
+                {entry.invitee_username
+                  ? `@${entry.invitee_username}`
+                  : (entry.invitee_first_name ?? 'Приглашённый')}
+                {entry.deposit_nano > 0
+                  ? ` внёс ${formatGram(entry.deposit_nano, 2)} GRAM`
+                  : ' прошёл квалификацию'}
+              </span>
+              <b>
+                {entry.reward_nano > 0
+                  ? `+${formatGram(entry.reward_nano, 3)} GRAM`
+                  : `+${entry.reward_points}`}
+              </b>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <details className="profile-proof-details">
         <summary>

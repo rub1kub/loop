@@ -887,20 +887,38 @@ def render_invite_card(
             fill=(150, 150, 150),
         )
 
-        _centered_text(
-            draw,
-            (CARD_WIDTH // 2, 858),
-            date_text,
-            font=_font(92, bold=True),
-            fill=(255, 255, 255),
-        )
-        _centered_text(
-            draw,
-            (CARD_WIDTH // 2, 946),
-            f"ОТКРЫТИЕ · {time_text}",
-            font=_font(20, bold=True),
-            fill=(135, 135, 135),
-        )
+        # Before the launch the card is a date to wait for; after it, a date
+        # would be stale the moment it was true. The queue itself is the news.
+        if launch_at > datetime.now(UTC):
+            _centered_text(
+                draw,
+                (CARD_WIDTH // 2, 858),
+                date_text,
+                font=_font(92, bold=True),
+                fill=(255, 255, 255),
+            )
+            _centered_text(
+                draw,
+                (CARD_WIDTH // 2, 946),
+                f"ОТКРЫТИЕ · {time_text}",
+                font=_font(20, bold=True),
+                fill=(135, 135, 135),
+            )
+        else:
+            _centered_text(
+                draw,
+                (CARD_WIDTH // 2, 858),
+                "УЖЕ ИДЁТ",
+                font=_font(92, bold=True),
+                fill=(255, 255, 255),
+            )
+            _centered_text(
+                draw,
+                (CARD_WIDTH // 2, 946),
+                "ОЧЕРЕДЬ ДВИЖЕТСЯ И ПЛАТИТ",
+                font=_font(20, bold=True),
+                fill=(135, 135, 135),
+            )
 
         draw.line((70, 1176, CARD_WIDTH - 70, 1176), fill=(54, 54, 54), width=2)
         inviter = f"@{username}" if username else first_name
@@ -932,9 +950,13 @@ def render_invite_card(
 
 
 def invite_caption(launch_at: datetime, variant_index: int) -> str:
-    date_text, time_text = launch_moment_ru(launch_at)
-    opening = f"Открытие {date_text.lower()} в {time_text.removesuffix(' МСК')} МСК."
-    return f"{invite_variant(variant_index)['caption']}\n\n{opening} Вход уже открыт."
+    if launch_at > datetime.now(UTC):
+        date_text, time_text = launch_moment_ru(launch_at)
+        opening = f"Открытие {date_text.lower()} в {time_text.removesuffix(' МСК')} МСК."
+    else:
+        # "Открытие 5 августа" mailed on the seventh reads as an old flyer.
+        opening = "Уже идёт: очередь движется и платит."
+    return f"{invite_variant(variant_index)['caption']}\n\n{opening} Вход открыт."
 
 
 def build_invite_inline(
