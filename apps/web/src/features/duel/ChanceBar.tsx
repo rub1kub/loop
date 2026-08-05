@@ -23,6 +23,7 @@ export function ChanceBar({
   remainingMs,
   drain,
   caption,
+  opponentName,
 }: {
   /** Own share of the pool, 0..1. */
   mine: number;
@@ -37,6 +38,8 @@ export function ChanceBar({
   drain?: number | null;
   /** What the clock is counting down to, said once, next to it. */
   caption?: string;
+  /** Who the other half of the bar is, when the server knows. */
+  opponentName?: string | null;
 }) {
   const reduced = useReducedMotion();
   const settled = phase === 'won' || phase === 'lost';
@@ -54,7 +57,7 @@ export function ChanceBar({
         settled
           ? phase === 'won'
             ? 'Победа: банк твой'
-            : 'Поражение: банк ушёл сопернику'
+            : `Поражение: банк ушёл ${opponentName ?? 'сопернику'}`
           : `Твой шанс ${Math.round(share * 100)} процентов`
       }
     >
@@ -104,6 +107,18 @@ export function ChanceBar({
             scaleY: { duration: 2.6, repeat: phase === 'idle' ? Infinity : 0, ease: 'easeInOut' },
           }}
         />
+        {settled && (
+          // Победа заливает полосу целиком, поражение осушает её в ноль — и без
+          // подписи пустая рамка читалась как сломавшийся элемент, а не как
+          // «банк ушёл». Исход называется прямо внутри полосы.
+          <div className={`chance-bar-verdict${phase === 'lost' ? ' is-lost' : ''}`}>
+            {phase === 'won'
+              ? 'БАНК ТВОЙ'
+              : opponentName
+                ? `БАНК ЗАБРАЛ ${opponentName}`
+                : 'БАНК УШЁЛ СОПЕРНИКУ'}
+          </div>
+        )}
       </motion.div>
 
       {phase === 'live' && seconds !== null && (

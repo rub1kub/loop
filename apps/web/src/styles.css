@@ -3619,3 +3619,59 @@ details[open] > summary .disclosure-indicator svg {
   color: var(--text, #fff);
   font-size: 12px;
 }
+
+/* The settled bar says what happened to the pool instead of standing empty. */
+.chance-bar-verdict {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  inset: 0;
+  pointer-events: none;
+}
+
+.chance-bar-verdict.is-lost {
+  color: #9a9a9a;
+}
+
+/* A duel is a person against a person; the strip puts two faces on the bar. */
+.duel-versus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.duel-versus > i {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.duel-face {
+  display: grid;
+  overflow: hidden;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #1c1c1c;
+  color: #cfcfcf;
+  font-size: 13px;
+  place-items: center;
+}
+
+.duel-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

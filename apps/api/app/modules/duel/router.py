@@ -1,6 +1,7 @@
 import secrets
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from aiogram.exceptions import TelegramAPIError
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import or_, select, update
@@ -8,7 +9,7 @@ from sqlalchemy.orm import aliased
 
 from ...control_state import effective_contract_fee, ensure_mode_enabled
 from ...dependencies import Config, CurrentUser, Db, require_full_access
-from ...models import Wallet
+from ...models import User, Wallet
 from ...referrals import get_or_create_referral_code
 from ...result_cards import build_duel_invite_inline
 from ...schemas import (
@@ -17,6 +18,7 @@ from ...schemas import (
     DuelBoostIntent,
     DuelBoostRequest,
     DuelBoostView,
+    DuelChallengePreviewView,
     DuelView,
     OfferQuoteRequest,
     OfferQuoteResponse,
@@ -422,6 +424,15 @@ async def list_duels(user: CurrentUser, db: Db, settings: Config) -> list[DuelVi
             .limit(50)
         )
     ).all()
+    opponent_ids = {
+        (second if first.user_id == user.id else first).user_id
+        for _, first, second in rows
+        if (second if first.user_id == user.id else first).user_id is not None
+    }
+    opponents: dict[str, User] = {}
+    if opponent_ids:
+        found = (await db.scalars(select(User).where(User.id.in_(opponent_ids)))).all()
+        opponents = {person.id: person for person in found}
     duel_ids = [duel.id for duel, _, _ in rows]
     boosts = (
         (
@@ -440,6 +451,8 @@ async def list_duels(user: CurrentUser, db: Db, settings: Config) -> list[DuelVi
     result: list[DuelView] = []
     for duel, first, second in rows:
         own_offer = first if first.user_id == user.id else second
+        other_offer = second if own_offer is first else first
+        opponent = opponents.get(other_offer.user_id) if other_offer.user_id else None
         boost_views = []
         for boost in boosts_by_duel.get(duel.id, []):
             boost_is_first = boost.offer_id == first.id
@@ -472,6 +485,9 @@ async def list_duels(user: CurrentUser, db: Db, settings: Config) -> list[DuelVi
                 boost_revision=duel.boost_revision,
                 reveal_deadline=duel.reveal_deadline,
                 boost_events=boost_views,
+                opponent_first_name=opponent.first_name if opponent else None,
+                opponent_username=opponent.username if opponent else None,
+                opponent_has_photo=bool(opponent and opponent.photo_url),
                 winner_wallet=duel.winner_wallet,
                 settled_tx_hash=duel.settled_tx_hash,
                 settlement_proof_url=(
@@ -683,6 +699,37 @@ async def expire_duel_intent(
         duel_id=duel.onchain_duel_id,
     )
 
+@router.get("/offers/{offer_id}/preview", response_model=DuelChallengePreviewView)
+async def duel_offer_preview(
+    offer_id: int,
+    user: CurrentUser,
+    db: Db,
+    settings: Config,
+) -> DuelChallengePreviewView:
+    del user  # any signed-in person may look at a challenge they were sent
+    offer = await db.scalar(
+        select(DuelOffer).where(
+            DuelOffer.onchain_offer_id == offer_id,
+            DuelOffer.network == settings.ton_network_id,
+        )
+    )
+    if offer is None or offer.user_id is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вызов не найден")
+    creator = await db.get(User, offer.user_id)
+    if creator is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вызов не найден")
+    still_open = (
+        offer.state == OfferState.OPEN.value and as_utc(offer.expires_at) > datetime.now(UTC)
+    )
+    return DuelChallengePreviewView(
+        creator_first_name=creator.first_name,
+        creator_username=creator.username,
+        stake_nano=offer.opponent_stake_nano,
+        receiver_chance_bps=10_000 - offer.chance_bps,
+        open=still_open,
+    )
+
+
 @router.post("/offers/{offer_id}/share", response_model=PreparedResultShareView)
 async def prepare_duel_share(
     offer_id: int,
@@ -714,7 +761,10 @@ async def prepare_duel_share(
     if bot is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Telegram сейчас недоступен")
 
-    intent = "duel"
+    # The card's button says "принять вызов", so the link has to land the
+    # reader on that exact challenge — not on a bare search screen where the
+    # promise quietly evaporates.
+    intent = f"duel_o{offer.onchain_offer_id}"
     if offer.mode == "direct":
         challenge = await db.scalar(
             select(DuelInvitation).where(DuelInvitation.creator_offer_id == offer.id)
@@ -763,3 +813,53 @@ async def prepare_duel_share(
         expiration_date=expiration,
         fallback_query=f"duel {offer.onchain_offer_id}",
     )
+
+@router.get(
+    "/{duel_id}/opponent-avatar",
+    response_class=Response,
+    include_in_schema=False,
+)
+async def opponent_avatar(
+    duel_id: int,
+    user: CurrentUser,
+    db: Db,
+    settings: Config,
+    request: Request,
+) -> Response:
+    """The other player's Telegram avatar, for one's own duel only.
+
+    A duel is a person against a person, and a face makes that true on the
+    screen. Proxied exactly like one's own avatar — same trusted hosts, same
+    size ceiling — and reachable only by a participant of this duel, so it
+    leaks nothing an opponent has not already shown by fighting you.
+    """
+    duel, own_offer = await owned_offer_for_duel(db, duel_id, user.id, settings.ton_network_id)
+    other_id = duel.offer_b_id if own_offer.id == duel.offer_a_id else duel.offer_a_id
+    other_offer = await db.get(DuelOffer, other_id)
+    opponent = (
+        await db.get(User, other_offer.user_id)
+        if other_offer and other_offer.user_id
+        else None
+    )
+    from ...routes import is_telegram_photo_url
+
+    if opponent is None or not opponent.photo_url or not is_telegram_photo_url(opponent.photo_url):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "avatar unavailable")
+    try:
+        upstream = await request.app.state.http.get(opponent.photo_url, follow_redirects=True)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "avatar unavailable") from exc
+    media_type = upstream.headers.get("content-type", "").split(";", 1)[0].lower()
+    if (
+        upstream.status_code != status.HTTP_200_OK
+        or not is_telegram_photo_url(str(upstream.url))
+        or media_type not in {"image/jpeg", "image/png", "image/webp"}
+        or len(upstream.content) > 1_000_000
+    ):
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "avatar unavailable")
+    return Response(
+        content=upstream.content,
+        media_type=media_type,
+        headers={"Cache-Control": "private, max-age=300"},
+    )
+

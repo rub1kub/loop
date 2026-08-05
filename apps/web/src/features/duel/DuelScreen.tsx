@@ -32,7 +32,7 @@ import {
   newSecret,
   parseGram,
 } from '../../ton';
-import type { Duel, Invite, Offer, Profile } from '../../types';
+import type { ChallengePreview, Duel, Invite, Offer, Profile } from '../../types';
 
 import { requireLinkedWallet, sameAddress } from '../../address';
 
@@ -134,6 +134,7 @@ export function DuelScreen({
   offers,
   duels,
   invite,
+  challengeOfferId = null,
   onDeclineInvite,
   onRefresh,
 }: {
@@ -141,6 +142,8 @@ export function DuelScreen({
   offers: Offer[];
   duels: Duel[];
   invite: Invite | null;
+  /** The AFK challenge a shared card brought this person to answer. */
+  challengeOfferId?: number | null;
   onDeclineInvite?: () => void;
   onRefresh: () => Promise<void>;
 }) {
@@ -153,6 +156,7 @@ export function DuelScreen({
   const maxStake = profile.duel_stake.max_stake_nano;
   const stakeFixed = minStake === maxStake;
   const [stake, setStake] = useState(() => formatGram(invite ? invite.stake_nano : minStake, 3));
+  const [challenge, setChallenge] = useState<ChallengePreview | null>(null);
   const [boostAmount, setBoostAmount] = useState('0.5');
   const chance = invite?.chance_bps ?? DEFAULT_CHANCE_BPS;
   const [mode, setMode] = useState<'afk' | 'direct'>(invite ? 'direct' : 'afk');
@@ -402,6 +406,53 @@ export function DuelScreen({
       ? latestDuel.payout_nano - latestDuel.stake_nano
       : latestDuel.stake_nano
     : 0;
+
+  const [faces, setFaces] = useState<{ mine: string | null; theirs: string | null }>({
+    mine: null,
+    theirs: null,
+  });
+  const versusDuelId = activeDuel?.onchain_duel_id ?? null;
+  useEffect(() => {
+    if (isMockTelegram() || versusDuelId === null) return;
+    let alive = true;
+    const created: string[] = [];
+    void Promise.all([api.meAvatar().catch(() => null), api.opponentAvatar(versusDuelId)]).then(
+      ([mine, theirs]) => {
+        if (!alive) return;
+        const mineUrl = mine ? URL.createObjectURL(mine) : null;
+        const theirsUrl = theirs ? URL.createObjectURL(theirs) : null;
+        if (mineUrl) created.push(mineUrl);
+        if (theirsUrl) created.push(theirsUrl);
+        setFaces({ mine: mineUrl, theirs: theirsUrl });
+      },
+    );
+    return () => {
+      alive = false;
+      created.forEach((url) => URL.revokeObjectURL(url));
+      setFaces({ mine: null, theirs: null });
+    };
+  }, [versusDuelId]);
+
+  useEffect(() => {
+    // The shared card promised "принять вызов". Landing on a bare search
+    // screen breaks that promise, so the exact challenge is fetched and put
+    // in front of the person: whose call it is, what it asks, whether it is
+    // still standing. A taken challenge says so instead of pretending.
+    if (!challengeOfferId || isMockTelegram()) return;
+    let alive = true;
+    void api
+      .duelChallengePreview(challengeOfferId)
+      .then((preview) => {
+        if (!alive) return;
+        setChallenge(preview);
+        if (preview.open) setStake(formatGram(preview.stake_nano, 3));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challengeOfferId]);
 
   const start = useCallback(
     async (selectedMode: 'afk' | 'direct') => {
@@ -782,6 +833,12 @@ export function DuelScreen({
   // cap the contract will not extend past however many boosts arrive.
   // Four digits everywhere: at three a 0,01 stake rounded the payout up to the
   // bank and the card claimed the fee was both taken and not taken.
+  const identifiedDuel = activeDuel ?? latestDuel;
+  const opponentName = identifiedDuel
+    ? identifiedDuel.opponent_username
+      ? `@${identifiedDuel.opponent_username}`
+      : identifiedDuel.opponent_first_name
+    : null;
   const shownPool = activeDuel?.total_pool_nano ?? activeOffer?.total_pool_nano ?? terms.totalPool;
   const shownPayout = activeDuel?.payout_nano ?? activeOffer?.payout_nano ?? payoutNano;
   const shownFee = Math.max(0, shownPool - shownPayout);
@@ -826,6 +883,7 @@ export function DuelScreen({
       <ChanceBar
         mine={chanceShare}
         phase={chancePhase}
+        opponentName={opponentName}
         remainingMs={chanceWindowMs}
         drain={chanceDrain}
         caption={
@@ -850,6 +908,25 @@ export function DuelScreen({
 
       {status === 'idle' && !duelClosed && (
         <div className="duel-form">
+          {!invite && challenge && (
+            <div className="invite-banner">
+              <p className="eyebrow">
+                ТЕБЯ ВЫЗЫВАЕТ{' '}
+                {(challenge.creator_username
+                  ? `@${challenge.creator_username}`
+                  : challenge.creator_first_name
+                ).toUpperCase()}
+              </p>
+              {challenge.open ? (
+                <>
+                  <strong>{formatGram(challenge.stake_nano, 3)} GRAM</strong>
+                  <span>ТВОЯ СТАВКА · ШАНС {challenge.receiver_chance_bps / 100}%</span>
+                </>
+              ) : (
+                <span>Этот вызов уже занят или истёк. Открой свой — условия те же.</span>
+              )}
+            </div>
+          )}
           {invite ? (
             <div className="invite-banner">
               <p className="eyebrow">
@@ -892,6 +969,27 @@ export function DuelScreen({
 
       {(status === 'searching' || status === 'matched') && (
         <div className="duel-live-state">
+          {status === 'matched' && activeDuel && (
+            <div className="duel-versus">
+              <span className="duel-face">
+                {faces.mine ? (
+                  <img src={faces.mine} alt="" />
+                ) : (
+                  profile.user.first_name.slice(0, 1).toUpperCase()
+                )}
+              </span>
+              <b>ТЫ</b>
+              <i aria-hidden="true">против</i>
+              <b>{opponentName ?? 'СОПЕРНИК'}</b>
+              <span className="duel-face">
+                {faces.theirs ? (
+                  <img src={faces.theirs} alt="" />
+                ) : (
+                  (activeDuel.opponent_first_name ?? '?').slice(0, 1).toUpperCase()
+                )}
+              </span>
+            </div>
+          )}
           {status === 'searching' && (
             <div className="duel-live-focus">
               <strong>{`${formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM`}</strong>
@@ -1127,7 +1225,11 @@ export function DuelScreen({
               disabled={busy}
               onClick={() => void start(invite ? 'direct' : 'afk')}
             >
-              {busy ? 'ГОТОВИМ…' : invite ? 'ПРИНЯТЬ ВЫЗОВ' : 'НАЙТИ СОПЕРНИКА'}
+              {busy
+                ? 'ГОТОВИМ…'
+                : invite || (challenge?.open ?? false)
+                  ? 'ПРИНЯТЬ ВЫЗОВ'
+                  : 'НАЙТИ СОПЕРНИКА'}
             </button>
             {invite && (
               <button

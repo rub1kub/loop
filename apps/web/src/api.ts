@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { telegramInitData } from './telegram';
 import type {
   ActionIntent,
+  ChallengePreview,
   BankPosition,
   BankPreview,
   BankQuote,
@@ -229,18 +230,18 @@ async function request<T>(path: string, init?: RequestInit, retryUnauthorized = 
   return (await response.json()) as T;
 }
 
-async function requestAvatar(retryUnauthorized = true): Promise<Blob | null> {
+async function requestAvatar(path = '/me/avatar', retryUnauthorized = true): Promise<Blob | null> {
   const headers = new Headers({ Accept: 'image/*' });
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/me/avatar`, { headers });
+    response = await fetch(`${API_BASE}${path}`, { headers });
   } catch (error) {
     throw new Error('Не удалось загрузить аватар.', { cause: error });
   }
   if (response.status === 401 && retryUnauthorized) {
     accessToken = null;
-    if (await restoreSession()) return requestAvatar(false);
+    if (await restoreSession()) return requestAvatar(path, false);
   }
   if (response.status === 404) return null;
   if (!response.ok || !response.headers.get('Content-Type')?.startsWith('image/')) {
@@ -272,6 +273,15 @@ export const api = {
 
   async meAvatar(): Promise<Blob | null> {
     return await requestAvatar();
+  },
+
+  async opponentAvatar(duelId: number): Promise<Blob | null> {
+    try {
+      return await requestAvatar(`/duels/${duelId}/opponent-avatar`);
+    } catch {
+      // A face is a nicety: a proxy hiccup must not mark the whole duel failed.
+      return null;
+    }
   },
 
   async updateSettings(input: {
@@ -377,6 +387,10 @@ export const api = {
 
   async duels(): Promise<Duel[]> {
     return await request('/duels');
+  },
+
+  async duelChallengePreview(offerId: number): Promise<ChallengePreview> {
+    return await request(`/duels/offers/${offerId}/preview`);
   },
 
   async revealIntent(duelId: number): Promise<ActionIntent> {

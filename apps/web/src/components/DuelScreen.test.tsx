@@ -30,6 +30,17 @@ const apiMocks = vi.hoisted(() => ({
   discardOffer: vi.fn(() => Promise.resolve(undefined)),
   expireOfferIntent: vi.fn(),
   quoteOffer: vi.fn(),
+  duelChallengePreview: vi.fn(() =>
+    Promise.resolve({
+      creator_first_name: 'Иван',
+      creator_username: 'ivan_loop',
+      stake_nano: 1_000_000_000,
+      receiver_chance_bps: 5000,
+      open: true,
+    }),
+  ),
+  meAvatar: vi.fn(() => Promise.resolve(null)),
+  opponentAvatar: vi.fn(() => Promise.resolve(null)),
   prepareDuelShare: vi.fn(() =>
     Promise.resolve({
       prepared_message_id: 'prepared-811',
@@ -110,6 +121,9 @@ const settledDuel = (overrides: Partial<Duel>): Duel => ({
   reveal_deadline: '2026-07-01T00:00:00.000Z',
   boost_events: [],
   winner_wallet: null,
+  opponent_first_name: null,
+  opponent_username: null,
+  opponent_has_photo: false,
   settled_tx_hash: 'settled',
   settlement_proof_url: null,
   ...overrides,
@@ -152,6 +166,9 @@ const liveDuel = (overrides: Partial<Duel> = {}): Duel => ({
   reveal_deadline: new Date(Date.now() + 360_000).toISOString(),
   boost_events: [],
   winner_wallet: null,
+  opponent_first_name: null,
+  opponent_username: null,
+  opponent_has_photo: false,
   settled_tx_hash: null,
   settlement_proof_url: null,
   ...overrides,
@@ -544,6 +561,9 @@ describe('DuelScreen', () => {
       reveal_deadline: new Date(Date.now() + 360_000).toISOString(),
       boost_events: [],
       winner_wallet: null,
+      opponent_first_name: null,
+      opponent_username: null,
+      opponent_has_photo: false,
       settled_tx_hash: null,
       settlement_proof_url: null,
     };
@@ -845,5 +865,40 @@ describe('DuelScreen', () => {
     await waitFor(() => expect(screen.getByText(/DUEL сейчас закрыт/)).toBeVisible());
     expect(screen.queryByRole('button', { name: 'НАЙТИ СОПЕРНИКА' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
+  });
+
+  it('names the loss inside the drained bar instead of leaving a void', () => {
+    // The lost bar drains to zero on purpose — the pool left. Without words the
+    // empty frame read as a broken element, and a tester reported it as one.
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[settledDuel({ winner_wallet: '0:bbb', opponent_username: 'vasya' })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('БАНК ЗАБРАЛ @vasya')).toBeVisible();
+  });
+
+  it('puts the shared challenge in front of the person who tapped it', async () => {
+    // The card said "принять вызов"; landing on a bare search screen breaks
+    // that promise three taps deep.
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[]}
+        duels={[]}
+        invite={null}
+        challengeOfferId={811}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText(/ТЕБЯ ВЫЗЫВАЕТ @IVAN_LOOP/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'ПРИНЯТЬ ВЫЗОВ' })).toBeEnabled();
+    expect(apiMocks.duelChallengePreview).toHaveBeenCalledWith(811);
   });
 });

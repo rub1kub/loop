@@ -177,6 +177,9 @@ const demoDuel: Duel = {
         ]
       : [],
   winner_wallet: mockScreen === 'duel-boost' ? null : demoProfile.wallet!.address,
+  opponent_first_name: null,
+  opponent_username: null,
+  opponent_has_photo: false,
   settled_tx_hash: mockScreen === 'duel-boost' ? null : 'demo-duel-settlement',
   settlement_proof_url:
     mockScreen === 'duel-boost'
@@ -322,6 +325,8 @@ interface LoopState {
   offers: Offer[];
   duels: Duel[];
   invite: Invite | null;
+  /** The AFK challenge a shared card brought this person to answer. */
+  challengeOfferId: number | null;
   rating: Rating | null;
   results: ResultCard[];
   error: string | null;
@@ -351,6 +356,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   offers: [],
   duels: [],
   invite: null,
+  challengeOfferId: null,
   rating: null,
   results: [],
   error: null,
@@ -435,14 +441,23 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         api.results(),
       ]);
       let invite: Invite | null = null;
+      let challengeOfferId: number | null = null;
       // A shared duel now carries the sharer's referral at the end, after
       // `-ref_`, so that bringing a friend into a duel finally counts. The
       // server reads that half; everything in front of it is the intention.
       const startParam = telegramStartParam()?.split('-ref_')[0] ?? null;
-      if (startParam?.startsWith('duel_')) invite = await api.invite(startParam.slice(5));
-      const opensDuel = startParam === 'duel' || Boolean(invite);
+      if (startParam?.startsWith('duel_o')) {
+        // The card said "принять вызов", so this person expects that exact
+        // challenge — not a bare search screen. Carry the offer through.
+        const parsed = Number(startParam.slice(6));
+        if (Number.isInteger(parsed) && parsed > 0) challengeOfferId = parsed;
+      } else if (startParam?.startsWith('duel_')) {
+        invite = await api.invite(startParam.slice(5));
+      }
+      const opensDuel = startParam === 'duel' || Boolean(invite) || challengeOfferId !== null;
       set({
         profile,
+        challengeOfferId,
         bankPosition,
         bankHistory,
         offers,

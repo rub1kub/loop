@@ -258,6 +258,7 @@ export default function App() {
         offers={state.offers}
         duels={state.duels}
         invite={state.invite}
+        challengeOfferId={state.challengeOfferId}
         onDeclineInvite={() => state.declineInvite()}
         onRefresh={() => state.refresh()}
       />

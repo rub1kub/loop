@@ -162,6 +162,14 @@ export interface Prelaunch {
   participants: number;
 }
 
+export interface ChallengePreview {
+  creator_first_name: string;
+  creator_username: string | null;
+  stake_nano: number;
+  receiver_chance_bps: number;
+  open: boolean;
+}
+
 export interface Announcement {
   text: string;
   url: string | null;
@@ -309,6 +317,10 @@ export interface Duel {
   boost_revision: number;
   reveal_deadline: string;
   boost_events: DuelBoost[];
+  /** A duel is a person against a person; the other person has a name. */
+  opponent_first_name: string | null;
+  opponent_username: string | null;
+  opponent_has_photo: boolean;
   winner_wallet: string | null;
   settled_tx_hash: string | null;
   settlement_proof_url: string | null;

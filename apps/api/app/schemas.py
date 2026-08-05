@@ -320,9 +320,29 @@ class DuelView(BaseModel):
     boost_revision: int
     reveal_deadline: datetime
     boost_events: list[DuelBoostView]
+    # A duel is a person against a person, and the screen showed two nameless
+    # halves of a bar. The opponent has a name; avatars ride a separate proxy.
+    opponent_first_name: str | None = None
+    opponent_username: str | None = None
+    opponent_has_photo: bool = False
     winner_wallet: str | None
     settled_tx_hash: str | None
     settlement_proof_url: str | None
+
+
+class DuelChallengePreviewView(BaseModel):
+    """What a shared challenge asks of the person who tapped it.
+
+    Written from the receiver's side, like the card that brought them here:
+    their stake, their odds, and who is calling them out. `open` is honest
+    about a challenge somebody else already answered.
+    """
+
+    creator_first_name: str
+    creator_username: str | None
+    stake_nano: int
+    receiver_chance_bps: int
+    open: bool
 
 
 class DuelBoostRequest(BaseModel):
