@@ -45,6 +45,7 @@ from .modules.duel.models import (
     MatchmakingOffer,
     OfferState,
 )
+from .public_feed import enqueue_public_feed
 from .result_cards import create_entry_card, create_result_card
 from .ton import (
     TonClient,
@@ -625,6 +626,17 @@ async def apply_bank_transaction(
                 contributed_nano=earlier.principal_nano,
                 tx_hash=tx_hash,
             )
+            await enqueue_public_feed(
+                db,
+                settings,
+                user_id=earlier.user_id,
+                event_kind="bank_payout",
+                event_key=f"bank_payout:{earlier.network}:{earlier.id}:{tx_hash}",
+                amount_nano=earlier.target_payout_nano,
+                result_nano=earlier.target_payout_nano - earlier.principal_nano,
+                network=earlier.network,
+                tx_hash=tx_hash,
+            )
             await qualify_referral(
                 db,
                 user_id=earlier.user_id,
@@ -676,6 +688,17 @@ async def apply_bank_transaction(
         network=position.network,
         contributed_nano=position.principal_nano,
         queue_position=int(ahead or 0) + 1,
+        tx_hash=tx_hash,
+    )
+    await enqueue_public_feed(
+        db,
+        settings,
+        user_id=position.user_id,
+        event_kind="bank_entry",
+        event_key=f"bank_entry:{position.network}:{position.id}:{tx_hash}",
+        amount_nano=position.principal_nano,
+        queue_position=int(ahead or 0) + 1,
+        network=position.network,
         tx_hash=tx_hash,
     )
     event = BankChainEvent(
@@ -974,6 +997,16 @@ async def apply_duel_transaction(
                     tx_hash=tx_hash,
                 )
             )
+        await enqueue_public_feed(
+            db,
+            settings,
+            user_id=offer.user_id,
+            event_kind="duel_entry",
+            event_key=f"duel_entry:{offer.network}:{offer.id}:{tx_hash}",
+            amount_nano=offer.stake_nano,
+            network=offer.network,
+            tx_hash=tx_hash,
+        )
         if opcode == DUEL_ACCEPT_DIRECT_OFFER:
             counter = await db.scalar(
                 select(MatchmakingOffer).where(
@@ -1260,6 +1293,17 @@ async def apply_duel_transaction(
             network=winner.network,
             payout_nano=winner.payout_nano,
             contributed_nano=winner.stake_nano,
+            tx_hash=tx_hash,
+        )
+        await enqueue_public_feed(
+            db,
+            settings,
+            user_id=winner.user_id,
+            event_kind="duel_payout",
+            event_key=f"duel_payout:{winner.network}:{duel.id}:{tx_hash}",
+            amount_nano=winner.payout_nano,
+            result_nano=winner.payout_nano - winner.stake_nano,
+            network=winner.network,
             tx_hash=tx_hash,
         )
         for player in (first, second):

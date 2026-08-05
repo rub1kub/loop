@@ -212,7 +212,7 @@ def test_decodes_independent_bank_and_duel_layouts() -> None:
 
 @pytest.mark.asyncio
 async def test_bank_projection_is_fifo_proof_bound_and_idempotent(app) -> None:
-    settings = get_settings()
+    settings = get_settings().model_copy(update={"public_feed_chat_id": -1003933253277})
     async with app.state.session_factory() as db:
         older_user = User(telegram_id=1001, first_name="Older")
         newer_user = User(telegram_id=1002, first_name="Newer")
@@ -297,9 +297,20 @@ async def test_bank_projection_is_fifo_proof_bound_and_idempotent(app) -> None:
         assert entry.payout_nano == 0
         assert entry.result_nano == 0
         assert entry.queue_position is not None
-        assert await db.scalar(select(func.count()).select_from(NotificationOutbox)) == 1
+        assert await db.scalar(select(func.count()).select_from(NotificationOutbox)) == 3
+        public_events = (
+            await db.scalars(
+                select(NotificationOutbox).where(NotificationOutbox.kind == "public_feed")
+            )
+        ).all()
+        assert len(public_events) == 2
+        assert {item.dedupe_key.split(":")[1] for item in public_events} == {
+            "bank_entry",
+            "bank_payout",
+        }
         assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.IGNORED
         assert await db.scalar(select(func.count()).select_from(ResultCard)) == 2
+        assert await db.scalar(select(func.count()).select_from(NotificationOutbox)) == 3
 
 
 @pytest.mark.asyncio
@@ -427,7 +438,7 @@ async def test_duel_projection_tracks_permissionless_offer(app) -> None:
 
 @pytest.mark.asyncio
 async def test_duel_projection_validates_funding_and_terminal_payout(app) -> None:
-    settings = get_settings()
+    settings = get_settings().model_copy(update={"public_feed_chat_id": -1003933253277})
     expires = datetime.fromtimestamp(1_800_000_900, UTC)
     async with app.state.session_factory() as db:
         first_user = User(telegram_id=2001, first_name="First")
@@ -570,6 +581,16 @@ async def test_duel_projection_validates_funding_and_terminal_payout(app) -> Non
             )
             == 2
         )
+        public_events = (
+            await db.scalars(
+                select(NotificationOutbox).where(NotificationOutbox.kind == "public_feed")
+            )
+        ).all()
+        assert len(public_events) == 2
+        assert {item.dedupe_key.split(":")[1] for item in public_events} == {
+            "duel_entry",
+            "duel_payout",
+        }
 
 
 @pytest.mark.asyncio

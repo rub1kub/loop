@@ -29,6 +29,7 @@ from .metrics import (
 from .modules.bank.router import router as bank_router
 from .modules.duel.router import router as duel_router
 from .nonce_store import RedisChallengeStore
+from .public_feed_routes import router as public_feed_router
 from .result_routes import router as result_router
 from .routes import router
 from .schemas import DuelCanaryReport
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
     app.include_router(bank_router, prefix="/api/v1")
     app.include_router(duel_router, prefix="/api/v1")
     app.include_router(result_router)
+    app.include_router(public_feed_router)
 
     @app.middleware("http")
     async def protect_api(

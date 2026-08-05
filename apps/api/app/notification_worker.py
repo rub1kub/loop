@@ -29,6 +29,13 @@ from .duel_notifications import (
 )
 from .models import NotificationOutbox, ResultCard, User
 from .modules.duel.models import Duel, DuelState
+from .public_feed import (
+    KIND_PUBLIC_FEED,
+    public_feed_caption,
+    public_feed_card_url,
+    public_feed_facts,
+    public_feed_markup,
+)
 from .referrals import get_or_create_referral_code
 from .result_cards import (
     notification_markup,
@@ -269,6 +276,60 @@ async def deliver_match_alert(
         )
 
 
+async def deliver_public_feed(
+    bot: Bot,
+    session_factory: Any,
+    settings: Settings,
+    outbox: NotificationOutbox,
+    user: User | None,
+) -> None:
+    try:
+        payload = json.loads(outbox.payload_json)
+        facts = public_feed_facts(outbox, user)
+        proof_url = str(payload["proof_url"])
+        message = await bot.send_photo(
+            chat_id=settings.public_feed_chat_id,
+            photo=public_feed_card_url(settings, outbox.id),
+            caption=public_feed_caption(facts),
+            parse_mode="HTML",
+            show_caption_above_media=True,
+            reply_markup=public_feed_markup(settings, facts, proof_url),
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        await update_delivery(
+            session_factory, outbox.id, state="failed", error="public_payload_invalid"
+        )
+    except TelegramRetryAfter as exc:
+        await update_delivery(
+            session_factory,
+            outbox.id,
+            state="retry",
+            error="telegram_rate_limit",
+            retry_after=exc.retry_after,
+        )
+    except TelegramForbiddenError:
+        await update_delivery(
+            session_factory, outbox.id, state="blocked", error="telegram_forbidden"
+        )
+    except TelegramBadRequest:
+        await update_delivery(
+            session_factory, outbox.id, state="failed", error="telegram_bad_request"
+        )
+    except TelegramAPIError:
+        # Telegram offers no sendPhoto idempotency key. An uncertain retry could
+        # publish the same financial event twice and is therefore not attempted.
+        await update_delivery(
+            session_factory, outbox.id, state="failed", error="delivery_uncertain"
+        )
+    else:
+        await update_delivery(
+            session_factory,
+            outbox.id,
+            state="sent",
+            message_id=message.message_id,
+        )
+
+
 async def deliver_one(
     bot: Bot,
     session_factory: Any,
@@ -287,6 +348,9 @@ async def deliver_one(
         elif kind in (KIND_DUEL_REVEAL_SOON, KIND_REFERRAL_QUALIFIED):
             payload = json.loads(outbox.payload_json)
             plain_user = await db.get(User, outbox.user_id)
+        elif kind == KIND_PUBLIC_FEED:
+            public_outbox = outbox
+            public_user = await db.get(User, outbox.user_id)
         else:
             payload = None
             card = await db.get(ResultCard, outbox.result_card_id)
@@ -298,6 +362,11 @@ async def deliver_one(
     if kind in (KIND_DUEL_REVEAL_SOON, KIND_REFERRAL_QUALIFIED):
         await deliver_plain_alert(
             bot, session_factory, settings, outbox_id, kind, plain_user, payload
+        )
+        return
+    if kind == KIND_PUBLIC_FEED:
+        await deliver_public_feed(
+            bot, session_factory, settings, public_outbox, public_user
         )
         return
     if card is None or user is None:
