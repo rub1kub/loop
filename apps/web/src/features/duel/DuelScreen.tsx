@@ -1,4 +1,10 @@
-import { ArrowSquareOut, PaperPlaneTilt, ShieldCheck, WarningCircle } from '@phosphor-icons/react';
+import {
+  ArrowSquareOut,
+  PaperPlaneTilt,
+  ShieldCheck,
+  UsersThree,
+  WarningCircle,
+} from '@phosphor-icons/react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1113,11 +1119,24 @@ export function DuelScreen({
         )}
         {status === 'searching' && !offerExpired && (activeOffer || mockSearching) && (
           <button
-            className="primary-button"
+            className="profile-row duel-invite-card"
             disabled={!mockSearching && activeOffer?.state !== 'open'}
             onClick={inviteToTelegram}
           >
-            <PaperPlaneTilt aria-hidden="true" /> ПРИГЛАСИТЬ
+            <span className="row-icon">
+              <UsersThree aria-hidden="true" />
+            </span>
+            <div>
+              <b>Пригласить соперника</b>
+              <small>
+                {!mockSearching && activeOffer?.state !== 'open'
+                  ? 'Станет доступно через несколько секунд'
+                  : activeOffer?.mode === 'direct'
+                    ? 'Отправить прямой вызов'
+                    : 'Позвать друга в DUEL'}
+              </small>
+            </div>
+            <PaperPlaneTilt aria-hidden="true" />
           </button>
         )}
         {awaitingSignature && activeOffer && (

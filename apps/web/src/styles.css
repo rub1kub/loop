@@ -1829,6 +1829,10 @@ details[open] > summary .disclosure-indicator svg {
   opacity: 0.45;
 }
 
+.duel-invite-card:disabled {
+  cursor: default;
+}
+
 .profile-screen {
   padding-top: calc(var(--safe-top) + 34px);
 }

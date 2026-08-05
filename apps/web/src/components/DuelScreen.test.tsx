@@ -262,10 +262,10 @@ describe('DuelScreen', () => {
 
     await waitFor(() => expect(refreshCount).toBeGreaterThanOrEqual(2), { timeout: 3_500 });
     expect(screen.getByText('ИЩЕМ СОПЕРНИКА')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'ПРИГЛАСИТЬ' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Пригласить соперника/i })).toBeEnabled();
   });
 
-  it('shows where invitation will appear while the stake is reaching the contract', () => {
+  it('shows invitation as an action card while the stake reaches the contract', () => {
     const offer: Offer = {
       id: 'pending-offer',
       onchain_offer_id: 810,
@@ -294,7 +294,10 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'ПРИГЛАСИТЬ' })).toBeDisabled();
+    const pendingInvite = screen.getByRole('button', { name: /Пригласить соперника/i });
+    expect(pendingInvite).toHaveClass('profile-row', 'duel-invite-card');
+    expect(pendingInvite).toHaveTextContent('Станет доступно через несколько секунд');
+    expect(pendingInvite).toBeDisabled();
 
     rerender(
       <DuelScreen
@@ -306,7 +309,9 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'ПРИГЛАСИТЬ' })).toBeEnabled();
+    const readyInvite = screen.getByRole('button', { name: /Пригласить соперника/i });
+    expect(readyInvite).toHaveTextContent('Позвать друга в DUEL');
+    expect(readyInvite).toBeEnabled();
   });
 
   it('does not ask the wallet to return the same stake twice', async () => {
@@ -404,7 +409,7 @@ describe('DuelScreen', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'ПРИГЛАСИТЬ' }));
+    fireEvent.click(screen.getByRole('button', { name: /Пригласить соперника/i }));
 
     expect(openTelegramLink).toHaveBeenCalledOnce();
     const shareUrl = decodeURIComponent(openTelegramLink.mock.calls[0][0] as string);
