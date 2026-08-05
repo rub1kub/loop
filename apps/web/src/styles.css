@@ -3451,3 +3451,9 @@ details[open] > summary .disclosure-indicator svg {
   letter-spacing: -0.03em;
   animation: chance-urgent 1.4s ease-in-out infinite;
 }
+
+.duel-result-breakdown {
+  width: 100%;
+  margin: 16px 0 0;
+  text-align: left;
+}

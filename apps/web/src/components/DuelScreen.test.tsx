@@ -262,7 +262,7 @@ describe('DuelScreen', () => {
     expect(screen.getByRole('img', { name: 'Поражение: банк ушёл сопернику' })).toBeVisible();
     expect(screen.getByText('ПОРАЖЕНИЕ')).toBeVisible();
     expect(screen.getByText('−1 GRAM')).toBeVisible();
-    expect(screen.getByText(/Ставка 1 GRAM ушла сопернику/)).toBeVisible();
+    expect(screen.getByText('Ушло сопернику').nextElementSibling).toHaveTextContent('1 GRAM');
     expect(screen.queryByText(/1,95/)).not.toBeInTheDocument();
     expect(screen.queryByText('ЗАВЕРШЕНО')).not.toBeInTheDocument();
   });
@@ -281,7 +281,7 @@ describe('DuelScreen', () => {
     expect(screen.getByRole('img', { name: 'Победа: банк твой' })).toBeVisible();
     expect(screen.getByText('ПОБЕДА')).toBeVisible();
     expect(screen.getByText('+0,95 GRAM')).toBeVisible();
-    expect(screen.getByText(/В кошелёк пришло 1,95 GRAM/)).toBeVisible();
+    expect(screen.getByText('Пришло в кошелёк').nextElementSibling).toHaveTextContent('1,95 GRAM');
   });
 
   it('lets a settled result be closed so another duel can be opened', () => {
@@ -296,7 +296,7 @@ describe('DuelScreen', () => {
     );
 
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'ЗАКРЫТЬ' }));
+    fireEvent.click(screen.getByRole('button', { name: /ИГРАТЬ ЕЩЁ|ПОПРОБОВАТЬ СНОВА/ }));
 
     expect(screen.queryByText('ПОРАЖЕНИЕ')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Ставка в GRAM')).toBeVisible();
@@ -315,7 +315,9 @@ describe('DuelScreen', () => {
       />,
     );
 
-    const afterLoss = screen.getByRole('button', { name: 'ЗАКРЫТЬ' }).parentElement!;
+    const afterLoss = screen.getByRole('button', {
+      name: /ИГРАТЬ ЕЩЁ|ПОПРОБОВАТЬ СНОВА/,
+    }).parentElement!;
     expect(afterLoss.firstElementChild).toHaveTextContent('ПОСМОТРЕТЬ ОПЕРАЦИЮ');
     unmount();
 
@@ -329,8 +331,11 @@ describe('DuelScreen', () => {
       />,
     );
 
-    const afterWin = screen.getByRole('button', { name: 'ЗАКРЫТЬ' }).parentElement!;
-    expect(afterWin.firstElementChild).toHaveTextContent('ЗАКРЫТЬ');
+    const afterWin = screen.getByRole('button', {
+      name: /ИГРАТЬ ЕЩЁ|ПОПРОБОВАТЬ СНОВА/,
+    }).parentElement!;
+    // After a win the way onward comes first; the proof stays available below it.
+    expect(afterWin.firstElementChild).toHaveTextContent('ИГРАТЬ ЕЩЁ');
   });
 
   it('resets the stake to the minimum after a loss instead of reloading it', () => {
@@ -344,7 +349,7 @@ describe('DuelScreen', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'ЗАКРЫТЬ' }));
+    fireEvent.click(screen.getByRole('button', { name: /ИГРАТЬ ЕЩЁ|ПОПРОБОВАТЬ СНОВА/ }));
 
     expect(screen.getByLabelText('Ставка в GRAM')).toHaveValue('0,5');
   });

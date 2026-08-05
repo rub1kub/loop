@@ -202,6 +202,7 @@ export default function App() {
         offers={state.offers}
         duels={state.duels}
         invite={state.invite}
+        onDeclineInvite={() => state.declineInvite()}
         onRefresh={() => state.refresh()}
       />
     ),

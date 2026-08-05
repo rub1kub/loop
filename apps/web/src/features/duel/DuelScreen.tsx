@@ -47,6 +47,12 @@ const MONEY_DIGITS = 4;
 // The contract refuses to push either side past ninety percent.
 const MAX_CHANCE_BPS = 9000;
 
+/** A fee stated as a rate, not just as an unexplained subtraction. */
+function feePercentOf(feeNano: number, poolNano: number): string {
+  if (poolNano <= 0) return '';
+  return `${((feeNano * 100) / poolNano).toFixed(1).replace('.', ',').replace(',0', '')}%`;
+}
+
 function canonicalTerms(requestedStake: number, chanceBps: number) {
   const quarterUnits = chanceBps / 2500;
   const poolUnit = Math.floor((requestedStake + quarterUnits - 1) / quarterUnits);
@@ -75,12 +81,14 @@ export function DuelScreen({
   offers,
   duels,
   invite,
+  onDeclineInvite,
   onRefresh,
 }: {
   profile: Profile;
   offers: Offer[];
   duels: Duel[];
   invite: Invite | null;
+  onDeclineInvite?: () => void;
   onRefresh: () => Promise<void>;
 }) {
   const wallet = useTonWallet();
@@ -809,11 +817,33 @@ export function DuelScreen({
         <div className="duel-result">
           <p className="eyebrow">{resultWon ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ'}</p>
           <strong>{`${resultWon ? '+' : '−'}${formatGram(resultDeltaNano, 3)} GRAM`}</strong>
-          <p className="duel-result-note">
-            {resultWon
-              ? `В кошелёк пришло ${formatGram(latestDuel.payout_nano, 3)} GRAM.`
-              : `Ставка ${formatGram(latestDuel.stake_nano, 3)} GRAM ушла сопернику.`}
-          </p>
+          <dl className="detail-list duel-result-breakdown">
+            <Term
+              label="Твоя ставка"
+              value={`${formatGram(latestDuel.stake_nano, MONEY_DIGITS)} GRAM`}
+            />
+            <Term
+              label="Общий банк"
+              value={`${formatGram(latestDuel.total_pool_nano, MONEY_DIGITS)} GRAM`}
+            />
+            <Term
+              label={`Комиссия ${feePercentOf(
+                latestDuel.total_pool_nano - latestDuel.payout_nano,
+                latestDuel.total_pool_nano,
+              )}`}
+              value={`−${formatGram(
+                Math.max(0, latestDuel.total_pool_nano - latestDuel.payout_nano),
+                MONEY_DIGITS,
+              )} GRAM`}
+            />
+            <Term
+              label={resultWon ? 'Пришло в кошелёк' : 'Ушло сопернику'}
+              value={`${formatGram(
+                resultWon ? latestDuel.payout_nano : latestDuel.stake_nano,
+                MONEY_DIGITS,
+              )} GRAM`}
+            />
+          </dl>
         </div>
       )}
 
@@ -860,7 +890,7 @@ export function DuelScreen({
                 haptic('selection');
               }}
             >
-              ЗАКРЫТЬ
+              {resultWon ? 'ИГРАТЬ ЕЩЁ' : 'ПОПРОБОВАТЬ СНОВА'}
             </button>
             {resultWon && latestDuel.settlement_proof_url && (
               <a
@@ -883,6 +913,18 @@ export function DuelScreen({
             >
               {busy ? 'ГОТОВИМ…' : invite ? 'ПРИНЯТЬ ВЫЗОВ' : 'НАЙТИ СОПЕРНИКА'}
             </button>
+            {invite && (
+              <button
+                className="duel-direct-action"
+                disabled={busy}
+                onClick={() => {
+                  haptic('selection');
+                  onDeclineInvite?.();
+                }}
+              >
+                НЕ СЕЙЧАС
+              </button>
+            )}
             {!invite && (
               <button
                 className="duel-direct-action"

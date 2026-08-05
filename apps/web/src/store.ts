@@ -314,6 +314,7 @@ interface LoopState {
   refreshRating(): Promise<void>;
   setTab(tab: Tab): void;
   setError(error: string | null): void;
+  declineInvite(): void;
   finishOnboarding(): Promise<void>;
   replayOnboarding(): void;
   setOnboardingEnabled(enabled: boolean): Promise<void>;
@@ -470,6 +471,13 @@ export const useLoopStore = create<LoopState>((set, get) => ({
 
   setTab(activeTab) {
     set({ activeTab });
+  },
+
+  declineInvite() {
+    // Nothing to tell the server: an invitation is a link, and refusing it only
+    // means this person is not taking it. The challenger's own offer stays as
+    // it was, open until they cancel it or it expires.
+    set({ invite: null });
   },
 
   setError(error) {
