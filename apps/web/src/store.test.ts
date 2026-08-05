@@ -14,10 +14,12 @@ const apiMocks = vi.hoisted(() => ({
   invite: vi.fn(),
 }));
 
+const telegramState = vi.hoisted(() => ({ startParam: null as string | null }));
+
 vi.mock('./api', () => ({ api: apiMocks, ApiError: class extends Error {} }));
 vi.mock('./telegram', () => ({
   telegramInitData: () => 'init-data',
-  telegramStartParam: () => null,
+  telegramStartParam: () => telegramState.startParam,
   isMockTelegram: () => false,
   haptic: vi.fn(),
   markDuelSeen: vi.fn(),
@@ -69,6 +71,7 @@ async function freshStore() {
 describe('bootstrap', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    telegramState.startParam = null;
     apiMocks.prelaunch.mockResolvedValue(prelaunch);
   });
 
@@ -109,5 +112,22 @@ describe('bootstrap', () => {
     await store.getState().bootstrap();
 
     expect(store.getState().showOnboarding).toBe(false);
+  });
+
+  it('opens DUEL directly from a shared search invitation', async () => {
+    telegramState.startParam = 'duel';
+    apiMocks.authenticate.mockResolvedValue({
+      profile: {
+        ...baseProfile,
+        app_open: true,
+        user: { ...baseProfile.user, onboarding_seen: true },
+      },
+      token: 't',
+    });
+    const store = await freshStore();
+    await store.getState().bootstrap();
+
+    expect(store.getState().activeTab).toBe('duel');
+    expect(apiMocks.invite).not.toHaveBeenCalled();
   });
 });

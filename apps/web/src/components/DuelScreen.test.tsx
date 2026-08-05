@@ -110,6 +110,7 @@ describe('DuelScreen', () => {
   afterEach(() => {
     cleanup();
     localStorage.clear();
+    window.Telegram = undefined;
   });
 
   beforeEach(() => {
@@ -261,6 +262,45 @@ describe('DuelScreen', () => {
     expect(screen.getByText('ИЩЕМ СОПЕРНИКА')).toBeVisible();
   });
 
+  it('shares an active search as an invitation to DUEL', () => {
+    const openTelegramLink = vi.fn();
+    window.Telegram = { WebApp: { openTelegramLink } } as unknown as typeof window.Telegram;
+    const offer: Offer = {
+      id: 'open-offer',
+      onchain_offer_id: 811,
+      chance_bps: 5_000,
+      total_pool_nano: 1_000_000_000,
+      stake_nano: 500_000_000,
+      opponent_stake_nano: 500_000_000,
+      fee_bps: 250,
+      fee_exempt: false,
+      payout_nano: 975_000_000,
+      net_profit_nano: 475_000_000,
+      mode: 'afk',
+      direct_opponent_wallet: null,
+      state: 'open',
+      expires_at: new Date(Date.now() + 900_000).toISOString(),
+      funding_tx_hash: 'funding',
+      funding_proof_url: 'https://tonviewer.com/transaction/funding',
+    };
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf(`0:${'11'.repeat(32)}`) }}
+        offers={[offer]}
+        duels={[]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'ПРИГЛАСИТЬ' }));
+
+    expect(openTelegramLink).toHaveBeenCalledOnce();
+    const shareUrl = decodeURIComponent(openTelegramLink.mock.calls[0][0] as string);
+    expect(shareUrl).toContain('https://t.me/getloopbot?startapp=duel');
+    expect(shareUrl).toContain('Ставка 0,5 GRAM. Сразимся?');
+  });
+
   it('presents one equal 50/50 rule without probability controls', () => {
     render(
       <DuelScreen profile={profile} offers={[]} duels={[]} invite={null} onRefresh={vi.fn()} />,
@@ -277,7 +317,7 @@ describe('DuelScreen', () => {
     expect(screen.getByText(/^Комиссия /)).not.toBeVisible();
     expect(screen.getByText(/Открыл только один — он и выигрывает/)).not.toBeVisible();
     expect(screen.queryByText(/Можно закрыть приложение/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ПРИГЛАСИТЬ СРАЗИТЬСЯ/ })).toBeInTheDocument();
     expect(screen.queryByText(/Одинаковая ставка/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /25%/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /75%/ })).not.toBeInTheDocument();

@@ -137,7 +137,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
       .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
   ).toBeGreaterThanOrEqual(12);
   await expect(page.locator('.duel-rules .disclosure-open-label')).toBeVisible();
-  await expect(page.getByRole('button', { name: /ВЫЗВАТЬ ДРУГА/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /ПРИГЛАСИТЬ СРАЗИТЬСЯ/ })).toBeVisible();
   const duelDisclosure = page.locator('.duel-rules summary');
   await duelDisclosure.focus();
   await expect(duelDisclosure).toHaveCSS('outline-color', 'rgb(245, 245, 247)');
@@ -147,6 +147,7 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
   await expect(page.getByText('2 GRAM')).toBeVisible();
   await page.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }).click();
   await expect(page.getByText('ИЩЕМ СОПЕРНИКА')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ПРИГЛАСИТЬ' })).toBeVisible();
   await expect(page.getByText('ПОИСК ИДЁТ')).toBeVisible();
   await expect(page.getByRole('button', { name: 'ОСТАНОВИТЬ ПОИСК' })).toBeVisible();
 

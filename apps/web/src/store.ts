@@ -419,6 +419,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
       let invite: Invite | null = null;
       const startParam = telegramStartParam();
       if (startParam?.startsWith('duel_')) invite = await api.invite(startParam.slice(5));
+      const opensDuel = startParam === 'duel' || Boolean(invite);
       set({
         profile,
         bankPosition,
@@ -429,7 +430,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         rating,
         results: hideDismissedResults(results),
         loading: false,
-        activeTab: invite ? 'duel' : 'bank',
+        activeTab: opensDuel ? 'duel' : 'bank',
         showOnboarding: profile.user.onboarding_enabled && !profile.user.onboarding_seen,
       });
     } catch (error) {

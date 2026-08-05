@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   ArrowSquareOut,
   PaperPlaneTilt,
   ShieldCheck,
@@ -552,17 +551,34 @@ export function DuelScreen({
   ]);
 
   function inviteToTelegram() {
-    if (!activeOffer || activeOffer.state !== 'open') {
+    if (mockSearching && !activeOffer) {
+      haptic('selection');
+      return;
+    }
+    if (!activeOffer || activeOffer.state !== 'open' || offerExpired) {
       failed('Сначала дождись, пока вызов появится в сети.');
       haptic('warning');
       return;
     }
     const app = telegram();
-    if (!app?.switchInlineQuery) {
+    if (activeOffer.mode === 'direct') {
+      if (!app?.switchInlineQuery) {
+        failed('Приглашение в Telegram доступно только внутри приложения.');
+        return;
+      }
+      app.switchInlineQuery(`duel ${activeOffer.onchain_offer_id}`, ['users', 'groups']);
+      haptic('light');
+      return;
+    }
+    if (!app?.openTelegramLink) {
       failed('Приглашение в Telegram доступно только внутри приложения.');
       return;
     }
-    app.switchInlineQuery(`duel ${activeOffer.onchain_offer_id}`, ['users', 'groups']);
+    const duelUrl = 'https://t.me/getloopbot?startapp=duel';
+    const text = `Я ищу соперника в LOOP DUEL. Ставка ${formatGram(activeOffer.stake_nano, 3)} GRAM. Сразимся?`;
+    app.openTelegramLink(
+      `https://t.me/share/url?url=${encodeURIComponent(duelUrl)}&text=${encodeURIComponent(text)}`,
+    );
     haptic('light');
   }
 
@@ -976,15 +992,16 @@ export function DuelScreen({
                 disabled={busy}
                 onClick={() => void start('direct')}
               >
-                <PaperPlaneTilt aria-hidden="true" /> ВЫЗВАТЬ ДРУГА
+                <PaperPlaneTilt aria-hidden="true" /> ПРИГЛАСИТЬ СРАЗИТЬСЯ
               </button>
             )}
           </>
         )}
-        {(activeOffer?.mode === 'direct' || (mockSearching && mode === 'direct')) &&
-          status === 'searching' && (
+        {status === 'searching' &&
+          !offerExpired &&
+          (activeOffer?.state === 'open' || mockSearching) && (
             <button className="primary-button" onClick={inviteToTelegram}>
-              ОТПРАВИТЬ ДРУГУ <ArrowRight aria-hidden="true" />
+              <PaperPlaneTilt aria-hidden="true" /> ПРИГЛАСИТЬ
             </button>
           )}
         {awaitingSignature && activeOffer && (
