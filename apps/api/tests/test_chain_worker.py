@@ -1267,3 +1267,93 @@ async def test_confirmed_referred_deposit_accrues_the_inviter_fee_share(app) -> 
             .where(ReferralReward.cause == f"fee_share:{position.id}")
         )
         assert total == 1
+
+
+class _Response:
+    def __init__(self, transactions: list[dict[str, object]]) -> None:
+        self._transactions = transactions
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, object]:
+        return {"transactions": self._transactions}
+
+
+class _Http:
+    def __init__(self, transactions: list[dict[str, object]]) -> None:
+        self._transactions = transactions
+
+    async def get(self, _url: str, **_kwargs: object) -> _Response:
+        return _Response(self._transactions)
+
+
+async def test_a_failing_transaction_keeps_the_work_already_done(app, monkeypatch) -> None:
+    # On launch night one deposit could not be written down, and the exception
+    # discarded the whole batch with it: the checkpoint never moved, so every
+    # following cycle replayed the same transactions and died in the same place.
+    # Confirmations stopped for everyone for an hour. What applied must survive,
+    # and the checkpoint must come to rest exactly at the transaction that hurt.
+    from app import chain_worker
+
+    settings = get_settings()
+    address = settings.bank_contract_address or "0:" + "ab" * 32
+    transactions = [
+        transaction(address, "0:" + "cd" * 32, lt, "", 1_000_000_000) for lt in (10, 20, 30, 40)
+    ]
+
+    seen: list[int] = []
+
+    async def flaky(_db, _settings, tx, _mode):
+        lt = int(tx["lt"])
+        seen.append(lt)
+        if lt == 30:
+            raise RuntimeError("this row cannot be written")
+        return ProjectionResult.APPLIED
+
+    monkeypatch.setattr(chain_worker, "apply_transaction", flaky)
+
+    with pytest.raises(chain_worker.ProjectionFailure) as raised:
+        await chain_worker.run_contract_once(
+            _Http(transactions),
+            app.state.session_factory,
+            settings,
+            mode="bank",
+            address=address,
+        )
+
+    # It stopped at the offending transaction rather than stepping over it: a
+    # later transaction may depend on an earlier one, so skipping would corrupt
+    # the projection more quietly than standing still.
+    assert seen == [10, 20, 30]
+    assert raised.value.tx_hash == "tx-30"
+    assert "tx-30" in str(raised.value)
+
+    key = f"bank:{settings.ton_network_id}:{address}"
+    async with app.state.session_factory() as db:
+        checkpoint = await db.get(chain_worker.ChainCheckpoint, key)
+        assert checkpoint is not None
+        # Past the two that applied, and no further.
+        assert checkpoint.last_lt == 21
+
+
+async def test_a_broken_bank_transaction_still_lets_duels_settle(app, monkeypatch) -> None:
+    # The two contracts share only this loop. BANK raised first and duels went
+    # unsettled for an hour for a reason that had nothing to do with duels.
+    from app import chain_worker
+
+    settings = get_settings()
+    attempted: list[str] = []
+
+    async def one_sided(_http, _factory, _settings, *, mode: str, address: str):
+        attempted.append(mode)
+        if mode == "bank":
+            raise chain_worker.ProjectionFailure("bank", "tx-7", RuntimeError("duplicate key"))
+        return 3, False
+
+    monkeypatch.setattr(chain_worker, "run_contract_once", one_sided)
+
+    with pytest.raises(chain_worker.ProjectionFailure):
+        await chain_worker.run_once(_Http([]), app.state.session_factory, settings)
+
+    assert attempted == ["bank", "duel"]

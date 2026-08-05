@@ -118,6 +118,22 @@ class ProjectionResult(enum.StrEnum):
     RETRY = "retry"
 
 
+class ProjectionFailure(Exception):
+    """One transaction the projection could not write down, and which one.
+
+    Raised after the cycle has committed everything that did apply, so the
+    checkpoint stands where the trouble starts. It carries the contract and the
+    transaction hash because a bare exception type is not enough to find the
+    row: on 2026-08-05 the log said only "IntegrityError" for an hour.
+    """
+
+    def __init__(self, mode: str, tx_hash: str, cause: Exception) -> None:
+        super().__init__(f"{mode} projection stopped at {tx_hash or 'unknown tx'}: {cause}")
+        self.mode = mode
+        self.tx_hash = tx_hash
+        self.cause = cause
+
+
 def has_masterchain_finality(transaction: dict[str, Any]) -> bool:
     try:
         return int(transaction.get("mc_block_seqno") or 0) > 0
@@ -1450,6 +1466,7 @@ async def run_contract_once(
     transactions = response.json().get("transactions", [])
     applied = 0
     blocked = False
+    failure: ProjectionFailure | None = None
     async with session_factory() as db:
         checkpoint = await db.get(ChainCheckpoint, key) or ChainCheckpoint(key=key, last_lt=0)
         db.add(checkpoint)
@@ -1459,9 +1476,16 @@ async def run_contract_once(
             savepoint = await db.begin_nested()
             try:
                 result = await apply_transaction(db, settings, transaction, mode)
-            except Exception:
+            except Exception as exc:
+                # Stop here rather than skip: a later transaction may depend on
+                # this one, and projecting it out of order would be a quieter,
+                # worse failure than standing still. What already applied is
+                # kept, so the next cycle resumes at this transaction instead
+                # of replaying — and dying on — the whole batch again.
                 await savepoint.rollback()
-                raise
+                failure = ProjectionFailure(mode, transaction.get("hash", ""), exc)
+                blocked = True
+                break
             if result == ProjectionResult.RETRY:
                 await savepoint.rollback()
                 blocked = True
@@ -1517,32 +1541,54 @@ async def run_contract_once(
             .values(state=ChallengeState.EXPIRED.value)
         )
         await db.commit()
+    if failure is not None:
+        raise failure
     return applied, blocked
 
 
 async def run_once(http: httpx.AsyncClient, session_factory: Any, settings: Any) -> int:
-    bank, bank_blocked = await run_contract_once(
-        http,
-        session_factory,
-        settings,
-        mode="bank",
-        address=settings.bank_contract_address,
-    )
-    duel, duel_blocked = await run_contract_once(
-        http,
-        session_factory,
-        settings,
-        mode="duel",
-        address=settings.effective_duel_contract_address,
-    )
-    if bank_blocked or duel_blocked:
+    # The two contracts share nothing but this loop, so one must not be able to
+    # stop the other. BANK ran first and raised, and for an hour on launch night
+    # no duel was settled either — for a reason that had nothing to do with
+    # duels. Each is attempted on its own; the trouble is reported afterwards.
+    applied = 0
+    blocked = False
+    trouble: list[Exception] = []
+    for mode, address in (
+        ("bank", settings.bank_contract_address),
+        ("duel", settings.effective_duel_contract_address),
+    ):
+        try:
+            count, contract_blocked = await run_contract_once(
+                http,
+                session_factory,
+                settings,
+                mode=mode,
+                address=address,
+            )
+        except Exception as exc:
+            logger.error(
+                "chain_projection_stopped",
+                mode=mode,
+                error=type(exc).__name__,
+                detail=str(exc),
+                tx_hash=getattr(exc, "tx_hash", None),
+                exc_info=exc,
+            )
+            trouble.append(exc)
+            continue
+        applied += count
+        blocked = blocked or contract_blocked
+    if trouble:
+        raise trouble[0]
+    if blocked:
         raise RuntimeError("chain projection is blocked on incomplete authoritative data")
     await asyncio.to_thread(
         HEARTBEAT_FILE.write_text,
         str(int(datetime.now(UTC).timestamp())),
         encoding="utf-8",
     )
-    return bank + duel
+    return applied
 
 
 async def attest_contracts(http: httpx.AsyncClient, settings: Any) -> None:
@@ -1575,7 +1621,14 @@ async def main() -> None:
                 await run_once(http, session_factory, settings)
                 retry_delay = 5
             except Exception as exc:
-                logger.error("chain_worker_failed", error=type(exc).__name__)
+                # The class name alone sent a whole outage to the Postgres log
+                # to be diagnosed. Say what happened and where.
+                logger.error(
+                    "chain_worker_failed",
+                    error=type(exc).__name__,
+                    detail=str(exc),
+                    exc_info=exc,
+                )
                 retry_delay = min(retry_delay * 2, 60)
             await asyncio.sleep(retry_delay)
     await engine.dispose()
