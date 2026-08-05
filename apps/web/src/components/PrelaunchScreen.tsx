@@ -58,9 +58,34 @@ export function PrelaunchScreen({ prelaunch }: { prelaunch: Prelaunch }) {
     return () => window.clearInterval(timer);
   }, []);
 
+  // The countdown runs on the device clock; the door is opened by the server's.
+  // A phone running a minute fast used to reach zero, reload, be told the app is
+  // still closed, and reload again — a loop, once a second, at the exact moment
+  // everyone is watching. So zero starts asking the server instead of reloading,
+  // and the page only reloads once the server actually says it is open.
+  const opening = target !== null && now >= target;
   useEffect(() => {
-    if (target !== null && now >= target) window.location.reload();
-  }, [now, target]);
+    if (!opening) return;
+    let alive = true;
+    let timer = 0;
+    const check = () => {
+      api
+        .me()
+        .then((profile) => {
+          if (!alive) return;
+          if (profile.app_open) window.location.reload();
+          else timer = window.setTimeout(check, 5000);
+        })
+        .catch(() => {
+          if (alive) timer = window.setTimeout(check, 5000);
+        });
+    };
+    check();
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [opening]);
 
   const left = target === null ? null : remainingUntil(target, now);
 
@@ -94,7 +119,8 @@ export function PrelaunchScreen({ prelaunch }: { prelaunch: Prelaunch }) {
       <section className="prelaunch-hero">
         <p className="eyebrow">ФИНАНСОВАЯ ПИРАМИДА</p>
         <h1 id="prelaunch-title">LOOP</h1>
-        {left && (
+        {opening && <p className="prelaunch-opening">ОТКРЫВАЕМ…</p>}
+        {left && !opening && (
           <div className="prelaunch-clock" role="timer" aria-live="off">
             <div>
               <strong>{left.days}</strong>

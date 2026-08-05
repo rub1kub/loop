@@ -11,9 +11,12 @@ vi.mock('../telegram', () => ({
   telegram: () => undefined,
 }));
 
-vi.mock('../api', () => ({
-  api: { prepareInviteShare: vi.fn() },
+const apiMocks = vi.hoisted(() => ({
+  me: vi.fn(() => Promise.resolve({ app_open: false })),
+  prepareInviteShare: vi.fn(),
 }));
+
+vi.mock('../api', () => ({ api: apiMocks }));
 
 const prelaunch: Prelaunch = {
   launch_at: '2026-08-05T16:30:00Z',
@@ -72,6 +75,27 @@ describe('PrelaunchScreen', () => {
     vi.advanceTimersByTime(1000);
     expect(seconds()).toContain('04');
     expect(reload).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('asks the server at zero instead of reloading on the phone clock', async () => {
+    // A device running fast used to reach zero, reload, be told the app is still
+    // closed, and reload again — a loop at the exact moment everyone is watching.
+    const reload = vi.fn();
+    vi.stubGlobal('location', { ...window.location, reload });
+    apiMocks.me.mockResolvedValue({ app_open: false });
+
+    vi.setSystemTime(new Date('2026-08-05T16:30:01Z'));
+    render(<PrelaunchScreen prelaunch={prelaunch} />);
+
+    expect(screen.getByText('ОТКРЫВАЕМ…')).toBeVisible();
+    await vi.waitFor(() => expect(apiMocks.me).toHaveBeenCalled());
+    expect(reload).not.toHaveBeenCalled();
+
+    // And it reloads exactly once, when the server itself says the door is open.
+    apiMocks.me.mockResolvedValue({ app_open: true });
+    await vi.advanceTimersByTimeAsync(5000);
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
     vi.unstubAllGlobals();
   });
 });

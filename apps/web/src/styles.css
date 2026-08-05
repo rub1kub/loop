@@ -3443,3 +3443,11 @@ details[open] > summary .disclosure-indicator svg {
 .bank-flow-summary {
   margin: 18px 0 4px;
 }
+
+.prelaunch-opening {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 730;
+  letter-spacing: -0.03em;
+  animation: chance-urgent 1.4s ease-in-out infinite;
+}
