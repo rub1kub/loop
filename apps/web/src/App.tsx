@@ -1,4 +1,8 @@
-import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
+import {
+  useIsConnectionRestored,
+  useTonConnectUI,
+  useTonWallet,
+} from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useRef } from 'react';
 
@@ -27,13 +31,16 @@ import {
 import { useLoopStore } from './store';
 import { installViewportBehavior } from './viewport';
 
-import { sameAddress } from './address';
+import { sameWalletConnection, WALLET_MISMATCH_MESSAGE } from './address';
 
 export default function App() {
   const state = useLoopStore();
   const wallet = useTonWallet();
+  const connectionRestored = useIsConnectionRestored();
   const [tonConnectUI] = useTonConnectUI();
   const proofConfigured = useRef(false);
+  const verificationInFlight = useRef<string | null>(null);
+  const staleSessionHandled = useRef<string | null>(null);
   const bootstrap = useCallback(() => useLoopStore.getState().bootstrap(), []);
   const setError = useCallback(
     (message: string | null) => useLoopStore.getState().setError(message),
@@ -79,13 +86,29 @@ export default function App() {
 
   useEffect(() => {
     if (
+      !connectionRestored ||
+      state.loading ||
+      !state.profile ||
       !wallet ||
       isMockTelegram() ||
-      sameAddress(state.profile?.wallet?.address, wallet.account.address)
-    )
+      sameWalletConnection(state.profile.wallet, wallet.account)
+    ) {
       return;
+    }
+    const sessionKey = `${wallet.account.chain}:${wallet.account.address}`;
     const proof = wallet.connectItems?.tonProof;
-    if (!proof || !('proof' in proof) || !wallet.account.publicKey) return;
+    if (!proof || !('proof' in proof) || !wallet.account.publicKey) {
+      // TON Connect restores its session from this browser's localStorage.
+      // A restored session has no fresh ton_proof and may point at a wallet
+      // that used to belong to this profile. It must never reach a money flow.
+      if (staleSessionHandled.current === sessionKey) return;
+      staleSessionHandled.current = sessionKey;
+      setError(WALLET_MISMATCH_MESSAGE);
+      void tonConnectUI.disconnect().catch(() => undefined);
+      return;
+    }
+    if (verificationInFlight.current === sessionKey) return;
+    verificationInFlight.current = sessionKey;
     void api
       .verifyWallet({
         address: wallet.account.address,
@@ -94,11 +117,22 @@ export default function App() {
         proof: proof.proof,
       })
       .then(() => refresh())
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         setError(humanError(error, 'Не удалось подтвердить кошелёк'));
-        void tonConnectUI.disconnect();
+        await tonConnectUI.disconnect().catch(() => undefined);
+      })
+      .finally(() => {
+        if (verificationInFlight.current === sessionKey) verificationInFlight.current = null;
       });
-  }, [refresh, setError, state.profile?.wallet?.address, tonConnectUI, wallet]);
+  }, [
+    connectionRestored,
+    refresh,
+    setError,
+    state.loading,
+    state.profile,
+    tonConnectUI,
+    wallet,
+  ]);
 
   useEffect(() => {
     const bankActive =

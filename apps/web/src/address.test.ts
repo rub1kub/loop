@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { friendlyAddress, rawAddress, sameAddress } from './address';
+import {
+  friendlyAddress,
+  rawAddress,
+  requireLinkedWallet,
+  sameAddress,
+  sameWalletConnection,
+  WALLET_MISMATCH_MESSAGE,
+} from './address';
 
 const RAW_UPPER = '0:B9B8FA17119EFE7F4296A489567FCF5776F9271823FAD26486E93D743F4093A5';
 const RAW_LOWER = RAW_UPPER.toLowerCase();
@@ -25,6 +32,26 @@ describe('address', () => {
     expect(sameAddress(RAW_UPPER, other)).toBe(false);
     expect(sameAddress(RAW_UPPER, null)).toBe(false);
     expect(sameAddress(undefined, RAW_LOWER)).toBe(false);
+  });
+
+  it('trusts only the wallet and network verified for the Telegram profile', () => {
+    const linked = { address: RAW_UPPER, network: -239 };
+    const connected = { address: RAW_LOWER, chain: '-239' };
+
+    expect(sameWalletConnection(linked, connected)).toBe(true);
+    expect(requireLinkedWallet(linked, connected)).toBe(RAW_LOWER);
+    expect(sameWalletConnection(linked, { ...connected, chain: '-3' })).toBe(false);
+    expect(sameWalletConnection(linked, { ...connected, address: `0:${'42'.repeat(32)}` })).toBe(
+      false,
+    );
+  });
+
+  it('fails closed when a browser restores another TON Connect account', () => {
+    const linked = { address: RAW_UPPER, network: -239 };
+    const restored = { address: `0:${'42'.repeat(32)}`, chain: '-239' };
+
+    expect(() => requireLinkedWallet(linked, restored)).toThrow(WALLET_MISMATCH_MESSAGE);
+    expect(() => requireLinkedWallet(null, restored)).toThrow(WALLET_MISMATCH_MESSAGE);
   });
 
   it('shows wallets the way wallets show themselves', () => {

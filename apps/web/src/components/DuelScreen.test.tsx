@@ -6,18 +6,26 @@ import type { Duel, Invite, Offer, Profile } from '../types';
 
 const tonConnect = vi.hoisted(() => ({
   openModal: vi.fn(() => new Promise<void>(() => undefined)),
+  sendTransaction: vi.fn(),
+}));
+
+const walletState = vi.hoisted(() => ({
+  current: null as null | {
+    account: { address: string; chain: string };
+  },
 }));
 
 const apiMocks = vi.hoisted(() => ({
   contractState: vi.fn(() => Promise.resolve({ paused: false })),
   discardOffer: vi.fn(() => Promise.resolve(undefined)),
+  quoteOffer: vi.fn(),
 }));
 
 vi.mock('../api', () => ({ api: apiMocks }));
 
 vi.mock('@tonconnect/ui-react', () => ({
   useTonConnectUI: () => [tonConnect],
-  useTonWallet: () => null,
+  useTonWallet: () => walletState.current,
 }));
 
 const profile: Profile = {
@@ -95,8 +103,11 @@ describe('DuelScreen', () => {
   });
 
   beforeEach(() => {
+    walletState.current = null;
     apiMocks.contractState.mockResolvedValue({ paused: false });
+    apiMocks.quoteOffer.mockClear();
     tonConnect.openModal.mockClear();
+    tonConnect.sendTransaction.mockClear();
   });
 
   it('locks the opponent action while the wallet flow is opening', () => {
@@ -110,6 +121,31 @@ describe('DuelScreen', () => {
 
     expect(tonConnect.openModal).toHaveBeenCalledOnce();
     expect(screen.getByRole('button', { name: 'ГОТОВИМ…' })).toBeDisabled();
+  });
+
+  it('does not prepare a DUEL for a wallet restored from another browser session', async () => {
+    walletState.current = {
+      account: { address: `0:${'22'.repeat(32)}`, chain: '-3' },
+    };
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf(`0:${'11'.repeat(32)}`) }}
+        offers={[]}
+        duels={[]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }));
+
+    expect(
+      await screen.findByText(
+        'В TON Connect выбран другой кошелёк. Подключи кошелёк из профиля заново.',
+      ),
+    ).toBeVisible();
+    expect(apiMocks.quoteOffer).not.toHaveBeenCalled();
+    expect(tonConnect.sendTransaction).not.toHaveBeenCalled();
   });
 
   it('presents one equal 50/50 rule without probability controls', () => {

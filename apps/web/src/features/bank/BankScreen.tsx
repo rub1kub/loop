@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../api';
+import { requireLinkedWallet, sameWalletConnection } from '../../address';
 import { humanError } from '../../errors';
 import { haptic, isMockTelegram, setBackAction } from '../../telegram';
 import {
@@ -125,7 +126,7 @@ export function BankScreen({
     !isMockTelegram() &&
     Boolean(wallet) &&
     isSupportedTonNetwork(wallet?.account.chain ?? '') &&
-    Boolean(profile.wallet);
+    sameWalletConnection(profile.wallet, wallet?.account);
 
   const mockPreview = useMemo<BankPreview | null>(
     () =>
@@ -196,6 +197,7 @@ export function BankScreen({
       if (!wallet || !isSupportedTonNetwork(wallet.account.chain)) {
         throw new Error('Подключите поддерживаемый внешний кошелёк');
       }
+      const from = requireLinkedWallet(profile.wallet, wallet.account);
       const positionId = newOfferId();
       const quote = await api.quoteBankPosition({
         position_id: positionId,
@@ -205,7 +207,7 @@ export function BankScreen({
       quoted.current = positionId;
       setWizard('waiting');
       await tonConnectUI.sendTransaction(
-        buildBankPositionTransaction(quote, wallet.account.address, wallet.account.chain),
+        buildBankPositionTransaction(quote, from, wallet.account.chain),
       );
       quoted.current = null;
       await onRefresh();

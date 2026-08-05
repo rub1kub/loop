@@ -34,7 +34,7 @@ import {
 } from '../../ton';
 import type { Duel, Invite, Offer, Profile } from '../../types';
 
-import { sameAddress } from '../../address';
+import { requireLinkedWallet, sameAddress } from '../../address';
 
 import { celebrate } from '../../celebrate';
 import { humanError } from '../../errors';
@@ -273,6 +273,7 @@ export function DuelScreen({
           throw new Error('Этот кошелёк сейчас не поддерживается');
         }
         if (!profile.wallet) throw new Error('Ждём подтверждение владения внешним кошельком');
+        const from = requireLinkedWallet(profile.wallet, wallet.account);
         let acceptedInvite = invite;
         if (invite) acceptedInvite = await api.acceptInvite(invite.code);
         const contract = await api.contractState('duel');
@@ -291,7 +292,7 @@ export function DuelScreen({
         const secret = newSecret();
         const commitment = commitmentForOffer(
           offerId,
-          wallet.account.address,
+          from,
           secret,
           contract.network,
           contract.address,
@@ -324,7 +325,7 @@ export function DuelScreen({
         await storeDuelSecret(offerId, secret.toString(16).padStart(64, '0'));
         setMessage('Подтверди ставку в кошельке.');
         await tonConnectUI.sendTransaction(
-          buildOpenOfferTransaction(quote, wallet.account.address, wallet.account.chain),
+          buildOpenOfferTransaction(quote, from, wallet.account.chain),
         );
         quotedOffer.current = null;
         setSignedOffer(offerId);
@@ -400,6 +401,7 @@ export function DuelScreen({
     locked.current = true;
     setBusy(true);
     try {
+      const from = requireLinkedWallet(profile.wallet, wallet.account);
       let intent;
       let secret: string | undefined;
       if (activeOffer.state === 'matched') {
@@ -419,7 +421,7 @@ export function DuelScreen({
         throw new Error('Ждём, пока сеть подтвердит предыдущее действие');
       }
       await tonConnectUI.sendTransaction(
-        buildActionTransaction(intent, wallet.account.address, wallet.account.chain, secret),
+        buildActionTransaction(intent, from, wallet.account.chain, secret),
       );
       setMessage('Действие отправлено. Ждём окончательный результат.');
       await onRefresh();
@@ -441,6 +443,7 @@ export function DuelScreen({
     failed,
     offerExpired,
     onRefresh,
+    profile.wallet,
     setMessage,
     tonConnectUI,
     wallet,
@@ -468,6 +471,7 @@ export function DuelScreen({
       if (!isSupportedTonNetwork(wallet.account.chain)) {
         throw new Error('Этот кошелёк сейчас не поддерживается');
       }
+      const from = requireLinkedWallet(profile.wallet, wallet.account);
       const contract = await api.contractState('duel');
       if (contract.status !== 'active' || !contract.code_hash_matches) {
         throw new Error('DUEL временно недоступен');
@@ -478,7 +482,7 @@ export function DuelScreen({
         min_chance_bps: boostedChanceBps,
       });
       await tonConnectUI.sendTransaction(
-        buildBoostTransaction(intent, wallet.account.address, wallet.account.chain, {
+        buildBoostTransaction(intent, from, wallet.account.chain, {
           duelId: activeDuel.onchain_duel_id,
           offerId: activeOffer.onchain_offer_id,
           amountNano: boostNano,
@@ -508,6 +512,7 @@ export function DuelScreen({
     duelBoosting,
     failed,
     onRefresh,
+    profile.wallet,
     setMessage,
     tonConnectUI,
     wallet,
