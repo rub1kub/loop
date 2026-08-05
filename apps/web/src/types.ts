@@ -74,6 +74,12 @@ export interface TelegramWebApp {
     getItem(key: string, callback: (error: string | null, value: string | null) => void): void;
     removeItem(key: string, callback?: (error: string | null) => void): void;
   };
+  /** Bot API 6.9 — present far more widely than SecureStorage's 9.0. */
+  CloudStorage?: {
+    setItem(key: string, value: string, callback?: (error: string | null) => void): void;
+    getItem(key: string, callback: (error: string | null, value: string | null) => void): void;
+    removeItem(key: string, callback?: (error: string | null) => void): void;
+  };
 }
 
 export interface User {

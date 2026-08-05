@@ -219,39 +219,86 @@ export async function sharePreparedResult(
   return false;
 }
 
+/**
+ * Where a duel's secret lives until it is revealed.
+ *
+ * SecureStorage is the right home — encrypted, on the device — but it landed in
+ * Bot API 9.0 and most clients answer its calls with "UNSUPPORTED". That raw
+ * word used to reach the player as their entire explanation, and DUEL was
+ * simply unplayable for them. So the secret falls back to CloudStorage (6.9,
+ * present almost everywhere and carried between devices) and finally to the
+ * webview's own storage. None of these tiers hands the secret to LOOP's server
+ * or to the opponent, which is the only property the commit-reveal needs.
+ */
+const secretKey = (offerId: number) => `loop-duel-${offerId}`;
+
+type KeyValueStore = NonNullable<TelegramWebApp['SecureStorage']>;
+
+function telegramStores(): KeyValueStore[] {
+  const app = telegram();
+  return [app?.SecureStorage, app?.CloudStorage].filter(Boolean) as KeyValueStore[];
+}
+
+function setIn(store: KeyValueStore, key: string, value: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    store.setItem(key, value, (error) => (error ? reject(new Error(error)) : resolve()));
+  });
+}
+
+function getFrom(store: KeyValueStore, key: string): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    store.getItem(key, (error, value) => (error ? reject(new Error(error)) : resolve(value)));
+  });
+}
+
 export async function storeDuelSecret(offerId: number, secretHex: string): Promise<void> {
-  const key = `loop-duel-${offerId}`;
-  const storage = telegram()?.SecureStorage;
-  if (storage) {
-    await new Promise<void>((resolve, reject) => {
-      storage.setItem(key, secretHex, (error) => (error ? reject(new Error(error)) : resolve()));
-    });
-    return;
+  const key = secretKey(offerId);
+  for (const store of telegramStores()) {
+    try {
+      await setIn(store, key, secretHex);
+      return;
+    } catch {
+      // This client does not support that tier; try the next one.
+    }
   }
-  if (isMockTelegram()) sessionStorage.setItem(key, secretHex);
-  else throw new Error('Обнови Telegram: без SecureStorage дуэль не запустится');
+  try {
+    window.localStorage.setItem(key, secretHex);
+  } catch {
+    throw new Error('Не удалось сохранить ключ дуэли. Разреши сайту хранить данные и повтори.');
+  }
 }
 
 export async function readDuelSecret(offerId: number): Promise<string | null> {
-  const key = `loop-duel-${offerId}`;
-  const storage = telegram()?.SecureStorage;
-  if (storage) {
-    return await new Promise<string | null>((resolve, reject) => {
-      storage.getItem(key, (error, value) => (error ? reject(new Error(error)) : resolve(value)));
-    });
+  const key = secretKey(offerId);
+  for (const store of telegramStores()) {
+    try {
+      const value = await getFrom(store, key);
+      if (value) return value;
+    } catch {
+      // Fall through to the next tier rather than losing a revealable duel.
+    }
   }
-  return isMockTelegram() ? sessionStorage.getItem(key) : null;
+  try {
+    return (
+      window.localStorage.getItem(key) ?? (isMockTelegram() ? sessionStorage.getItem(key) : null)
+    );
+  } catch {
+    return null;
+  }
 }
 
 export async function removeDuelSecret(offerId: number): Promise<void> {
-  const key = `loop-duel-${offerId}`;
-  const storage = telegram()?.SecureStorage;
-  if (storage) {
-    await new Promise<void>((resolve, reject) => {
-      storage.removeItem(key, (error) => (error ? reject(new Error(error)) : resolve()));
+  const key = secretKey(offerId);
+  for (const store of telegramStores()) {
+    await new Promise<void>((resolve) => {
+      store.removeItem(key, () => resolve());
     });
-  } else if (isMockTelegram()) {
+  }
+  try {
+    window.localStorage.removeItem(key);
     sessionStorage.removeItem(key);
+  } catch {
+    // Nothing to clean up.
   }
 }
 

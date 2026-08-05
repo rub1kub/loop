@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   haptic,
@@ -322,5 +322,58 @@ describe('Telegram SDK loading never blocks the app', () => {
     expect(script).not.toBeNull();
     expect(script!.src).toContain('/telegram-web-app.js');
     expect(script!.src).not.toContain('telegram.org');
+  });
+});
+
+describe('duel secret storage', () => {
+  const key = 'loop-duel-777';
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    delete (window as { Telegram?: unknown }).Telegram;
+  });
+
+  it('keeps the duel playable when SecureStorage answers UNSUPPORTED', async () => {
+    // SecureStorage landed in Bot API 9.0; most clients reject its calls with a
+    // bare "UNSUPPORTED", which used to reach the player as their whole
+    // explanation and made DUEL unplayable for them.
+    const cloud = new Map<string, string>();
+    (window as unknown as { Telegram: unknown }).Telegram = {
+      WebApp: {
+        SecureStorage: {
+          setItem: (_k: string, _v: string, cb: (e: string | null) => void) => cb('UNSUPPORTED'),
+          getItem: (_k: string, cb: (e: string | null, v: string | null) => void) =>
+            cb('UNSUPPORTED', null),
+          removeItem: (_k: string, cb?: (e: string | null) => void) => cb?.('UNSUPPORTED'),
+        },
+        CloudStorage: {
+          setItem: (k: string, v: string, cb?: (e: string | null) => void) => {
+            cloud.set(k, v);
+            cb?.(null);
+          },
+          getItem: (k: string, cb: (e: string | null, v: string | null) => void) =>
+            cb(null, cloud.get(k) ?? null),
+          removeItem: (k: string, cb?: (e: string | null) => void) => {
+            cloud.delete(k);
+            cb?.(null);
+          },
+        },
+      },
+    };
+
+    const { storeDuelSecret, readDuelSecret, removeDuelSecret } = await import('./telegram');
+    await expect(storeDuelSecret(777, 'beef')).resolves.toBeUndefined();
+    expect(cloud.get(key)).toBe('beef');
+    await expect(readDuelSecret(777)).resolves.toBe('beef');
+    await removeDuelSecret(777);
+    await expect(readDuelSecret(777)).resolves.toBeNull();
+  });
+
+  it('still keeps the secret when the client offers no storage at all', async () => {
+    (window as unknown as { Telegram: unknown }).Telegram = { WebApp: {} };
+    const { storeDuelSecret, readDuelSecret } = await import('./telegram');
+
+    await expect(storeDuelSecret(777, 'cafe')).resolves.toBeUndefined();
+    await expect(readDuelSecret(777)).resolves.toBe('cafe');
   });
 });
