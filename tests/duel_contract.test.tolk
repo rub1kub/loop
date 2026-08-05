@@ -980,6 +980,20 @@ get fun `test owner cancellation refunds and offer id remains replay protected`(
         value: ton("1"),
     });
 
+    // A second wallet confirmation for the same offer must be harmless: the
+    // first cancellation removed the offer before sending its only refund.
+    val duplicateCancel = contract.sendCancelOffer(
+        playerA.address,
+        403,
+        401,
+        { value: ton("0.03") },
+    );
+    expect(duplicateCancel).toHaveFailedTx({ exitCode: Errors.OfferMissing });
+    expect(duplicateCancel).toNotHaveTx<OfferRefund>({
+        from: contract.address,
+        to: playerA.address,
+    });
+
     val replay = contract.sendOpenOffer(
         playerA.address,
         401,

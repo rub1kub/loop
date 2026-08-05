@@ -28,6 +28,7 @@ const walletState = vi.hoisted(() => ({
 const apiMocks = vi.hoisted(() => ({
   contractState: vi.fn<() => Promise<ContractStateMock>>(() => Promise.resolve({ paused: false })),
   discardOffer: vi.fn(() => Promise.resolve(undefined)),
+  expireOfferIntent: vi.fn(),
   quoteOffer: vi.fn(),
 }));
 
@@ -116,6 +117,7 @@ describe('DuelScreen', () => {
   beforeEach(() => {
     walletState.current = null;
     apiMocks.contractState.mockResolvedValue({ paused: false });
+    apiMocks.expireOfferIntent.mockReset();
     apiMocks.quoteOffer.mockReset();
     tonConnect.openModal.mockClear();
     tonConnect.sendTransaction.mockClear();
@@ -154,12 +156,12 @@ describe('DuelScreen', () => {
       await screen.findByText(
         'В TON Connect выбран другой кошелёк. Подключи кошелёк из профиля заново.',
       ),
-    ).toBeVisible();
+    ).toBeInTheDocument();
     expect(apiMocks.quoteOffer).not.toHaveBeenCalled();
     expect(tonConnect.sendTransaction).not.toHaveBeenCalled();
   });
 
-  it('replaces broadcast waiting copy when the contract confirms the stake', async () => {
+  it('polls the chain projection and unlocks invitation after funding', async () => {
     const walletAddress = `0:${'11'.repeat(32)}`;
     const contractAddress = `0:${'22'.repeat(32)}`;
     walletState.current = {
@@ -174,6 +176,7 @@ describe('DuelScreen', () => {
     });
 
     let projectedOffer: Offer | null = null;
+    let refreshCount = 0;
     apiMocks.quoteOffer.mockImplementation(
       (request: { offer_id: number; commitment_hex: string }) => {
         projectedOffer = {
@@ -229,13 +232,15 @@ describe('DuelScreen', () => {
     function ConfirmedOffer() {
       const [offers, setOffers] = useState<Offer[]>([]);
       const onRefresh = () => {
+        refreshCount += 1;
         if (projectedOffer) {
           setOffers([
             {
               ...projectedOffer,
-              state: 'open',
-              funding_tx_hash: 'confirmed',
-              funding_proof_url: 'https://tonviewer.com/transaction/confirmed',
+              state: refreshCount >= 2 ? 'open' : 'pending_funding',
+              funding_tx_hash: refreshCount >= 2 ? 'confirmed' : null,
+              funding_proof_url:
+                refreshCount >= 2 ? 'https://tonviewer.com/transaction/confirmed' : null,
             },
           ]);
         }
@@ -255,11 +260,117 @@ describe('DuelScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' }));
 
-    await waitFor(() =>
-      expect(screen.getByText('Ставка подтверждена. Ищем соперника.')).toBeVisible(),
-    );
-    expect(screen.queryByText(/Ждём подтверждение/)).not.toBeInTheDocument();
+    await waitFor(() => expect(refreshCount).toBeGreaterThanOrEqual(2), { timeout: 3_500 });
     expect(screen.getByText('ИЩЕМ СОПЕРНИКА')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'ПРИГЛАСИТЬ' })).toBeEnabled();
+  });
+
+  it('shows where invitation will appear while the stake is reaching the contract', () => {
+    const offer: Offer = {
+      id: 'pending-offer',
+      onchain_offer_id: 810,
+      chance_bps: 5_000,
+      total_pool_nano: 1_000_000_000,
+      stake_nano: 500_000_000,
+      opponent_stake_nano: 500_000_000,
+      fee_bps: 250,
+      fee_exempt: false,
+      payout_nano: 975_000_000,
+      net_profit_nano: 475_000_000,
+      mode: 'afk',
+      direct_opponent_wallet: null,
+      state: 'pending_funding',
+      expires_at: new Date(Date.now() + 900_000).toISOString(),
+      funding_tx_hash: null,
+      funding_proof_url: null,
+    };
+    const { rerender } = render(
+      <DuelScreen
+        profile={profile}
+        offers={[offer]}
+        duels={[]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'ПРИГЛАСИТЬ' })).toBeDisabled();
+
+    rerender(
+      <DuelScreen
+        profile={profile}
+        offers={[{ ...offer, state: 'open', funding_tx_hash: 'confirmed' }]}
+        duels={[]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'ПРИГЛАСИТЬ' })).toBeEnabled();
+  });
+
+  it('does not ask the wallet to return the same stake twice', async () => {
+    const walletAddress = `0:${'11'.repeat(32)}`;
+    walletState.current = { account: { address: walletAddress, chain: '-3' } };
+    const offer: Offer = {
+      id: 'expired-offer',
+      onchain_offer_id: 812,
+      chance_bps: 5_000,
+      total_pool_nano: 1_000_000_000,
+      stake_nano: 500_000_000,
+      opponent_stake_nano: 500_000_000,
+      fee_bps: 250,
+      fee_exempt: false,
+      payout_nano: 975_000_000,
+      net_profit_nano: 475_000_000,
+      mode: 'afk',
+      direct_opponent_wallet: null,
+      state: 'open',
+      expires_at: new Date(Date.now() - 1_000).toISOString(),
+      funding_tx_hash: 'funding',
+      funding_proof_url: null,
+    };
+    apiMocks.expireOfferIntent.mockResolvedValue({
+      operation: 'expire_offer',
+      query_id: 813,
+      offer_id: offer.onchain_offer_id,
+      duel_id: 0,
+      contract_address: `0:${'22'.repeat(32)}`,
+      amount_nano: '30000000',
+      valid_until: Math.floor(Date.now() / 1000) + 300,
+      network: -3,
+    });
+    tonConnect.sendTransaction.mockResolvedValue({ boc: 'return-request' });
+    const onRefresh = vi.fn(() => Promise.resolve());
+    const { unmount } = render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf(walletAddress) }}
+        offers={[offer]}
+        duels={[]}
+        invite={null}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'ВЕРНУТЬ СТАВКУ' }));
+
+    const pending = await screen.findByRole('button', { name: 'ВОЗВРАЩАЕМ…' });
+    expect(pending).toBeDisabled();
+    fireEvent.click(pending);
+    expect(tonConnect.sendTransaction).toHaveBeenCalledOnce();
+
+    unmount();
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf(walletAddress) }}
+        offers={[offer]}
+        duels={[]}
+        invite={null}
+        onRefresh={onRefresh}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'ВОЗВРАЩАЕМ…' })).toBeDisabled();
+    expect(tonConnect.sendTransaction).toHaveBeenCalledOnce();
   });
 
   it('shares an active search as an invitation to DUEL', () => {

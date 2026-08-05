@@ -1,9 +1,4 @@
-import {
-  ArrowSquareOut,
-  PaperPlaneTilt,
-  ShieldCheck,
-  WarningCircle,
-} from '@phosphor-icons/react';
+import { ArrowSquareOut, PaperPlaneTilt, ShieldCheck, WarningCircle } from '@phosphor-icons/react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -40,9 +35,50 @@ import { humanError } from '../../errors';
 import { ChanceBar, type ChancePhase } from './ChanceBar';
 
 const DEFAULT_CHANCE_BPS = 5000;
-const FUNDING_BROADCAST_NOTICE = 'Ставка отправлена. Проверяем, что контракт её получил.';
-const FUNDING_CONFIRMED_NOTICE = 'Ставка подтверждена. Ищем соперника.';
-const DIRECT_FUNDING_CONFIRMED_NOTICE = 'Ставка подтверждена. Отправь вызов другу.';
+const FUNDING_BROADCAST_NOTICE =
+  'Ставка отправлена. Обычно она появляется в DUEL за несколько секунд.';
+const FUNDING_CONFIRMED_NOTICE = 'Ставка в игре. Можно пригласить соперника.';
+const DIRECT_FUNDING_CONFIRMED_NOTICE = 'Ставка в игре. Отправь вызов другу.';
+const PENDING_ACTION_STORAGE_KEY = 'loop.duel.pending-action.v1';
+const PENDING_ACTION_TTL_MS = 120_000;
+const PROJECTION_POLL_MS = 2_000;
+
+type PendingActionKind = 'reveal' | 'cancel_offer' | 'expire_offer' | 'expire_duel';
+
+type PendingAction = {
+  offerId: number;
+  kind: PendingActionKind;
+  startedAt: number;
+};
+
+function readPendingAction(): PendingAction | null {
+  try {
+    const raw = window.localStorage.getItem(PENDING_ACTION_STORAGE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PendingAction>;
+    if (
+      typeof value.offerId !== 'number' ||
+      typeof value.startedAt !== 'number' ||
+      !['reveal', 'cancel_offer', 'expire_offer', 'expire_duel'].includes(value.kind ?? '') ||
+      Date.now() - value.startedAt >= PENDING_ACTION_TTL_MS
+    ) {
+      window.localStorage.removeItem(PENDING_ACTION_STORAGE_KEY);
+      return null;
+    }
+    return value as PendingAction;
+  } catch {
+    return null;
+  }
+}
+
+function storePendingAction(value: PendingAction | null): void {
+  try {
+    if (value) window.localStorage.setItem(PENDING_ACTION_STORAGE_KEY, JSON.stringify(value));
+    else window.localStorage.removeItem(PENDING_ACTION_STORAGE_KEY);
+  } catch {
+    // A private WebView may disable storage. The in-memory lock still works.
+  }
+}
 // Four digits everywhere on the money card: at three, a 0,01 stake rounded the
 // payout up to the whole bank and the card claimed the fee was both taken and
 // not taken at the same time.
@@ -126,6 +162,13 @@ export function DuelScreen({
   const [duelClosed, setDuelClosed] = useState<boolean | null>(null);
   /** Set the moment the wallet accepts, so the screen stops asking for a signature. */
   const [signedOffer, setSignedOffer] = useState<number | null>(null);
+  /** A broadcast action stays locked until the chain projection changes. */
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(readPendingAction);
+  const onRefreshRef = useRef(onRefresh);
+
+  useEffect(() => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
 
   useEffect(() => {
     if (isMockTelegram()) return;
@@ -183,6 +226,59 @@ export function DuelScreen({
           ['boosting', 'revealing'].includes(duel.state),
       )
     : undefined;
+
+  const clearPendingAction = useCallback(() => {
+    setPendingAction(null);
+    storePendingAction(null);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingAction) return;
+    const sameOffer = activeOffer?.onchain_offer_id === pendingAction.offerId;
+    const completed =
+      !sameOffer ||
+      (pendingAction.kind === 'reveal' && activeDuel?.own_revealed === true) ||
+      (pendingAction.kind === 'expire_duel' && activeDuel === undefined);
+    if (!completed) return;
+    const timeout = window.setTimeout(clearPendingAction, 0);
+    return () => window.clearTimeout(timeout);
+  }, [activeDuel, activeOffer, clearPendingAction, pendingAction]);
+
+  useEffect(() => {
+    if (!pendingAction) return;
+    const remaining = PENDING_ACTION_TTL_MS - (Date.now() - pendingAction.startedAt);
+    const timeout = window.setTimeout(clearPendingAction, Math.max(0, remaining));
+    return () => window.clearTimeout(timeout);
+  }, [clearPendingAction, pendingAction]);
+
+  // TON Connect only tells us that the wallet broadcast a message. Poll the
+  // server projection until the contract transaction becomes visible instead
+  // of leaving the player on a stale intermediate screen for an arbitrary
+  // global refresh interval.
+  const projectionWatchKey =
+    signedOffer !== null
+      ? `funding:${signedOffer}`
+      : pendingAction
+        ? `action:${pendingAction.offerId}:${pendingAction.kind}`
+        : null;
+  useEffect(() => {
+    if (!projectionWatchKey || isMockTelegram()) return;
+    let stopped = false;
+    let timeout: number | undefined;
+    const startedAt = Date.now();
+    const poll = async () => {
+      if (stopped) return;
+      await onRefreshRef.current().catch(() => undefined);
+      if (!stopped && Date.now() - startedAt < PENDING_ACTION_TTL_MS) {
+        timeout = window.setTimeout(() => void poll(), PROJECTION_POLL_MS);
+      }
+    };
+    void poll();
+    return () => {
+      stopped = true;
+      if (timeout !== undefined) window.clearTimeout(timeout);
+    };
+  }, [projectionWatchKey]);
   const latestDuel = duels[0];
   const offerExpired = activeOffer ? Date.parse(activeOffer.expires_at) <= now : false;
   const duelExpired = activeDuel ? Date.parse(activeDuel.reveal_deadline) <= now : false;
@@ -362,7 +458,6 @@ export function DuelScreen({
         quotedOffer.current = null;
         setSignedOffer(offerId);
         setMessage(FUNDING_BROADCAST_NOTICE);
-        await onRefresh();
         haptic('success');
       } catch (error) {
         // A refused signature must leave the screen exactly as it was. The
@@ -425,7 +520,7 @@ export function DuelScreen({
   );
 
   const runActiveAction = useCallback(async () => {
-    if (locked.current || !activeOffer) return;
+    if (locked.current || pendingAction || !activeOffer) return;
     if (!wallet) {
       await tonConnectUI.openModal();
       return;
@@ -455,8 +550,18 @@ export function DuelScreen({
       await tonConnectUI.sendTransaction(
         buildActionTransaction(intent, from, wallet.account.chain, secret),
       );
-      setMessage('Действие отправлено. Ждём окончательный результат.');
-      await onRefresh();
+      const action = {
+        offerId: activeOffer.onchain_offer_id,
+        kind: intent.operation,
+        startedAt: Date.now(),
+      } satisfies PendingAction;
+      setPendingAction(action);
+      storePendingAction(action);
+      setMessage(
+        intent.operation === 'cancel_offer' || intent.operation === 'expire_offer'
+          ? 'LOOP возвращает ставку. Это обычно занимает несколько секунд.'
+          : 'Запрос отправлен. LOOP проверяет результат.',
+      );
       haptic('success');
     } catch (error) {
       const notice = humanError(error, 'Действие не выполнено');
@@ -474,7 +579,7 @@ export function DuelScreen({
     duelExpired,
     failed,
     offerExpired,
-    onRefresh,
+    pendingAction,
     profile.wallet,
     setMessage,
     tonConnectUI,
@@ -582,21 +687,30 @@ export function DuelScreen({
     haptic('light');
   }
 
-  const activeActionLabel = activeOffer
-    ? activeOffer.state === 'matched'
-      ? duelExpired
-        ? 'ЗАВЕРШИТЬ ДУЭЛЬ'
-        : duelBoosting || activeDuel?.own_revealed
-          ? null
-          : 'ОТКРЫТЬ РЕЗУЛЬТАТ'
-      : activeOffer.state === 'open' || activeOffer.state === 'reserved'
-        ? offerExpired
-          ? 'ВЕРНУТЬ СТАВКУ'
-          : 'ОСТАНОВИТЬ ПОИСК'
-        : null
-    : mockSearching
-      ? 'ОСТАНОВИТЬ ПОИСК'
-      : null;
+  const pendingActionLabel = pendingAction
+    ? pendingAction.kind === 'cancel_offer' || pendingAction.kind === 'expire_offer'
+      ? 'ВОЗВРАЩАЕМ…'
+      : pendingAction.kind === 'reveal'
+        ? 'ОТКРЫВАЕМ…'
+        : 'ЗАВЕРШАЕМ…'
+    : null;
+  const activeActionLabel =
+    pendingActionLabel ??
+    (activeOffer
+      ? activeOffer.state === 'matched'
+        ? duelExpired
+          ? 'ЗАВЕРШИТЬ ДУЭЛЬ'
+          : duelBoosting || activeDuel?.own_revealed
+            ? null
+            : 'ОТКРЫТЬ РЕЗУЛЬТАТ'
+        : activeOffer.state === 'open' || activeOffer.state === 'reserved'
+          ? offerExpired
+            ? 'ВЕРНУТЬ СТАВКУ'
+            : 'ОСТАНОВИТЬ ПОИСК'
+          : null
+      : mockSearching
+        ? 'ОСТАНОВИТЬ ПОИСК'
+        : null);
   const activeDeadline =
     status === 'matched' && activeDuel
       ? duelBoosting && activeDuel.boost_deadline
@@ -997,13 +1111,15 @@ export function DuelScreen({
             )}
           </>
         )}
-        {status === 'searching' &&
-          !offerExpired &&
-          (activeOffer?.state === 'open' || mockSearching) && (
-            <button className="primary-button" onClick={inviteToTelegram}>
-              <PaperPlaneTilt aria-hidden="true" /> ПРИГЛАСИТЬ
-            </button>
-          )}
+        {status === 'searching' && !offerExpired && (activeOffer || mockSearching) && (
+          <button
+            className="primary-button"
+            disabled={!mockSearching && activeOffer?.state !== 'open'}
+            onClick={inviteToTelegram}
+          >
+            <PaperPlaneTilt aria-hidden="true" /> ПРИГЛАСИТЬ
+          </button>
+        )}
         {awaitingSignature && activeOffer && (
           <button
             className="secondary-button"
@@ -1016,7 +1132,7 @@ export function DuelScreen({
         {activeActionLabel && (
           <button
             className={status === 'matched' ? 'primary-button' : 'secondary-button'}
-            disabled={busy}
+            disabled={busy || Boolean(pendingAction)}
             onClick={() => {
               if (mockSearching && !activeOffer) {
                 setMockSearching(false);
