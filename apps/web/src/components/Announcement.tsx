@@ -1,62 +1,90 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { haptic, openPlatformLink } from '../telegram';
 import type { Announcement as AnnouncementData } from '../types';
 
-const DISMISSED_KEY = 'loop:announcement-dismissed';
+const READ_KEY = 'loop:announcement-read';
+const HIDDEN_KEY = 'loop:announcement-hidden';
 
 /**
- * A note from the channel, shown inside the app.
+ * A note from the channel, shown where the bot is not allowed to write.
  *
  * Two thirds of the people here opened the mini app from a link and never
- * pressed Start in the bot, so Telegram will not let it write to them at all.
- * The app is the only place left to say anything to them.
+ * pressed Start in the bot, so Telegram refuses to deliver anything to them.
+ * Inside the app there is no such wall.
  *
- * It is shaped like the message it actually is, and it is deliberately cut off:
- * the text fades into the card rather than ending, because the rest of it lives
- * in the channel and the whole point is to go there. A fade is honest about
- * that in a way a truncating ellipsis is not — nothing is hidden, the road just
+ * It is shaped like the message it is, and it is deliberately cut short: the
+ * text fades into the sheet rather than ending, because the rest of it lives in
+ * the channel and going there is the whole point. A fade is honest about that
+ * in a way a truncating ellipsis is not — nothing is hidden, the road simply
  * continues elsewhere.
+ *
+ * Closing it and reading it are different answers and are remembered
+ * differently. The cross means "not now" and lasts until the app is opened
+ * again; following the link means it has done its job, and it never returns.
  */
 export function Announcement({ data }: { data: AnnouncementData }) {
-  const [dismissed, setDismissed] = useState(
-    () => window.localStorage.getItem(DISMISSED_KEY) === data.text,
+  const [open, setOpen] = useState(
+    () =>
+      window.localStorage.getItem(READ_KEY) !== data.text &&
+      window.sessionStorage.getItem(HIDDEN_KEY) !== data.text,
   );
-  if (dismissed) return null;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') hideForNow();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  if (!open) return null;
+
+  function hideForNow() {
+    // Remembered by the text, so the next announcement is a new question.
+    window.sessionStorage.setItem(HIDDEN_KEY, data.text);
+    setOpen(false);
+  }
+
+  function read() {
+    haptic('selection');
+    window.localStorage.setItem(READ_KEY, data.text);
+    setOpen(false);
+    // A t.me address belongs to Telegram's own viewer: opened in a browser tab
+    // the reader arrives at the channel signed out and cannot subscribe.
+    if (data.url) openPlatformLink(data.url, data.url.includes('t.me/'));
+  }
 
   return (
-    <div className="announcement">
-      <button
-        type="button"
-        className="announcement-card"
-        onClick={() => {
-          haptic('selection');
-          // A t.me address belongs to Telegram's own viewer, not a browser tab.
-          if (data.url) openPlatformLink(data.url, data.url.includes('t.me/'));
-        }}
+    <div className="announcement-backdrop" onClick={hideForNow}>
+      <div
+        className="announcement-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Сообщение из канала"
+        onClick={(event) => event.stopPropagation()}
       >
-        <span className="announcement-head">
-          <span className="announcement-avatar" aria-hidden>
-            R
-          </span>
+        <button
+          type="button"
+          className="announcement-close"
+          aria-label="Закрыть"
+          onClick={hideForNow}
+        >
+          ✕
+        </button>
+        <div className="announcement-head">
+          <img className="announcement-avatar" src="/assets/channel-avatar.jpg" alt="" />
           <span className="announcement-author">rubikub</span>
-        </span>
-        <span className="announcement-body">{data.text}</span>
-        <span className="announcement-more">{data.url ? 'Читать полностью' : ''}</span>
-      </button>
-      <button
-        type="button"
-        className="announcement-close"
-        aria-label="Скрыть объявление"
-        onClick={() => {
-          // Remembered by its text, so the next announcement appears on its own
-          // and this one does not come back every time the app is opened.
-          window.localStorage.setItem(DISMISSED_KEY, data.text);
-          setDismissed(true);
-        }}
-      >
-        ✕
-      </button>
+        </div>
+        <div className="announcement-body">{data.text}</div>
+        {data.url && (
+          <button type="button" className="announcement-read" onClick={read}>
+            ЧИТАТЬ ПОЛНОСТЬЮ
+          </button>
+        )}
+      </div>
     </div>
   );
 }

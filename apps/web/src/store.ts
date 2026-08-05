@@ -86,7 +86,15 @@ const demoProfile: Profile = {
     fee_discount_active: false,
   },
   duel_stake: { min_stake_nano: 500_000_000, max_stake_nano: 500_000_000 },
-  announcement: null,
+  // Only reachable with VITE_MOCK_TELEGRAM, and there so the sheet can be
+  // looked at without waiting for a real announcement to be addressed to you.
+  announcement: {
+    text:
+      'LOOP. ПЕРВАЯ НОЧЬ.\n\nМы открылись сегодня в 19:30 с потолком в 1 GRAM на позицию.\n\n' +
+      'Прошло три часа.\n\nОтправлено людям — 575,78 GRAM\nBANK закрыл 161 позицию на 530,75\n' +
+      'DUEL раздал победителям 45,03 за 20 боёв\n\nА теперь честно.\n\nНаступает ночь.',
+    url: 'https://t.me/rubikub/5158',
+  },
   app_open: true,
   launch_at: null,
 };

@@ -13,36 +13,57 @@ describe('the note from the channel', () => {
     cleanup();
     vi.clearAllMocks();
     window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it('opens the post in Telegram rather than a browser tab', () => {
-    // A t.me address handed to openLink leaves the app for a web view of the
-    // channel, where the person is not signed in and cannot subscribe.
+    // Handed to a browser the reader lands on the channel signed out, where
+    // subscribing — the entire purpose — is not offered.
     render(<Announcement data={note} />);
-    fireEvent.click(screen.getByText('Читать полностью'));
+    fireEvent.click(screen.getByText('ЧИТАТЬ ПОЛНОСТЬЮ'));
 
     expect(telegram.openPlatformLink).toHaveBeenCalledWith('https://t.me/rubikub/5158', true);
   });
 
-  it('stays dismissed for this note, and steps aside for the next one', () => {
-    const { unmount } = render(<Announcement data={note} />);
-    fireEvent.click(screen.getByLabelText('Скрыть объявление'));
-    expect(screen.queryByText(note.text)).toBeNull();
-    unmount();
+  it('never returns once it has been read', () => {
+    const first = render(<Announcement data={note} />);
+    fireEvent.click(screen.getByText('ЧИТАТЬ ПОЛНОСТЬЮ'));
+    first.unmount();
 
+    // A new session, which is what a reopened mini app is.
+    window.sessionStorage.clear();
     render(<Announcement data={note} />);
     expect(screen.queryByText(note.text)).toBeNull();
-    cleanup();
+  });
 
-    // A different announcement is a different message and shows up again.
+  it('treats the cross as "not now" and asks again next time the app opens', () => {
+    const first = render(<Announcement data={note} />);
+    fireEvent.click(screen.getByLabelText('Закрыть'));
+    expect(screen.queryByText(note.text)).toBeNull();
+    first.unmount();
+
+    // Same session: still out of the way.
+    const second = render(<Announcement data={note} />);
+    expect(screen.queryByText(note.text)).toBeNull();
+    second.unmount();
+
+    window.sessionStorage.clear();
+    render(<Announcement data={note} />);
+    expect(screen.getByText(note.text)).toBeTruthy();
+  });
+
+  it('lets the next announcement through on its own', () => {
+    const first = render(<Announcement data={note} />);
+    fireEvent.click(screen.getByText('ЧИТАТЬ ПОЛНОСТЬЮ'));
+    first.unmount();
+
     render(<Announcement data={{ ...note, text: 'Потолок поднят до 10 GRAM.' }} />);
     expect(screen.getByText('Потолок поднят до 10 GRAM.')).toBeTruthy();
   });
 
-  it('says nothing about reading on when there is nowhere to go', () => {
+  it('offers no way onward when there is nowhere to go', () => {
     render(<Announcement data={{ text: 'Короткая заметка', url: null }} />);
-    fireEvent.click(screen.getByText('Короткая заметка'));
-
+    expect(screen.queryByText('ЧИТАТЬ ПОЛНОСТЬЮ')).toBeNull();
     expect(telegram.openPlatformLink).not.toHaveBeenCalled();
   });
 });
