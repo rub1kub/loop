@@ -1,6 +1,6 @@
 import { useIsConnectionRestored, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from './api';
 import { InlineDuelPreview } from './components/InlineDuelPreview';
@@ -34,7 +34,8 @@ export default function App() {
   const wallet = useTonWallet();
   const connectionRestored = useIsConnectionRestored();
   const [tonConnectUI] = useTonConnectUI();
-  const proofConfigured = useRef(false);
+  const [proofEpoch, setProofEpoch] = useState(0);
+  const profileUserId = state.profile?.user.id ?? null;
   const verificationInFlight = useRef<string | null>(null);
   const staleSessionHandled = useRef<string | null>(null);
   const bootstrap = useCallback(() => useLoopStore.getState().bootstrap(), []);
@@ -65,20 +66,49 @@ export default function App() {
     };
   }, [bootstrap]);
 
+  // The challenge the wallet signs lives five minutes on the server. It used to
+  // be fetched once per page load and never again, so anyone who looked around
+  // first and pressed connect later signed something already expired — and no
+  // retry could help, because the page never asked for another one. Only
+  // restarting the mini app did. Keep it fresh instead: renew before it lapses,
+  // and immediately after a verification fails.
   useEffect(() => {
-    if (state.loading || !state.profile || isMockTelegram() || proofConfigured.current) return;
-    proofConfigured.current = true;
-    tonConnectUI.setConnectRequestParameters({ state: 'loading' });
-    void api
-      .walletChallenge()
-      .then(({ payload }) => {
-        tonConnectUI.setConnectRequestParameters({ state: 'ready', value: { tonProof: payload } });
-      })
-      .catch((error: unknown) => {
-        proofConfigured.current = false;
-        setError(humanError(error, 'Не удалось подготовить подключение кошелька') ?? '');
-      });
-  }, [setError, state.loading, state.profile, tonConnectUI]);
+    if (state.loading || !profileUserId || isMockTelegram()) return;
+    let alive = true;
+    let renewal = 0;
+    let first = true;
+    const arm = () => {
+      // Only the first fetch may hold the connect dialog: putting it back into
+      // `loading` while somebody is midway through connecting would interrupt
+      // them, and a renewal has nothing to interrupt for.
+      if (first) tonConnectUI.setConnectRequestParameters({ state: 'loading' });
+      first = false;
+      void api
+        .walletChallenge()
+        .then(({ payload, expires_at }) => {
+          if (!alive) return;
+          tonConnectUI.setConnectRequestParameters({
+            state: 'ready',
+            value: { tonProof: payload },
+          });
+          // Well before the edge, and never a busy loop: an absent or unparsable
+          // expiry must not become setTimeout(0) and hammer the server.
+          const remaining = new Date(expires_at).getTime() - Date.now();
+          const delay = Number.isFinite(remaining) ? remaining * 0.6 : 180_000;
+          renewal = window.setTimeout(arm, Math.min(Math.max(delay, 30_000), 600_000));
+        })
+        .catch((error: unknown) => {
+          if (!alive) return;
+          setError(humanError(error, 'Не удалось подготовить подключение кошелька') ?? '');
+          renewal = window.setTimeout(arm, 30_000);
+        });
+    };
+    arm();
+    return () => {
+      alive = false;
+      window.clearTimeout(renewal);
+    };
+  }, [profileUserId, proofEpoch, setError, state.loading, tonConnectUI]);
 
   useEffect(() => {
     if (
@@ -115,6 +145,10 @@ export default function App() {
       .then(() => refresh())
       .catch(async (error: unknown) => {
         setError(humanError(error, 'Не удалось подтвердить кошелёк'));
+        // Whatever went wrong, the challenge has been spent. Without a new one
+        // the next attempt fails the same way, and the person is stuck until
+        // they restart the app.
+        setProofEpoch((epoch) => epoch + 1);
         await tonConnectUI.disconnect().catch(() => undefined);
       })
       .finally(() => {

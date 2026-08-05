@@ -78,7 +78,12 @@ const store = vi.hoisted(() => ({
 }));
 
 const apiMocks = vi.hoisted(() => ({
-  walletChallenge: vi.fn(() => Promise.resolve({ payload: 'challenge' })),
+  walletChallenge: vi.fn(() =>
+    Promise.resolve({
+      payload: 'challenge',
+      expires_at: new Date(Date.now() + 300_000).toISOString(),
+    }),
+  ),
   verifyWallet: vi.fn(),
 }));
 
@@ -137,5 +142,29 @@ describe('App wallet restoration', () => {
       'В TON Connect выбран другой кошелёк. Подключи кошелёк из профиля заново.',
     );
     expect(apiMocks.verifyWallet).not.toHaveBeenCalled();
+  });
+
+  it('asks for a new challenge after one is refused, instead of stranding the wallet', async () => {
+    // The challenge lives five minutes. It used to be fetched once per page
+    // load, so anyone who pressed connect later signed something expired — and
+    // every retry repeated it, because the page never asked for another. The
+    // only cure was restarting the mini app.
+    walletState.current = {
+      account: {
+        address: '0:' + 'ab'.repeat(32),
+        chain: '-239',
+        publicKey: 'cd'.repeat(32),
+      },
+      connectItems: {
+        tonProof: { proof: { timestamp: 1, domain: {}, signature: 'sig', payload: 'challenge' } },
+      },
+    };
+    apiMocks.verifyWallet.mockRejectedValueOnce(new Error('wallet challenge is invalid or used'));
+
+    render(<App />);
+
+    await waitFor(() => expect(apiMocks.verifyWallet).toHaveBeenCalledOnce());
+    // A second challenge is requested without the person touching anything.
+    await waitFor(() => expect(apiMocks.walletChallenge.mock.calls.length).toBeGreaterThan(1));
   });
 });
