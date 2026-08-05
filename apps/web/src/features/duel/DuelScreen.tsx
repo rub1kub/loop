@@ -45,9 +45,17 @@ const FUNDING_BROADCAST_NOTICE =
   'Ставка отправлена. Обычно она появляется в DUEL за несколько секунд.';
 const FUNDING_CONFIRMED_NOTICE = 'Ставка в игре. Можно пригласить соперника.';
 const DIRECT_FUNDING_CONFIRMED_NOTICE = 'Ставка в игре. Отправь вызов другу.';
+const REVEAL_BROADCAST_NOTICE = 'Кошелёк отправил ход. Ждём подтверждение в сети.';
 const PENDING_ACTION_STORAGE_KEY = 'loop.duel.pending-action.v1';
-const PENDING_ACTION_TTL_MS = 120_000;
+// A wallet message is valid for five minutes. Keep the action locked for the
+// same window so a delayed wallet broadcast cannot be signed twice.
+const PENDING_ACTION_TTL_MS = 330_000;
 const PROJECTION_POLL_MS = 2_000;
+// A boost sent in the final second can reach the indexer a few seconds after
+// the visible clock reaches zero. During this short reconciliation window the
+// contract may legally extend the response time, so do not claim reveal has
+// started yet.
+const BOOST_PROJECTION_GRACE_MS = 12_000;
 
 type PendingActionKind = 'reveal' | 'cancel_offer' | 'expire_offer' | 'expire_duel';
 
@@ -195,21 +203,6 @@ export function DuelScreen({
     ['pending_funding', 'open', 'reserved', 'matched'].includes(offer.state),
   );
 
-  // TON Connect resolves when the wallet broadcasts the external message,
-  // not when the DUEL contract has processed the internal one. Derive the
-  // visible copy from the chain projection so a broadcast notice cannot stay
-  // behind after an offer is already open.
-  const message =
-    notice.text === FUNDING_BROADCAST_NOTICE
-      ? activeOffer?.state === 'open' || activeOffer?.state === 'reserved'
-        ? activeOffer.mode === 'direct'
-          ? DIRECT_FUNDING_CONFIRMED_NOTICE
-          : FUNDING_CONFIRMED_NOTICE
-        : activeOffer?.state === 'matched' || (!activeOffer && signedOffer === null)
-          ? ''
-          : notice.text
-      : notice.text;
-
   useEffect(() => {
     if (
       signedOffer === null ||
@@ -292,7 +285,35 @@ export function DuelScreen({
   const duelBoosting = Boolean(
     activeDuel && activeDuel.state === 'boosting' && boostDeadline && boostDeadline >= now,
   );
+  const boostClosing = Boolean(
+    activeDuel &&
+    activeDuel.state === 'boosting' &&
+    boostDeadline &&
+    boostDeadline < now &&
+    now - boostDeadline < BOOST_PROJECTION_GRACE_MS,
+  );
   const boostPanelOpen = Boolean(activeDuel && duelBoosting && boostPanelDuelId === activeDuel.id);
+
+  // TON Connect resolves when the wallet broadcasts the external message,
+  // not when the DUEL contract has processed the internal one. Derive the
+  // visible copy from the chain projection so a broadcast notice cannot stay
+  // behind after confirmation.
+  const message =
+    notice.text === FUNDING_BROADCAST_NOTICE
+      ? activeOffer?.state === 'open' || activeOffer?.state === 'reserved'
+        ? activeOffer.mode === 'direct'
+          ? DIRECT_FUNDING_CONFIRMED_NOTICE
+          : FUNDING_CONFIRMED_NOTICE
+        : activeOffer?.state === 'matched' || (!activeOffer && signedOffer === null)
+          ? ''
+          : notice.text
+      : notice.text === REVEAL_BROADCAST_NOTICE
+        ? activeDuel?.own_revealed
+          ? 'Твой ход подтверждён. Теперь очередь соперника.'
+          : activeDuel || activeOffer
+            ? notice.text
+            : ''
+        : notice.text;
 
   useEffect(() => {
     if (!activeDuel) {
@@ -310,8 +331,12 @@ export function DuelScreen({
     const notification = window.setTimeout(() => {
       setMessage(
         latest.side === 'you'
-          ? `Твоё усиление подтверждено: ${(activeDuel.chance_bps / 100).toFixed(1).replace('.', ',')}%`
-          : `Соперник усилился. Твой шанс: ${(activeDuel.chance_bps / 100).toFixed(1).replace('.', ',')}%`,
+          ? `Твоё усиление подтверждено. Шанс ${(activeDuel.chance_bps / 100)
+              .toFixed(1)
+              .replace('.', ',')}%. Время на ответ обновлено.`
+          : `Ставка соперника подтверждена. Твой шанс ${(activeDuel.chance_bps / 100)
+              .toFixed(1)
+              .replace('.', ',')}%. Время на ответ обновлено.`,
       );
       haptic(latest.side === 'you' ? 'success' : 'warning');
     }, 0);
@@ -348,12 +373,12 @@ export function DuelScreen({
   const boostHitsCeiling = activeDuel !== undefined && boostedChanceBps >= MAX_CHANCE_BPS;
 
   const status =
-    activeOffer?.state === 'matched'
-      ? 'matched'
-      : activeOffer || mockSearching
-        ? 'searching'
-        : latestDuel?.state === 'settled' && latestDuel.id !== seenDuelId
-          ? 'result'
+    latestDuel?.state === 'settled' && latestDuel.id !== seenDuelId
+      ? 'result'
+      : activeOffer?.state === 'matched'
+        ? 'matched'
+        : activeOffer || mockSearching
+          ? 'searching'
           : 'idle';
   const resultWon = Boolean(
     latestDuel?.winner_wallet && sameAddress(latestDuel.winner_wallet, profile.wallet?.address),
@@ -540,6 +565,7 @@ export function DuelScreen({
       if (activeOffer.state === 'matched') {
         if (!activeDuel) throw new Error('Обновляем состояние DUEL');
         if (duelBoosting) throw new Error('Сначала дождись конца усиления');
+        if (boostClosing) throw new Error('Проверяем последние ставки');
         if (duelExpired) intent = await api.expireDuelIntent(activeDuel.onchain_duel_id);
         else {
           if (activeDuel.own_revealed) return;
@@ -566,7 +592,9 @@ export function DuelScreen({
       setMessage(
         intent.operation === 'cancel_offer' || intent.operation === 'expire_offer'
           ? 'LOOP возвращает ставку. Это обычно занимает несколько секунд.'
-          : 'Запрос отправлен. LOOP проверяет результат.',
+          : intent.operation === 'reveal'
+            ? REVEAL_BROADCAST_NOTICE
+            : 'Запрос отправлен. LOOP проверяет результат.',
       );
       haptic('success');
     } catch (error) {
@@ -581,6 +609,7 @@ export function DuelScreen({
   }, [
     activeDuel,
     activeOffer,
+    boostClosing,
     duelBoosting,
     duelExpired,
     failed,
@@ -706,7 +735,7 @@ export function DuelScreen({
       ? activeOffer.state === 'matched'
         ? duelExpired
           ? 'ЗАВЕРШИТЬ ДУЭЛЬ'
-          : duelBoosting || activeDuel?.own_revealed
+          : duelBoosting || boostClosing || activeDuel?.own_revealed
             ? null
             : 'ОТКРЫТЬ РЕЗУЛЬТАТ'
         : activeOffer.state === 'open' || activeOffer.state === 'reserved'
@@ -719,9 +748,11 @@ export function DuelScreen({
         : null);
   const activeDeadline =
     status === 'matched' && activeDuel
-      ? duelBoosting && activeDuel.boost_deadline
-        ? Date.parse(activeDuel.boost_deadline)
-        : Date.parse(activeDuel.reveal_deadline)
+      ? boostClosing || (pendingAction?.kind === 'reveal' && !activeDuel.own_revealed)
+        ? null
+        : duelBoosting && activeDuel.boost_deadline
+          ? Date.parse(activeDuel.boost_deadline)
+          : Date.parse(activeDuel.reveal_deadline)
       : activeOffer
         ? Date.parse(activeOffer.expires_at)
         : mockExpiresAt;
@@ -761,11 +792,15 @@ export function DuelScreen({
       ? 'ПРОВЕРЯЕМ СТАВКУ В СЕТИ'
       : 'ЖДЁМ ПОДПИСЬ В КОШЕЛЬКЕ'
     : status === 'matched'
-      ? duelBoosting
-        ? 'СОПЕРНИК НАЙДЕН'
-        : activeDuel?.own_revealed
-          ? 'ТЫ ОТКРЫЛ РЕЗУЛЬТАТ'
-          : 'ВРЕМЯ ВЫШЛО'
+      ? pendingAction?.kind === 'reveal' && !activeDuel?.own_revealed
+        ? 'ПОДТВЕРЖДАЕМ ТВОЙ ХОД'
+        : duelBoosting
+          ? 'УСИЛЕНИЕ ОТКРЫТО'
+          : boostClosing
+            ? 'ПРОВЕРЯЕМ ПОСЛЕДНИЕ СТАВКИ'
+            : activeDuel?.own_revealed
+              ? 'ЖДЁМ ХОД СОПЕРНИКА'
+              : 'ОТКРОЙ РЕЗУЛЬТАТ'
       : status === 'searching'
         ? offerExpired
           ? 'СРОК ВЫЗОВА ИСТЁК'
@@ -795,11 +830,11 @@ export function DuelScreen({
         drain={chanceDrain}
         caption={
           status === 'matched'
-            ? duelBoosting
-              ? 'ДО КОНЦА СТАВОК'
-              : activeDuel?.own_revealed
-                ? 'ЖДЁМ СОПЕРНИКА'
-                : 'ОТКРЫТЬ РЕЗУЛЬТАТ'
+            ? boostClosing || (pendingAction?.kind === 'reveal' && !activeDuel?.own_revealed)
+              ? undefined
+              : duelBoosting
+                ? 'ДО КОНЦА СТАВОК'
+                : 'ДО АВТОМАТИЧЕСКОГО ИСХОДА'
             : undefined
         }
       />

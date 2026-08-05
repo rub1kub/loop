@@ -36,6 +36,11 @@ function readDismissed(): Set<string> {
 }
 
 const dismissedResultIds = readDismissed();
+// Several screens can request the same snapshot at once (the global poller,
+// transaction confirmation and a visibility change). A slower, older response
+// must never overwrite a newer chain projection and visually move a DUEL back
+// to the previous phase.
+let refreshRequestId = 0;
 
 function rememberDismissed(cardId: string): void {
   dismissedResultIds.add(cardId);
@@ -443,6 +448,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
 
   async refresh() {
     if (isMockTelegram()) return;
+    const requestId = ++refreshRequestId;
     const [profile, bankPosition, bankHistory, offers, duels, results] = await Promise.all([
       api.me(),
       api.currentBankPosition(),
@@ -451,6 +457,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
       api.duels(),
       api.results(),
     ]);
+    if (requestId !== refreshRequestId) return;
     set({
       profile,
       bankPosition,

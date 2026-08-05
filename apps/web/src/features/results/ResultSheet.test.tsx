@@ -52,10 +52,11 @@ describe('ResultSheet', () => {
     render(<ResultSheet card={card} onClose={vi.fn()} onError={vi.fn()} />);
 
     expect(screen.getByRole('heading', { name: 'Цикл замкнулся.' })).toBeInTheDocument();
-    // What the app sent, not the gain over the deposit: a cycle that returned
-    // 3 GRAM on a 2 GRAM entry reads "+3", never "+1".
-    expect(screen.getByText('+3 GRAM')).toBeInTheDocument();
-    expect(screen.queryByText('+1 GRAM')).not.toBeInTheDocument();
+    // The headline is the gain, while the copy below preserves the complete
+    // payout so a transfer is never confused with profit.
+    expect(screen.getByText('+1 GRAM')).toBeInTheDocument();
+    expect(screen.getByText(/В кошелёк пришло 3 GRAM/)).toBeInTheDocument();
+    expect(screen.queryByText('+3 GRAM')).not.toBeInTheDocument();
     expect(screen.getByAltText('Карточка результата LOOP')).toHaveAttribute('src', card.image_url);
 
     fireEvent.click(screen.getByRole('button', { name: 'ПОДЕЛИТЬСЯ' }));

@@ -145,7 +145,10 @@ async def test_result_prepare_and_seen_use_native_telegram_share(client, app) ->
     assert prepared.json()["fallback_query"] == f"result {card.public_id}"
     assert bot.calls[0]["allow_user_chats"] is True
     assert bot.calls[0]["allow_group_chats"] is True
-    assert bot.calls[0]["result"].photo_url.endswith(f"/{card.public_id}.jpg")
+    assert bot.calls[0]["result"].photo_url.endswith(
+        f"/{card.public_id}.jpg?v={card.template_version}"
+    )
+    assert bot.calls[0]["result"].description == "+1 GRAM"
     async with app.state.session_factory() as db:
         referral = await db.scalar(
             select(ReferralCode).where(ReferralCode.owner_user_id == card.user_id)

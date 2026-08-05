@@ -26,7 +26,7 @@ from .ton import explorer_transaction_url
 CARD_WIDTH = 1080
 CARD_HEIGHT = 1350
 CARD_JPEG_QUALITY = 92
-CARD_TEMPLATE_VERSION = 1
+CARD_TEMPLATE_VERSION = 2
 FONT_REGULAR_CANDIDATES = (
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
@@ -257,7 +257,12 @@ def result_caption(card: ResultCard) -> str:
 
 
 def result_card_image_url(settings: Settings, card: ResultCard) -> str:
-    return f"{settings.public_origin}/api/v1/results/cards/{card.public_id}.jpg"
+    # The image route is immutable for a template version. Version the URL so
+    # Telegram and browser caches do not keep an older payout-as-profit card.
+    return (
+        f"{settings.public_origin}/api/v1/results/cards/{card.public_id}.jpg"
+        f"?v={CARD_TEMPLATE_VERSION}"
+    )
 
 
 def result_deep_link(settings: Settings, referral_code: str | None) -> str:
@@ -282,7 +287,7 @@ def build_result_inline(
         description=(
             f"{format_gram(card.contributed_nano)} GRAM в очереди"
             if entry
-            else f"+{format_gram(card.payout_nano)} GRAM"
+            else f"+{format_gram(card.result_nano)} GRAM"
         ),
         caption=result_caption(card),
         reply_markup=InlineKeyboardMarkup(
@@ -624,14 +629,14 @@ def _render_result_card(facts: CardFacts) -> bytes:
     _centered_text(
         draw,
         (CARD_WIDTH // 2, 790),
-        f"+{format_gram(facts.payout_nano)} GRAM",
+        f"+{format_gram(facts.result_nano)} GRAM",
         font=_font(82, bold=True),
         fill=(255, 255, 255),
     )
     _centered_text(
         draw,
         (CARD_WIDTH // 2, 868),
-        "ВЫПЛАЧЕНО",
+        "СВЕРХ СТАВКИ",
         font=_font(20, bold=True),
         fill=(135, 135, 135),
     )

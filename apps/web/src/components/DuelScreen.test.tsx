@@ -107,6 +107,48 @@ const settledDuel = (overrides: Partial<Duel>): Duel => ({
   ...overrides,
 });
 
+const matchedOffer = (): Offer => ({
+  id: 'matched-offer',
+  onchain_offer_id: 701,
+  chance_bps: 5_000,
+  total_pool_nano: 2_000_000_000,
+  stake_nano: 1_000_000_000,
+  opponent_stake_nano: 1_000_000_000,
+  fee_bps: 250,
+  fee_exempt: false,
+  payout_nano: 1_950_000_000,
+  net_profit_nano: 950_000_000,
+  mode: 'afk',
+  direct_opponent_wallet: null,
+  state: 'matched',
+  expires_at: new Date(Date.now() + 600_000).toISOString(),
+  funding_tx_hash: 'funding',
+  funding_proof_url: null,
+});
+
+const liveDuel = (overrides: Partial<Duel> = {}): Duel => ({
+  id: 'live-duel',
+  onchain_duel_id: 702,
+  state: 'boosting',
+  offer_id: 701,
+  own_revealed: false,
+  chance_bps: 5_000,
+  stake_nano: 1_000_000_000,
+  opponent_stake_nano: 1_000_000_000,
+  total_pool_nano: 2_000_000_000,
+  fee_exempt: false,
+  payout_nano: 1_950_000_000,
+  boost_deadline: new Date(Date.now() + 60_000).toISOString(),
+  hard_deadline: new Date(Date.now() + 180_000).toISOString(),
+  boost_revision: 0,
+  reveal_deadline: new Date(Date.now() + 360_000).toISOString(),
+  boost_events: [],
+  winner_wallet: null,
+  settled_tx_hash: null,
+  settlement_proof_url: null,
+  ...overrides,
+});
+
 describe('DuelScreen', () => {
   afterEach(() => {
     cleanup();
@@ -536,6 +578,58 @@ describe('DuelScreen', () => {
 
     expect(screen.queryByRole('button', { name: 'УВЕЛИЧИТЬ ШАНС' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).toHaveClass('primary-button');
+  });
+
+  it('checks final boosts before opening reveal and explains the automatic outcome timer', () => {
+    const offer = matchedOffer();
+    const { rerender } = render(
+      <DuelScreen
+        profile={profile}
+        offers={[offer]}
+        duels={[liveDuel({ boost_deadline: new Date(Date.now() - 1_000).toISOString() })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('ПРОВЕРЯЕМ ПОСЛЕДНИЕ СТАВКИ')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).not.toBeInTheDocument();
+
+    rerender(
+      <DuelScreen
+        profile={profile}
+        offers={[offer]}
+        duels={[liveDuel({ boost_deadline: new Date(Date.now() - 13_000).toISOString() })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('ОТКРОЙ РЕЗУЛЬТАТ')).toBeVisible();
+    expect(screen.getByText(/ДО АВТОМАТИЧЕСКОГО ИСХОДА/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).toBeEnabled();
+  });
+
+  it('says what happens after this player has revealed', () => {
+    render(
+      <DuelScreen
+        profile={profile}
+        offers={[matchedOffer()]}
+        duels={[
+          liveDuel({
+            state: 'revealing',
+            own_revealed: true,
+            boost_deadline: new Date(Date.now() - 60_000).toISOString(),
+          }),
+        ]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('ЖДЁМ ХОД СОПЕРНИКА')).toBeVisible();
+    expect(screen.getByText(/ДО АВТОМАТИЧЕСКОГО ИСХОДА/)).toBeVisible();
+    expect(screen.queryByText('ЖДЁМ СОПЕРНИКА')).not.toBeInTheDocument();
   });
 
   it('marks a failure as a failure instead of stamping it with a verified shield', () => {

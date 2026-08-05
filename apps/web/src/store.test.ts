@@ -4,6 +4,7 @@ import type { Profile } from './types';
 
 const apiMocks = vi.hoisted(() => ({
   authenticate: vi.fn(),
+  me: vi.fn(),
   prelaunch: vi.fn(),
   currentBankPosition: vi.fn(() => Promise.resolve(null)),
   bankPositions: vi.fn(() => Promise.resolve([])),
@@ -68,6 +69,14 @@ async function freshStore() {
   return useLoopStore;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe('bootstrap', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -129,5 +138,37 @@ describe('bootstrap', () => {
 
     expect(store.getState().activeTab).toBe('duel');
     expect(apiMocks.invite).not.toHaveBeenCalled();
+  });
+});
+
+describe('refresh', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMocks.currentBankPosition.mockResolvedValue(null);
+    apiMocks.bankPositions.mockResolvedValue([]);
+    apiMocks.offers.mockResolvedValue([]);
+    apiMocks.duels.mockResolvedValue([]);
+    apiMocks.results.mockResolvedValue([]);
+  });
+
+  it('does not let an older response move the interface back in time', async () => {
+    const older = deferred<Profile>();
+    const newer = deferred<Profile>();
+    apiMocks.me
+      .mockImplementationOnce(() => older.promise)
+      .mockImplementationOnce(() => newer.promise);
+    const store = await freshStore();
+
+    const first = store.getState().refresh();
+    const second = store.getState().refresh();
+    newer.resolve({ ...baseProfile, user: { ...baseProfile.user, first_name: 'Новое состояние' } });
+    await second;
+    older.resolve({
+      ...baseProfile,
+      user: { ...baseProfile.user, first_name: 'Старое состояние' },
+    });
+    await first;
+
+    expect(store.getState().profile?.user.first_name).toBe('Новое состояние');
   });
 });
