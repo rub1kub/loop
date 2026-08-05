@@ -30,6 +30,13 @@ const apiMocks = vi.hoisted(() => ({
   discardOffer: vi.fn(() => Promise.resolve(undefined)),
   expireOfferIntent: vi.fn(),
   quoteOffer: vi.fn(),
+  prepareDuelShare: vi.fn(() =>
+    Promise.resolve({
+      prepared_message_id: 'prepared-811',
+      expiration_date: new Date(Date.now() + 86_400_000).toISOString(),
+      fallback_query: 'duel 811',
+    }),
+  ),
 }));
 
 vi.mock('../api', () => ({ api: apiMocks }));
@@ -421,7 +428,10 @@ describe('DuelScreen', () => {
     expect(tonConnect.sendTransaction).toHaveBeenCalledOnce();
   });
 
-  it('shares an active search as an invitation to DUEL', () => {
+  it('sends a ready-made challenge card instead of dropping out of the app', async () => {
+    // The old button either left the app with `duel 811` showing in the input
+    // or sent a bare link carrying no stake, no odds and no button. Now the
+    // server prepares the card and Telegram opens a picker over the app.
     const openTelegramLink = vi.fn();
     window.Telegram = { WebApp: { openTelegramLink } } as unknown as typeof window.Telegram;
     const offer: Offer = {
@@ -454,10 +464,9 @@ describe('DuelScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Пригласить соперника/i }));
 
-    expect(openTelegramLink).toHaveBeenCalledOnce();
-    const shareUrl = decodeURIComponent(openTelegramLink.mock.calls[0][0] as string);
-    expect(shareUrl).toContain('https://t.me/getloopbot?startapp=duel');
-    expect(shareUrl).toContain('Ставка 0,5 GRAM. Сразимся?');
+    await waitFor(() => expect(apiMocks.prepareDuelShare).toHaveBeenCalledWith(811));
+    // Nothing is sent by hand any more, and the app is not left behind.
+    expect(openTelegramLink).not.toHaveBeenCalled();
   });
 
   it('presents one equal 50/50 rule without probability controls', () => {

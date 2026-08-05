@@ -971,3 +971,153 @@ def build_invite_inline(
             ]
         ),
     )
+
+
+def render_duel_invite_card(
+    *,
+    first_name: str,
+    username: str | None,
+    opponent_stake_nano: int,
+    receiver_chance_bps: int,
+    profit_nano: int,
+) -> bytes:
+    """The card a player sends when calling someone out.
+
+    Written from the receiver's side throughout — their stake, their odds,
+    what they take home — because the person reading it in a group chat is
+    deciding whether to answer, not admiring somebody else's terms.
+    """
+    with RENDER_LIMIT:
+        image = Image.new("RGBA", (CARD_WIDTH, CARD_HEIGHT), (0, 0, 0, 255))
+        draw = ImageDraw.Draw(image)
+        seed = int.from_bytes(hashlib.sha256(first_name.encode()).digest()[:8], "big")
+        rng = random.Random(seed)  # noqa: S311 - deterministic visual noise, not security
+        for _ in range(520):
+            shade = rng.randint(14, 42)
+            draw.point(
+                (rng.randrange(CARD_WIDTH), rng.randrange(CARD_HEIGHT)),
+                fill=(shade, shade, shade, rng.randint(60, 150)),
+            )
+        # The orbits sit at a fixed height that lands exactly on the odds, so
+        # this card takes the glow instead and keeps it above the headline.
+        _draw_infinity(image, 205)
+        draw = ImageDraw.Draw(image)
+
+        draw.text(
+            (70, 64), "∞  LOOP", font=_font(30, bold=True), fill=(245, 245, 245), anchor="la"
+        )
+        draw.text(
+            (CARD_WIDTH - 70, 68),
+            "ВЫЗОВ",
+            font=_font(20, bold=True),
+            fill=(142, 142, 142),
+            anchor="ra",
+        )
+
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 400),
+            "ТЕБЯ ВЫЗЫВАЮТ\nНА ДУЭЛЬ",
+            font=_font(76, bold=True),
+            fill=(250, 250, 250),
+        )
+
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 660),
+            f"{format_gram(opponent_stake_nano)} GRAM",
+            font=_font(112, bold=True),
+            fill=(250, 250, 250),
+        )
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 748),
+            "ТВОЯ СТАВКА",
+            font=_font(24, bold=True),
+            fill=(135, 135, 135),
+        )
+
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 900),
+            f"{receiver_chance_bps // 100}%",
+            font=_font(84, bold=True),
+            fill=(250, 250, 250),
+        )
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 976),
+            "ТВОИ ШАНСЫ",
+            font=_font(24, bold=True),
+            fill=(135, 135, 135),
+        )
+
+        _centered_text(
+            draw,
+            (CARD_WIDTH // 2, 1086),
+            f"ПОБЕДА  ·  +{format_gram(profit_nano)} GRAM",
+            font=_font(30, bold=True),
+            fill=(212, 212, 212),
+        )
+
+        draw.line((70, 1176, CARD_WIDTH - 70, 1176), fill=(54, 54, 54), width=2)
+        caller = f"@{username}" if username else first_name
+        draw.text(
+            (70, 1222),
+            f"ВЫЗЫВАЕТ  {caller.upper()}",
+            font=_font(22, bold=True),
+            fill=(212, 212, 212),
+            anchor="la",
+        )
+        draw.text(
+            (CARD_WIDTH - 70, 1222),
+            "ОТВЕТИТЬ МОЖНО РАЗ",
+            font=_font(22, bold=True),
+            fill=(212, 212, 212),
+            anchor="ra",
+        )
+        draw.text(
+            (CARD_WIDTH // 2, 1318),
+            "LOOP · TONSUITE.ORG",
+            font=_font(16, bold=True),
+            fill=(95, 95, 95),
+            anchor="ma",
+        )
+
+        output = io.BytesIO()
+        image.convert("RGB").save(output, format="JPEG", quality=CARD_JPEG_QUALITY, optimize=True)
+        return output.getvalue()
+
+
+def build_duel_invite_inline(
+    *,
+    settings: Settings,
+    offer_id: str,
+    accept_url: str,
+    opponent_stake_nano: int,
+    receiver_chance_bps: int,
+    profit_nano: int,
+    first_name: str,
+) -> InlineQueryResultPhoto:
+    image_url = (
+        f"{settings.public_origin}/api/v1/duels/cards/{offer_id}.jpg?v={CARD_TEMPLATE_VERSION}"
+    )
+    stake = format_gram(opponent_stake_nano)
+    return InlineQueryResultPhoto(
+        id=f"duel-{offer_id}",
+        photo_url=image_url,
+        thumbnail_url=image_url,
+        photo_width=CARD_WIDTH,
+        photo_height=CARD_HEIGHT,
+        title="Вызов на дуэль",
+        description=f"Ставка {stake} GRAM · шансы {receiver_chance_bps // 100}%",
+        caption=(
+            f"{first_name} вызывает на дуэль.\n\n"
+            f"Твоя ставка: {stake} GRAM\n"
+            f"Твои шансы: {receiver_chance_bps // 100}%\n"
+            f"Победа: +{format_gram(profit_nano)} GRAM"
+        ),
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="ПРИНЯТЬ ВЫЗОВ", url=accept_url)]]
+        ),
+    )

@@ -17,8 +17,8 @@ import {
   markDuelSeen,
   readDuelSecret,
   readSeenDuelId,
+  sharePreparedResult,
   storeDuelSecret,
-  telegram,
 } from '../../telegram';
 import {
   buildActionTransaction,
@@ -690,7 +690,7 @@ export function DuelScreen({
     wallet,
   ]);
 
-  function inviteToTelegram() {
+  async function inviteToTelegram() {
     if (mockSearching && !activeOffer) {
       haptic('selection');
       return;
@@ -700,26 +700,26 @@ export function DuelScreen({
       haptic('warning');
       return;
     }
-    const app = telegram();
-    if (activeOffer.mode === 'direct') {
-      if (!app?.switchInlineQuery) {
+    // One path for both modes now, and the same one the result card uses: the
+    // server prepares the card, Telegram opens a chat picker over the app and
+    // one tap sends it. Before this, a direct challenge dropped the player out
+    // of the app with `duel 12345` showing in the input, and an open search
+    // sent a bare link with no stake, no odds and no button on it.
+    try {
+      const prepared = await api.prepareDuelShare(activeOffer.onchain_offer_id);
+      const opened = await sharePreparedResult(
+        prepared.prepared_message_id,
+        prepared.fallback_query,
+      );
+      if (!opened) {
         failed('Приглашение в Telegram доступно только внутри приложения.');
         return;
       }
-      app.switchInlineQuery(`duel ${activeOffer.onchain_offer_id}`, ['users', 'groups']);
       haptic('light');
-      return;
+    } catch (error: unknown) {
+      failed(humanError(error, 'Не удалось подготовить приглашение') ?? '');
+      haptic('warning');
     }
-    if (!app?.openTelegramLink) {
-      failed('Приглашение в Telegram доступно только внутри приложения.');
-      return;
-    }
-    const duelUrl = 'https://t.me/getloopbot?startapp=duel';
-    const text = `Я ищу соперника в LOOP DUEL. Ставка ${formatGram(activeOffer.stake_nano, 3)} GRAM. Сразимся?`;
-    app.openTelegramLink(
-      `https://t.me/share/url?url=${encodeURIComponent(duelUrl)}&text=${encodeURIComponent(text)}`,
-    );
-    haptic('light');
   }
 
   const pendingActionLabel = pendingAction
@@ -1156,7 +1156,7 @@ export function DuelScreen({
           <button
             className="profile-row duel-invite-card"
             disabled={!mockSearching && activeOffer?.state !== 'open'}
-            onClick={inviteToTelegram}
+            onClick={() => void inviteToTelegram()}
           >
             <span className="row-icon">
               <UsersThree aria-hidden="true" />

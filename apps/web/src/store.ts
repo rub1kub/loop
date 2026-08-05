@@ -435,7 +435,10 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         api.results(),
       ]);
       let invite: Invite | null = null;
-      const startParam = telegramStartParam();
+      // A shared duel now carries the sharer's referral at the end, after
+      // `-ref_`, so that bringing a friend into a duel finally counts. The
+      // server reads that half; everything in front of it is the intention.
+      const startParam = telegramStartParam()?.split('-ref_')[0] ?? null;
       if (startParam?.startsWith('duel_')) invite = await api.invite(startParam.slice(5));
       const opensDuel = startParam === 'duel' || Boolean(invite);
       set({

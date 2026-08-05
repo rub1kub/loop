@@ -28,7 +28,12 @@ from .modules.duel.models import (
 )
 from .rating import build_rating
 from .referrals import get_or_create_referral_code
-from .result_cards import INVITE_VARIANTS, build_invite_inline, render_invite_card
+from .result_cards import (
+    INVITE_VARIANTS,
+    build_invite_inline,
+    render_duel_invite_card,
+    render_invite_card,
+)
 from .schemas import (
     AnnouncementView,
     AuthResponse,
@@ -106,9 +111,21 @@ async def record_referral_attribution(
     user: User,
     start_param: str | None,
 ) -> None:
-    if not start_param or not start_param.startswith("ref_"):
+    # A start parameter carries an intention as well as an invitation, and until
+    # now only the bare invitation counted. Every duel ever shared arrived as
+    # `duel` or `duel_<challenge>`, so the player who brought a friend in was
+    # credited with nothing — on the most viral action in the product. The
+    # referral may now ride along at the end, after `-ref_`, which cannot
+    # collide with the hex challenge code in front of it.
+    if not start_param:
         return
-    code = start_param[4:]
+    _, separator, trailing = start_param.rpartition("-ref_")
+    if separator:
+        code = trailing
+    elif start_param.startswith("ref_"):
+        code = start_param[4:]
+    else:
+        return
     referral = await db.get(ReferralCode, code)
     if referral is None or referral.owner_user_id == user.id:
         return
@@ -728,6 +745,38 @@ async def prelaunch(user: CurrentUser, db: Db, settings: Config) -> PrelaunchVie
             if leader_id in leaders
         ],
         participants=participants,
+    )
+
+
+@router.get("/duels/cards/{offer_id}.jpg", include_in_schema=False)
+async def duel_invite_card_image(offer_id: str, db: Db, settings: Config) -> Response:
+    """The challenge card, addressable by offer id.
+
+    Public on purpose: Telegram's servers fetch this URL to build the shared
+    message, and they arrive without a session. The id is a uuid nobody can
+    guess, and the card resolves to a stake, odds and a first name — the same
+    three facts the message itself carries.
+    """
+    offer = await db.get(MatchmakingOffer, offer_id)
+    if offer is None or offer.state not in {OfferState.OPEN.value, OfferState.RESERVED.value}:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "card not found")
+    creator = await db.get(User, offer.user_id)
+    if creator is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "card not found")
+    content = await run_in_threadpool(
+        render_duel_invite_card,
+        first_name=creator.first_name,
+        username=creator.username,
+        opponent_stake_nano=offer.opponent_stake_nano,
+        receiver_chance_bps=10_000 - offer.chance_bps,
+        profit_nano=max(offer.payout_nano - offer.opponent_stake_nano, 0),
+    )
+    # An offer lives fifteen minutes, so the card can be held for its lifetime
+    # and no longer: the terms on it stop being true when the duel is answered.
+    return Response(
+        content=content,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=900"},
     )
 
 

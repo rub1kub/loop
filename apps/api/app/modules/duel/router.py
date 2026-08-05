@@ -1,6 +1,7 @@
 import secrets
 from datetime import UTC, datetime, timedelta
 
+from aiogram.exceptions import TelegramAPIError
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import aliased
@@ -8,6 +9,8 @@ from sqlalchemy.orm import aliased
 from ...control_state import effective_contract_fee, ensure_mode_enabled
 from ...dependencies import Config, CurrentUser, Db, require_full_access
 from ...models import Wallet
+from ...referrals import get_or_create_referral_code
+from ...result_cards import build_duel_invite_inline
 from ...schemas import (
     ActionIntent,
     ContractCall,
@@ -18,6 +21,7 @@ from ...schemas import (
     OfferQuoteRequest,
     OfferQuoteResponse,
     OfferView,
+    PreparedResultShareView,
 )
 from ...ton import (
     TonProviderError,
@@ -677,4 +681,85 @@ async def expire_duel_intent(
         offer.network,
         offer_id=offer.onchain_offer_id,
         duel_id=duel.onchain_duel_id,
+    )
+
+@router.post("/offers/{offer_id}/share", response_model=PreparedResultShareView)
+async def prepare_duel_share(
+    offer_id: int,
+    user: CurrentUser,
+    db: Db,
+    settings: Config,
+    request: Request,
+) -> PreparedResultShareView:
+    """A ready-made challenge card, so inviting somebody is one tap.
+
+    The old button either dropped the player out of the app into an inline
+    query with `duel 12345` visible in the input, or sent a bare link with no
+    stake, no odds and no button. Both closed the app to do it. This is the
+    same machinery the result card already uses: Telegram opens a chat picker
+    over the app and one tap sends the card.
+    """
+    offer = await db.scalar(
+        select(DuelOffer).where(
+            DuelOffer.onchain_offer_id == offer_id,
+            DuelOffer.user_id == user.id,
+            DuelOffer.network == settings.ton_network_id,
+        )
+    )
+    if offer is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вызов не найден")
+    if offer.state != OfferState.OPEN.value or as_utc(offer.expires_at) <= datetime.now(UTC):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Вызов уже неактуален")
+    bot = request.app.state.bot
+    if bot is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Telegram сейчас недоступен")
+
+    intent = "duel"
+    if offer.mode == "direct":
+        challenge = await db.scalar(
+            select(DuelInvitation).where(DuelInvitation.creator_offer_id == offer.id)
+        )
+        # The address-bound flow mints the code only once the creator has signed
+        # on chain; without it the contract would refuse the acceptance permit.
+        if challenge is None or challenge.state != ChallengeState.OPEN.value:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Вызов ещё не подтверждён сетью")
+        intent = f"duel_{challenge.code}"
+    referral = await get_or_create_referral_code(db, user.id)
+    accept_url = (
+        f"https://t.me/{settings.bot_username.removeprefix('@')}"
+        f"?startapp={intent}-ref_{referral.code}"
+    )
+    try:
+        prepared = await bot.save_prepared_inline_message(
+            user_id=user.telegram_id,
+            result=build_duel_invite_inline(
+                settings=settings,
+                offer_id=offer.id,
+                accept_url=accept_url,
+                opponent_stake_nano=offer.opponent_stake_nano,
+                receiver_chance_bps=10_000 - offer.chance_bps,
+                profit_nano=max(offer.payout_nano - offer.opponent_stake_nano, 0),
+                first_name=user.first_name,
+            ),
+            allow_user_chats=True,
+            allow_bot_chats=False,
+            allow_group_chats=True,
+            allow_channel_chats=True,
+        )
+    except TelegramAPIError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Telegram сейчас недоступен"
+        ) from exc
+    expiration = prepared.expiration_date
+    if isinstance(expiration, int):
+        expiration = datetime.fromtimestamp(expiration, UTC)
+    elif isinstance(expiration, timedelta):
+        expiration = datetime.now(UTC) + expiration
+    elif expiration.tzinfo is None:
+        expiration = expiration.replace(tzinfo=UTC)
+    await db.commit()
+    return PreparedResultShareView(
+        prepared_message_id=prepared.id,
+        expiration_date=expiration,
+        fallback_query=f"duel {offer.onchain_offer_id}",
     )

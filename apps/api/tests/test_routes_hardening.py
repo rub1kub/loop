@@ -534,3 +534,36 @@ async def test_a_wallet_held_by_a_live_position_says_so(app, client, monkeypatch
     assert "DUEL" not in detail  # only the side actually holding it
     # Cyrillic is what makes the interface show it instead of a fallback.
     assert any("Ѐ" <= character <= "ӿ" for character in detail)
+
+
+async def test_a_duel_shared_to_a_friend_finally_credits_the_player(app, client) -> None:
+    # Attribution only ever fired on a bare `ref_`, and every duel invitation
+    # went out as `duel` or `duel_<challenge>`. So the one action that actually
+    # spreads the product — calling a friend out — credited nobody, and the two
+    # percent the inviter is promised never began.
+    from app.models import ReferralAttribution, ReferralCode
+
+    inviter_headers = await auth_headers(client, 700_301)
+    async with app.state.session_factory() as db:
+        inviter = await db.scalar(select(User).where(User.telegram_id == 700_301))
+        db.add(ReferralCode(code="duelcode", owner_user_id=inviter.id))
+        await db.commit()
+        inviter_id = inviter.id
+    assert inviter_headers
+
+    await auth_headers(client, 700_302, start_param="duel-ref_duelcode")
+    await auth_headers(client, 700_303, start_param="duel_abc123-ref_duelcode")
+    # The plain form has to keep working exactly as before.
+    await auth_headers(client, 700_304, start_param="ref_duelcode")
+    # And an intention with no invitation on it credits no one.
+    await auth_headers(client, 700_305, start_param="duel_abc123")
+
+    async with app.state.session_factory() as db:
+        credited = (
+            await db.scalars(
+                select(User.telegram_id)
+                .join(ReferralAttribution, ReferralAttribution.invitee_user_id == User.id)
+                .where(ReferralAttribution.inviter_user_id == inviter_id)
+            )
+        ).all()
+    assert sorted(credited) == [700_302, 700_303, 700_304]

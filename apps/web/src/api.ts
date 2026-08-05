@@ -342,6 +342,10 @@ export const api = {
     );
   },
 
+  async prepareDuelShare(offerId: number): Promise<PreparedResultShare> {
+    return await request(`/duels/offers/${offerId}/share`, { method: 'POST', body: '{}' });
+  },
+
   async prepareResultShare(cardId: string): Promise<PreparedResultShare> {
     return await request(`/results/${encodeURIComponent(cardId)}/prepare`, {
       method: 'POST',
