@@ -10,20 +10,25 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-def upgrade() -> None:
+KINDS_WITH_FEED = (
+    "kind IN ('result', 'duel_matched', 'referral_qualified', 'duel_reveal_soon', 'public_feed')"
+)
+KINDS_BEFORE_FEED = "kind IN ('result', 'duel_matched', 'referral_qualified', 'duel_reveal_soon')"
+
+
+def _replace_kind_check(new_definition: str) -> None:
+    # SQLite cannot ALTER a constraint, and the integration suite runs on it.
+    # Recreating the table there would buy nothing: the suite starts from an
+    # empty database, so the table is created with the current definition.
+    if op.get_bind().dialect.name == "sqlite":
+        return
     op.drop_constraint("notification_kind", "notification_outbox", type_="check")
-    op.create_check_constraint(
-        "notification_kind",
-        "notification_outbox",
-        "kind IN ('result', 'duel_matched', 'referral_qualified', "
-        "'duel_reveal_soon', 'public_feed')",
-    )
+    op.create_check_constraint("notification_kind", "notification_outbox", new_definition)
+
+
+def upgrade() -> None:
+    _replace_kind_check(KINDS_WITH_FEED)
 
 
 def downgrade() -> None:
-    op.drop_constraint("notification_kind", "notification_outbox", type_="check")
-    op.create_check_constraint(
-        "notification_kind",
-        "notification_outbox",
-        "kind IN ('result', 'duel_matched', 'referral_qualified', 'duel_reveal_soon')",
-    )
+    _replace_kind_check(KINDS_BEFORE_FEED)
