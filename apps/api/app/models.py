@@ -207,6 +207,18 @@ class ReferralPayoutRequest(Base):
     """
 
     __tablename__ = "referral_payout_requests"
+    __table_args__ = (
+        # Одна открытая заявка на человека: вторая попросила бы те же деньги
+        # ещё раз. Частичный индекс, поэтому закрытые заявки не мешают подать
+        # новую.
+        Index(
+            "uq_open_referral_payout_request",
+            "user_id",
+            unique=True,
+            postgresql_where=text("state = 'requested'"),
+            sqlite_where=text("state = 'requested'"),
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     address: Mapped[str] = mapped_column(String(68), nullable=False)
