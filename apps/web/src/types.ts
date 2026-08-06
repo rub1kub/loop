@@ -410,6 +410,7 @@ export interface RatingEntry {
   qualified_referrals: number;
   proofs: number;
   reliability_bps: number;
+  earned_nano: number;
   is_me: boolean;
 }
 

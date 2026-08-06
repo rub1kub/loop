@@ -209,7 +209,7 @@ export function ProfileScreen({
       </div>
       <div className="referral-earnings">
         <strong>{formatGram(referral?.reward_nano ?? 0, 2)} GRAM</strong>
-        <span>заработано на 2% со взносов приглашённых — навсегда</span>
+        <span>заработано на 3% со взносов приглашённых — навсегда</span>
         {(referral?.reward_nano ?? 0) > 0 && (
           <small>Выплата пока вручную: напиши в чат @getloopchat</small>
         )}

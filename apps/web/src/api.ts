@@ -141,6 +141,7 @@ const ratingEntrySchema = z.object({
   qualified_referrals: z.number(),
   proofs: z.number(),
   reliability_bps: z.number(),
+  earned_nano: z.number().default(0),
   is_me: z.boolean(),
 });
 

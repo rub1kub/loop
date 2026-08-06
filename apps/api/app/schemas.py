@@ -462,6 +462,9 @@ class RatingEntryView(BaseModel):
     qualified_referrals: int
     proofs: int
     reliability_bps: int
+    # GRAM actually sent to this person over the season — the figure a rating
+    # in a money product is silently asked about anyway.
+    earned_nano: int = 0
     is_me: bool
 
 

@@ -147,7 +147,7 @@ export function PrelaunchScreen({ prelaunch }: { prelaunch: Prelaunch }) {
       </section>
 
       <section className="prelaunch-referral">
-        <h2>2% с каждого взноса приглашённых. Навсегда.</h2>
+        <h2>3% с каждого взноса приглашённых. Навсегда.</h2>
         <div className="prelaunch-link-actions">
           <button className="primary-button" onClick={() => void share()}>
             <ShareNetwork size={18} aria-hidden="true" /> ПРИГЛАСИТЬ

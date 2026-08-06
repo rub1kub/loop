@@ -1255,7 +1255,7 @@ async def test_confirmed_referred_deposit_accrues_the_inviter_fee_share(app) -> 
             select(ReferralReward).where(ReferralReward.cause == f"fee_share:{position.id}")
         )
         assert reward is not None
-        assert reward.reward_nano == 40_000_000  # 2% of 2 GRAM
+        assert reward.reward_nano == 60_000_000  # 3% of 2 GRAM
         assert reward.reward_points == 0
 
         # The same transaction seen again accrues nothing new.

@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
 from .config import Settings, get_settings
@@ -272,6 +273,39 @@ async def build_rating(
         .group_by(ReferralAttribution.inviter_user_id),
     )
 
+    bank_earned = await grouped_counts(
+        db,
+        select(BankPosition.user_id, func.sum(BankPayout.amount_nano))
+        .join(BankPayout, BankPayout.position_id == BankPosition.id)
+        .where(
+            BankPosition.user_id.is_not(None),
+            BankPayout.created_at >= start,
+            BankPayout.created_at < end,
+        )
+        .group_by(BankPosition.user_id),
+    )
+    # A duel pays its winner: the settlement names the winning wallet, and the
+    # offer that owns that wallet names the person.
+    winner_offer = aliased(DuelOffer)
+    duel_earned = await grouped_counts(
+        db,
+        select(winner_offer.user_id, func.sum(DuelSettlement.payout_nano))
+        .join(Duel, Duel.id == DuelSettlement.duel_id)
+        .join(
+            winner_offer,
+            and_(
+                winner_offer.id.in_((Duel.offer_a_id, Duel.offer_b_id)),
+                winner_offer.owner_wallet == DuelSettlement.winner_wallet,
+            ),
+        )
+        .where(
+            winner_offer.user_id.is_not(None),
+            DuelSettlement.created_at >= start,
+            DuelSettlement.created_at < end,
+        )
+        .group_by(winner_offer.user_id),
+    )
+
     circle_rows = (
         await db.execute(
             select(
@@ -352,6 +386,7 @@ async def build_rating(
                 missed_reveals=metrics.missed_reveals,
                 qualified_referrals=metrics.qualified_referrals,
                 proofs=metrics.bank_payouts + metrics.duel_settlements,
+                earned_nano=bank_earned.get(user.id, 0) + duel_earned.get(user.id, 0),
                 reliability_bps=reliability,
                 is_me=user.id == current_user.id,
             )

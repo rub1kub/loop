@@ -134,7 +134,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
         <>
           <div className="section-label">
             <span>ГОНКА НЕДЕЛИ</span>
-            <small>2% СО ВЗНОСОВ ПРИГЛАШЁННЫХ</small>
+            <small>3% СО ВЗНОСОВ ПРИГЛАШЁННЫХ</small>
           </div>
           <div className="invite-race" aria-label="Гонка приглашающих за неделю">
             {rating.invite_race.map((entry) => (
@@ -237,7 +237,13 @@ function RatingRow({ entry }: { entry: RatingEntry }) {
       <div>
         <strong>{entry.is_me ? 'ТЫ' : entry.first_name}</strong>
         <small>
-          УРОВЕНЬ {levelLabels[entry.level]} · ЗАСЧИТАНО: {entry.proofs}
+          {/* A rating in a money product gets asked one silent question —
+              "сколько он поднял" — so the row answers it instead of counting
+              bureaucratic proofs at people. */}
+          УРОВЕНЬ {levelLabels[entry.level]} ·{' '}
+          {entry.earned_nano > 0
+            ? `ПОЛУЧИЛ ${formatGram(entry.earned_nano, 2)} GRAM`
+            : 'ПОКА 0 GRAM'}
         </small>
       </div>
       <b>{entry.score}</b>

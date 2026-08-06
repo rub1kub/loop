@@ -19,6 +19,7 @@ const me = {
   qualified_referrals: 2,
   proofs: 8,
   reliability_bps: 8000,
+  earned_nano: 0,
   is_me: true,
 };
 
