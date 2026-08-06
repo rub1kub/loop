@@ -32,7 +32,7 @@ import {
   newSecret,
   parseGram,
 } from '../../ton';
-import type { ChallengePreview, Duel, Invite, Offer, Profile } from '../../types';
+import type { ActionIntent, ChallengePreview, Duel, Invite, Offer, Profile } from '../../types';
 
 import { requireLinkedWallet, sameAddress } from '../../address';
 
@@ -57,7 +57,8 @@ const PROJECTION_POLL_MS = 2_000;
 // started yet.
 const BOOST_PROJECTION_GRACE_MS = 12_000;
 
-type PendingActionKind = 'reveal' | 'cancel_offer' | 'expire_offer' | 'expire_duel';
+type PendingActionKind =
+  'reveal' | 'cancel_offer' | 'expire_offer' | 'expire_duel' | 'match_offers';
 
 type PendingAction = {
   offerId: number;
@@ -600,6 +601,83 @@ export function DuelScreen({
     },
     [failed, onRefresh, setMessage],
   );
+
+  const [matchIntent, setMatchIntent] = useState<ActionIntent | null>(null);
+  const searchingOfferId =
+    status === 'searching' && activeOffer?.state === 'open' && activeOffer.mode === 'afk'
+      ? activeOffer.onchain_offer_id
+      : null;
+  useEffect(() => {
+    // Two people who tap within the funding window each see an empty room and
+    // open parallel offers. The chain worker cannot marry them — the server
+    // holds no mainnet keys — but the contract's MatchOffers is permissionless,
+    // so the moment a complement shows up either player can join them for gas.
+    // The cleanup below already clears the intent when the search ends.
+    if (searchingOfferId === null || isMockTelegram()) return;
+    let alive = true;
+    let timer = 0;
+    const look = () => {
+      void api
+        .matchOfferIntent(searchingOfferId)
+        .then((intent) => {
+          if (alive) setMatchIntent(intent);
+        })
+        .catch(() => {
+          if (alive) setMatchIntent(null);
+        })
+        .finally(() => {
+          if (alive) timer = window.setTimeout(look, 5000);
+        });
+    };
+    look();
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+      setMatchIntent(null);
+    };
+  }, [searchingOfferId]);
+
+  const joinFoundOpponent = useCallback(async () => {
+    if (locked.current || busy || !matchIntent || !activeOffer) return;
+    if (!wallet) {
+      await tonConnectUI.openModal();
+      return;
+    }
+    locked.current = true;
+    setBusy(true);
+    try {
+      const from = requireLinkedWallet(profile.wallet, wallet.account);
+      await tonConnectUI.sendTransaction(
+        buildActionTransaction(matchIntent, from, wallet.account.chain),
+      );
+      setPendingAction({
+        offerId: activeOffer.onchain_offer_id,
+        kind: 'match_offers',
+        startedAt: Date.now(),
+      });
+      setMatchIntent(null);
+      setMessage('');
+      haptic('success');
+      await onRefresh();
+    } catch (error: unknown) {
+      const text = humanError(error, 'Не удалось объединить ставки');
+      if (text) failed(text);
+      haptic('warning');
+    } finally {
+      locked.current = false;
+      setBusy(false);
+    }
+  }, [
+    activeOffer,
+    busy,
+    failed,
+    matchIntent,
+    onRefresh,
+    profile.wallet,
+    setMessage,
+    tonConnectUI,
+    wallet,
+  ]);
 
   const runActiveAction = useCallback(async () => {
     if (locked.current || pendingAction || !activeOffer) return;
@@ -1253,6 +1331,15 @@ export function DuelScreen({
               </button>
             )}
           </>
+        )}
+        {status === 'searching' && matchIntent && (
+          <button
+            className="primary-button"
+            disabled={busy}
+            onClick={() => void joinFoundOpponent()}
+          >
+            {busy ? 'ОБЪЕДИНЯЕМ…' : 'СОПЕРНИК НАЙДЕН — НАЧАТЬ БОЙ'}
+          </button>
         )}
         {status === 'searching' && !offerExpired && (activeOffer || mockSearching) && (
           <button

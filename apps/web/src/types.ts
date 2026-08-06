@@ -351,10 +351,11 @@ export interface DuelBoostIntent {
 }
 
 export interface ActionIntent {
-  operation: 'reveal' | 'cancel_offer' | 'expire_offer' | 'expire_duel';
+  operation: 'reveal' | 'cancel_offer' | 'expire_offer' | 'expire_duel' | 'match_offers';
   query_id: number;
   offer_id: number;
   duel_id: number;
+  counter_offer_id: number;
   contract_address: string;
   amount_nano: string;
   valid_until: number;

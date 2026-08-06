@@ -12,6 +12,7 @@ import {
   COMMITMENT_DOMAIN,
   BOOST_DUEL_OPCODE,
   commitmentForOffer,
+  MATCH_OFFERS_OPCODE,
   newOfferId,
   OPEN_DIRECT_OFFER_OPCODE,
   parseGram,
@@ -254,6 +255,7 @@ describe('TON duel encoding', () => {
       query_id: 9,
       offer_id: 77,
       duel_id: 88,
+      counter_offer_id: 0,
       contract_address: `0:${'22'.repeat(32)}`,
       amount_nano: '30000000',
       valid_until: 2_000_000_000,
@@ -377,6 +379,7 @@ describe('TON duel encoding', () => {
       query_id: 9,
       offer_id: 77,
       duel_id: 0,
+      counter_offer_id: 0,
       contract_address: `0:${'22'.repeat(32)}`,
       amount_nano: '30000000',
       valid_until: 2_000_000_000,
@@ -386,4 +389,28 @@ describe('TON duel encoding', () => {
       'Сеть DUEL изменилась',
     );
   });
+});
+
+it('lays out the match transaction with the standing offer first', () => {
+  // Same order the quote path uses: the offer already on the books, then mine.
+  const transaction = buildActionTransaction(
+    {
+      operation: 'match_offers',
+      query_id: 21,
+      offer_id: 911,
+      duel_id: 0,
+      counter_offer_id: 910,
+      contract_address: `0:${'22'.repeat(32)}`,
+      amount_nano: '50000000',
+      valid_until: Math.floor(Date.now() / 1000) + 300,
+      network: -3,
+    },
+    `0:${'33'.repeat(32)}`,
+    '-3',
+  );
+  const body = Cell.fromBase64(transaction.messages![0].payload!).beginParse();
+  expect(body.loadUint(32)).toBe(MATCH_OFFERS_OPCODE);
+  expect(body.loadUintBig(64)).toBe(21n);
+  expect(body.loadUintBig(64)).toBe(910n);
+  expect(body.loadUintBig(64)).toBe(911n);
 });

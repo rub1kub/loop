@@ -680,3 +680,56 @@ async def test_a_shared_challenge_previews_from_the_receivers_side(app, client) 
         await client.get("/api/v1/duels/offers/990501/preview", headers=receiver_headers)
     ).json()
     assert gone["open"] is False
+
+
+async def test_two_lonely_offers_get_a_permissionless_wedding(app, client) -> None:
+    # Matching happens at quote time, so two people who tap within the funding
+    # window each open a parallel offer and stand side by side for fifteen
+    # minutes, invisible to each other. The contract lets either of them send
+    # MatchOffers for gas money; the intent finds the oldest complement.
+    settings = get_settings()
+    my_headers = await auth_headers(client, 700_601)
+    await auth_headers(client, 700_602)
+
+    async with app.state.session_factory() as db:
+        me = await db.scalar(select(User).where(User.telegram_id == 700_601))
+        other = await db.scalar(select(User).where(User.telegram_id == 700_602))
+        my_wallet = Wallet(
+            user_id=me.id, network=settings.ton_network_id,
+            address="0:" + "a7" * 32, public_key="b7" * 32,
+        )
+        their_wallet = Wallet(
+            user_id=other.id, network=settings.ton_network_id,
+            address="0:" + "c7" * 32, public_key="d7" * 32,
+        )
+        db.add_all([my_wallet, their_wallet])
+        await db.flush()
+        mine = offer_for(
+            me, my_wallet, 990_601, chance_bps=5_000,
+            stake_nano=500_000_000, opponent_stake_nano=500_000_000,
+        )
+        theirs = offer_for(
+            other, their_wallet, 990_602, chance_bps=5_000,
+            stake_nano=500_000_000, opponent_stake_nano=500_000_000,
+        )
+        for offer in (mine, theirs):
+            offer.network = settings.ton_network_id
+            offer.contract_address = "0:" + "e7" * 32
+            offer.funding_tx_hash = f"funded-{offer.onchain_offer_id}"
+        db.add_all([mine, theirs])
+        await db.commit()
+
+    intent = (
+        await client.post("/api/v1/duels/offers/990601/match-intent", headers=my_headers)
+    ).json()
+    assert intent["operation"] == "match_offers"
+    assert intent["offer_id"] == 990_601
+    assert intent["counter_offer_id"] == 990_602
+
+    # Alone again once the counter is spoken for.
+    async with app.state.session_factory() as db:
+        counter = await db.scalar(select(DuelOffer).where(DuelOffer.onchain_offer_id == 990_602))
+        counter.state = OfferState.RESERVED.value
+        await db.commit()
+    refused = await client.post("/api/v1/duels/offers/990601/match-intent", headers=my_headers)
+    assert refused.status_code == 404

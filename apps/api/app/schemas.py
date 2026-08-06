@@ -395,6 +395,9 @@ class ActionIntent(BaseModel):
     query_id: int
     offer_id: int
     duel_id: int
+    # For match_offers: the other side's open offer. The contract checks the
+    # pair itself — open, different owners, equal pools, complementary odds.
+    counter_offer_id: int = 0
     contract_address: str
     amount_nano: str
     valid_until: int

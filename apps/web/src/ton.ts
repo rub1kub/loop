@@ -6,6 +6,7 @@ import type { ActionIntent, BankQuote, DuelBoostIntent, OfferQuote } from './typ
 export const BANK_CREATE_POSITION_OPCODE = 0x4c424e01;
 export const OPEN_OFFER_OPCODE = 0x4c4f4f01;
 export const CANCEL_OFFER_OPCODE = 0x4c4f4f02;
+export const MATCH_OFFERS_OPCODE = 0x4c4f4f03;
 export const REVEAL_OPCODE = 0x4c4f4f04;
 export const EXPIRE_OFFER_OPCODE = 0x4c4f4f05;
 export const EXPIRE_DUEL_OPCODE = 0x4c4f4f06;
@@ -218,6 +219,14 @@ export function buildActionTransaction(
       .storeUint(intent.duel_id, 64)
       .storeUint(intent.offer_id, 64)
       .storeUint(BigInt(`0x${secretHex}`), 256);
+  } else if (intent.operation === 'match_offers') {
+    // Marrying two open offers: the standing one first, mine second — the same
+    // order the quote path uses when a newcomer references an open counter.
+    body
+      .storeUint(MATCH_OFFERS_OPCODE, 32)
+      .storeUint(intent.query_id, 64)
+      .storeUint(intent.counter_offer_id, 64)
+      .storeUint(intent.offer_id, 64);
   } else if (intent.operation === 'cancel_offer' || intent.operation === 'expire_offer') {
     body
       .storeUint(

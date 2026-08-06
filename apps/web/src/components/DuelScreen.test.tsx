@@ -41,6 +41,9 @@ const apiMocks = vi.hoisted(() => ({
   ),
   meAvatar: vi.fn(() => Promise.resolve(null)),
   opponentAvatar: vi.fn(() => Promise.resolve(null)),
+  matchOfferIntent: vi.fn<(offerId: number) => Promise<unknown>>(() =>
+    Promise.reject(new Error('Соперника пока нет')),
+  ),
   prepareDuelShare: vi.fn(() =>
     Promise.resolve({
       prepared_message_id: 'prepared-811',
@@ -900,5 +903,54 @@ describe('DuelScreen', () => {
     expect(await screen.findByText(/ТЕБЯ ВЫЗЫВАЕТ @IVAN_LOOP/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'ПРИНЯТЬ ВЫЗОВ' })).toBeEnabled();
     expect(apiMocks.duelChallengePreview).toHaveBeenCalledWith(811);
+  });
+
+  it('offers the wedding button the moment a lonely complement appears', async () => {
+    // Two parallel searches used to stare past each other for fifteen minutes.
+    apiMocks.matchOfferIntent.mockImplementationOnce(() =>
+      Promise.resolve({
+        operation: 'match_offers' as const,
+        query_id: 7,
+        offer_id: 811,
+        duel_id: 0,
+        counter_offer_id: 812,
+        contract_address: '0:' + '11'.repeat(32),
+        amount_nano: '50000000',
+        valid_until: Math.floor(Date.now() / 1000) + 300,
+        network: -3,
+      }),
+    );
+    const offer: Offer = {
+      id: 'open-offer',
+      onchain_offer_id: 811,
+      chance_bps: 5_000,
+      total_pool_nano: 1_000_000_000,
+      stake_nano: 500_000_000,
+      opponent_stake_nano: 500_000_000,
+      fee_bps: 250,
+      fee_exempt: false,
+      payout_nano: 975_000_000,
+      net_profit_nano: 475_000_000,
+      mode: 'afk',
+      direct_opponent_wallet: null,
+      state: 'open',
+      expires_at: new Date(Date.now() + 900_000).toISOString(),
+      funding_tx_hash: 'funding',
+      funding_proof_url: 'https://tonviewer.com/transaction/funding',
+    };
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[offer]}
+        duels={[]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'СОПЕРНИК НАЙДЕН — НАЧАТЬ БОЙ' }),
+    ).toBeEnabled();
+    expect(apiMocks.matchOfferIntent).toHaveBeenCalledWith(811);
   });
 });

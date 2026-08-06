@@ -84,7 +84,10 @@ export function ChanceBar({
         {phase === 'searching' && !reduced && (
           <motion.div
             className="chance-bar-scan"
-            animate={{ x: ['-40%', '140%'] }}
+            // Percent-x is measured against the element's own width, so at
+            // 140% the 34%-wide wave died mid-track. `left` is measured
+            // against the track and carries it past the far edge.
+            animate={{ left: ['-34%', '100%'] }}
             transition={{ duration: 1.8, repeat: Infinity, ease: 'linear' }}
           />
         )}

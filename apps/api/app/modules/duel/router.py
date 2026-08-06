@@ -95,12 +95,14 @@ def action_intent(
     *,
     offer_id: int = 0,
     duel_id: int = 0,
+    counter_offer_id: int = 0,
 ) -> ActionIntent:
     return ActionIntent(
         operation=operation,
         query_id=secrets.randbelow(9_007_199_254_740_990) + 1,
         offer_id=offer_id,
         duel_id=duel_id,
+        counter_offer_id=counter_offer_id,
         contract_address=contract_address,
         amount_nano=str(ACTION_GAS_NANO),
         valid_until=int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
@@ -698,6 +700,63 @@ async def expire_duel_intent(
         offer_id=offer.onchain_offer_id,
         duel_id=duel.onchain_duel_id,
     )
+
+@router.post("/offers/{offer_id}/match-intent", response_model=ActionIntent)
+async def match_offer_intent(
+    offer_id: int,
+    user: CurrentUser,
+    db: Db,
+    settings: Config,
+) -> ActionIntent:
+    """Marry two open offers that quoted past each other.
+
+    Matching normally happens at quote time: the newcomer's transaction carries
+    the id of an already-open counter offer. Two people who tap within the
+    funding window each see an empty room, both open parallel offers, and then
+    stand side by side unable to see each other for fifteen minutes. The
+    contract's MatchOffers is permissionless — either player may send it for
+    gas money — so the app offers exactly that the moment a complement appears.
+    """
+    mine = await db.scalar(
+        select(DuelOffer).where(
+            DuelOffer.onchain_offer_id == offer_id,
+            DuelOffer.user_id == user.id,
+            DuelOffer.network == settings.ton_network_id,
+        )
+    )
+    now = datetime.now(UTC)
+    if (
+        mine is None
+        or mine.state != OfferState.OPEN.value
+        or mine.mode != "afk"
+        or as_utc(mine.expires_at) <= now
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ставка не ждёт соперника")
+    counter = await db.scalar(
+        select(DuelOffer)
+        .where(
+            DuelOffer.network == settings.ton_network_id,
+            DuelOffer.contract_address == mine.contract_address,
+            DuelOffer.user_id != user.id,
+            DuelOffer.mode == "afk",
+            DuelOffer.state == OfferState.OPEN.value,
+            DuelOffer.funding_tx_hash.is_not(None),
+            DuelOffer.total_pool_nano == mine.total_pool_nano,
+            DuelOffer.chance_bps == 10_000 - mine.chance_bps,
+            DuelOffer.expires_at > now,
+        )
+        .order_by(DuelOffer.created_at)
+    )
+    if counter is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Соперника пока нет")
+    return action_intent(
+        "match_offers",
+        mine.contract_address,
+        mine.network,
+        offer_id=mine.onchain_offer_id,
+        counter_offer_id=counter.onchain_offer_id,
+    )
+
 
 @router.get("/offers/{offer_id}/preview", response_model=DuelChallengePreviewView)
 async def duel_offer_preview(

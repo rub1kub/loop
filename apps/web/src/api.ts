@@ -407,6 +407,10 @@ export const api = {
     return await request(`/duels/offers/${offerId}/preview`);
   },
 
+  async matchOfferIntent(offerId: number): Promise<ActionIntent> {
+    return await request(`/duels/offers/${offerId}/match-intent`, { method: 'POST', body: '{}' });
+  },
+
   async revealIntent(duelId: number): Promise<ActionIntent> {
     return await request(`/duels/${duelId}/reveal-intent`, { method: 'POST', body: '{}' });
   },
