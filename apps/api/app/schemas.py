@@ -420,6 +420,20 @@ class ReferralRewardView(BaseModel):
     deposit_nano: int = 0
 
 
+class ReferralPayoutRequestView(BaseModel):
+    id: str
+    address: str
+    amount_nano: int
+    state: str
+    created_at: datetime
+
+
+class ReferralPayoutRequestBody(BaseModel):
+    """Куда отправить заработанное. Сумму назначает сервер, не клиент."""
+
+    address: str = Field(min_length=48, max_length=68)
+
+
 class ReferralView(BaseModel):
     code: str
     url: str
@@ -427,6 +441,10 @@ class ReferralView(BaseModel):
     qualified: int
     reward_points: int
     reward_nano: int
+    # Начислено минус уже выплаченное и минус то, что висит в открытой заявке.
+    available_nano: int = 0
+    minimum_payout_nano: int = 0
+    pending_payout: ReferralPayoutRequestView | None = None
     history: list[ReferralRewardView]
 
 

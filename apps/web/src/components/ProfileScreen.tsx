@@ -17,6 +17,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../api';
+import { humanError } from '../errors';
 import {
   haptic,
   isHapticsEnabled,
@@ -42,27 +43,30 @@ const demoReferral: Referral = {
   invited: 3,
   qualified: 2,
   reward_points: 200,
-  reward_nano: 160_000_000,
+  reward_nano: 960_000_000,
+  available_nano: 900_000_000,
+  minimum_payout_nano: 500_000_000,
+  pending_payout: null,
   history: [
     {
       cause: 'fee_share:demo-1',
       reward_points: 0,
-      reward_nano: 100_000_000,
+      reward_nano: 600_000_000,
       payout_tx_hash: null,
       created_at: new Date().toISOString(),
       invitee_first_name: 'Иван',
       invitee_username: 'ivan_loop',
-      deposit_nano: 5_000_000_000,
+      deposit_nano: 20_000_000_000,
     },
     {
       cause: 'fee_share:demo-2',
       reward_points: 0,
-      reward_nano: 60_000_000,
+      reward_nano: 360_000_000,
       payout_tx_hash: null,
       created_at: new Date(Date.now() - 3_600_000).toISOString(),
       invitee_first_name: 'Мария',
       invitee_username: null,
-      deposit_nano: 3_000_000_000,
+      deposit_nano: 12_000_000_000,
     },
   ],
 };
@@ -91,6 +95,10 @@ export function ProfileScreen({
   const [referral, setReferral] = useState<Referral | null>(() =>
     isMockTelegram() ? demoReferral : null,
   );
+  const [payoutOpen, setPayoutOpen] = useState(false);
+  const [payoutAddress, setPayoutAddress] = useState('');
+  const [payoutBusy, setPayoutBusy] = useState(false);
+  const [payoutError, setPayoutError] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [vibrationEnabled, setVibrationEnabled] = useState(isHapticsEnabled);
   const [notificationPending, setNotificationPending] = useState(false);
@@ -120,6 +128,24 @@ export function ProfileScreen({
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [profile.user.id, profile.user.photo_url]);
+
+  async function submitPayout() {
+    if (payoutBusy || !referral) return;
+    setPayoutBusy(true);
+    setPayoutError('');
+    try {
+      const payout = await api.requestReferralPayout(payoutAddress.trim());
+      setReferral({ ...referral, available_nano: 0, pending_payout: payout });
+      setPayoutOpen(false);
+      setPayoutAddress('');
+      haptic('success');
+    } catch (error: unknown) {
+      setPayoutError(humanError(error, 'Не удалось отправить заявку') ?? '');
+      haptic('warning');
+    } finally {
+      setPayoutBusy(false);
+    }
+  }
 
   async function shareReferral() {
     if (!referral) return;
@@ -210,10 +236,66 @@ export function ProfileScreen({
       <div className="referral-earnings">
         <strong>{formatGram(referral?.reward_nano ?? 0, 2)} GRAM</strong>
         <span>заработано на 3% со взносов приглашённых — навсегда</span>
-        {(referral?.reward_nano ?? 0) > 0 && (
-          <small>Выплата пока вручную: напиши в чат @getloopchat</small>
+        {referral?.pending_payout ? (
+          <small>
+            Заявка на {formatGram(referral.pending_payout.amount_nano, 3)} GRAM отправлена. Выплата
+            придёт на указанный кошелёк.
+          </small>
+        ) : (referral?.available_nano ?? 0) >= (referral?.minimum_payout_nano ?? 0) &&
+          (referral?.available_nano ?? 0) > 0 ? (
+          <button className="referral-payout-open" onClick={() => setPayoutOpen((open) => !open)}>
+            {payoutOpen ? 'ОТМЕНА' : `ВЫВЕСТИ ${formatGram(referral!.available_nano, 3)} GRAM`}
+          </button>
+        ) : (
+          (referral?.reward_nano ?? 0) > 0 && (
+            <small>
+              Вывести можно от {formatGram(referral!.minimum_payout_nano, 2)} GRAM. Приглашай ещё.
+            </small>
+          )
         )}
       </div>
+      {payoutOpen && referral && (
+        <div className="referral-payout">
+          <label className="stake-input">
+            <span className="stake-input-heading">
+              <span>КОШЕЛЁК ДЛЯ ВЫПЛАТЫ</span>
+            </span>
+            <div>
+              <input
+                value={payoutAddress}
+                onChange={(event) => setPayoutAddress(event.target.value)}
+                placeholder={profile.wallet?.address ? 'UQ…' : 'UQ…'}
+                aria-label="Адрес кошелька для выплаты"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+          </label>
+          {profile.wallet && (
+            // Подключённый кошелёк — самый вероятный ответ, но подставлять его
+            // молча нельзя: деньги должны уйти туда, куда человек сказал сам.
+            <button
+              className="referral-payout-fill"
+              onClick={() => setPayoutAddress(profile.wallet!.address)}
+            >
+              Подставить подключённый
+            </button>
+          )}
+          <button
+            className="primary-button"
+            disabled={payoutBusy || payoutAddress.trim().length < 48}
+            onClick={() => void submitPayout()}
+          >
+            {payoutBusy
+              ? 'ОТПРАВЛЯЕМ…'
+              : `ЗАПРОСИТЬ ${formatGram(referral.available_nano, 3)} GRAM`}
+          </button>
+          {payoutError && <p className="referral-payout-error">{payoutError}</p>}
+          <p className="referral-payout-note">
+            Выплата отправляется вручную. Проверь адрес — деньги уйдут именно на него.
+          </p>
+        </div>
+      )}
       <button className="profile-row" onClick={() => void shareReferral()} disabled={!referral}>
         <span className="row-icon">
           <UsersThree />

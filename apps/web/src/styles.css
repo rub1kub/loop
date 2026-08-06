@@ -3723,3 +3723,58 @@ details[open] > summary .disclosure-indicator svg {
   color: var(--muted);
   font-size: 11px;
 }
+
+/* Заявка на вывод рефералки: форма живёт под самой цифрой заработка. */
+.referral-payout-open {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+
+.referral-payout {
+  display: grid;
+  width: 100%;
+  margin: 0 0 10px;
+  gap: 8px;
+}
+
+.referral-payout-fill {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.referral-payout-error {
+  margin: 0;
+  color: #ff8a8a;
+  font-size: 12px;
+}
+
+.referral-payout-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Поле адреса переиспользует разметку поля суммы, где кегль рассчитан на
+   короткое число. Адрес — 48 символов, ему нужен свой размер. */
+.referral-payout .stake-input input {
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.referral-payout .stake-input input::placeholder {
+  font-size: 15px;
+}

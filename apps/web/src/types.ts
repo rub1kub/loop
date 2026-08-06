@@ -364,6 +364,14 @@ export interface ActionIntent {
   network: number;
 }
 
+export interface ReferralPayout {
+  id: string;
+  address: string;
+  amount_nano: number;
+  state: string;
+  created_at: string;
+}
+
 export interface Referral {
   code: string;
   url: string;
@@ -371,6 +379,10 @@ export interface Referral {
   qualified: number;
   reward_points: number;
   reward_nano: number;
+  /** Начислено минус выплаченное минус то, что висит в открытой заявке. */
+  available_nano: number;
+  minimum_payout_nano: number;
+  pending_payout: ReferralPayout | null;
   history: {
     cause: string;
     reward_points: number;

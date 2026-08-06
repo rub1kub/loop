@@ -101,6 +101,9 @@ class Settings(BaseSettings):
     plush_brick_network_id: int = -239
     plush_brick_toncenter_url: str = "https://toncenter.com"
     holder_min_balance_nano: int = 1
+    # Меньше этой суммы заявку на вывод рефералки не примем: перевод стоит газ,
+    # и просить перевести пыль дороже, чем она сама.
+    referral_min_payout_nano: int = 500_000_000
     plush_brick_fee_bps: int = 0
 
     # The in-app announcement. Two thirds of the audience opens the mini app

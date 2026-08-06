@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 
 import httpx
+import structlog
 from aiogram.exceptions import TelegramAPIError
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import func, select, update
@@ -16,6 +17,7 @@ from .models import (
     AuthExchange,
     ReferralAttribution,
     ReferralCode,
+    ReferralPayoutRequest,
     ReferralReward,
     User,
     Wallet,
@@ -49,6 +51,8 @@ from .schemas import (
     PreparedResultShareView,
     ProfileView,
     RatingView,
+    ReferralPayoutRequestBody,
+    ReferralPayoutRequestView,
     ReferralRewardView,
     ReferralView,
     SettingsUpdate,
@@ -64,8 +68,9 @@ from .security import (
     validate_telegram_init_data,
     verify_ton_proof,
 )
-from .ton import TonProviderError, explorer_transaction_url
+from .ton import TonProviderError, explorer_transaction_url, normalize_address
 
+logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1")
 # How long a confirmed PLUSH BRICK balance answers for the profile before the
 # indexer is asked again. Long enough to keep polling clients off the rate
@@ -744,6 +749,25 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
             )
         ).all()
         principals = {row[0]: row[1] for row in rows}
+    paid = await db.scalar(
+        select(func.coalesce(func.sum(ReferralReward.reward_nano), 0))
+        .select_from(ReferralReward)
+        .join(
+            ReferralAttribution,
+            ReferralReward.attribution_id == ReferralAttribution.id,
+        )
+        .where(
+            ReferralAttribution.inviter_user_id == user.id,
+            ReferralReward.payout_tx_hash.is_not(None),
+        )
+    )
+    pending = await db.scalar(
+        select(ReferralPayoutRequest).where(
+            ReferralPayoutRequest.user_id == user.id,
+            ReferralPayoutRequest.state == "requested",
+        )
+    )
+    available = max(int(totals[1]) - int(paid or 0) - (pending.amount_nano if pending else 0), 0)
     return ReferralView(
         code=referral.code,
         url=f"https://t.me/{settings.bot_username}?startapp=ref_{referral.code}",
@@ -751,6 +775,19 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
         qualified=qualified or 0,
         reward_points=int(totals[0]),
         reward_nano=int(totals[1]),
+        available_nano=available,
+        minimum_payout_nano=settings.referral_min_payout_nano,
+        pending_payout=(
+            ReferralPayoutRequestView(
+                id=pending.id,
+                address=pending.address,
+                amount_nano=pending.amount_nano,
+                state=pending.state,
+                created_at=pending.created_at,
+            )
+            if pending
+            else None
+        ),
         history=[
             ReferralRewardView(
                 cause=reward.cause,
@@ -764,6 +801,95 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
             )
             for reward, invitee in rewards
         ],
+    )
+
+
+@router.post("/referrals/payout", response_model=ReferralPayoutRequestView)
+async def request_referral_payout(
+    body: ReferralPayoutRequestBody,
+    user: CurrentUser,
+    db: Db,
+    settings: Config,
+    request: Request,
+) -> ReferralPayoutRequestView:
+    """Ask for the referral share to be sent to a wallet.
+
+    Paying is still done by hand from the treasury; what this adds is a place
+    to ask. The amount is fixed at the moment of asking, so later accruals do
+    not silently change what was agreed, and one open request at a time keeps
+    the same money from being requested twice.
+    """
+    try:
+        address = normalize_address(body.address)
+    except TonProviderError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Проверь адрес кошелька"
+        ) from exc
+    open_request = await db.scalar(
+        select(ReferralPayoutRequest).where(
+            ReferralPayoutRequest.user_id == user.id,
+            ReferralPayoutRequest.state == "requested",
+        )
+    )
+    if open_request is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Заявка уже отправлена. Дождись выплаты, потом можно подать новую.",
+        )
+    earned = await db.scalar(
+        select(func.coalesce(func.sum(ReferralReward.reward_nano), 0))
+        .select_from(ReferralReward)
+        .join(
+            ReferralAttribution,
+            ReferralReward.attribution_id == ReferralAttribution.id,
+        )
+        .where(
+            ReferralAttribution.inviter_user_id == user.id,
+            ReferralReward.payout_tx_hash.is_(None),
+        )
+    )
+    amount = int(earned or 0)
+    if amount < settings.referral_min_payout_nano:
+        floor = settings.referral_min_payout_nano / 1_000_000_000
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"Вывести можно от {floor:.2f}".replace(".", ",").rstrip("0").rstrip(",")
+            + " GRAM. Приглашай ещё.",
+        )
+    payout = ReferralPayoutRequest(
+        user_id=user.id,
+        address=address,
+        amount_nano=amount,
+    )
+    db.add(payout)
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        # Две вкладки нажали одновременно: открытая заявка ровно одна.
+        await db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "Заявка уже отправлена.") from exc
+    await db.refresh(payout)
+
+    bot = request.app.state.bot
+    if bot is not None and settings.alert_chat_id:
+        who = f"@{user.username}" if user.username else user.first_name
+        try:
+            await bot.send_message(
+                settings.alert_chat_id,
+                "💸 Заявка на вывод рефералки\n\n"
+                f"{who} (id {user.telegram_id})\n"
+                f"Сумма: {amount / 1_000_000_000:.3f} GRAM\n"
+                f"Кошелёк: {body.address}",
+            )
+        except TelegramAPIError:
+            # Заявка уже записана; недоставленное уведомление её не отменяет.
+            logger.warning("referral_payout_alert_failed", user_id=user.id)
+    return ReferralPayoutRequestView(
+        id=payout.id,
+        address=payout.address,
+        amount_nano=payout.amount_nano,
+        state=payout.state,
+        created_at=payout.created_at,
     )
 
 

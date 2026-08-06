@@ -1482,3 +1482,185 @@ async def test_the_biggest_positions_may_not_aim_for_double(client, app) -> None
     )
     assert at_the_line.status_code == 200, at_the_line.text
     settings.bank_double_limit_nano = 5 * GRAM
+
+
+@pytest.mark.asyncio
+async def test_a_referral_payout_can_be_asked_for_once_and_is_fixed_when_asked(
+    client, app
+) -> None:
+    # People earned, watched the figure grow, and had nowhere to say "send it
+    # here" except the chat. Paying stays manual; asking should not be. The
+    # amount is frozen at the moment of asking so later accruals cannot
+    # silently change what was agreed, and a second open request would ask for
+    # the same money twice.
+    from app.models import (
+        ReferralAttribution,
+        ReferralCode,
+        ReferralPayoutRequest,
+        ReferralReward,
+    )
+
+    settings = get_settings()
+    settings.referral_min_payout_nano = 500_000_000
+    headers = await authenticate(client, 777000999)
+    wallet_address = "UQD8H0kPp7Y0AT-wDHAzyG8wiWPy6-KxIBcExD_WId_okeHK"
+
+    async with app.state.session_factory() as db:
+        me = await db.scalar(select(User).where(User.telegram_id == 777000999))
+        invitee = User(telegram_id=777001000, first_name="Гость")
+        db.add(invitee)
+        await db.flush()
+        db.add(ReferralCode(code="payout-code", owner_user_id=me.id))
+        attribution = ReferralAttribution(
+            inviter_user_id=me.id, invitee_user_id=invitee.id, code="payout-code"
+        )
+        db.add(attribution)
+        await db.flush()
+        db.add_all(
+            [
+                ReferralReward(
+                    attribution_id=attribution.id,
+                    cause="fee_share:paid-one",
+                    reward_nano=200_000_000,
+                    payout_tx_hash="already-sent",
+                ),
+                ReferralReward(
+                    attribution_id=attribution.id,
+                    cause="fee_share:open-one",
+                    reward_nano=900_000_000,
+                ),
+            ]
+        )
+        await db.commit()
+        me_id = me.id
+
+    before = (await client.get("/api/v1/referrals", headers=headers)).json()
+    assert before["reward_nano"] == 1_100_000_000
+    # What is left to send: everything accrued minus what already went out.
+    assert before["available_nano"] == 900_000_000
+    assert before["pending_payout"] is None
+
+    refused = await client.post(
+        "/api/v1/referrals/payout", headers=headers, json={"address": "not-an-address-at-all-x"}
+    )
+    assert refused.status_code == 422
+
+    asked = await client.post(
+        "/api/v1/referrals/payout", headers=headers, json={"address": wallet_address}
+    )
+    assert asked.status_code == 200, asked.text
+    assert asked.json()["amount_nano"] == 900_000_000
+    assert asked.json()["state"] == "requested"
+
+    # Asking again while one is open would put the same money in the queue twice.
+    again = await client.post(
+        "/api/v1/referrals/payout", headers=headers, json={"address": wallet_address}
+    )
+    assert again.status_code == 409
+
+    after = (await client.get("/api/v1/referrals", headers=headers)).json()
+    assert after["pending_payout"]["amount_nano"] == 900_000_000
+    # Nothing is left to ask for while the request stands.
+    assert after["available_nano"] == 0
+
+    async with app.state.session_factory() as db:
+        stored = await db.scalar(
+            select(ReferralPayoutRequest).where(ReferralPayoutRequest.user_id == me_id)
+        )
+        # Stored in raw form, so the treasury pays the same wallet either way.
+        assert stored.address.startswith("0:")
+        assert stored.amount_nano == 900_000_000
+
+
+@pytest.mark.asyncio
+async def test_dust_is_not_worth_a_transfer(client, app) -> None:
+    from app.models import ReferralAttribution, ReferralCode, ReferralReward
+
+    settings = get_settings()
+    settings.referral_min_payout_nano = 500_000_000
+    headers = await authenticate(client, 777001001)
+
+    async with app.state.session_factory() as db:
+        me = await db.scalar(select(User).where(User.telegram_id == 777001001))
+        invitee = User(telegram_id=777001002, first_name="Гость")
+        db.add(invitee)
+        await db.flush()
+        db.add(ReferralCode(code="dust-code", owner_user_id=me.id))
+        attribution = ReferralAttribution(
+            inviter_user_id=me.id, invitee_user_id=invitee.id, code="dust-code"
+        )
+        db.add(attribution)
+        await db.flush()
+        db.add(
+            ReferralReward(
+                attribution_id=attribution.id,
+                cause="fee_share:dust",
+                reward_nano=10_000_000,
+            )
+        )
+        await db.commit()
+
+    refused = await client.post(
+        "/api/v1/referrals/payout",
+        headers=headers,
+        json={"address": "UQD8H0kPp7Y0AT-wDHAzyG8wiWPy6-KxIBcExD_WId_okeHK"},
+    )
+    assert refused.status_code == 422
+    assert "0,5" in refused.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_the_owner_is_told_about_a_payout_request(client, app, monkeypatch) -> None:
+    # The request is worth nothing if nobody sees it: paying is manual, so the
+    # message in the owner's chat is the whole delivery mechanism.
+    from app.models import ReferralAttribution, ReferralCode, ReferralReward
+
+    settings = get_settings()
+    settings.referral_min_payout_nano = 500_000_000
+    settings.alert_chat_id = 1084693264
+    headers = await authenticate(client, 777001003)
+
+    async with app.state.session_factory() as db:
+        me = await db.scalar(select(User).where(User.telegram_id == 777001003))
+        me.username = "zovushiy"
+        invitee = User(telegram_id=777001004, first_name="Гость")
+        db.add(invitee)
+        await db.flush()
+        db.add(ReferralCode(code="alert-code", owner_user_id=me.id))
+        attribution = ReferralAttribution(
+            inviter_user_id=me.id, invitee_user_id=invitee.id, code="alert-code"
+        )
+        db.add(attribution)
+        await db.flush()
+        db.add(
+            ReferralReward(
+                attribution_id=attribution.id,
+                cause="fee_share:alert",
+                reward_nano=1_500_000_000,
+            )
+        )
+        await db.commit()
+
+    sent: list[tuple[int, str]] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id: int, text: str) -> None:
+            sent.append((chat_id, text))
+
+    monkeypatch.setattr(app.state, "bot", FakeBot(), raising=False)
+
+    asked = await client.post(
+        "/api/v1/referrals/payout",
+        headers=headers,
+        json={"address": "UQD8H0kPp7Y0AT-wDHAzyG8wiWPy6-KxIBcExD_WId_okeHK"},
+    )
+    assert asked.status_code == 200, asked.text
+
+    assert len(sent) == 1
+    chat_id, text = sent[0]
+    assert chat_id == 1084693264
+    assert "@zovushiy" in text
+    assert "1.500 GRAM" in text
+    # The address is echoed in the form the person typed, to be checked by eye.
+    assert "UQD8H0kPp7Y0AT-wDHAzyG8wiWPy6-KxIBcExD_WId_okeHK" in text
+    settings.alert_chat_id = 0

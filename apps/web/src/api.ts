@@ -19,6 +19,7 @@ import type {
   PreparedResultShare,
   Rating,
   Referral,
+  ReferralPayout,
   ResultCard,
   Wallet,
 } from './types';
@@ -453,6 +454,13 @@ export const api = {
 
   async referrals(): Promise<Referral> {
     return await request('/referrals');
+  },
+
+  async requestReferralPayout(address: string): Promise<ReferralPayout> {
+    return await request('/referrals/payout', {
+      method: 'POST',
+      body: JSON.stringify({ address }),
+    });
   },
 
   async discardBankPosition(positionId: number): Promise<void> {

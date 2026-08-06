@@ -198,6 +198,25 @@ class ReferralReward(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class ReferralPayoutRequest(Base):
+    """Кто, сколько и на какой кошелёк просит вывести с рефералки.
+
+    Выплата остаётся ручной: строка здесь фиксирует просьбу и её сумму на
+    момент подачи, а деньги отправляет владелец. Пока заявка открыта, вторую
+    подать нельзя — иначе одна и та же сумма попросилась бы дважды.
+    """
+
+    __tablename__ = "referral_payout_requests"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    address: Mapped[str] = mapped_column(String(68), nullable=False)
+    amount_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), default="requested", nullable=False)
+    payout_tx_hash: Mapped[str | None] = mapped_column(String(96))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ChainCheckpoint(Base):
     __tablename__ = "chain_checkpoints"
     key: Mapped[str] = mapped_column(String(128), primary_key=True)
