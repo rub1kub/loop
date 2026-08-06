@@ -187,3 +187,19 @@ async def test_bot_configuration_only_mutates_drifted_metadata() -> None:
     bot = FakeBot()
     await configure_bot(bot, settings)  # type: ignore[arg-type]
     assert bot.calls == ["description"]
+
+
+def test_the_share_button_asks_for_an_invite_without_a_code() -> None:
+    # The share button under a broadcast sends "invite" and nothing else: the
+    # card is built for whoever pressed it, so the code in the query was never
+    # read anyway. Requiring one meant the button could not ask at all — and a
+    # share that carries no referral code credits nobody for the people it
+    # brings, on the one action the button exists for.
+    from app.bot import INVITE_PATTERN
+
+    assert INVITE_PATTERN.match("invite")
+    assert INVITE_PATTERN.match("  invite  ")
+    # The old form still resolves, so links already sent keep working.
+    assert INVITE_PATTERN.match("invite abcd1234")
+    assert not INVITE_PATTERN.match("inviteXX")
+    assert not INVITE_PATTERN.match("result abc")

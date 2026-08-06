@@ -54,7 +54,7 @@ logger = structlog.get_logger()
 
 INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
 RESULT_PATTERN = re.compile(r"^\s*result\s+([A-Za-z0-9_-]{20,32})\s*$", re.IGNORECASE)
-INVITE_PATTERN = re.compile(r"^\s*invite\s+[A-Za-z0-9_-]{4,24}\s*$", re.IGNORECASE)
+INVITE_PATTERN = re.compile(r"^\s*invite(\s+[A-Za-z0-9_-]{4,24})?\s*$", re.IGNORECASE)
 BOT_NAME = "LOOP"
 BOT_DESCRIPTION = (
     "LOOP — живой цикл внутри Telegram. В BANK новые взносы постепенно наполняют "
@@ -254,28 +254,14 @@ def create_dispatcher(
         # и человек пересылает новость дальше. Копия сообщения не наследует
         # разметку исходника, поэтому она задаётся здесь явно, и кнопка
         # владельца «разослать» на людей не попадает.
-        # Что человек отправляет дальше, должно давать причину открыть, а не
-        # описывать устройство продукта: «BANK и DUEL внутри Telegram» ничего
-        # не обещает тому, кто про LOOP не слышал. Здесь — обещание и повод.
+        # Кнопка отправляет не ссылку, а инлайн-приглашение: карточку строит
+        # бот по тому, кто её нажал, и подставляет ЕГО реферальный код. Прежняя
+        # ссылка вела на голый t.me/getloopbot — человек приводил людей и не
+        # получал за них ничего, ровно на том действии, ради которого кнопка и
+        # существует.
         share = InlineKeyboardMarkup(
             inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="📤 ПОДЕЛИТЬСЯ",
-                        url=(
-                            "https://t.me/share/url?url="
-                            f"https://t.me/{settings.bot_username.removeprefix('@')}"
-                            "&text="
-                            + quote(
-                                "Финансовая пирамида в Telegram. Прямо так и называется — "
-                                "никто ничего не прячет.\n\n"
-                                "Встаёшь в очередь, следующие взносы двигают её к тебе. "
-                                "Каждая выплата лежит в блокчейне и проверяется кем угодно.\n\n"
-                                "Зовёшь своих — получаешь 3% с каждого их взноса. Навсегда."
-                            )
-                        ),
-                    )
-                ]
+                [InlineKeyboardButton(text="📤 ПОДЕЛИТЬСЯ", switch_inline_query="invite")]
             ]
         )
         async with session_factory() as db:
