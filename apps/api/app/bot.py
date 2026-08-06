@@ -3,6 +3,7 @@ import re
 import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from urllib.parse import quote
 
 import structlog
 from aiogram import Bot, Dispatcher, Router
@@ -249,6 +250,24 @@ def create_dispatcher(
             await query.answer("Эта рассылка уже уходила", show_alert=True)
             return
         await query.answer("Рассылаю…")
+        # Кнопка под рассылкой — не для владельца, а для получателя: один тап,
+        # и человек пересылает новость дальше. Копия сообщения не наследует
+        # разметку исходника, поэтому она задаётся здесь явно, и кнопка
+        # владельца «разослать» на людей не попадает.
+        share = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📤 ПОДЕЛИТЬСЯ",
+                        url=(
+                            "https://t.me/share/url?url="
+                            f"https://t.me/{settings.bot_username.removeprefix('@')}"
+                            "&text=" + quote("LOOP: BANK и DUEL внутри Telegram.")
+                        ),
+                    )
+                ]
+            ]
+        )
         async with session_factory() as db:
             targets = list(await db.scalars(select(User.telegram_id).order_by(User.created_at)))
         delivered = 0
@@ -259,6 +278,7 @@ def create_dispatcher(
                     chat_id=chat_id,
                     from_chat_id=settings.alert_chat_id,
                     message_id=int(source_id),
+                    reply_markup=share,
                 )
                 delivered += 1
             except TelegramRetryAfter as exc:
