@@ -171,6 +171,9 @@ class BankLimitView(BaseModel):
     principal_limit_nano: int
     next_limit_nano: int | None
     completions_until_next: int | None
+    # Выше этой суммы цель ×2 недоступна: крупная позиция с двойной целью
+    # требует вдвое больше будущих взносов, чтобы закрыться.
+    double_limit_nano: int = 0
 
 
 class BankContractCall(BaseModel):

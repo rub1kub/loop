@@ -6,10 +6,11 @@ from datetime import UTC, datetime
 
 import structlog
 from aiogram import Bot, Dispatcher, Router
-from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     BotCommand,
+    CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InlineQuery,
@@ -220,6 +221,58 @@ def create_dispatcher(
         except TelegramBadRequest as exc:
             logger.warning("support_rich_message_rejected", error=str(exc))
             await message.answer(SUPPORT_TEXT, reply_markup=keyboard)
+
+    @router.callback_query(lambda query: (query.data or "").startswith("bcast:"))
+    async def broadcast_draft(query: CallbackQuery) -> None:
+        """Send the draft above this button to everyone who can receive it.
+
+        A draft arrives in the owner's chat first and is only ever a draft: the
+        message is written, read, and then chosen. The button copies that exact
+        message, so what people receive is what the owner approved — not a
+        second rendering that could differ from it.
+
+        Two guards, because one tap reaches four hundred people: only the
+        configured owner chat may press it, and a message already sent cannot
+        be sent twice.
+        """
+        presser = query.from_user.id if query.from_user else 0
+        bot = query.bot
+        if bot is None or not settings.alert_chat_id or presser != settings.alert_chat_id:
+            await query.answer("Недоступно", show_alert=True)
+            return
+        source_id = (query.data or "").removeprefix("bcast:")
+        if not source_id.isdigit():
+            await query.answer("Нечего рассылать", show_alert=True)
+            return
+        guard = f"loop:broadcast-sent:{source_id}"
+        if not await redis_client.set(guard, "1", ex=86_400, nx=True):
+            await query.answer("Эта рассылка уже уходила", show_alert=True)
+            return
+        await query.answer("Рассылаю…")
+        async with session_factory() as db:
+            targets = list(await db.scalars(select(User.telegram_id).order_by(User.created_at)))
+        delivered = 0
+        unreachable = 0
+        for chat_id in targets:
+            try:
+                await bot.copy_message(
+                    chat_id=chat_id,
+                    from_chat_id=settings.alert_chat_id,
+                    message_id=int(source_id),
+                )
+                delivered += 1
+            except TelegramRetryAfter as exc:
+                await asyncio.sleep(exc.retry_after)
+                unreachable += 1
+            except TelegramAPIError:
+                # Blocked, never started, deactivated — none of it should stop
+                # the rest of the list.
+                unreachable += 1
+            await asyncio.sleep(0.06)
+        await bot.send_message(
+            settings.alert_chat_id,
+            f"Разослано: {delivered}. Не доставлено: {unreachable} из {len(targets)}.",
+        )
 
     @router.inline_query()
     async def inline_result_or_duel(query: InlineQuery) -> None:

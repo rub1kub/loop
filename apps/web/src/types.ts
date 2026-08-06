@@ -235,6 +235,8 @@ export interface BankLimit {
   principal_limit_nano: number;
   next_limit_nano: number | null;
   completions_until_next: number | null;
+  /** Выше этой суммы цель ×2 недоступна. */
+  double_limit_nano: number;
 }
 
 export interface Offer {

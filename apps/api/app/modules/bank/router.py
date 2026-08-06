@@ -88,16 +88,32 @@ async def bank_limit(db: Db, settings: Config) -> BankLimitView:
         principal_limit_nano=current,
         next_limit_nano=next_limit,
         completions_until_next=remaining,
+        double_limit_nano=settings.bank_double_limit_nano,
     )
 
 
-async def validate_principal(db: Db, settings: Config, principal_nano: int) -> BankLimitView:
+async def validate_principal(
+    db: Db,
+    settings: Config,
+    principal_nano: int,
+    multiplier_bps: int | None = None,
+) -> BankLimitView:
     limit = await bank_limit(db, settings)
     maximum = min(settings.bank_max_principal_nano, limit.principal_limit_nano)
     if not settings.bank_min_principal_nano <= principal_nano <= maximum:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             f"Сейчас можно внести от 1 до {maximum // GRAM} GRAM",
+        )
+    # A big position with a doubled target asks the queue for twice as much
+    # future money to close. The ceiling rose to ten; the largest targets did
+    # not rise with it.
+    double_limit = settings.bank_double_limit_nano
+    if multiplier_bps == 20_000 and double_limit and principal_nano > double_limit:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"Цель ×2 доступна до {double_limit // GRAM} GRAM. "
+            f"Для суммы больше выбери ×1,25 или ×1,5.",
         )
     return limit
 
@@ -302,7 +318,7 @@ async def preview_position(
         )
     if not settings.bank_contract_address:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "BANK contract is not configured")
-    await validate_principal(db, settings, body.principal_nano)
+    await validate_principal(db, settings, body.principal_nano, body.multiplier_bps)
     await active_wallet(db, user.id, settings.ton_network_id)
     fee_bps = await effective_contract_fee(
         db,
@@ -357,7 +373,7 @@ async def quote_position(
         ) from exc
     if admin.paused:
         raise HTTPException(status.HTTP_409_CONFLICT, "BANK сейчас закрыт")
-    await validate_principal(db, settings, body.principal_nano)
+    await validate_principal(db, settings, body.principal_nano, body.multiplier_bps)
     wallet = await active_wallet(db, user.id, settings.ton_network_id)
     await db.execute(
         update(BankPosition)

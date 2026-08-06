@@ -65,9 +65,10 @@ export function BankScreen({
     isMockTelegram()
       ? {
           completed_positions: 0,
-          principal_limit_nano: 5_000_000_000,
-          next_limit_nano: 10_000_000_000,
+          principal_limit_nano: 10_000_000_000,
+          next_limit_nano: 15_000_000_000,
           completions_until_next: 25,
+          double_limit_nano: 5_000_000_000,
         }
       : null,
   );
@@ -76,6 +77,7 @@ export function BankScreen({
   /** The quote holding this wallet's position slot until the wallet answers. */
   const quoted = useRef<number | null>(null);
 
+  const doubleLimitNano = limit?.double_limit_nano ?? 0;
   const principalNano = useMemo(() => {
     try {
       return parseGram(amount);
@@ -83,6 +85,12 @@ export function BankScreen({
       return 0;
     }
   }, [amount]);
+
+  const doubleBlocked = doubleLimitNano > 0 && principalNano > doubleLimitNano;
+  // Выбранная цель выводится, а не хранится: сумма поднялась выше порога —
+  // ×2 сама опускается до ×1,5, и шаг подтверждения не отказывает уже после
+  // того, как человек всё выбрал.
+  const effectiveMultiplier = doubleBlocked && multiplier === 20000 ? 15000 : multiplier;
 
   useEffect(() => {
     if (!wizard) return setBackAction();
@@ -134,8 +142,8 @@ export function BankScreen({
       isMockTelegram()
         ? {
             principal_nano: principalNano,
-            multiplier_bps: multiplier,
-            target_payout_nano: (principalNano * multiplier) / 10_000,
+            multiplier_bps: effectiveMultiplier,
+            target_payout_nano: (principalNano * effectiveMultiplier) / 10_000,
             fee_nano: principalNano / 10,
             gas_nano: 80_000_000,
             transaction_amount_nano: principalNano + 80_000_000,
@@ -143,14 +151,14 @@ export function BankScreen({
             network: -3,
           }
         : null,
-    [multiplier, principalNano],
+    [effectiveMultiplier, principalNano],
   );
 
   useEffect(() => {
     if (wizard !== 'multiplier' || !canPreview) return;
     let active = true;
     void api
-      .previewBankPosition({ principal_nano: principalNano, multiplier_bps: multiplier })
+      .previewBankPosition({ principal_nano: principalNano, multiplier_bps: effectiveMultiplier })
       .then((result) => {
         if (active) setFetchedPreview(result);
       })
@@ -161,7 +169,7 @@ export function BankScreen({
     return () => {
       active = false;
     };
-  }, [canPreview, multiplier, principalNano, wizard]);
+  }, [canPreview, effectiveMultiplier, principalNano, wizard]);
 
   const preview = mockPreview ?? (canPreview ? fetchedPreview : null);
 
@@ -176,7 +184,7 @@ export function BankScreen({
           position_id: newOfferId(),
           owner_wallet: profile.wallet?.address ?? `0:${'42'.repeat(32)}`,
           principal_nano: preview.principal_nano,
-          multiplier_bps: multiplier,
+          multiplier_bps: effectiveMultiplier,
           target_payout_nano: preview.target_payout_nano,
           funded_amount_nano: initialFunding,
           remaining_amount_nano: preview.target_payout_nano - initialFunding,
@@ -341,21 +349,34 @@ export function BankScreen({
                 <p className="eyebrow">ШАГ 2 ИЗ 2 · ЦЕЛЬ</p>
                 <h3>Выбери целевую выплату.</h3>
                 <div className="choice-list">
-                  {multipliers.map((value) => (
-                    <button
-                      key={value}
-                      className={multiplier === value ? 'active' : ''}
-                      onClick={() => {
-                        setMultiplier(value);
-                        haptic('selection');
-                      }}
-                    >
-                      <span>×{String(value / 10_000).replace('.', ',')}</span>
-                      <strong>{formatGram((principalNano * value) / 10_000, 3)} GRAM</strong>
-                      {multiplier === value && <Check aria-hidden="true" />}
-                    </button>
-                  ))}
+                  {multipliers.map((value) => {
+                    const blocked = value === 20000 && doubleBlocked;
+                    return (
+                      <button
+                        key={value}
+                        className={effectiveMultiplier === value ? 'active' : ''}
+                        disabled={blocked}
+                        onClick={() => {
+                          setMultiplier(value);
+                          haptic('selection');
+                        }}
+                      >
+                        <span>×{String(value / 10_000).replace('.', ',')}</span>
+                        <strong>{formatGram((principalNano * value) / 10_000, 3)} GRAM</strong>
+                        {effectiveMultiplier === value && !blocked && <Check aria-hidden="true" />}
+                      </button>
+                    );
+                  })}
                 </div>
+                {doubleBlocked && (
+                  // Отказ после выбора читался бы как поломка. Цель гаснет
+                  // сразу и объясняет причину: крупная позиция с двойной целью
+                  // требует вдвое больше будущих взносов, чтобы закрыться.
+                  <p className="bank-flow-note">
+                    Цель ×2 доступна до {formatGram(doubleLimitNano, 0)} GRAM. Чем больше цель, тем
+                    дольше очередь её закрывает.
+                  </p>
+                )}
                 <dl className="detail-list bank-flow-summary">
                   <Detail label="Ты платишь" value={`${formatGram(principalNano, 3)} GRAM`} />
                   {preview && (

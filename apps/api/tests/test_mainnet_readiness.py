@@ -358,23 +358,23 @@ def test_unreviewed_release_caps_value_below_a_reviewed_one(monkeypatch) -> None
         "treasury": MAINNET_ADDRESS,
         "duel_invite_signer_public_key": "b" * 64,
     }
-    # A reviewed release may carry 10 GRAM; an unreviewed one is held at 5,
-    # raised from 1 over the opening evening by the owner. The cap is the
+    # A reviewed release may carry 10 GRAM; an unreviewed one is held at 10
+    # as well now, raised from 1 across the opening day by the owner. The cap is the
     # compensating control rather than a formality, so the gate still has to bite.
     over_cap = {
         **base,
         "initial_limits": {
-            "bank_max_principal_nano": 9_000_000_000,
+            "bank_max_principal_nano": 19_000_000_000,
             "duel_max_pool_nano": 1_000_000_000,
         },
     }
-    with pytest.raises(readiness.ReadinessError, match="5 GRAM launch cap"):
+    with pytest.raises(readiness.ReadinessError, match="10 GRAM launch cap"):
         readiness.validate_release_evidence(over_cap, release_dir / "release.json")
 
     at_cap = {
         **base,
         "initial_limits": {
-            "bank_max_principal_nano": 5_000_000_000,
+            "bank_max_principal_nano": 10_000_000_000,
             "duel_max_pool_nano": 1_000_000_000,
         },
     }
@@ -383,11 +383,11 @@ def test_unreviewed_release_caps_value_below_a_reviewed_one(monkeypatch) -> None
     just_over = {
         **base,
         "initial_limits": {
-            "bank_max_principal_nano": 6_000_000_000,
+            "bank_max_principal_nano": 11_000_000_000,
             "duel_max_pool_nano": 1_000_000_000,
         },
     }
-    with pytest.raises(readiness.ReadinessError, match="5 GRAM launch cap"):
+    with pytest.raises(readiness.ReadinessError, match="10 GRAM launch cap"):
         readiness.validate_release_evidence(just_over, release_dir / "release.json")
 
     # The cap is per participant, and a DUEL pool holds two of them: measured
@@ -395,8 +395,8 @@ def test_unreviewed_release_caps_value_below_a_reviewed_one(monkeypatch) -> None
     two_players = {
         **base,
         "initial_limits": {
-            "bank_max_principal_nano": 5_000_000_000,
-            "duel_max_pool_nano": 10_000_000_000,
+            "bank_max_principal_nano": 10_000_000_000,
+            "duel_max_pool_nano": 20_000_000_000,
         },
     }
     assert (
@@ -406,11 +406,11 @@ def test_unreviewed_release_caps_value_below_a_reviewed_one(monkeypatch) -> None
     three_players = {
         **base,
         "initial_limits": {
-            "bank_max_principal_nano": 5_000_000_000,
-            "duel_max_pool_nano": 11_000_000_000,
+            "bank_max_principal_nano": 10_000_000_000,
+            "duel_max_pool_nano": 21_000_000_000,
         },
     }
-    with pytest.raises(readiness.ReadinessError, match="5 GRAM launch cap"):
+    with pytest.raises(readiness.ReadinessError, match="10 GRAM launch cap"):
         readiness.validate_release_evidence(three_players, release_dir / "release.json")
 
     within_cap = {

@@ -20,15 +20,17 @@ DEFAULT_RELEASE_FILE = ROOT / "deployments" / "mainnet" / "release.json"
 COMMIT = re.compile(r"[0-9a-f]{40}", re.IGNORECASE)
 HASH = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
 INITIAL_VALUE_CAP_NANO = 10_000_000_000
-# Raised 1 → 3 → 5 GRAM on 2026-08-05 by the owner, over the evening the product
-# opened, as the contract's own ladder climbed to rung 20 on 133 completed
-# positions and the queue moved 399 GRAM in and 357 out in a single hour with no
-# contract fault. Still an owner's decision rather than a review: nothing was
-# independently audited between any of these numbers, so what changed is the
-# appetite, not the evidence. A ceiling governs concentration, not throughput —
-# it decides how much one person has standing in the queue on the day deposits
-# stop arriving. Whoever raises it next should be able to say that out loud.
-UNREVIEWED_VALUE_CAP_NANO = 5_000_000_000
+# Raised 1 → 3 → 5 → 10 GRAM by the owner across the opening day, as the
+# contract's own ladder climbed to rung 30 on 169 completed positions. Still an
+# owner's decision rather than a review: nothing was independently audited
+# between any of these numbers, so what changed is the appetite, not the
+# evidence. A ceiling governs concentration, not throughput — it decides how
+# much one person has standing in the queue on the day deposits stop arriving.
+# The doubling target does not follow it up: above LOOP_BANK_DOUBLE_LIMIT_NANO
+# a position may aim for ×1,25 or ×1,5, never ×2, so the biggest entries stop
+# demanding the biggest future. Whoever raises this next should be able to say
+# all of that out loud.
+UNREVIEWED_VALUE_CAP_NANO = 10_000_000_000
 
 
 class ReadinessError(RuntimeError):

@@ -1439,3 +1439,46 @@ async def test_a_duel_card_names_the_loser_and_says_so_out_loud(client, app) -> 
     assert image.status_code == 200
     assert image.headers["content-type"] == "image/jpeg"
     assert winner_headers
+
+
+@pytest.mark.asyncio
+async def test_the_biggest_positions_may_not_aim_for_double(client, app) -> None:
+    # The ceiling rose to ten GRAM; the doubling target did not follow it up.
+    # A ten-GRAM position aiming at x2 asks the queue for roughly 22 GRAM of
+    # future deposits to close, against 16.7 at x1.5 — and 109 of the 118 open
+    # positions were already sitting at x2 when this shipped. The threshold is
+    # exercised below the ladder's own limit so this tests the rule, not the
+    # rung a fresh queue happens to be standing on.
+    settings = get_settings()
+    settings.bank_double_limit_nano = GRAM // 2
+    headers = await authenticate(client, 777000888)
+    await add_wallet(app, 777000888, byte="8")
+
+    limits = (await client.get("/api/v1/bank/limits", headers=headers)).json()
+    assert limits["double_limit_nano"] == GRAM // 2
+
+    over = await client.post(
+        "/api/v1/bank/positions/preview",
+        headers=headers,
+        json={"principal_nano": GRAM, "multiplier_bps": 20_000},
+    )
+    assert over.status_code == 422
+    assert "×2" in over.json()["detail"]
+
+    gentler = await client.post(
+        "/api/v1/bank/positions/preview",
+        headers=headers,
+        json={"principal_nano": GRAM, "multiplier_bps": 15_000},
+    )
+    assert gentler.status_code == 200, gentler.text
+    assert gentler.json()["target_payout_nano"] == GRAM * 15_000 // 10_000
+
+    # Exactly at the line is still allowed: the rule bites above it, not on it.
+    settings.bank_double_limit_nano = GRAM
+    at_the_line = await client.post(
+        "/api/v1/bank/positions/preview",
+        headers=headers,
+        json={"principal_nano": GRAM, "multiplier_bps": 20_000},
+    )
+    assert at_the_line.status_code == 200, at_the_line.text
+    settings.bank_double_limit_nano = 5 * GRAM

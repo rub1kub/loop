@@ -13,7 +13,7 @@
   "treasury": "EQBQlkBiBOwKHFGmAVgBs3gaOuPRWJ1xlXRkBMxTQafUKRXN",
   "duel_invite_signer_public_key": "4071653b6203e099b7a47c116a12a75272383f9f2018da86b200ff8fae79bb93",
   "initial_limits": {
-    "bank_max_principal_nano": 5000000000,
+    "bank_max_principal_nano": 10000000000,
     "duel_max_pool_nano": 10000000000
   }
 }

@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     bank_position_gas_nano: int = 80_000_000
     bank_min_principal_nano: int = 1_000_000_000
     bank_max_principal_nano: int = 100_000_000_000
+    # Выше этой суммы цель ×2 закрыта. Позиция на 10 GRAM с целью ×2 требует
+    # около 22 GRAM последующих взносов; при ×1,5 — около 16,7. Сейчас 109 из
+    # 118 открытых позиций взяты на ×2, и именно они делают хвост очереди
+    # тяжёлым. Контракт такого правила не знает: он примет ×2 на любую сумму,
+    # так что это ограничение приложения, а не цепи.
+    bank_double_limit_nano: int = 5_000_000_000
     # Response-only test aid. It never changes the chain projection or payout
     # logic and is forbidden by the mainnet gate below.
     bank_debug_telegram_ids: str = ""
