@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import and_, func, or_, select
@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
 from .config import Settings, get_settings
-from .models import ReferralAttribution, User
+from .models import ReferralAttribution, ReferralReward, User
 from .modules.bank.models import BankPayout, BankPosition, BankPositionStatus
 from .modules.duel.models import (
     Duel,
@@ -19,6 +19,7 @@ from .modules.duel.models import (
     OfferState,
 )
 from .schemas import (
+    InviteRaceEntryView,
     RatingEntryView,
     RatingFormulaItem,
     RatingPulseView,
@@ -148,6 +149,21 @@ def all_user_ids(groups: Iterable[dict[str, int]]) -> set[str]:
     for group in groups:
         result.update(group)
     return result
+
+
+MSK = timezone(timedelta(hours=3))
+
+
+def race_week_window(now: datetime | None = None) -> tuple[datetime, datetime]:
+    """Monday 00:00 МСК to the next — the audience's week, not the server's."""
+    current = now or datetime.now(UTC)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=UTC)
+    local = current.astimezone(MSK)
+    monday = (local - timedelta(days=local.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return monday.astimezone(UTC), (monday + timedelta(days=7)).astimezone(UTC)
 
 
 async def build_rating(
@@ -377,6 +393,66 @@ async def build_rating(
         .where(DuelSettlement.created_at >= since)
     )
 
+    week_start, week_end = race_week_window(current)
+    earned_rows = (
+        await db.execute(
+            select(
+                ReferralAttribution.inviter_user_id,
+                func.coalesce(func.sum(ReferralReward.reward_nano), 0),
+            )
+            .join(ReferralReward, ReferralReward.attribution_id == ReferralAttribution.id)
+            .where(
+                ReferralReward.created_at >= week_start,
+                ReferralReward.created_at < week_end,
+                ReferralReward.reward_nano > 0,
+            )
+            .group_by(ReferralAttribution.inviter_user_id)
+        )
+    ).all()
+    invited_rows = (
+        await db.execute(
+            select(ReferralAttribution.inviter_user_id, func.count())
+            .where(
+                ReferralAttribution.created_at >= week_start,
+                ReferralAttribution.created_at < week_end,
+            )
+            .group_by(ReferralAttribution.inviter_user_id)
+        )
+    ).all()
+    earned_by_user = {row[0]: int(row[1]) for row in earned_rows}
+    invited_by_user = {row[0]: int(row[1]) for row in invited_rows}
+    racers = set(earned_by_user) | set(invited_by_user)
+    racer_users: dict[str, User] = {}
+    if racers:
+        found = (await db.scalars(select(User).where(User.id.in_(racers)))).all()
+        racer_users = {person.id: person for person in found}
+    ordered = sorted(
+        (uid for uid in racers if uid in racer_users),
+        # GRAM first — the number a bot farm cannot fake — then heads brought.
+        key=lambda uid: (-earned_by_user.get(uid, 0), -invited_by_user.get(uid, 0)),
+    )
+    race_entries = [
+        InviteRaceEntryView(
+            rank=position + 1,
+            first_name=racer_users[uid].first_name,
+            username=racer_users[uid].username,
+            earned_nano=earned_by_user.get(uid, 0),
+            invited=invited_by_user.get(uid, 0),
+            is_me=uid == current_user.id,
+        )
+        for position, uid in enumerate(ordered)
+    ]
+    race_me = next((entry for entry in race_entries if entry.is_me), None)
+    if race_me is None:
+        race_me = InviteRaceEntryView(
+            rank=len(race_entries) + 1,
+            first_name=current_user.first_name,
+            username=current_user.username,
+            earned_nano=0,
+            invited=0,
+            is_me=True,
+        )
+
     return RatingView(
         season_id=f"{start.year:04d}-{start.month:02d}",
         season_name=f"{MONTHS_RU[start.month]} · {start.year}",
@@ -395,4 +471,7 @@ async def build_rating(
             proofs_24h=int(bank_proofs_24h or 0) + int(duel_proofs_24h or 0),
         ),
         formula=RATING_FORMULA,
+        invite_race=race_entries[:10],
+        invite_race_me=race_me,
+        invite_race_ends_at=week_end,
     )

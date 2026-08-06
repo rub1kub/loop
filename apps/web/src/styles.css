@@ -3675,3 +3675,51 @@ details[open] > summary .disclosure-indicator svg {
   height: 100%;
   object-fit: cover;
 }
+
+/* The weekly invite race: the only number here a bot farm cannot fake. */
+.invite-race {
+  display: grid;
+  width: 100%;
+  gap: 6px;
+}
+
+.invite-race-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.invite-race-row.is-me {
+  border-color: #6a6a6a;
+}
+
+.invite-race-row > b {
+  min-width: 30px;
+  color: var(--muted);
+}
+
+.invite-race-row > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-race-row > span small {
+  color: var(--muted);
+}
+
+.invite-race-row > strong {
+  flex-shrink: 0;
+}
+
+.invite-race-note {
+  width: 100%;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}

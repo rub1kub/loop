@@ -380,6 +380,15 @@ export interface Referral {
   }[];
 }
 
+export interface InviteRaceEntry {
+  rank: number;
+  first_name: string;
+  username: string | null;
+  earned_nano: number;
+  invited: number;
+  is_me: boolean;
+}
+
 export interface RatingFormulaItem {
   code: string;
   label: string;
@@ -421,6 +430,9 @@ export interface Rating {
   circle: RatingEntry[];
   pulse: RatingPulse;
   formula: RatingFormulaItem[];
+  invite_race: InviteRaceEntry[];
+  invite_race_me: InviteRaceEntry | null;
+  invite_race_ends_at: string | null;
 }
 
 export interface Invite {

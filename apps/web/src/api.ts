@@ -144,6 +144,15 @@ const ratingEntrySchema = z.object({
   is_me: z.boolean(),
 });
 
+const inviteRaceEntrySchema = z.object({
+  rank: z.number(),
+  first_name: z.string(),
+  username: z.string().nullable(),
+  earned_nano: z.number(),
+  invited: z.number(),
+  is_me: z.boolean(),
+});
+
 const ratingSchema = z.object({
   season_id: z.string(),
   season_name: z.string(),
@@ -165,6 +174,10 @@ const ratingSchema = z.object({
       points: z.number(),
     }),
   ),
+  // Absent on an older server; an empty race is simply not shown.
+  invite_race: z.array(inviteRaceEntrySchema).default([]),
+  invite_race_me: inviteRaceEntrySchema.nullable().default(null),
+  invite_race_ends_at: z.string().nullable().default(null),
 });
 
 const IDEMPOTENT_POSTS = /^\/(results\/[^/]+\/seen|bank\/positions\/\d+\/discard)$/;

@@ -472,6 +472,22 @@ class RatingPulseView(BaseModel):
     proofs_24h: int
 
 
+class InviteRaceEntryView(BaseModel):
+    """One line of the weekly invite race.
+
+    Ranked by GRAM actually earned from invitees' confirmed deposits — the one
+    number a registration farm cannot fake, because a fake account has to put
+    real money through the queue before a single nanogram accrues.
+    """
+
+    rank: int
+    first_name: str
+    username: str | None
+    earned_nano: int
+    invited: int
+    is_me: bool
+
+
 class RatingView(BaseModel):
     season_id: str
     season_name: str
@@ -482,6 +498,9 @@ class RatingView(BaseModel):
     circle: list[RatingEntryView]
     pulse: RatingPulseView
     formula: list[RatingFormulaItem]
+    invite_race: list[InviteRaceEntryView] = []
+    invite_race_me: InviteRaceEntryView | None = None
+    invite_race_ends_at: datetime | None = None
 
 
 class InviteView(BaseModel):

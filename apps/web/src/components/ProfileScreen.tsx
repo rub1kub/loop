@@ -237,8 +237,8 @@ export function ProfileScreen({
                   ? `@${entry.invitee_username}`
                   : (entry.invitee_first_name ?? 'Приглашённый')}
                 {entry.deposit_nano > 0
-                  ? ` внёс ${formatGram(entry.deposit_nano, 2)} GRAM`
-                  : ' прошёл квалификацию'}
+                  ? ` · взнос ${formatGram(entry.deposit_nano, 2)} GRAM`
+                  : ' · квалификация'}
               </span>
               <b>
                 {entry.reward_nano > 0

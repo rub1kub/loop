@@ -1290,3 +1290,72 @@ async def test_a_provider_timeout_does_not_erase_a_confirmed_holder(client, app)
     assert calls["count"] == 2
     assert third["plush_brick"]["holder"] is True
     assert third["plush_brick"]["balance_nano"] == 10_054_226_191
+
+
+@pytest.mark.asyncio
+async def test_the_weekly_race_ranks_money_and_forgets_last_week(client, app) -> None:
+    # Registrations were farmable — 22 bots took first place in the prelaunch
+    # race in under three minutes. GRAM earned from invitees' real deposits is
+    # the one number a farm cannot fake, and a week that never resets would
+    # crown the same names forever.
+    from app.models import ReferralAttribution, ReferralCode, ReferralReward
+    from app.rating import race_week_window
+
+    week_start, _ = race_week_window()
+    headers = await authenticate(client, 777000666)
+
+    async with app.state.session_factory() as db:
+        me = await db.scalar(select(User).where(User.telegram_id == 777000666))
+        rival = User(telegram_id=777000667, first_name="Соперница", username="rivalka")
+        sleeper = User(telegram_id=777000668, first_name="Прошлая неделя")
+        invitee_a = User(telegram_id=777000669, first_name="Гость А")
+        invitee_b = User(telegram_id=777000670, first_name="Гость Б")
+        invitee_c = User(telegram_id=777000671, first_name="Гость В")
+        db.add_all([rival, sleeper, invitee_a, invitee_b, invitee_c])
+        await db.flush()
+        db.add_all(
+            [
+                ReferralCode(code="race-me", owner_user_id=me.id),
+                ReferralCode(code="race-rival", owner_user_id=rival.id),
+                ReferralCode(code="race-sleeper", owner_user_id=sleeper.id),
+            ]
+        )
+        await db.flush()
+        rows = [
+            (me, invitee_a, "race-me", 40_000_000, week_start + timedelta(hours=1)),
+            (rival, invitee_b, "race-rival", 100_000_000, week_start + timedelta(hours=2)),
+            # Real money, wrong week: must not appear in this race at all.
+            (sleeper, invitee_c, "race-sleeper", 900_000_000, week_start - timedelta(days=1)),
+        ]
+        for inviter, invitee, code, nano, moment in rows:
+            attribution = ReferralAttribution(
+                inviter_user_id=inviter.id,
+                invitee_user_id=invitee.id,
+                code=code,
+                created_at=moment,
+            )
+            db.add(attribution)
+            await db.flush()
+            db.add(
+                ReferralReward(
+                    attribution_id=attribution.id,
+                    cause=f"fee_share:test-{code}",
+                    reward_nano=nano,
+                    reward_points=0,
+                    created_at=moment,
+                )
+            )
+        await db.commit()
+
+    rating = (await client.get("/api/v1/rating", headers=headers)).json()
+    race = rating["invite_race"]
+
+    assert [entry["first_name"] for entry in race] == ["Соперница", "Loop"]
+    assert race[0]["earned_nano"] == 100_000_000
+    assert race[0]["rank"] == 1
+    assert race[1]["is_me"] is True
+    assert rating["invite_race_me"]["rank"] == 2
+    assert rating["invite_race_me"]["earned_nano"] == 40_000_000
+    # Last week's hero is nowhere in this week's table.
+    assert all(entry["first_name"] != "Прошлая неделя" for entry in race)
+    assert rating["invite_race_ends_at"] is not None

@@ -293,6 +293,33 @@ const demoRating: Rating = {
     active_duels: 17,
     proofs_24h: 46,
   },
+  invite_race: [
+    {
+      rank: 1,
+      first_name: 'Мария',
+      username: 'masha_ton',
+      earned_nano: 380_000_000,
+      invited: 6,
+      is_me: false,
+    },
+    {
+      rank: 2,
+      first_name: 'Дмитрий',
+      username: null,
+      earned_nano: 160_000_000,
+      invited: 3,
+      is_me: true,
+    },
+  ],
+  invite_race_me: {
+    rank: 2,
+    first_name: 'Дмитрий',
+    username: null,
+    earned_nano: 160_000_000,
+    invited: 3,
+    is_me: true,
+  },
+  invite_race_ends_at: new Date(Date.now() + 3 * 86_400_000).toISOString(),
   formula: [
     { code: 'bank_payout', label: 'Подтверждённая выплата BANK', points: 100 },
     { code: 'duel_settlement', label: 'Подтверждённый результат DUEL', points: 60 },

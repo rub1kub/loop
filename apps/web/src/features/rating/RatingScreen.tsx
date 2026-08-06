@@ -1,5 +1,6 @@
 import { CheckCircle, ShieldCheck, UsersThree } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
+import { formatGram } from '../../ton';
 import { useState } from 'react';
 
 import { DisclosureIndicator } from '../../components/DisclosureIndicator';
@@ -128,6 +129,37 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
           )}
         </motion.div>
       </AnimatePresence>
+
+      {(rating.invite_race.length > 0 || (rating.invite_race_me?.invited ?? 0) > 0) && (
+        <>
+          <div className="section-label">
+            <span>ГОНКА НЕДЕЛИ</span>
+            <small>2% СО ВЗНОСОВ ПРИГЛАШЁННЫХ</small>
+          </div>
+          <div className="invite-race" aria-label="Гонка приглашающих за неделю">
+            {rating.invite_race.map((entry) => (
+              <div key={entry.rank} className={`invite-race-row${entry.is_me ? ' is-me' : ''}`}>
+                <b>#{entry.rank}</b>
+                <span>
+                  {entry.is_me ? 'ТЫ' : entry.username ? `@${entry.username}` : entry.first_name}
+                  <small>{entry.invited > 0 ? ` · привёл ${entry.invited}` : ''}</small>
+                </span>
+                <strong>{formatGram(entry.earned_nano, 2)} GRAM</strong>
+              </div>
+            ))}
+            {rating.invite_race_me && !rating.invite_race.some((entry) => entry.is_me) && (
+              <div className="invite-race-row is-me">
+                <b>#{rating.invite_race_me.rank}</b>
+                <span>ТЫ</span>
+                <strong>{formatGram(rating.invite_race_me.earned_nano, 2)} GRAM</strong>
+              </div>
+            )}
+          </div>
+          <p className="invite-race-note">
+            Считаются только настоящие взносы приглашённых. Каждый понедельник в 00:00 МСК — с нуля.
+          </p>
+        </>
+      )}
 
       <details className="rating-details rating-formula">
         <summary>
