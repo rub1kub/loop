@@ -660,7 +660,10 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByText('ЖДЁМ ХОД СОПЕРНИКА')).toBeVisible();
+    // "Ход" здесь ни при чём: игрок не ходит, а открывает ставку, сделанную
+    // при входе. Тестер прочитал «ждём ход противника» после отправки
+    // транзакции и спросил, какой ход, если результат уже определён.
+    expect(screen.getByText('СОПЕРНИК ЕЩЁ НЕ ОТКРЫЛ')).toBeVisible();
     expect(screen.getByText(/ДО АВТОМАТИЧЕСКОГО ИСХОДА/)).toBeVisible();
     expect(screen.queryByText('ЖДЁМ СОПЕРНИКА')).not.toBeInTheDocument();
   });

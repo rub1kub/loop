@@ -45,7 +45,7 @@ const FUNDING_BROADCAST_NOTICE =
   'Ставка отправлена. Обычно она появляется в DUEL за несколько секунд.';
 const FUNDING_CONFIRMED_NOTICE = 'Ставка в игре. Можно пригласить соперника.';
 const DIRECT_FUNDING_CONFIRMED_NOTICE = 'Ставка в игре. Отправь вызов другу.';
-const REVEAL_BROADCAST_NOTICE = 'Кошелёк отправил ход. Ждём подтверждение в сети.';
+const REVEAL_BROADCAST_NOTICE = 'Кошелёк отправил открытие. Ждём подтверждение в сети.';
 const PENDING_ACTION_STORAGE_KEY = 'loop.duel.pending-action.v1';
 // A wallet message is valid for five minutes. Keep the action locked for the
 // same window so a delayed wallet broadcast cannot be signed twice.
@@ -314,7 +314,7 @@ export function DuelScreen({
           : notice.text
       : notice.text === REVEAL_BROADCAST_NOTICE
         ? activeDuel?.own_revealed
-          ? 'Твой ход подтверждён. Теперь очередь соперника.'
+          ? 'Твой результат открыт. Ждём, когда откроет соперник.'
           : activeDuel || activeOffer
             ? notice.text
             : ''
@@ -928,13 +928,13 @@ export function DuelScreen({
       : 'ЖДЁМ ПОДПИСЬ В КОШЕЛЬКЕ'
     : status === 'matched'
       ? pendingAction?.kind === 'reveal' && !activeDuel?.own_revealed
-        ? 'ПОДТВЕРЖДАЕМ ТВОЙ ХОД'
+        ? 'ПОДТВЕРЖДАЕМ ОТКРЫТИЕ'
         : duelBoosting
           ? 'УСИЛЕНИЕ ОТКРЫТО'
           : boostClosing
             ? 'ПРОВЕРЯЕМ ПОСЛЕДНИЕ СТАВКИ'
             : activeDuel?.own_revealed
-              ? 'ЖДЁМ ХОД СОПЕРНИКА'
+              ? 'СОПЕРНИК ЕЩЁ НЕ ОТКРЫЛ'
               : 'ОТКРОЙ РЕЗУЛЬТАТ'
       : status === 'searching'
         ? offerExpired

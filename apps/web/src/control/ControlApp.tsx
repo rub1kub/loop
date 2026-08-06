@@ -983,12 +983,16 @@ export default function ControlApp() {
 
   if (!authenticatedWallet || !overview) {
     return (
+      // Дверь без вывески. Раньше страница объявляла себя управлением LOOP,
+      // называла владельца и обещала, что тут переводят деньги, — случайно
+      // забредший видел карту того, что стоит попробовать взломать. Внутрь
+      // всё равно пускает только подпись кошелька владельца, но незачем
+      // рассказывать, что за дверью, тому, кто просто перебирает адреса.
       <main className="control-login">
         <section>
           <div className="control-mark">∞</div>
-          <span className="eyebrow">LOOP · ДЛЯ ВЛАДЕЛЬЦА</span>
-          <h1>Управление LOOP</h1>
-          <p>Подключи кошелёк владельца. Подпись подтвердит вход — деньги никуда не переводятся.</p>
+          <h1>LOOP</h1>
+          <p>Продолжить можно с подтверждённым кошельком.</p>
           <button
             className="button light login-button"
             disabled={busy}
@@ -997,8 +1001,7 @@ export default function ControlApp() {
             <ShieldCheck size={21} weight="fill" />
             {busy ? 'ПРОВЕРЯЕМ…' : 'ПОДКЛЮЧИТЬ КОШЕЛЁК'}
           </button>
-          {error && <div className="login-error">{error}</div>}
-          <small className="login-note">Доступ автоматически закроется через один час.</small>
+          {error && <div className="login-error">Не удалось подтвердить доступ.</div>}
         </section>
       </main>
     );

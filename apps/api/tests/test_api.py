@@ -1359,3 +1359,83 @@ async def test_the_weekly_race_ranks_money_and_forgets_last_week(client, app) ->
     # Last week's hero is nowhere in this week's table.
     assert all(entry["first_name"] != "Прошлая неделя" for entry in race)
     assert rating["invite_race_ends_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_a_duel_card_names_the_loser_and_says_so_out_loud(client, app) -> None:
+    # Winning a duel against a person and being handed an anonymous receipt is
+    # the flattest possible version of the moment. The owner asked for teeth:
+    # the card names who lost, and the caption taunts them by @username.
+    from app.models import ResultCard
+    from app.modules.duel.models import Duel, DuelOffer, DuelState, OfferState
+    from app.result_cards import duel_opponent_label, result_caption
+
+    settings = get_settings()
+    winner_headers = await authenticate(client, 777000777)
+    await authenticate(client, 777000778)
+
+    async with app.state.session_factory() as db:
+        winner = await db.scalar(select(User).where(User.telegram_id == 777000777))
+        loser = await db.scalar(select(User).where(User.telegram_id == 777000778))
+        loser.username = "iloveflopp"
+        offers = []
+        for index, person in enumerate((winner, loser)):
+            offer = DuelOffer(
+                onchain_offer_id=880_001 + index,
+                query_id=880_001 + index,
+                user_id=person.id,
+                owner_wallet="0:" + f"{index:02x}" * 32,
+                network=settings.ton_network_id,
+                contract_address="0:" + "ab" * 32,
+                chance_bps=5_000,
+                total_pool_nano=2_000_000_000,
+                stake_nano=1_000_000_000,
+                opponent_stake_nano=1_000_000_000,
+                fee_bps=1_000,
+                payout_nano=1_800_000_000,
+                commitment_hex="cd" * 32,
+                mode="afk",
+                state=OfferState.SETTLED.value,
+                expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            )
+            db.add(offer)
+            offers.append(offer)
+        await db.flush()
+        duel = Duel(
+            onchain_duel_id=880_100,
+            network=settings.ton_network_id,
+            offer_a_id=offers[0].id,
+            offer_b_id=offers[1].id,
+            state=DuelState.SETTLED.value,
+            boost_revision=0,
+            reveal_deadline=datetime.now(UTC) + timedelta(minutes=5),
+        )
+        db.add(duel)
+        await db.flush()
+        card = ResultCard(
+            user_id=winner.id,
+            mode="duel",
+            entity_id=duel.id,
+            event_key="duel:test:880100",
+            network=settings.ton_network_id,
+            payout_nano=1_800_000_000,
+            contributed_nano=1_000_000_000,
+            result_nano=800_000_000,
+            tx_hash="hash-880100",
+            proof_url="https://tonviewer.com/transaction/hash-880100",
+        )
+        db.add(card)
+        await db.commit()
+
+        label = await duel_opponent_label(db, card)
+        assert label == "@iloveflopp"
+        caption = result_caption(card, label)
+        assert "@iloveflopp" in caption
+        # Never the flat anonymous line once the loser is known.
+        assert "Я забрал DUEL в LOOP." not in caption
+        public_id = card.public_id
+
+    image = await client.get(f"/api/v1/results/cards/{public_id}.jpg")
+    assert image.status_code == 200
+    assert image.headers["content-type"] == "image/jpeg"
+    assert winner_headers

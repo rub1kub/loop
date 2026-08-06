@@ -26,7 +26,7 @@ from .ton import explorer_transaction_url
 CARD_WIDTH = 1080
 CARD_HEIGHT = 1350
 CARD_JPEG_QUALITY = 92
-CARD_TEMPLATE_VERSION = 2
+CARD_TEMPLATE_VERSION = 3
 FONT_REGULAR_CANDIDATES = (
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
@@ -46,6 +46,8 @@ class CardFacts:
     contributed_nano: int
     result_nano: int
     queue_position: int | None = None
+    # Кого победили — @ник или имя. Появляется только на карточках DUEL.
+    opponent: str | None = None
     demo: bool = False
 
 
@@ -221,6 +223,49 @@ DUEL_PAYOUT_HEADLINES = (
     "ОДИН НА ОДИН.\nПУЛ У МЕНЯ",
 )
 
+# Победная карточка называет побеждённого по имени и глумится. Тон задан
+# владельцем: жёстко, мемно, постиронично. Оба игрока сами согласились на
+# дуэль в продукте, который называет себя финансовой пирамидой на первом
+# экране, — карточка продолжает тот же язык. Вариант детерминирован public_id,
+# чтобы картинка оставалась кэшируемой.
+DUEL_TAUNT_VARIANTS: tuple[dict[str, str], ...] = (
+    {"headline": "ПОСТАВИЛ РАКОМ\n{opp}", "caption": "Поставил раком {opp} в LOOP DUEL."},
+    {
+        "headline": "{opp}\nСПОНСИРУЕТ\nМОЙ УСПЕХ",
+        "caption": "{opp} теперь спонсирует мой успех. Спасибо за взнос.",
+    },
+    {
+        "headline": "МИНУТА МОЛЧАНИЯ\nПО СТАВКЕ\n{opp}",
+        "caption": "Минута молчания по ставке {opp}. Она ушла ко мне.",
+    },
+    {
+        "headline": "{opp},\nСПАСИБО.\nОЧЕНЬ ВКУСНО",
+        "caption": "{opp}, спасибо. Очень вкусно. Ставку не верну.",
+    },
+    {
+        "headline": "{opp}\nВЕРИЛ В СЕБЯ.\nЗРЯ",
+        "caption": "{opp} верил в себя. Математика решила иначе.",
+    },
+    {
+        "headline": "СОБОЛЕЗНУЕМ\nБЛИЗКИМ\n{opp}",
+        "caption": "Соболезнуем близким {opp}. Ставка погибла в честном бою.",
+    },
+    {
+        "headline": "{opp} —\nМОЙ ПАССИВНЫЙ\nДОХОД",
+        "caption": "{opp} — мой пассивный доход. Рекомендую такого соперника каждому.",
+    },
+    {
+        "headline": "ШАНСЫ БЫЛИ\n50/50.\nНО НЕ У {opp}",
+        "caption": "Шансы были 50/50. Но, как выяснилось, не у {opp}.",
+    },
+)
+
+
+def duel_taunt(public_id: str, opponent: str) -> dict[str, str]:
+    seed = int.from_bytes(hashlib.sha256(f"taunt:{public_id}".encode()).digest()[:4], "big")
+    variant = DUEL_TAUNT_VARIANTS[seed % len(DUEL_TAUNT_VARIANTS)]
+    return {key: value.format(opp=opponent) for key, value in variant.items()}
+
 
 def result_headline(mode: str, public_id: str = "") -> str:
     if mode == "bank":
@@ -235,7 +280,7 @@ def result_headline(mode: str, public_id: str = "") -> str:
     return pool[seed % len(pool)]
 
 
-def result_caption(card: ResultCard) -> str:
+def result_caption(card: ResultCard, opponent_label: str | None = None) -> str:
     if card.mode == "bank_entry":
         variant = entry_variant(card.public_id)
         return variant["caption"].format(amount=f"{format_gram(card.contributed_nano)} GRAM")
@@ -248,8 +293,13 @@ def result_caption(card: ResultCard) -> str:
             f"Сверх взноса: +{result} GRAM\n\n"
             "Результат подтверждён."
         )
+    opening = (
+        duel_taunt(card.public_id, opponent_label)["caption"]
+        if opponent_label
+        else "Я забрал DUEL в LOOP."
+    )
     return (
-        f"Я забрал DUEL в LOOP.\n\n"
+        f"{opening}\n\n"
         f"Выплата: {payout} GRAM\n"
         f"Разница к входу: +{result} GRAM\n\n"
         "Результат подтверждён."
@@ -274,6 +324,7 @@ def build_result_inline(
     card: ResultCard,
     settings: Settings,
     referral_code: str | None,
+    opponent_label: str | None = None,
 ) -> InlineQueryResultPhoto:
     image_url = result_card_image_url(settings, card)
     entry = card.mode == "bank_entry"
@@ -289,7 +340,7 @@ def build_result_inline(
             if entry
             else f"+{format_gram(card.result_nano)} GRAM"
         ),
-        caption=result_caption(card),
+        caption=result_caption(card, opponent_label),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -326,6 +377,28 @@ def notification_markup(
             ],
         ]
     )
+
+
+async def duel_opponent_label(db: Any, card: ResultCard) -> str | None:
+    """Кого победил владелец карточки — @ник или имя, если сервер их знает."""
+    if card.mode != "duel":
+        return None
+    from .modules.duel.models import Duel, DuelOffer
+
+    duel = await db.get(Duel, card.entity_id)
+    if duel is None:
+        return None
+    for offer_id in (duel.offer_a_id, duel.offer_b_id):
+        offer = await db.get(DuelOffer, offer_id)
+        if offer is None or offer.user_id is None or offer.user_id == card.user_id:
+            continue
+        from .models import User
+
+        loser = await db.get(User, offer.user_id)
+        if loser is None:
+            return None
+        return f"@{loser.username}" if loser.username else loser.first_name
+    return None
 
 
 async def create_result_card(
@@ -618,13 +691,21 @@ def _render_result_card(facts: CardFacts) -> bytes:
 
     _draw_infinity(image, 325)
     draw = ImageDraw.Draw(image)
+    taunt = (
+        duel_taunt(facts.public_id, facts.opponent)
+        if facts.mode == "duel" and facts.opponent
+        else None
+    )
     _centered_text(
         draw,
         (CARD_WIDTH // 2, 610),
-        result_headline(facts.mode, facts.public_id),
-        font=_font(74, bold=True),
+        taunt["headline"] if taunt else result_headline(facts.mode, facts.public_id),
+        # Ники бывают длинными, поэтому глумливый заголовок набирается мельче.
+        # Интерлиньяж задаётся явно: на трёх строках дефолтный клал строки
+        # друг на друга, и «@ник» перекрывал следующее слово.
+        font=_font(56 if taunt else 74, bold=True),
         fill=(250, 250, 250),
-        spacing=-2,
+        spacing=22 if taunt else -2,
     )
     _centered_text(
         draw,

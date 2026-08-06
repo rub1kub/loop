@@ -8,7 +8,12 @@ from starlette.concurrency import run_in_threadpool
 from .dependencies import Config, CurrentUser, Db
 from .models import ResultCard
 from .referrals import get_or_create_referral_code
-from .result_cards import CardFacts, build_result_inline, render_result_card
+from .result_cards import (
+    CardFacts,
+    build_result_inline,
+    duel_opponent_label,
+    render_result_card,
+)
 from .schemas import PreparedResultShareView, ResultCardView
 
 router = APIRouter(prefix="/api/v1/results", tags=["results"])
@@ -73,6 +78,7 @@ async def result_image(public_id: str, db: Db) -> Response:
             contributed_nano=card.contributed_nano,
             result_nano=card.result_nano,
             queue_position=card.queue_position,
+            opponent=await duel_opponent_label(db, card),
         )
     )
     return Response(
@@ -125,6 +131,7 @@ async def prepare_result_share(
                 card,
                 settings,
                 referral.code,
+                await duel_opponent_label(db, card),
             ),
             allow_user_chats=True,
             allow_bot_chats=False,

@@ -41,7 +41,12 @@ from .modules.duel.models import (
     OfferState,
 )
 from .referrals import get_or_create_referral_code
-from .result_cards import INVITE_VARIANTS, build_invite_inline, build_result_inline
+from .result_cards import (
+    INVITE_VARIANTS,
+    build_invite_inline,
+    build_result_inline,
+    duel_opponent_label,
+)
 
 logger = structlog.get_logger()
 
@@ -269,6 +274,7 @@ def create_dispatcher(
                         card,
                         settings,
                         referral.code,
+                        await duel_opponent_label(db, card),
                     )
                 ],
                 cache_time=30,

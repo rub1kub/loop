@@ -38,6 +38,7 @@ from .public_feed import (
 )
 from .referrals import get_or_create_referral_code
 from .result_cards import (
+    duel_opponent_label,
     notification_markup,
     result_caption,
     result_card_image_url,
@@ -336,6 +337,7 @@ async def deliver_one(
     settings: Settings,
     outbox_id: str,
 ) -> None:
+    opponent_label: str | None = None
     async with session_factory() as db:
         outbox = await db.get(NotificationOutbox, outbox_id)
         if outbox is None or outbox.state != "processing":
@@ -356,6 +358,8 @@ async def deliver_one(
             card = await db.get(ResultCard, outbox.result_card_id)
             user = await db.get(User, outbox.user_id)
             referral = await get_or_create_referral_code(db, outbox.user_id) if user else None
+            # Кого победили — пока сессия открыта: подпись назовёт его по нику.
+            opponent_label = await duel_opponent_label(db, card) if card else None
     if kind == KIND_DUEL_MATCHED:
         await deliver_match_alert(bot, session_factory, settings, outbox_id, player, duel, payload)
         return
@@ -392,7 +396,7 @@ async def deliver_one(
             lambda effect: bot.send_photo(
                 chat_id=user.telegram_id,
                 photo=result_card_image_url(settings, card),
-                caption=result_caption(card),
+                caption=result_caption(card, opponent_label),
                 reply_markup=notification_markup(
                     card,
                     settings,
