@@ -3,7 +3,6 @@ import re
 import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from urllib.parse import quote
 
 import structlog
 from aiogram import Bot, Dispatcher, Router
