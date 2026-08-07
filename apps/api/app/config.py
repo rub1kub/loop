@@ -104,6 +104,11 @@ class Settings(BaseSettings):
     # Меньше этой суммы заявку на вывод рефералки не примем: перевод стоит газ,
     # и просить перевести пыль дороже, чем она сама.
     referral_min_payout_nano: int = 500_000_000
+    # Личные ставки рефералки: "<telegram_id>:<bps>,...". Пусто — все на общей.
+    # Десять процентов равны всей комиссии протокола, так что с приглашённых
+    # такого человека протокол не зарабатывает ничего: это осознанная сделка,
+    # а не настройка «на всякий случай».
+    referral_special_bps: str = ""
     plush_brick_fee_bps: int = 0
 
     # The in-app announcement. Two thirds of the audience opens the mini app
@@ -155,6 +160,31 @@ class Settings(BaseSettings):
             if str(telegram_id) not in allowed:
                 return None
         return text, self.announcement_url.strip()
+
+    def referral_share_bps_for(self, telegram_id: int | None, default_bps: int) -> int:
+        """Ставка рефералки для конкретного пригласившего.
+
+        Прежние начисления не пересчитываются никогда: строка награды ключуется
+        по позиции, а ставка берётся в момент подтверждения взноса. Изменение
+        здесь влияет только на то, что придёт после.
+        """
+        if telegram_id is None:
+            return default_bps
+        for chunk in self.referral_special_bps.split(","):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            holder, _, value = chunk.partition(":")
+            if holder.strip() != str(telegram_id):
+                continue
+            try:
+                bps = int(value)
+            except ValueError as exc:
+                raise ValueError(f"invalid referral share: {chunk!r}") from exc
+            if not 0 <= bps <= 10_000:
+                raise ValueError(f"referral share out of range: {chunk!r}")
+            return bps
+        return default_bps
 
     @property
     def closed_beta_ids(self) -> frozenset[int]:

@@ -28,6 +28,7 @@ from .models import (
     NotificationOutbox,
     ReferralAttribution,
     ReferralReward,
+    User,
     Wallet,
 )
 from .modules.bank.models import BankChainEvent, BankPayout, BankPosition, BankPositionStatus
@@ -775,7 +776,14 @@ async def accrue_referral_fee_share(db: Any, *, position: Any) -> None:
     )
     if attribution is None:
         return
-    reward = position.principal_nano * REFERRAL_FEE_SHARE_BPS // 10_000
+    # Ставка берётся по пригласившему и на момент подтверждения взноса: уже
+    # начисленное не пересчитывается, потому что каждая награда ключуется
+    # позицией, которая её вызвала.
+    inviter = await db.get(User, attribution.inviter_user_id)
+    share_bps = get_settings().referral_share_bps_for(
+        inviter.telegram_id if inviter else None, REFERRAL_FEE_SHARE_BPS
+    )
+    reward = position.principal_nano * share_bps // 10_000
     if reward <= 0:
         return
     cause = f"fee_share:{position.id}"

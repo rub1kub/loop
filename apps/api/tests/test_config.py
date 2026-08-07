@@ -176,3 +176,29 @@ def test_an_announcement_about_tonight_stops_appearing_in_the_morning() -> None:
     # Without an hour it simply stays until the text is cleared.
     forever = settings.model_copy(update={"announcement_until": None})
     assert forever.announcement_for(777, now=datetime(2027, 1, 1, tzinfo=UTC)) is not None
+
+
+def test_a_personal_referral_rate_applies_only_to_whoever_is_named() -> None:
+    # Two people were promised ten percent by the owner. Everyone else stays on
+    # the standard share, and nothing already accrued is touched: a reward is
+    # keyed to the deposit that caused it, and the rate is read when that
+    # deposit confirms.
+    from app.config import Settings
+
+    settings = Settings(referral_special_bps="630786537:1000, 373473908:1000")
+
+    assert settings.referral_share_bps_for(630786537, 300) == 1000
+    assert settings.referral_share_bps_for(373473908, 300) == 1000
+    assert settings.referral_share_bps_for(999999999, 300) == 300
+    assert settings.referral_share_bps_for(None, 300) == 300
+
+    # Nothing configured means nobody is special.
+    assert Settings().referral_share_bps_for(630786537, 300) == 300
+
+
+def test_a_malformed_personal_rate_is_refused_rather_than_guessed() -> None:
+    from app.config import Settings
+
+    for broken in ("630786537:сто", "630786537:20000", "630786537:-5"):
+        with pytest.raises(ValueError):
+            Settings(referral_special_bps=broken).referral_share_bps_for(630786537, 300)
