@@ -379,6 +379,8 @@ export interface Referral {
   qualified: number;
   reward_points: number;
   reward_nano: number;
+  /** Личная ставка человека в базисных пунктах — не всегда общая. */
+  share_bps: number;
   /** Начислено минус выплаченное минус то, что висит в открытой заявке. */
   available_nano: number;
   minimum_payout_nano: number;

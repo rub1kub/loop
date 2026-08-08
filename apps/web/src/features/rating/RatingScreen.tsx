@@ -134,7 +134,7 @@ export function RatingScreen({ rating }: { rating: Rating | null }) {
         <>
           <div className="section-label">
             <span>ГОНКА НЕДЕЛИ</span>
-            <small>3% СО ВЗНОСОВ ПРИГЛАШЁННЫХ</small>
+            <small>ЗА ВЗНОСЫ ПРИГЛАШЁННЫХ</small>
           </div>
           <div className="invite-race" aria-label="Гонка приглашающих за неделю">
             {rating.invite_race.map((entry) => (

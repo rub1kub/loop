@@ -30,6 +30,7 @@ from .modules.duel.models import (
     OfferState,
 )
 from .rating import build_rating
+from .chain_worker import REFERRAL_FEE_SHARE_BPS
 from .referrals import get_or_create_referral_code
 from .result_cards import (
     INVITE_VARIANTS,
@@ -775,6 +776,11 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
         qualified=qualified or 0,
         reward_points=int(totals[0]),
         reward_nano=int(totals[1]),
+        # The screen used to print a bare "3%" for everybody. Two inviters were
+        # promised 10%, and nothing told them or the screen that it changed —
+        # the rate here is the one that will actually apply to their next
+        # accrual, not the standard one.
+        share_bps=settings.referral_share_bps_for(user.telegram_id, REFERRAL_FEE_SHARE_BPS),
         available_nano=available,
         minimum_payout_nano=settings.referral_min_payout_nano,
         pending_payout=(

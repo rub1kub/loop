@@ -1573,6 +1573,33 @@ async def test_a_referral_payout_can_be_asked_for_once_and_is_fixed_when_asked(
 
 
 @pytest.mark.asyncio
+async def test_referrals_reports_the_persons_actual_rate_not_the_standard_one(
+    client, app
+) -> None:
+    # The screen printed a bare "3%" for everybody. Two inviters were promised
+    # 10%, and nothing told the screen — a raised rate is worthless if the
+    # person can't see it changed. /referrals must answer with the rate that
+    # will actually apply to this person's next accrual.
+    from app.chain_worker import REFERRAL_FEE_SHARE_BPS
+
+    settings = get_settings()
+    boosted_id = 777001010
+    ordinary_id = 777001011
+    settings.referral_special_bps = f"{boosted_id}:1000"
+
+    boosted_headers = await authenticate(client, boosted_id)
+    ordinary_headers = await authenticate(client, ordinary_id)
+
+    boosted = (await client.get("/api/v1/referrals", headers=boosted_headers)).json()
+    assert boosted["share_bps"] == 1000
+
+    ordinary = (await client.get("/api/v1/referrals", headers=ordinary_headers)).json()
+    assert ordinary["share_bps"] == REFERRAL_FEE_SHARE_BPS
+
+    settings.referral_special_bps = ""
+
+
+@pytest.mark.asyncio
 async def test_dust_is_not_worth_a_transfer(client, app) -> None:
     from app.models import ReferralAttribution, ReferralCode, ReferralReward
 

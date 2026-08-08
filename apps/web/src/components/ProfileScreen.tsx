@@ -235,7 +235,10 @@ export function ProfileScreen({
       </div>
       <div className="referral-earnings">
         <strong>{formatGram(referral?.reward_nano ?? 0, 2)} GRAM</strong>
-        <span>заработано на 3% со взносов приглашённых — навсегда</span>
+        <span>
+          заработано на {String((referral?.share_bps ?? 300) / 100).replace('.', ',')}% со
+          взносов приглашённых — навсегда
+        </span>
         {referral?.pending_payout ? (
           <small>
             Заявка на {formatGram(referral.pending_payout.amount_nano, 3)} GRAM отправлена. Выплата
