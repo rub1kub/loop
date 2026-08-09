@@ -11,6 +11,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from starlette.concurrency import run_in_threadpool
 
+from .chain_worker import REFERRAL_FEE_SHARE_BPS
 from .control_state import effective_contract_fee, ensure_mode_enabled
 from .dependencies import Config, CurrentUser, Db
 from .models import (
@@ -30,7 +31,6 @@ from .modules.duel.models import (
     OfferState,
 )
 from .rating import build_rating
-from .chain_worker import REFERRAL_FEE_SHARE_BPS
 from .referrals import get_or_create_referral_code
 from .result_cards import (
     INVITE_VARIANTS,
