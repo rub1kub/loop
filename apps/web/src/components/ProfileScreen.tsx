@@ -44,6 +44,7 @@ const demoReferral: Referral = {
   qualified: 2,
   reward_points: 200,
   reward_nano: 960_000_000,
+  share_bps: 300,
   available_nano: 900_000_000,
   minimum_payout_nano: 500_000_000,
   pending_payout: null,
