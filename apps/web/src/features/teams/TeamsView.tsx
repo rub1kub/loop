@@ -782,7 +782,6 @@ function TeamManagement({
   const [policy, setPolicy] = useState(detail.join_policy);
   const [name, setName] = useState(detail.name);
   const [description, setDescription] = useState(detail.description);
-  const [mark, setMark] = useState(detail.mark % 6);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarRemoved, setAvatarRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -807,7 +806,7 @@ function TeamManagement({
   const saveBrand = async () => {
     setSaving(true);
     try {
-      await api.updateTeam(detail.slug, { name, description, mark });
+      await api.updateTeam(detail.slug, { name, description });
       if (avatarFile) {
         await api.updateTeamAvatar(detail.slug, avatarFile);
       } else if (avatarRemoved) {
@@ -836,7 +835,7 @@ function TeamManagement({
             <span>ИЗОБРАЖЕНИЕ</span>
             <label className="team-avatar-upload">
               <TeamAvatar
-                mark={mark}
+                mark={detail.mark}
                 url={avatarRemoved ? null : (avatarPreview ?? detail.avatar_url)}
               />
               <span>
@@ -895,22 +894,6 @@ function TeamManagement({
             />
             <small>{description.length}/160</small>
           </label>
-          <div>
-            <span>ЗНАК БЕЗ ИЗОБРАЖЕНИЯ</span>
-            <div className="team-mark-picker">
-              {Array.from({ length: 6 }, (_, choice) => (
-                <button
-                  key={choice}
-                  type="button"
-                  className={mark === choice ? 'active' : ''}
-                  onClick={() => setMark(choice)}
-                  aria-label={`Эмблема ${choice + 1}`}
-                >
-                  <TeamMark mark={choice} compact />
-                </button>
-              ))}
-            </div>
-          </div>
           <button
             className="secondary-button"
             type="button"

@@ -4364,6 +4364,10 @@ details[open] > summary .disclosure-indicator svg {
   margin-top: 24px;
 }
 
+.teams-view > .mode-header {
+  margin-bottom: 24px;
+}
+
 .teams-unavailable {
   display: grid;
   min-height: 45vh;
@@ -4587,6 +4591,7 @@ details[open] > summary .disclosure-indicator svg {
   border: 1px solid var(--edge);
   border-radius: inherit;
   object-fit: cover;
+  filter: grayscale(1);
   user-select: none;
 }
 
@@ -5409,34 +5414,6 @@ details[open] > summary .disclosure-indicator svg {
   font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.1em;
-}
-
-.team-mark-picker {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.team-mark-picker > button {
-  display: grid;
-  min-height: 52px;
-  padding: 5px;
-  place-items: center;
-  border: 1px solid var(--edge);
-  border-radius: 13px;
-  background: var(--surface);
-  color: var(--ink);
-}
-
-.team-mark-picker > button.active {
-  border-color: var(--ink);
-  background: var(--ink);
-}
-
-.team-mark-picker > button.active .team-mark {
-  border-color: var(--surface);
-  background: var(--surface);
-  color: var(--ink);
 }
 
 .team-role-hint {

@@ -108,6 +108,7 @@ def normalize_team_avatar(source: bytes) -> bytes:
             ).convert("RGBA")
             normalized = Image.new("RGB", square.size, "black")
             normalized.paste(square, mask=square.getchannel("A"))
+            normalized = ImageOps.grayscale(normalized).convert("RGB")
             output = BytesIO()
             normalized.save(output, format="JPEG", quality=88, optimize=True, progressive=True)
             return output.getvalue()

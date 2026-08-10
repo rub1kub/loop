@@ -148,6 +148,8 @@ async def test_only_owner_can_upload_normalized_team_avatar(client) -> None:
     with Image.open(BytesIO(avatar.content)) as normalized:
         assert normalized.size == (512, 512)
         assert normalized.mode == "RGB"
+        red, green, blue = normalized.getpixel((256, 256))
+        assert red == green == blue
 
     unchanged = await client.get(avatar_url, headers={"If-None-Match": avatar.headers["etag"]})
     assert unchanged.status_code == 304

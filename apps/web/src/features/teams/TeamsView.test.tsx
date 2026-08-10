@@ -115,5 +115,8 @@ describe('team forms', () => {
     fireEvent.click(card!);
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'КОМАНДЫ' })).toBeNull());
     expect(screen.getByRole('heading', { name: 'dev' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('УПРАВЛЕНИЕ'));
+    expect(screen.queryByText('ЗНАК БЕЗ ИЗОБРАЖЕНИЯ')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Эмблема/ })).not.toBeInTheDocument();
   });
 });
