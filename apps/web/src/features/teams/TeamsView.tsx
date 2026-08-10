@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   CaretDown,
   Check,
   GearSix,
@@ -12,10 +11,10 @@ import {
   X,
 } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '../../api';
-import { haptic, sharePreparedResult } from '../../telegram';
+import { haptic, setBackAction, sharePreparedResult } from '../../telegram';
 import { formatGram } from '../../ton';
 import type {
   TeamDetail,
@@ -65,6 +64,27 @@ export function TeamMark({ mark, compact = false }: { mark: number; compact?: bo
   );
 }
 
+function TeamAvatar({
+  mark,
+  url,
+  compact = false,
+}: {
+  mark: number;
+  url: string | null;
+  compact?: boolean;
+}) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const visibleUrl = url && url !== failedUrl ? url : null;
+  return (
+    <span className={`team-avatar${compact ? ' is-compact' : ''}`} aria-hidden="true">
+      <TeamMark mark={mark} compact={compact} />
+      {visibleUrl && (
+        <img src={visibleUrl} alt="" draggable={false} onError={() => setFailedUrl(visibleUrl)} />
+      )}
+    </span>
+  );
+}
+
 export function TeamsView({
   overview,
   invite,
@@ -79,6 +99,12 @@ export function TeamsView({
   const [searchResults, setSearchResults] = useState<TeamEntry[]>([]);
   const [searchTotal, setSearchTotal] = useState(0);
   const [members, setMembers] = useState<TeamMember[]>(overview?.my_team?.top_members ?? []);
+  const backToTeams = useCallback(() => {
+    setPage('home');
+    haptic('selection');
+  }, []);
+
+  useEffect(() => setBackAction(page === 'home' ? undefined : backToTeams), [backToTeams, page]);
 
   const openDetail = async (team: TeamEntry | TeamDetail) => {
     setBusy(true);
@@ -119,11 +145,17 @@ export function TeamsView({
 
   if (!overview) {
     return (
-      <div className="teams-unavailable">
-        <span className="waiting-ring" aria-hidden="true" />
-        <strong>Собираем команды.</strong>
-        <p>Личный рейтинг продолжает работать.</p>
-      </div>
+      <>
+        <header className="mode-header">
+          <p className="eyebrow">СЕЗОН · ОБНОВЛЯЕТСЯ</p>
+          <h1>КОМАНДЫ</h1>
+        </header>
+        <div className="teams-unavailable">
+          <span className="waiting-ring" aria-hidden="true" />
+          <strong>Собираем команды.</strong>
+          <p>Личный рейтинг продолжает работать.</p>
+        </div>
+      </>
     );
   }
 
@@ -149,7 +181,6 @@ export function TeamsView({
         {page === 'create' ? (
           <CreateTeam
             busy={busy}
-            onBack={() => setPage('home')}
             onCreate={(input) => {
               void run(async () => {
                 const created = await api.createTeam(input);
@@ -160,7 +191,7 @@ export function TeamsView({
           />
         ) : page === 'search' ? (
           <div className="team-subpage">
-            <SubpageHeader title="НАЙТИ КОМАНДУ" onBack={() => setPage('home')} />
+            <SubpageHeader title="НАЙТИ КОМАНДУ" />
             <form className="team-search" onSubmit={submitSearch}>
               <MagnifyingGlass aria-hidden="true" />
               <input
@@ -188,7 +219,6 @@ export function TeamsView({
             seasonEndsAt={overview.season.ends_at}
             members={members}
             busy={busy}
-            onBack={() => setPage('home')}
             onRefresh={() => void run(refreshDetail)}
             onJoin={() => {
               void run(async () => {
@@ -230,41 +260,47 @@ export function TeamsView({
             onError={onError}
           />
         ) : (
-          <TeamHome
-            overview={overview}
-            invite={invite}
-            busy={busy}
-            onDismissInvite={onDismissInvite}
-            onAcceptInvite={() => {
-              if (!invite) return;
-              void run(async () => {
-                const result = await api.joinTeamInvite(invite.token);
-                onDismissInvite();
-                await onRefresh();
-                setDetail(result.team);
-                setMembers(result.team.top_members);
-                setPage('detail');
-              });
-            }}
-            onCreate={() => setPage('create')}
-            onSearch={() => setPage('search')}
-            onOpen={(team) => void openDetail(team)}
-            onShare={() => {
-              const team = overview.my_team;
-              if (!team) return;
-              void run(async () => {
-                const prepared = await api.prepareTeamShare(team.slug);
-                if (
-                  !(await sharePreparedResult(
-                    prepared.prepared_message_id,
-                    prepared.fallback_query,
-                  ))
-                ) {
-                  throw new Error('Telegram не открыл отправку сообщения');
-                }
-              });
-            }}
-          />
+          <>
+            <header className="mode-header">
+              <p className="eyebrow">СЕЗОН · {overview.season.name}</p>
+              <h1>КОМАНДЫ</h1>
+            </header>
+            <TeamHome
+              overview={overview}
+              invite={invite}
+              busy={busy}
+              onDismissInvite={onDismissInvite}
+              onAcceptInvite={() => {
+                if (!invite) return;
+                void run(async () => {
+                  const result = await api.joinTeamInvite(invite.token);
+                  onDismissInvite();
+                  await onRefresh();
+                  setDetail(result.team);
+                  setMembers(result.team.top_members);
+                  setPage('detail');
+                });
+              }}
+              onCreate={() => setPage('create')}
+              onSearch={() => setPage('search')}
+              onOpen={(team) => void openDetail(team)}
+              onShare={() => {
+                const team = overview.my_team;
+                if (!team) return;
+                void run(async () => {
+                  const prepared = await api.prepareTeamShare(team.slug);
+                  if (
+                    !(await sharePreparedResult(
+                      prepared.prepared_message_id,
+                      prepared.fallback_query,
+                    ))
+                  ) {
+                    throw new Error('Telegram не открыл отправку сообщения');
+                  }
+                });
+              }}
+            />
+          </>
         )}
       </motion.div>
     </AnimatePresence>
@@ -301,7 +337,7 @@ function TeamHome({
           <button className="team-invite-close" onClick={onDismissInvite} aria-label="Закрыть">
             <X aria-hidden="true" />
           </button>
-          <TeamMark mark={invite.team.mark} />
+          <TeamAvatar mark={invite.team.mark} url={invite.team.avatar_url} />
           <p className="eyebrow">{invite.inviter_name.toUpperCase()} ЗОВЁТ ТЕБЯ</p>
           <h2>{invite.team.name}</h2>
           <p>
@@ -316,7 +352,7 @@ function TeamHome({
       {myTeam ? (
         <section className="my-team-card" onClick={() => onOpen(myTeam)}>
           <div className="my-team-head">
-            <TeamMark mark={myTeam.mark} />
+            <TeamAvatar mark={myTeam.mark} url={myTeam.avatar_url} />
             <div>
               <span className="eyebrow">ТВОЯ КОМАНДА</span>
               <h2>{myTeam.name}</h2>
@@ -407,7 +443,7 @@ function TeamList({
           onClick={() => onOpen(team)}
         >
           <b>{team.rank}</b>
-          <TeamMark mark={team.mark} compact />
+          <TeamAvatar mark={team.mark} url={team.avatar_url} compact />
           <span>
             <strong>{team.name}</strong>
             <small>
@@ -423,11 +459,9 @@ function TeamList({
 
 function CreateTeam({
   busy,
-  onBack,
   onCreate,
 }: {
   busy: boolean;
-  onBack: () => void;
   onCreate: (input: {
     name: string;
     tag: string;
@@ -439,7 +473,7 @@ function CreateTeam({
   const [policy, setPolicy] = useState<'open' | 'request' | 'invite'>('open');
   return (
     <div className="team-subpage team-create">
-      <SubpageHeader title="НОВАЯ КОМАНДА" onBack={onBack} />
+      <SubpageHeader title="НОВАЯ КОМАНДА" />
       <p className="team-create-intro">Имя останется. Неделя начнётся заново.</p>
       <form
         onSubmit={(event) => {
@@ -498,7 +532,6 @@ function TeamDetailPanel({
   seasonEndsAt,
   members,
   busy,
-  onBack,
   onRefresh,
   onJoin,
   onLeave,
@@ -511,7 +544,6 @@ function TeamDetailPanel({
   seasonEndsAt: string;
   members: TeamMember[];
   busy: boolean;
-  onBack: () => void;
   onRefresh: () => void;
   onJoin: () => void;
   onLeave: () => void;
@@ -528,9 +560,8 @@ function TeamDetailPanel({
   } as const;
   return (
     <div className="team-subpage team-detail">
-      <SubpageHeader title={`#${detail.tag}`} onBack={onBack} />
       <section className="team-detail-hero">
-        <TeamMark mark={detail.mark} />
+        <TeamAvatar mark={detail.mark} url={detail.avatar_url} />
         <p className="eyebrow">КОМАНДА · #{detail.rank}</p>
         <h2>{detail.name}</h2>
         <p>{detail.description || policyLabels[detail.join_policy]}</p>
@@ -752,7 +783,17 @@ function TeamManagement({
   const [name, setName] = useState(detail.name);
   const [description, setDescription] = useState(detail.description);
   const [mark, setMark] = useState(detail.mark % 6);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarRemoved, setAvatarRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const avatarPreview = useMemo(
+    () => (avatarFile ? URL.createObjectURL(avatarFile) : null),
+    [avatarFile],
+  );
+  useEffect(() => {
+    if (!avatarPreview) return;
+    return () => URL.revokeObjectURL(avatarPreview);
+  }, [avatarPreview]);
   const savePolicy = async (value: TeamDetail['join_policy']) => {
     setPolicy(value);
     try {
@@ -767,6 +808,13 @@ function TeamManagement({
     setSaving(true);
     try {
       await api.updateTeam(detail.slug, { name, description, mark });
+      if (avatarFile) {
+        await api.updateTeamAvatar(detail.slug, avatarFile);
+      } else if (avatarRemoved) {
+        await api.deleteTeamAvatar(detail.slug);
+      }
+      setAvatarFile(null);
+      setAvatarRemoved(false);
       onRefresh();
     } catch (error) {
       onError(message(error));
@@ -784,6 +832,50 @@ function TeamManagement({
       </summary>
       {detail.my_role === 'owner' && (
         <div className="team-brand-settings">
+          <div className="team-avatar-setting">
+            <span>ИЗОБРАЖЕНИЕ</span>
+            <label className="team-avatar-upload">
+              <TeamAvatar
+                mark={mark}
+                url={avatarRemoved ? null : (avatarPreview ?? detail.avatar_url)}
+              />
+              <span>
+                <strong>{detail.avatar_url || avatarFile ? 'ЗАМЕНИТЬ' : 'ЗАГРУЗИТЬ'}</strong>
+                <small>JPG, PNG или WebP · до 5 МБ</small>
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0] ?? null;
+                  event.currentTarget.value = '';
+                  if (!file) return;
+                  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+                    onError('Поддерживаются JPG, PNG и WebP');
+                    return;
+                  }
+                  if (file.size > 5 * 1024 * 1024) {
+                    onError('Файл больше 5 МБ');
+                    return;
+                  }
+                  setAvatarFile(file);
+                  setAvatarRemoved(false);
+                }}
+              />
+            </label>
+            {(detail.avatar_url || avatarFile) && !avatarRemoved && (
+              <button
+                className="team-avatar-remove"
+                type="button"
+                onClick={() => {
+                  setAvatarFile(null);
+                  setAvatarRemoved(true);
+                }}
+              >
+                УБРАТЬ ИЗОБРАЖЕНИЕ
+              </button>
+            )}
+          </div>
           <label>
             <span>НАЗВАНИЕ</span>
             <input
@@ -804,7 +896,7 @@ function TeamManagement({
             <small>{description.length}/160</small>
           </label>
           <div>
-            <span>ЭМБЛЕМА</span>
+            <span>ЗНАК БЕЗ ИЗОБРАЖЕНИЯ</span>
             <div className="team-mark-picker">
               {Array.from({ length: 6 }, (_, choice) => (
                 <button
@@ -895,14 +987,10 @@ function TeamManagement({
   );
 }
 
-function SubpageHeader({ title, onBack }: { title: string; onBack: () => void }) {
+function SubpageHeader({ title }: { title: string }) {
   return (
     <header className="team-subpage-header">
-      <button onClick={onBack} aria-label="Назад">
-        <ArrowLeft aria-hidden="true" />
-      </button>
       <strong>{title}</strong>
-      <span />
     </header>
   );
 }

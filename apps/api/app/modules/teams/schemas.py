@@ -20,6 +20,7 @@ class TeamEntryView(BaseModel):
     description: str
     tag: str
     mark: int
+    avatar_url: str | None
     join_policy: str
     member_count: int
     active_members: int

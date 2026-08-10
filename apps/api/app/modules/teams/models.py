@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     UniqueConstraint,
     text,
@@ -50,6 +51,8 @@ class Team(Base):
     description: Mapped[str] = mapped_column(String(160), default="", nullable=False)
     tag: Mapped[str] = mapped_column(String(8), nullable=False)
     mark: Mapped[int] = mapped_column(Integer, nullable=False)
+    avatar_jpeg: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    avatar_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     join_policy: Mapped[str] = mapped_column(
         String(16), default=TeamJoinPolicy.OPEN.value, nullable=False
     )

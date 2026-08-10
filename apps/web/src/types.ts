@@ -477,6 +477,7 @@ export interface TeamEntry {
   description: string;
   tag: string;
   mark: number;
+  avatar_url: string | null;
   join_policy: 'open' | 'request' | 'invite';
   member_count: number;
   active_members: number;

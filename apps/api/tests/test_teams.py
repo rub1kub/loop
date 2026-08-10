@@ -2,10 +2,12 @@ import hashlib
 import hmac
 import json
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 from types import SimpleNamespace
 from urllib.parse import urlencode
 
 import pytest
+from PIL import Image
 from sqlalchemy import func, select
 
 from app.models import User
@@ -108,6 +110,75 @@ async def test_join_requests_require_team_manager(client) -> None:
     assert approved.status_code == 204
     member_view = await client.get(f"/api/v1/teams/{slug}", headers=applicant)
     assert member_view.json()["my_role"] == "member"
+
+
+@pytest.mark.asyncio
+async def test_only_owner_can_upload_normalized_team_avatar(client) -> None:
+    owner = await authenticate(client, 8_250_000_001)
+    outsider = await authenticate(client, 8_250_000_002)
+    created = await client.post(
+        "/api/v1/teams",
+        headers=owner,
+        json={"name": "Чёрный квадрат", "tag": "КВАДРАТ", "join_policy": "open"},
+    )
+    slug = created.json()["slug"]
+    source = BytesIO()
+    Image.new("RGBA", (180, 120), (240, 240, 240, 180)).save(source, format="PNG")
+
+    denied = await client.put(
+        f"/api/v1/teams/{slug}/avatar",
+        headers={**outsider, "Content-Type": "image/png"},
+        content=source.getvalue(),
+    )
+    assert denied.status_code == 403
+
+    uploaded = await client.put(
+        f"/api/v1/teams/{slug}/avatar",
+        headers={**owner, "Content-Type": "image/png"},
+        content=source.getvalue(),
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    avatar_url = uploaded.json()["avatar_url"]
+    assert avatar_url.startswith(f"/api/v1/team-cards/{slug}/avatar.jpg?v=")
+
+    avatar = await client.get(avatar_url)
+    assert avatar.status_code == 200
+    assert avatar.headers["content-type"] == "image/jpeg"
+    assert avatar.headers["x-content-type-options"] == "nosniff"
+    with Image.open(BytesIO(avatar.content)) as normalized:
+        assert normalized.size == (512, 512)
+        assert normalized.mode == "RGB"
+
+    unchanged = await client.get(avatar_url, headers={"If-None-Match": avatar.headers["etag"]})
+    assert unchanged.status_code == 304
+
+    removed = await client.delete(f"/api/v1/teams/{slug}/avatar", headers=owner)
+    assert removed.status_code == 200
+    assert removed.json()["avatar_url"] is None
+    assert (await client.get(avatar_url)).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_team_avatar_rejects_unsafe_input(client) -> None:
+    owner = await authenticate(client, 8_260_000_001)
+    created = await client.post(
+        "/api/v1/teams",
+        headers=owner,
+        json={"name": "Чистый сигнал", "tag": "СИГНАЛ", "join_policy": "open"},
+    )
+    slug = created.json()["slug"]
+    unsupported = await client.put(
+        f"/api/v1/teams/{slug}/avatar",
+        headers={**owner, "Content-Type": "image/svg+xml"},
+        content=b"<svg/>",
+    )
+    assert unsupported.status_code == 415
+    broken = await client.put(
+        f"/api/v1/teams/{slug}/avatar",
+        headers={**owner, "Content-Type": "image/png"},
+        content=b"not an image",
+    )
+    assert broken.status_code == 422
 
 
 @pytest.mark.asyncio

@@ -203,6 +203,7 @@ const teamEntrySchema = z.object({
   description: z.string(),
   tag: z.string(),
   mark: z.number(),
+  avatar_url: z.string().nullable(),
   join_policy: z.enum(['open', 'request', 'invite']),
   member_count: z.number(),
   active_members: z.number(),
@@ -313,7 +314,7 @@ async function restoreSession(): Promise<boolean> {
 
 async function request<T>(path: string, init?: RequestInit, retryUnauthorized = true): Promise<T> {
   const headers = new Headers(init?.headers);
-  headers.set('Content-Type', 'application/json');
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   const method = (init?.method ?? 'GET').toUpperCase();
   // Marking a card seen sets one timestamp once, so repeating it is harmless
@@ -655,6 +656,24 @@ export const api = {
       await request<unknown>(`/teams/${encodeURIComponent(slug)}`, {
         method: 'PATCH',
         body: JSON.stringify(input),
+      }),
+    );
+  },
+
+  async updateTeamAvatar(slug: string, file: File): Promise<TeamDetail> {
+    return teamDetailSchema.parse(
+      await request<unknown>(`/teams/${encodeURIComponent(slug)}/avatar`, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      }),
+    );
+  },
+
+  async deleteTeamAvatar(slug: string): Promise<TeamDetail> {
+    return teamDetailSchema.parse(
+      await request<unknown>(`/teams/${encodeURIComponent(slug)}/avatar`, {
+        method: 'DELETE',
       }),
     );
   },

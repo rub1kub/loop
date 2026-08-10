@@ -171,6 +171,7 @@ def ranked_teams_statement(season_id: str) -> Select[Any]:
             Team.description.label("description"),
             Team.tag.label("tag"),
             Team.mark.label("mark"),
+            Team.avatar_sha256.label("avatar_sha256"),
             Team.join_policy.label("join_policy"),
             Team.created_at.label("created_at"),
             func.coalesce(members.c.member_count, 0).label("member_count"),
@@ -216,6 +217,11 @@ def entry_from_row(row: Any, *, my_team_id: str | None) -> TeamEntryView:
         description=str(data["description"]),
         tag=str(data["tag"]),
         mark=int(data["mark"]),
+        avatar_url=(
+            f"/api/v1/team-cards/{data['slug']}/avatar.jpg?v={str(data['avatar_sha256'])[:12]}"
+            if data["avatar_sha256"]
+            else None
+        ),
         join_policy=str(data["join_policy"]),
         member_count=int(data["member_count"]),
         active_members=int(data["active_members"]),

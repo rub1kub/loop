@@ -15,11 +15,7 @@ export function TeamsScreen({
   onError: (message: string) => void;
 }) {
   return (
-    <section className="screen teams-screen" aria-labelledby="teams-title">
-      <header className="mode-header">
-        <p className="eyebrow">СЕЗОН · {teams?.season.name ?? 'ОБНОВЛЯЕТСЯ'}</p>
-        <h1 id="teams-title">КОМАНДЫ</h1>
-      </header>
+    <section className="screen teams-screen" aria-label="Команды">
       <TeamsView
         overview={teams}
         invite={invite}

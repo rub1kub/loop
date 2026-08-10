@@ -1,7 +1,10 @@
+import hashlib
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 
 from aiogram.exceptions import TelegramAPIError
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -52,6 +55,67 @@ router = APIRouter(
     dependencies=[Depends(require_full_access)],
 )
 public_router = APIRouter(prefix="/team-cards", tags=["TEAMS"])
+
+TEAM_AVATAR_MAX_BYTES = 5 * 1024 * 1024
+TEAM_AVATAR_MAX_PIXELS = 36_000_000
+TEAM_AVATAR_SIDE = 512
+TEAM_AVATAR_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+async def read_team_avatar(request: Request) -> bytes:
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+    if content_type not in TEAM_AVATAR_TYPES:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            "Поддерживаются JPG, PNG и WebP",
+        )
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > TEAM_AVATAR_MAX_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Файл больше 5 МБ")
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > TEAM_AVATAR_MAX_BYTES:
+            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Файл больше 5 МБ")
+        chunks.append(chunk)
+    if not size:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Изображение пустое")
+    return b"".join(chunks)
+
+
+def normalize_team_avatar(source: bytes) -> bytes:
+    try:
+        with Image.open(BytesIO(source)) as probe:
+            width, height = probe.size
+            if width < 64 or height < 64:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    "Изображение должно быть не меньше 64×64",
+                )
+            if width * height > TEAM_AVATAR_MAX_PIXELS:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    "Изображение слишком большое",
+                )
+            probe.verify()
+        with Image.open(BytesIO(source)) as opened:
+            image = ImageOps.exif_transpose(opened)
+            square = ImageOps.fit(
+                image,
+                (TEAM_AVATAR_SIDE, TEAM_AVATAR_SIDE),
+                method=Image.Resampling.LANCZOS,
+            ).convert("RGBA")
+            normalized = Image.new("RGB", square.size, "black")
+            normalized.paste(square, mask=square.getchannel("A"))
+            output = BytesIO()
+            normalized.save(output, format="JPEG", quality=88, optimize=True, progressive=True)
+            return output.getvalue()
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Не удалось прочитать изображение",
+        ) from exc
 
 
 async def get_active_team(db: Db, slug: str) -> Team:
@@ -185,6 +249,38 @@ async def update_team(
         team.mark = body.mark
     if body.join_policy is not None:
         team.join_policy = body.join_policy
+    await db.commit()
+    season = await ensure_season(db)
+    detail = await team_detail(db, team, user, season)
+    await db.commit()
+    return detail
+
+
+@router.put("/{slug}/avatar", response_model=TeamDetailView)
+async def upload_team_avatar(
+    slug: str,
+    request: Request,
+    user: CurrentUser,
+    db: Db,
+) -> TeamDetailView:
+    team = await get_active_team(db, slug)
+    await assert_manager(db, team, user.id, owner_only=True)
+    image = normalize_team_avatar(await read_team_avatar(request))
+    team.avatar_jpeg = image
+    team.avatar_sha256 = hashlib.sha256(image).hexdigest()
+    await db.commit()
+    season = await ensure_season(db)
+    detail = await team_detail(db, team, user, season)
+    await db.commit()
+    return detail
+
+
+@router.delete("/{slug}/avatar", response_model=TeamDetailView)
+async def delete_team_avatar(slug: str, user: CurrentUser, db: Db) -> TeamDetailView:
+    team = await get_active_team(db, slug)
+    await assert_manager(db, team, user.id, owner_only=True)
+    team.avatar_jpeg = None
+    team.avatar_sha256 = None
     await db.commit()
     season = await ensure_season(db)
     detail = await team_detail(db, team, user, season)
@@ -362,4 +458,31 @@ async def team_card(slug: str, db: Db) -> Response:
         image,
         media_type="image/jpeg",
         headers={"Cache-Control": "public, max-age=300, stale-while-revalidate=3600"},
+    )
+
+
+@public_router.get("/{slug}/avatar.jpg", response_class=Response, include_in_schema=False)
+async def team_avatar(slug: str, request: Request, db: Db) -> Response:
+    row = (
+        await db.execute(
+            select(Team.avatar_jpeg, Team.avatar_sha256).where(
+                Team.slug == slug,
+                Team.state == "active",
+                Team.avatar_jpeg.is_not(None),
+            )
+        )
+    ).one_or_none()
+    if row is None or row.avatar_jpeg is None or row.avatar_sha256 is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Изображение команды не найдено")
+    etag = f'"{row.avatar_sha256}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+    return Response(
+        row.avatar_jpeg,
+        media_type="image/jpeg",
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "ETag": etag,
+            "X-Content-Type-Options": "nosniff",
+        },
     )
