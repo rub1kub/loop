@@ -5,9 +5,9 @@
 | Suite      | Scope                                                                                                                                                                                                                           |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Acton      | BANK maturity limits, FIFO allocation, partial/exact/cascading settlement, value conservation, fees, replay and races; DUEL matching, boosts, revision races, hard deadlines, 90/10 cap, commit–reveal, refunds and permissions |
-| pytest     | Telegram auth, API validation, independent models, invites, matchmaking races, chain indexing, idempotency, temporal team scoring and roles, referral controls, security headers and TON proofs                                  |
-| Vitest     | parsing, API schemas, TON message construction and context binding, boost states, team navigation, haptics, loader and BANK queue copy                                                                                         |
-| Playwright | production UI across phone, tablet and desktop viewports, BANK wizard, DUEL boost flow, RATING, TEAMS, profile, repeated keyboard/navigation transitions and tab-bar safe area                                                     |
+| pytest     | Telegram auth, API validation, independent models, invites, matchmaking races, chain indexing, idempotency, temporal team scoring and roles, referral controls, security headers and TON proofs                                 |
+| Vitest     | parsing, API schemas, TON message construction and context binding, boost states, team navigation, haptics, loader and BANK queue copy                                                                                          |
+| Playwright | production UI across phone, tablet and desktop viewports, BANK wizard, DUEL boost flow, RATING, TEAMS, profile, repeated keyboard/navigation transitions and tab-bar safe area                                                  |
 | Alembic    | clean install and migration graph consistency                                                                                                                                                                                   |
 
 ## Commands
