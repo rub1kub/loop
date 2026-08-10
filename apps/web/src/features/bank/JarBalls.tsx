@@ -16,6 +16,7 @@ import {
   targetCount,
 } from './jarPhysics';
 import type { Ball } from './jarPhysics';
+import { startDeviceTilt } from './deviceTilt';
 
 const NEW_TOKEN_INTERVAL = 0.095;
 const CHAMBER_LEFT = 0.178;
@@ -182,17 +183,6 @@ export function JarBalls({ fill }: { fill: number }) {
       canvas.dataset.targetCount = String(targetCount(pile, fillRef.current));
     };
 
-    const settleStatic = () => {
-      // Reduced motion: lay the balls out settled, no simulation.
-      pile.balls.length = 0;
-      flight.balls.length = 0;
-      for (let i = 0; i < 400 && pile.balls.length < targetCount(pile, fillRef.current); i += 1) {
-        pour(pile, fillRef.current);
-      }
-      placeSettled(pile);
-      draw();
-    };
-
     const settleInitialFill = () => {
       const target = targetCount(pile, fillRef.current);
       pour(pile, fillRef.current, Math.random, target);
@@ -225,6 +215,7 @@ export function JarBalls({ fill }: { fill: number }) {
       // breath every 18–28 seconds, and only when the jar is at least a third
       // full, untouched and upright. Pointer and device tilt remain physical.
       if (
+        !reducedMotion &&
         fillRef.current >= 30 &&
         flight.balls.length === 0 &&
         pile.pointer === null &&
@@ -290,6 +281,10 @@ export function JarBalls({ fill }: { fill: number }) {
       const mouthTokens = pile.balls.filter(
         (ball) => ball.x - ball.r >= pile.mouth.left && ball.x + ball.r <= pile.mouth.right,
       );
+      const insideCentroid = pile.balls.reduce(
+        (total, ball) => ({ x: total.x + ball.x, y: total.y + ball.y }),
+        { x: 0, y: 0 },
+      );
       const highestMouthToken = mouthTokens.reduce<(typeof mouthTokens)[number] | null>(
         (highest, ball) => (!highest || ball.y < highest.y ? ball : highest),
         null,
@@ -298,8 +293,18 @@ export function JarBalls({ fill }: { fill: number }) {
         coordinateSystem: 'canvas origin top-left; x right; y down; pixels',
         fillPercent: fillRef.current,
         stage: { width: stageWidth, height: stageHeight },
+        gravity: {
+          x: Number(pile.gravity.x.toFixed(3)),
+          y: Number(pile.gravity.y.toFixed(3)),
+        },
         mouth: { left: flight.mouthLeft, right: flight.mouthRight, y: flight.mouthY },
         inside: pile.balls.length,
+        insideCentroid: pile.balls.length
+          ? {
+              x: Number((chamberLeft + insideCentroid.x / pile.balls.length).toFixed(2)),
+              y: Number((chamberTop + insideCentroid.y / pile.balls.length).toFixed(2)),
+            }
+          : null,
         highestMouthToken: highestMouthToken
           ? {
               x: Number((highestMouthToken.x + chamberLeft).toFixed(2)),
@@ -323,54 +328,37 @@ export function JarBalls({ fill }: { fill: number }) {
       event.preventDefault();
       liftSurfaceToken(pile, () => 0.72);
     };
-    if (import.meta.env.VITE_MOCK_TELEGRAM === 'true' && !reducedMotion) {
+    if (import.meta.env.VITE_MOCK_TELEGRAM === 'true') {
       debugWindow.render_game_to_text = renderJarState;
       debugWindow.advanceTime = (milliseconds: number) => {
         const frames = Math.max(1, Math.ceil(milliseconds / (1000 / 60)));
         for (let index = 0; index < frames; index += 1) simulate(1 / 60);
       };
-      window.addEventListener('keydown', debugEject);
+      if (!reducedMotion) window.addEventListener('keydown', debugEject);
     }
 
     const observer =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => {
-            resize();
-            if (reducedMotion) settleStatic();
-          })
-        : null;
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => resize()) : null;
     observer?.observe(canvas);
 
     const app = telegram();
-    const orientation = app?.DeviceOrientation;
-    const onTilt = () => {
-      if (!orientation?.isStarted) return;
-      // beta tips the top edge toward or away, gamma tips left or right;
-      // their sines are the screen-plane share of real gravity.
-      const gx = Math.sin(orientation.gamma);
-      const gy = Math.sin(orientation.beta);
-      const magnitude = Math.hypot(gx, gy);
-      if (magnitude < 0.12) {
-        pile.gravity.x = 0;
-        pile.gravity.y = 1;
-        return;
+    const tilt = startDeviceTilt(app, (gravity) => {
+      pile.gravity.x = gravity.x;
+      pile.gravity.y = gravity.y;
+    });
+    const requestTiltPermission = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.bank-object')) {
+        void tilt.requestPermission();
       }
-      pile.gravity.x = gx / Math.max(magnitude, 1);
-      pile.gravity.y = gy / Math.max(magnitude, 1);
     };
-    let tiltStarted = false;
-    if (!reducedMotion && orientation && app?.isVersionAtLeast?.('8.0')) {
-      orientation.start({ refresh_rate: 60 }, (started) => {
-        tiltStarted = started;
-      });
-      app.onEvent?.('deviceOrientationChanged', onTilt);
-    }
+    window.addEventListener('pointerdown', requestTiltPermission, { passive: true });
 
-    if (reducedMotion) settleStatic();
-    else {
-      settleInitialFill();
-      raf = window.requestAnimationFrame(frame);
-    }
+    // Reduced Motion removes the autonomous ejection and pointer disturbance,
+    // not direct physical input. A user rotating the phone must still move the
+    // tokens, so the lightweight solver keeps running on every device.
+    settleInitialFill();
+    raf = window.requestAnimationFrame(frame);
 
     return () => {
       window.cancelAnimationFrame(raf);
@@ -379,14 +367,14 @@ export function JarBalls({ fill }: { fill: number }) {
       window.removeEventListener('pointerup', releasePointer);
       window.removeEventListener('pointercancel', dropPointer);
       window.removeEventListener('blur', dropPointer);
+      window.removeEventListener('pointerdown', requestTiltPermission);
       window.removeEventListener('keydown', debugEject);
       if (debugWindow.render_game_to_text === renderJarState) {
         delete debugWindow.render_game_to_text;
         delete debugWindow.advanceTime;
       }
       observer?.disconnect();
-      if (tiltStarted) orientation?.stop();
-      app?.offEvent?.('deviceOrientationChanged', onTilt);
+      tilt.stop();
     };
   }, []);
 

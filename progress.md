@@ -138,3 +138,15 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   extreme velocity, device tilt and viewport resize cases. Reduced-motion mode remains static.
 - Mock-only deterministic time/state hooks cover visual QA. Focused physics/UI tests pass, and
   Chromium checks at 390 × 844 and 1024 × 768 show no nearest-payout copy, overflow or console errors.
+
+## 2026-08-10: BANK device tilt recovery
+
+- Decoupled direct device tilt from `prefers-reduced-motion`: that preference now suppresses only
+  autonomous ejections and pointer disturbance, while the physical solver remains responsive.
+- Replaced the fragile version gate with Telegram DeviceOrientation feature detection, corrected
+  the requested interval to 20 ms, and re-arms tracking after fullscreen changes and activation.
+- Added a W3C `deviceorientation` fallback for Swiftgram and other third-party clients that return
+  `UNSUPPORTED`; iOS permission is requested only from a direct tap on the BANK object.
+- Unit coverage verifies Telegram start/restart, radians-to-gravity mapping, browser fallback,
+  cleanup and one-shot permission. Chromium sensor simulation visibly moves the pile both ways,
+  including with reduced motion enabled, without console errors.
