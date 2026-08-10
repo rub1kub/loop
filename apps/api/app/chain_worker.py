@@ -46,6 +46,10 @@ from .modules.duel.models import (
     MatchmakingOffer,
     OfferState,
 )
+from .modules.teams.scoring import (
+    reconcile_team_score_events_safely,
+    record_team_score_event,
+)
 from .public_feed import enqueue_public_feed
 from .result_cards import create_entry_card, create_result_card
 from .ton import (
@@ -57,6 +61,20 @@ from .ton import (
 )
 
 logger = structlog.get_logger()
+
+
+async def record_team_score_safely(db: AsyncSession, **values: Any) -> None:
+    """A social projection can be rebuilt and must never stop money indexing."""
+    try:
+        async with db.begin_nested():
+            await record_team_score_event(db, **values)
+    except Exception as exc:
+        logger.warning(
+            "team_score_event_failed",
+            source_key=values.get("source_key"),
+            error=type(exc).__name__,
+            detail=str(exc),
+        )
 
 DUEL_OPEN_OFFER = 0x4C4F4F01
 DUEL_CANCEL_OFFER = 0x4C4F4F02
@@ -637,19 +655,30 @@ async def apply_bank_transaction(
             earlier.current_status = BankPositionStatus.PAYOUT_SENT.value
             earlier.completed_at = datetime.fromtimestamp(int(transaction["now"]), UTC)
             earlier.payout_transaction = tx_hash
-            if (
-                await db.scalar(select(BankPayout.id).where(BankPayout.position_id == earlier.id))
-                is None
-            ):
-                db.add(
-                    BankPayout(
-                        position_id=earlier.id,
-                        network=earlier.network,
-                        amount_nano=earlier.target_payout_nano,
-                        destination=earlier.owner_wallet,
-                        tx_hash=tx_hash,
-                    )
+            payout_row = await db.scalar(
+                select(BankPayout).where(BankPayout.position_id == earlier.id)
+            )
+            if payout_row is None:
+                payout_row = BankPayout(
+                    position_id=earlier.id,
+                    network=earlier.network,
+                    amount_nano=earlier.target_payout_nano,
+                    destination=earlier.owner_wallet,
+                    tx_hash=tx_hash,
                 )
+                db.add(payout_row)
+                await db.flush()
+            await record_team_score_safely(
+                db,
+                user_id=earlier.user_id,
+                source_kind="bank_payout",
+                source_entity_id=payout_row.id,
+                source_key=f"bank_payout:{earlier.network}:{payout_row.id}",
+                amount_nano=0,
+                network=earlier.network,
+                tx_hash=tx_hash,
+                event_at=earlier.completed_at,
+            )
             await create_result_card(
                 db,
                 user_id=earlier.user_id,
@@ -698,6 +727,17 @@ async def apply_bank_transaction(
     )
     position.confirmed_at = datetime.fromtimestamp(int(transaction["now"]), UTC)
     position.funding_transaction = tx_hash
+    await record_team_score_safely(
+        db,
+        user_id=position.user_id,
+        source_kind="bank_entry",
+        source_entity_id=position.id,
+        source_key=f"bank_entry:{position.network}:{position.id}",
+        amount_nano=position.principal_nano,
+        network=position.network,
+        tx_hash=tx_hash,
+        event_at=position.confirmed_at,
+    )
     await accrue_referral_fee_share(db, position=position)
     ahead = await db.scalar(
         select(func.count())
@@ -1314,19 +1354,33 @@ async def apply_duel_transaction(
         duel.settled_at = datetime.fromtimestamp(int(transaction["now"]), UTC)
         first.state = OfferState.SETTLED.value
         second.state = OfferState.SETTLED.value
-        if (
-            await db.scalar(select(DuelSettlement.id).where(DuelSettlement.duel_id == duel.id))
-            is None
-        ):
-            db.add(
-                DuelSettlement(
-                    duel_id=duel.id,
-                    winner_wallet=winner.owner_wallet,
-                    payout_nano=winner.payout_nano,
-                    fee_nano=winner.total_pool_nano - winner.payout_nano,
-                    outcome="settled",
-                    tx_hash=tx_hash,
-                )
+        settlement_row = await db.scalar(
+            select(DuelSettlement).where(DuelSettlement.duel_id == duel.id)
+        )
+        if settlement_row is None:
+            settlement_row = DuelSettlement(
+                duel_id=duel.id,
+                winner_wallet=winner.owner_wallet,
+                payout_nano=winner.payout_nano,
+                fee_nano=winner.total_pool_nano - winner.payout_nano,
+                outcome="settled",
+                tx_hash=tx_hash,
+            )
+            db.add(settlement_row)
+            await db.flush()
+        for player in (first, second):
+            await record_team_score_safely(
+                db,
+                user_id=player.user_id,
+                source_kind="duel_settlement",
+                source_entity_id=settlement_row.id,
+                source_key=(
+                    f"duel_settlement:{winner.network}:{settlement_row.id}:{player.user_id}"
+                ),
+                amount_nano=0,
+                network=winner.network,
+                tx_hash=tx_hash,
+                event_at=duel.settled_at,
             )
         await create_result_card(
             db,
@@ -1611,6 +1665,16 @@ async def run_once(http: httpx.AsyncClient, session_factory: Any, settings: Any)
         raise trouble[0]
     if blocked:
         raise RuntimeError("chain projection is blocked on incomplete authoritative data")
+    async with session_factory() as db:
+        repaired = await reconcile_team_score_events_safely(
+            db,
+            network=settings.ton_network_id,
+            bank_contract_address=settings.bank_contract_address,
+            duel_contract_address=settings.effective_duel_contract_address,
+        )
+        await db.commit()
+        if repaired:
+            logger.info("team_score_events_reconciled", count=repaired)
     await asyncio.to_thread(
         HEARTBEAT_FILE.write_text,
         str(int(datetime.now(UTC).timestamp())),

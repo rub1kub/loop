@@ -1,4 +1,4 @@
-export type Tab = 'bank' | 'duel' | 'rating' | 'profile';
+export type Tab = 'bank' | 'duel' | 'teams' | 'rating' | 'profile';
 
 export interface TelegramWebApp {
   initData: string;
@@ -459,6 +459,101 @@ export interface Rating {
   invite_race: InviteRaceEntry[];
   invite_race_me: InviteRaceEntry | null;
   invite_race_ends_at: string | null;
+}
+
+export interface TeamSeason {
+  id: string;
+  key: string;
+  name: string;
+  starts_at: string;
+  ends_at: string;
+  competition: 'bank_flow';
+}
+
+export interface TeamEntry {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  tag: string;
+  mark: number;
+  join_policy: 'open' | 'request' | 'invite';
+  member_count: number;
+  active_members: number;
+  flow_nano: number;
+  bank_entries: number;
+  bank_payouts: number;
+  duel_settlements: number;
+  rank: number;
+  is_mine: boolean;
+}
+
+export interface TeamMember {
+  user_id: string;
+  first_name: string;
+  username: string | null;
+  photo_url: string | null;
+  role: 'owner' | 'admin' | 'member';
+  joined_at: string;
+  flow_nano: number;
+  bank_entries: number;
+  bank_payouts: number;
+  duel_settlements: number;
+  is_me: boolean;
+}
+
+export interface TeamActivity {
+  id: string;
+  kind: 'bank_entry' | 'bank_payout' | 'duel_settlement';
+  user_id: string;
+  first_name: string;
+  username: string | null;
+  amount_nano: number;
+  tx_hash: string;
+  event_at: string;
+}
+
+export interface TeamJoinRequest {
+  id: string;
+  user_id: string;
+  first_name: string;
+  username: string | null;
+  photo_url: string | null;
+  created_at: string;
+}
+
+export interface TeamDetail extends TeamEntry {
+  my_role: 'owner' | 'admin' | 'member' | null;
+  my_join_state: 'none' | 'pending' | 'joined';
+  my_flow_nano: number;
+  top_members: TeamMember[];
+  recent_activity: TeamActivity[];
+  pending_requests: TeamJoinRequest[];
+}
+
+export interface TeamOverview {
+  season: TeamSeason;
+  my_team: TeamDetail | null;
+  leaderboard: TeamEntry[];
+}
+
+export interface TeamInvitePreview {
+  token: string;
+  expires_at: string;
+  team: TeamEntry;
+  inviter_name: string;
+}
+
+export interface TeamJoinResult {
+  state: 'joined' | 'requested';
+  team: TeamDetail;
+}
+
+export interface TeamMembersPage {
+  items: TeamMember[];
+  total: number;
+  offset: number;
+  limit: number;
 }
 
 export interface Invite {

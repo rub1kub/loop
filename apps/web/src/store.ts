@@ -18,6 +18,8 @@ import type {
   Rating,
   ResultCard,
   Tab,
+  TeamInvitePreview,
+  TeamOverview,
 } from './types';
 
 const mockParameters = new URLSearchParams(window.location.search);
@@ -343,14 +345,142 @@ const demoRating: Rating = {
   ],
 };
 
+const demoTeams: TeamOverview = {
+  season: {
+    id: 'team-season-demo',
+    key: '2026-W32',
+    name: '10–16 АВГУСТА',
+    starts_at: new Date(now - 2 * 86_400_000).toISOString(),
+    ends_at: new Date(now + 5 * 86_400_000).toISOString(),
+    competition: 'bank_flow',
+  },
+  my_team: {
+    id: 'team-void',
+    slug: 'void-demo',
+    name: 'VOID',
+    description: 'Держим ритм. Забираем неделю.',
+    tag: 'VOID',
+    mark: 3,
+    join_policy: 'open',
+    member_count: 17,
+    active_members: 8,
+    flow_nano: 28_600_000_000,
+    bank_entries: 22,
+    bank_payouts: 9,
+    duel_settlements: 12,
+    rank: 4,
+    is_mine: true,
+    my_role: 'owner',
+    my_join_state: 'joined',
+    my_flow_nano: 4_000_000_000,
+    top_members: [
+      {
+        user_id: 'demo',
+        first_name: 'Дмитрий',
+        username: 'loop_demo',
+        photo_url: null,
+        role: 'owner',
+        joined_at: new Date(now - 5 * 86_400_000).toISOString(),
+        flow_nano: 4_000_000_000,
+        bank_entries: 3,
+        bank_payouts: 1,
+        duel_settlements: 2,
+        is_me: true,
+      },
+      {
+        user_id: 'team-user-2',
+        first_name: 'Мира',
+        username: 'miraloop',
+        photo_url: null,
+        role: 'admin',
+        joined_at: new Date(now - 4 * 86_400_000).toISOString(),
+        flow_nano: 6_500_000_000,
+        bank_entries: 5,
+        bank_payouts: 2,
+        duel_settlements: 1,
+        is_me: false,
+      },
+    ],
+    recent_activity: [
+      {
+        id: 'team-event-demo',
+        kind: 'bank_entry',
+        user_id: 'team-user-2',
+        first_name: 'Мира',
+        username: 'miraloop',
+        amount_nano: 2_000_000_000,
+        tx_hash: 'demo-team-proof',
+        event_at: new Date(now - 12 * 60_000).toISOString(),
+      },
+    ],
+    pending_requests: [],
+  },
+  leaderboard: [
+    {
+      id: 'team-1',
+      slug: 'north-demo',
+      name: 'NORTH',
+      description: '',
+      tag: 'NORTH',
+      mark: 0,
+      join_policy: 'open',
+      member_count: 31,
+      active_members: 16,
+      flow_nano: 43_200_000_000,
+      bank_entries: 34,
+      bank_payouts: 13,
+      duel_settlements: 9,
+      rank: 1,
+      is_mine: false,
+    },
+    {
+      id: 'team-2',
+      slug: 'signal-demo',
+      name: 'SIGNAL',
+      description: '',
+      tag: 'SGNL',
+      mark: 1,
+      join_policy: 'request',
+      member_count: 24,
+      active_members: 11,
+      flow_nano: 35_700_000_000,
+      bank_entries: 29,
+      bank_payouts: 10,
+      duel_settlements: 14,
+      rank: 2,
+      is_mine: false,
+    },
+    {
+      id: 'team-3',
+      slug: 'orbit-demo',
+      name: 'ORBIT',
+      description: '',
+      tag: 'ORBIT',
+      mark: 2,
+      join_policy: 'invite',
+      member_count: 19,
+      active_members: 9,
+      flow_nano: 31_700_000_000,
+      bank_entries: 25,
+      bank_payouts: 8,
+      duel_settlements: 7,
+      rank: 3,
+      is_mine: false,
+    },
+  ],
+};
+demoTeams.leaderboard.push(demoTeams.my_team!);
+
 const initialTab: Tab =
   mockScreen?.startsWith('duel') || mockScreen === 'inline'
     ? 'duel'
-    : mockScreen === 'rating'
-      ? 'rating'
-      : mockScreen === 'profile' || mockScreen === 'settings'
-        ? 'profile'
-        : 'bank';
+    : mockScreen === 'teams'
+      ? 'teams'
+      : mockScreen === 'rating'
+        ? 'rating'
+        : mockScreen === 'profile' || mockScreen === 'settings'
+          ? 'profile'
+          : 'bank';
 
 interface LoopState {
   loading: boolean;
@@ -366,6 +496,8 @@ interface LoopState {
   /** The AFK challenge a shared card brought this person to answer. */
   challengeOfferId: number | null;
   rating: Rating | null;
+  teams: TeamOverview | null;
+  teamInvite: TeamInvitePreview | null;
   results: ResultCard[];
   error: string | null;
   showOnboarding: boolean;
@@ -373,6 +505,7 @@ interface LoopState {
   bootstrap(): Promise<void>;
   refresh(): Promise<void>;
   refreshRating(): Promise<void>;
+  clearTeamInvite(): void;
   setTab(tab: Tab): void;
   setError(error: string | null): void;
   declineInvite(): void;
@@ -397,6 +530,8 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   invite: null,
   challengeOfferId: null,
   rating: null,
+  teams: null,
+  teamInvite: null,
   results: [],
   error: null,
   showOnboarding: false,
@@ -442,7 +577,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         }
         const empty = mockScreen === 'bank-empty';
         set({
-          profile: demoProfile,
+          profile: mockScreen === 'teams' ? { ...demoProfile, announcement: null } : demoProfile,
           bankPosition: empty ? null : demoBank,
           bankPulse: demoBankPulse,
           bankHistory: empty ? [] : [demoBank],
@@ -455,6 +590,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
           duels: mockScreen === 'duel-result' || mockScreen === 'duel-boost' ? [demoDuel] : [],
           invite: mockScreen === 'duel-invite' ? demoInvite : null,
           rating: demoRating,
+          teams: demoTeams,
           results: demoResult ? [demoResult] : [],
           loading: false,
           showOnboarding:
@@ -472,7 +608,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         set({ profile, prelaunch: await api.prelaunch(), loading: false });
         return;
       }
-      const [bankPosition, bankPulse, bankHistory, offers, duels, rating, results] =
+      const [bankPosition, bankPulse, bankHistory, offers, duels, rating, teams, results] =
         await Promise.all([
           api.currentBankPosition(),
           api.bankPulse(),
@@ -480,6 +616,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
           api.offers(),
           api.duels(),
           api.rating().catch(() => null),
+          api.teamsOverview().catch(() => null),
           api.results(),
         ]);
       let invite: Invite | null = null;
@@ -488,6 +625,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
       // `-ref_`, so that bringing a friend into a duel finally counts. The
       // server reads that half; everything in front of it is the intention.
       const startParam = telegramStartParam()?.split('-ref_')[0] ?? null;
+      let teamInvite: TeamInvitePreview | null = null;
       if (startParam?.startsWith('duel_o')) {
         // The card said "принять вызов", so this person expects that exact
         // challenge — not a bare search screen. Carry the offer through.
@@ -495,8 +633,11 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         if (Number.isInteger(parsed) && parsed > 0) challengeOfferId = parsed;
       } else if (startParam?.startsWith('duel_')) {
         invite = await api.invite(startParam.slice(5));
+      } else if (startParam?.startsWith('team_')) {
+        teamInvite = await api.teamInvite(startParam.slice(5)).catch(() => null);
       }
       const opensDuel = startParam === 'duel' || Boolean(invite) || challengeOfferId !== null;
+      const opensTeam = Boolean(teamInvite);
       set({
         profile,
         challengeOfferId,
@@ -507,9 +648,11 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         duels,
         invite,
         rating,
+        teams,
+        teamInvite,
         results: hideDismissedResults(results),
         loading: false,
-        activeTab: opensDuel ? 'duel' : 'bank',
+        activeTab: opensDuel ? 'duel' : opensTeam ? 'teams' : 'bank',
         showOnboarding: profile.user.onboarding_enabled && !profile.user.onboarding_seen,
       });
     } catch (error) {
@@ -547,11 +690,19 @@ export const useLoopStore = create<LoopState>((set, get) => ({
 
   async refreshRating() {
     if (isMockTelegram()) return;
-    try {
-      set({ rating: await api.rating() });
-    } catch {
+    const [rating, teams] = await Promise.all([
+      api.rating().catch(() => null),
+      api.teamsOverview().catch(() => null),
+    ]);
+    if (!rating && !teams) {
       set({ error: 'Рейтинг временно не обновился. Основные режимы продолжают работать.' });
+      return;
     }
+    set({ rating: rating ?? get().rating, teams: teams ?? get().teams });
+  },
+
+  clearTeamInvite() {
+    set({ teamInvite: null });
   },
 
   setTab(activeTab) {

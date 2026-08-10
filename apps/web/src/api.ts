@@ -22,6 +22,11 @@ import type {
   Referral,
   ReferralPayout,
   ResultCard,
+  TeamDetail,
+  TeamInvitePreview,
+  TeamJoinResult,
+  TeamMembersPage,
+  TeamOverview,
   Wallet,
 } from './types';
 
@@ -191,6 +196,99 @@ const ratingSchema = z.object({
   invite_race_ends_at: z.string().nullable().default(null),
 });
 
+const teamEntrySchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  description: z.string(),
+  tag: z.string(),
+  mark: z.number(),
+  join_policy: z.enum(['open', 'request', 'invite']),
+  member_count: z.number(),
+  active_members: z.number(),
+  flow_nano: z.number(),
+  bank_entries: z.number(),
+  bank_payouts: z.number(),
+  duel_settlements: z.number(),
+  rank: z.number(),
+  is_mine: z.boolean(),
+});
+
+const teamMemberSchema = z.object({
+  user_id: z.string(),
+  first_name: z.string(),
+  username: z.string().nullable(),
+  photo_url: z.string().nullable(),
+  role: z.enum(['owner', 'admin', 'member']),
+  joined_at: z.string(),
+  flow_nano: z.number(),
+  bank_entries: z.number(),
+  bank_payouts: z.number(),
+  duel_settlements: z.number(),
+  is_me: z.boolean(),
+});
+
+const teamDetailSchema = teamEntrySchema.extend({
+  my_role: z.enum(['owner', 'admin', 'member']).nullable(),
+  my_join_state: z.enum(['none', 'pending', 'joined']),
+  my_flow_nano: z.number(),
+  top_members: z.array(teamMemberSchema),
+  recent_activity: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.enum(['bank_entry', 'bank_payout', 'duel_settlement']),
+      user_id: z.string(),
+      first_name: z.string(),
+      username: z.string().nullable(),
+      amount_nano: z.number(),
+      tx_hash: z.string(),
+      event_at: z.string(),
+    }),
+  ),
+  pending_requests: z.array(
+    z.object({
+      id: z.string(),
+      user_id: z.string(),
+      first_name: z.string(),
+      username: z.string().nullable(),
+      photo_url: z.string().nullable(),
+      created_at: z.string(),
+    }),
+  ),
+});
+
+const teamOverviewSchema = z.object({
+  season: z.object({
+    id: z.string(),
+    key: z.string(),
+    name: z.string(),
+    starts_at: z.string(),
+    ends_at: z.string(),
+    competition: z.literal('bank_flow'),
+  }),
+  my_team: teamDetailSchema.nullable(),
+  leaderboard: z.array(teamEntrySchema),
+});
+
+const teamInvitePreviewSchema = z.object({
+  token: z.string(),
+  expires_at: z.string(),
+  team: teamEntrySchema,
+  inviter_name: z.string(),
+});
+
+const teamMembersPageSchema = z.object({
+  items: z.array(teamMemberSchema),
+  total: z.number(),
+  offset: z.number(),
+  limit: z.number(),
+});
+
+const teamJoinResultSchema = z.object({
+  state: z.enum(['joined', 'requested']),
+  team: teamDetailSchema,
+});
+
 const IDEMPOTENT_POSTS = /^\/(results\/[^/]+\/seen|bank\/positions\/\d+\/discard)$/;
 
 async function restoreSession(): Promise<boolean> {
@@ -251,6 +349,7 @@ async function request<T>(path: string, init?: RequestInit, retryUnauthorized = 
     };
     throw new Error(body.detail ?? `HTTP ${response.status}`);
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -490,6 +589,130 @@ export const api = {
 
   async rating(): Promise<Rating> {
     return ratingSchema.parse(await request<unknown>('/rating'));
+  },
+
+  async teamsOverview(): Promise<TeamOverview> {
+    return teamOverviewSchema.parse(await request<unknown>('/teams/overview'));
+  },
+
+  async team(slug: string): Promise<TeamDetail> {
+    return teamDetailSchema.parse(await request<unknown>(`/teams/${encodeURIComponent(slug)}`));
+  },
+
+  async searchTeams(
+    q = '',
+    offset = 0,
+  ): Promise<{ items: TeamOverview['leaderboard']; total: number }> {
+    const result = z
+      .object({
+        items: z.array(teamEntrySchema),
+        total: z.number(),
+        offset: z.number(),
+        limit: z.number(),
+      })
+      .parse(
+        await request<unknown>(
+          `/teams/search?q=${encodeURIComponent(q)}&offset=${offset}&limit=20`,
+        ),
+      );
+    return { items: result.items, total: result.total };
+  },
+
+  async teamMembers(slug: string, offset = 0): Promise<TeamMembersPage> {
+    return teamMembersPageSchema.parse(
+      await request<unknown>(
+        `/teams/${encodeURIComponent(slug)}/members?offset=${offset}&limit=50`,
+      ),
+    );
+  },
+
+  async teamInvite(token: string): Promise<TeamInvitePreview> {
+    return teamInvitePreviewSchema.parse(
+      await request<unknown>(`/teams/invites/${encodeURIComponent(token)}`),
+    );
+  },
+
+  async createTeam(input: {
+    name: string;
+    tag: string;
+    join_policy: 'open' | 'request' | 'invite';
+  }): Promise<TeamDetail> {
+    return teamDetailSchema.parse(
+      await request<unknown>('/teams', { method: 'POST', body: JSON.stringify(input) }),
+    );
+  },
+
+  async updateTeam(
+    slug: string,
+    input: {
+      name?: string;
+      description?: string;
+      mark?: number;
+      join_policy?: 'open' | 'request' | 'invite';
+    },
+  ): Promise<TeamDetail> {
+    return teamDetailSchema.parse(
+      await request<unknown>(`/teams/${encodeURIComponent(slug)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    );
+  },
+
+  async joinTeam(slug: string): Promise<TeamJoinResult> {
+    return teamJoinResultSchema.parse(
+      await request(`/teams/${encodeURIComponent(slug)}/join`, {
+        method: 'POST',
+        body: '{}',
+      }),
+    );
+  },
+
+  async joinTeamInvite(token: string): Promise<TeamJoinResult> {
+    return teamJoinResultSchema.parse(
+      await request(`/teams/invites/${encodeURIComponent(token)}/join`, {
+        method: 'POST',
+        body: '{}',
+      }),
+    );
+  },
+
+  async leaveTeam(slug: string): Promise<void> {
+    await request(`/teams/${encodeURIComponent(slug)}/leave`, { method: 'POST', body: '{}' });
+  },
+
+  async prepareTeamShare(slug: string): Promise<PreparedResultShare> {
+    return await request(`/teams/${encodeURIComponent(slug)}/share`, {
+      method: 'POST',
+      body: '{}',
+    });
+  },
+
+  async decideTeamRequest(slug: string, requestId: string, approve: boolean): Promise<void> {
+    await request(`/teams/${encodeURIComponent(slug)}/requests/${encodeURIComponent(requestId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ approve }),
+    });
+  },
+
+  async updateTeamMember(slug: string, userId: string, role: 'admin' | 'member'): Promise<void> {
+    await request(`/teams/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  },
+
+  async removeTeamMember(slug: string, userId: string): Promise<void> {
+    await request(`/teams/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async transferTeam(slug: string, userId: string): Promise<void> {
+    await request(`/teams/${encodeURIComponent(slug)}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
+    });
   },
 
   async invite(code: string): Promise<Invite> {

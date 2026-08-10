@@ -294,3 +294,4 @@ class AdminAuditEvent(Base):
 # Register bounded-context tables in the shared SQLAlchemy metadata.
 from .modules.bank import models as _bank_models  # noqa: E402,F401
 from .modules.duel import models as _duel_models  # noqa: E402,F401
+from .modules.teams import models as _team_models  # noqa: E402,F401

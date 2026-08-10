@@ -28,6 +28,8 @@ from .metrics import (
 )
 from .modules.bank.router import router as bank_router
 from .modules.duel.router import router as duel_router
+from .modules.teams.router import public_router as public_team_router
+from .modules.teams.router import router as team_router
 from .nonce_store import RedisChallengeStore
 from .public_feed_routes import router as public_feed_router
 from .result_routes import router as result_router
@@ -149,6 +151,8 @@ def create_app() -> FastAPI:
     app.include_router(control_router)
     app.include_router(bank_router, prefix="/api/v1")
     app.include_router(duel_router, prefix="/api/v1")
+    app.include_router(team_router, prefix="/api/v1")
+    app.include_router(public_team_router, prefix="/api/v1")
     app.include_router(result_router)
     app.include_router(public_feed_router)
 

@@ -29,6 +29,7 @@ from aiogram.types import (
     RichTextBold,
     WebAppInfo,
 )
+from fastapi import HTTPException
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -41,6 +42,9 @@ from .modules.duel.models import (
     MatchmakingOffer,
     OfferState,
 )
+from .modules.teams.card import build_team_invite_inline
+from .modules.teams.models import Team
+from .modules.teams.service import ensure_season, ranked_team_entry, resolve_invite
 from .referrals import get_or_create_referral_code
 from .result_cards import (
     INVITE_VARIANTS,
@@ -54,6 +58,7 @@ logger = structlog.get_logger()
 INLINE_PATTERN = re.compile(r"^\s*duel\s+(\d{1,16})\s*$", re.IGNORECASE)
 RESULT_PATTERN = re.compile(r"^\s*result\s+([A-Za-z0-9_-]{20,32})\s*$", re.IGNORECASE)
 INVITE_PATTERN = re.compile(r"^\s*invite(\s+[A-Za-z0-9_-]{4,24})?\s*$", re.IGNORECASE)
+TEAM_PATTERN = re.compile(r"^\s*team\s+([A-Za-z0-9_-]{12,48})\s*$", re.IGNORECASE)
 BOT_NAME = "LOOP"
 BOT_DESCRIPTION = (
     "LOOP — живой цикл внутри Telegram. В BANK новые взносы постепенно наполняют "
@@ -291,6 +296,49 @@ def create_dispatcher(
 
     @router.inline_query()
     async def inline_result_or_duel(query: InlineQuery) -> None:
+        team_match = TEAM_PATTERN.match(query.query)
+        if team_match:
+            async with session_factory() as db:
+                creator = await db.scalar(
+                    select(User).where(User.telegram_id == query.from_user.id)
+                )
+                if creator is None:
+                    await query.answer([], cache_time=1, is_personal=True)
+                    return
+                try:
+                    invite = await resolve_invite(db, team_match.group(1))
+                except HTTPException:
+                    await query.answer([], cache_time=1, is_personal=True)
+                    return
+                team = await db.get(Team, invite.team_id)
+                inviter = await db.get(User, invite.inviter_user_id)
+                if team is None or inviter is None or team.state != "active":
+                    await query.answer([], cache_time=1, is_personal=True)
+                    return
+                referral = await get_or_create_referral_code(db, inviter.id)
+                season = await ensure_season(db)
+                entry = await ranked_team_entry(
+                    db, season, user_id=creator.id, team_id=team.id
+                )
+                if entry is None:
+                    await query.answer([], cache_time=1, is_personal=True)
+                    return
+                await db.commit()
+            await query.answer(
+                [
+                    build_team_invite_inline(
+                        settings=settings,
+                        team=entry,
+                        token=team_match.group(1),
+                        referral_code=referral.code,
+                        inviter_name=inviter.first_name,
+                    )
+                ],
+                cache_time=15,
+                is_personal=True,
+            )
+            return
+
         invite_match = INVITE_PATTERN.match(query.query)
         if invite_match and settings.launch_at is not None:
             async with session_factory() as db:

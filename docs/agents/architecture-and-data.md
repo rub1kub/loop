@@ -86,11 +86,11 @@ Browser и API не могут выполнить admin действие без 
 
 `store.ts` хранит:
 
-- `activeTab`: `bank | duel | rating | profile`;
+- `activeTab`: `duel | rating | bank | teams | profile`;
 - profile и verified wallet;
 - текущую BANK position и историю;
 - offers, duels и открытый invite;
-- rating;
+- rating и недельный обзор команд;
 - onboarding/error/loading.
 
 Активные BANK/DUEL состояния обновляются каждые пять секунд. Рейтинг на активной вкладке —
@@ -120,6 +120,7 @@ Browser и API не могут выполнить admin действие без 
 | BANK                      | `apps/web/src/features/bank/BankScreen.tsx`     |
 | DUEL                      | `apps/web/src/features/duel/DuelScreen.tsx`     |
 | рейтинг                   | `apps/web/src/features/rating/RatingScreen.tsx` |
+| команды                   | `apps/web/src/features/teams/TeamsScreen.tsx`   |
 | профиль                   | `apps/web/src/components/ProfileScreen.tsx`     |
 | control                   | `apps/web/src/control/ControlApp.tsx`           |
 | глобальные стили Mini App | `apps/web/src/styles.css`                       |
@@ -142,6 +143,13 @@ Browser и API не могут выполнить admin действие без 
 | `GET`   | `/onchain/jettons/{jetton_master}` | доказать Jetton wallet и balance           |
 | `GET`   | `/referrals`                       | referral link, counts и reward history     |
 | `GET`   | `/rating`                          | вычисляемый season score, lists и pulse    |
+| `GET`   | `/teams/overview`                  | сезон, своя команда и общий список         |
+| `GET`   | `/teams/search`                    | поиск и постраничный список команд         |
+| `POST`  | `/teams`                           | создать команду                            |
+| `GET`   | `/teams/{slug}`                    | команда, права и заявки                    |
+| `PATCH` | `/teams/{slug}`                    | оформление и режим вступления              |
+| `POST`  | `/teams/{slug}/join`               | войти или отправить заявку                 |
+| `POST`  | `/teams/{slug}/share`              | Telegram-карточка приглашения              |
 | `GET`   | `/invites/{code}`                  | preview прямого DUEL                       |
 | `POST`  | `/invites/{code}/accept`           | привязать invite к verified user wallet    |
 
@@ -203,7 +211,7 @@ Browser и API не могут выполнить admin действие без 
 
 ## PostgreSQL
 
-Текущая Alembic head: `20260726_0009`.
+Текущая Alembic head: `20260810_0020`.
 
 ### Shared
 
@@ -221,6 +229,24 @@ Browser и API не могут выполнить admin действие без 
 | `admin_audit_events`    | prepared/applied/confirmed административные действия |
 | `result_cards`          | неизменяемые факты подтверждённых BANK/DUEL выплат   |
 | `notification_outbox`   | одна попытка личной доставки на карточку             |
+
+### Teams bounded context
+
+| Таблица                    | Назначение                                                     |
+| -------------------------- | -------------------------------------------------------------- |
+| `teams`                    | название, описание, эмблема, владелец и режим вступления       |
+| `team_memberships`         | временной интервал членства и роль                              |
+| `team_invites`             | хешированные короткоживущие приглашения                        |
+| `team_join_requests`       | заявки и решение администратора                                |
+| `team_seasons`             | недельные окна понедельник–понедельник по Москве                |
+| `team_score_events`        | неизменяемые подтверждённые источники командной статистики      |
+| `team_season_stats`        | агрегат команды за сезон                                       |
+| `team_member_season_stats` | агрегат участника внутри команды                               |
+
+Один пользователь имеет не более одного активного членства, а команда — ровно одного активного
+владельца. Основной `flow_nano` растёт только от подтверждённого principal BANK. Событие
+прикрепляется к членству, действовавшему в момент транзакции. Уникальный `source_key` защищает от
+повторного начисления; фоновая сверка восстанавливает социальную проекцию отдельно от финансовой.
 
 ### BANK bounded context
 

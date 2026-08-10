@@ -24,9 +24,20 @@ The global list and the qualified-referral circle use the same public formula. S
 ORBIT and LOOP levels make progress legible without turning financial volume into status.
 RATING is an off-chain projection of verified events and never changes contract state.
 
+## TEAMS
+
+TEAMS is a weekly competition built from finalized activity. Confirmed BANK entry principal is
+the primary team score; BANK payouts and DUEL settlements remain visible secondary statistics.
+Membership is temporal, so changing teams cannot move an earlier transaction to a new team.
+
+A person can belong to one active team at a time. Teams have an owner, administrators and
+members, support open/request/invite entry, and have no product-level member cap. Owners manage
+the name, description, monochrome emblem, admission policy, roles and ownership. Team scoring is
+an idempotent server projection and never changes BANK or DUEL contract state.
+
 ## Shared product layer
 
-Telegram identity, an external TON Connect wallet, RATING, referrals and profile navigation are
+Telegram identity, an external TON Connect wallet, RATING, TEAMS, referrals and profile navigation are
 shared. Financial state is not. BANK and DUEL have separate contracts, projections, history,
 fees and screens. Neither mode writes into the other.
 

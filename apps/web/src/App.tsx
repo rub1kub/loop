@@ -15,6 +15,7 @@ import { TabBar } from './components/TabBar';
 import { BankScreen } from './features/bank/BankScreen';
 import { DuelScreen } from './features/duel/DuelScreen';
 import { RatingScreen } from './features/rating/RatingScreen';
+import { TeamsScreen } from './features/teams/TeamsScreen';
 import { ResultSheet } from './features/results/ResultSheet';
 import { installInteractionGuards } from './interactionGuards';
 import {
@@ -197,7 +198,7 @@ export default function App() {
   }, [setError, state.error]);
 
   useEffect(() => {
-    if (state.activeTab !== 'rating' || isMockTelegram()) return;
+    if (!['rating', 'teams'].includes(state.activeTab) || isMockTelegram()) return;
     void refreshRating();
     const timer = window.setInterval(() => void refreshRating(), 20_000);
     return () => window.clearInterval(timer);
@@ -265,6 +266,15 @@ export default function App() {
       />
     ),
     rating: <RatingScreen rating={state.rating} />,
+    teams: (
+      <TeamsScreen
+        teams={state.teams}
+        invite={state.teamInvite}
+        onRefresh={() => state.refreshRating()}
+        onDismissInvite={() => state.clearTeamInvite()}
+        onError={(message) => state.setError(message)}
+      />
+    ),
     profile: (
       <ProfileScreen
         profile={state.profile}

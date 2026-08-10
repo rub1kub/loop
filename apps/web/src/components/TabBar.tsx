@@ -1,11 +1,18 @@
-import { ChartBar, Diamond, Infinity as InfinityIcon, UserCircle } from '@phosphor-icons/react';
+import {
+  ChartBar,
+  Diamond,
+  Infinity as InfinityIcon,
+  UserCircle,
+  UsersThree,
+} from '@phosphor-icons/react';
 
 import type { Tab } from '../types';
 
 const tabs = [
-  { id: 'bank', label: 'BANK', Icon: Diamond },
   { id: 'duel', label: 'DUEL', Icon: InfinityIcon },
   { id: 'rating', label: 'РЕЙТИНГ', Icon: ChartBar },
+  { id: 'bank', label: 'BANK', Icon: Diamond },
+  { id: 'teams', label: 'КОМАНДЫ', Icon: UsersThree },
   { id: 'profile', label: 'ПРОФИЛЬ', Icon: UserCircle },
 ] satisfies { id: Tab; label: string; Icon: typeof Diamond }[];
 
@@ -17,7 +24,7 @@ export function TabBar({ active, onChange }: { active: Tab; onChange: (tab: Tab)
         return (
           <button
             key={id}
-            className={selected ? 'active' : ''}
+            className={`${selected ? 'active' : ''}${id === 'bank' ? ' bank-home-tab' : ''}`}
             onClick={() => onChange(id)}
             aria-current={selected ? 'page' : undefined}
           >

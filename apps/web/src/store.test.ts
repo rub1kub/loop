@@ -20,6 +20,8 @@ const apiMocks = vi.hoisted(() => ({
   offers: vi.fn(() => Promise.resolve([])),
   duels: vi.fn(() => Promise.resolve([])),
   rating: vi.fn(() => Promise.resolve(null)),
+  teamsOverview: vi.fn(() => Promise.resolve(null)),
+  teamInvite: vi.fn(() => Promise.resolve(null)),
   results: vi.fn(() => Promise.resolve([])),
   invite: vi.fn(),
 }));
