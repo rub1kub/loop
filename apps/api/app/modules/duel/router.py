@@ -777,8 +777,9 @@ async def duel_offer_preview(
     creator = await db.get(User, offer.user_id)
     if creator is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Вызов не найден")
-    still_open = (
-        offer.state == OfferState.OPEN.value and as_utc(offer.expires_at) > datetime.now(UTC)
+    still_open = as_utc(offer.expires_at) > datetime.now(UTC) and (
+        offer.state == OfferState.OPEN.value
+        or (offer.mode == "afk" and offer.state == OfferState.RESERVED.value)
     )
     return DuelChallengePreviewView(
         creator_first_name=creator.first_name,
@@ -814,7 +815,10 @@ async def prepare_duel_share(
     )
     if offer is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Вызов не найден")
-    if offer.state != OfferState.OPEN.value or as_utc(offer.expires_at) <= datetime.now(UTC):
+    shareable = offer.state == OfferState.OPEN.value or (
+        offer.mode == "afk" and offer.state == OfferState.RESERVED.value
+    )
+    if not shareable or as_utc(offer.expires_at) <= datetime.now(UTC):
         raise HTTPException(status.HTTP_409_CONFLICT, "Вызов уже неактуален")
     bot = request.app.state.bot
     if bot is None:
@@ -921,4 +925,3 @@ async def opponent_avatar(
         media_type=media_type,
         headers={"Cache-Control": "private, max-age=300"},
     )
-

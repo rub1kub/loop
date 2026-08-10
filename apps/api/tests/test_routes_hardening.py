@@ -4,6 +4,7 @@ import json
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import urlencode
 
 import pytest
@@ -638,7 +639,7 @@ async def test_a_shared_challenge_previews_from_the_receivers_side(app, client) 
     # the exact challenge: whose call, what it asks of THEM, and whether it is
     # still standing — an answered challenge says so instead of pretending.
     settings = get_settings()
-    await auth_headers(client, 700_501)
+    creator_headers = await auth_headers(client, 700_501)
     receiver_headers = await auth_headers(client, 700_502)
 
     async with app.state.session_factory() as db:
@@ -671,6 +672,35 @@ async def test_a_shared_challenge_previews_from_the_receivers_side(app, client) 
         "receiver_chance_bps": 5_000,
         "open": True,
     }
+
+    class FakeBot:
+        def __init__(self) -> None:
+            self.session = app.state.bot.session
+
+        async def save_prepared_inline_message(self, **_kwargs):
+            return SimpleNamespace(
+                id="prepared-reserved-duel",
+                expiration_date=datetime(2030, 1, 1, tzinfo=UTC),
+            )
+
+    # A quote can reserve an AFK offer for a few seconds before its wallet is
+    # signed. The creator is still searching during that window and must not
+    # lose the ability to share the same challenge after returning to LOOP.
+    app.state.bot = FakeBot()
+    async with app.state.session_factory() as db:
+        stored = await db.scalar(select(DuelOffer).where(DuelOffer.onchain_offer_id == 990_501))
+        stored.state = OfferState.RESERVED.value
+        stored.reserved_until = datetime.now(UTC) + timedelta(minutes=5)
+        await db.commit()
+    reserved = (
+        await client.get("/api/v1/duels/offers/990501/preview", headers=receiver_headers)
+    ).json()
+    assert reserved["open"] is True
+    shared = await client.post(
+        "/api/v1/duels/offers/990501/share", headers=creator_headers, json={}
+    )
+    assert shared.status_code == 200, shared.text
+    assert shared.json()["prepared_message_id"] == "prepared-reserved-duel"
 
     async with app.state.session_factory() as db:
         stored = await db.scalar(select(DuelOffer).where(DuelOffer.onchain_offer_id == 990_501))

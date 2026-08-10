@@ -189,6 +189,8 @@ describe('DuelScreen', () => {
     apiMocks.contractState.mockResolvedValue({ paused: false });
     apiMocks.expireOfferIntent.mockReset();
     apiMocks.quoteOffer.mockReset();
+    apiMocks.opponentAvatar.mockClear();
+    apiMocks.prepareDuelShare.mockClear();
     tonConnect.openModal.mockClear();
     tonConnect.sendTransaction.mockClear();
   });
@@ -472,7 +474,7 @@ describe('DuelScreen', () => {
       funding_tx_hash: 'funding',
       funding_proof_url: 'https://tonviewer.com/transaction/funding',
     };
-    render(
+    const { rerender } = render(
       <DuelScreen
         profile={{ ...profile, wallet: walletOf(`0:${'11'.repeat(32)}`) }}
         offers={[offer]}
@@ -487,6 +489,45 @@ describe('DuelScreen', () => {
     await waitFor(() => expect(apiMocks.prepareDuelShare).toHaveBeenCalledWith(811));
     // Nothing is sent by hand any more, and the app is not left behind.
     expect(openTelegramLink).not.toHaveBeenCalled();
+
+    apiMocks.prepareDuelShare.mockClear();
+    rerender(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf(`0:${'11'.repeat(32)}`) }}
+        offers={[{ ...offer, state: 'reserved' }]}
+        duels={[]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+    const returnedInvite = screen.getByRole('button', { name: /Пригласить соперника/i });
+    expect(returnedInvite).toBeEnabled();
+    fireEvent.click(returnedInvite);
+    await waitFor(() => expect(apiMocks.prepareDuelShare).toHaveBeenCalledWith(811));
+  });
+
+  it('does not show the previous opponent while a new search is empty', () => {
+    localStorage.setItem('loop-duel-seen', 'old-duel');
+    const openOffer: Offer = {
+      ...matchedOffer(),
+      id: 'new-search',
+      onchain_offer_id: 812,
+      state: 'open',
+    };
+
+    render(
+      <DuelScreen
+        profile={profile}
+        offers={[openOffer]}
+        duels={[settledDuel({ id: 'old-duel', onchain_duel_id: 702 })]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('ИЩЕМ СОПЕРНИКА')).toBeVisible();
+    expect(apiMocks.opponentAvatar).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('.duel-orbit-player')[1]?.querySelector('img')).toBeNull();
   });
 
   it('presents one equal 50/50 rule without probability controls', () => {

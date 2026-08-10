@@ -413,7 +413,11 @@ export function DuelScreen({
     mine: null,
     theirs: null,
   });
-  const versusDuelId = (activeDuel ?? latestDuel)?.onchain_duel_id ?? null;
+  // A settled duel belongs to the result screen only. Reusing it while a new
+  // offer is searching leaked the previous opponent's face into an empty room.
+  const versusDuelId =
+    activeDuel?.onchain_duel_id ??
+    (status === 'result' ? (latestDuel?.onchain_duel_id ?? null) : null);
   useEffect(() => {
     if (isMockTelegram() || versusDuelId === null) return;
     let alive = true;
@@ -824,7 +828,10 @@ export function DuelScreen({
       haptic('selection');
       return;
     }
-    if (!activeOffer || activeOffer.state !== 'open' || offerExpired) {
+    const shareable =
+      activeOffer?.state === 'open' ||
+      (activeOffer?.mode === 'afk' && activeOffer.state === 'reserved');
+    if (!activeOffer || !shareable || offerExpired) {
       failed('Сначала дождись, пока вызов появится в сети.');
       haptic('warning');
       return;
@@ -886,6 +893,11 @@ export function DuelScreen({
         ? Date.parse(activeOffer.expires_at)
         : mockExpiresAt;
   const liveMode = activeOffer?.mode ?? mode;
+  const invitationShareable = Boolean(
+    mockSearching ||
+    activeOffer?.state === 'open' ||
+    (activeOffer?.mode === 'afk' && activeOffer.state === 'reserved'),
+  );
 
   // A quote holds the wallet's offer slot before the wallet has answered,
   // and that is not a search: nothing is on chain to find an opponent for.
@@ -1342,7 +1354,7 @@ export function DuelScreen({
         {status === 'searching' && !offerExpired && (activeOffer || mockSearching) && (
           <button
             className="profile-row duel-invite-card"
-            disabled={!mockSearching && activeOffer?.state !== 'open'}
+            disabled={!invitationShareable}
             onClick={() => void inviteToTelegram()}
           >
             <span className="row-icon">
@@ -1351,7 +1363,7 @@ export function DuelScreen({
             <div>
               <b>Пригласить соперника</b>
               <small>
-                {!mockSearching && activeOffer?.state !== 'open'
+                {!invitationShareable
                   ? 'Станет доступно через несколько секунд'
                   : activeOffer?.mode === 'direct'
                     ? 'Отправить прямой вызов'
