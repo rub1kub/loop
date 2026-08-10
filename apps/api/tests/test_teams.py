@@ -48,6 +48,21 @@ async def authenticate(client, telegram_id: int) -> dict[str, str]:
 
 
 @pytest.mark.asyncio
+async def test_team_creation_needs_only_a_name_and_policy(client) -> None:
+    owner = await authenticate(client, 8_090_000_001)
+    created = await client.post(
+        "/api/v1/teams",
+        headers=owner,
+        json={"name": "Только имя", "join_policy": "open"},
+    )
+
+    assert created.status_code == 201, created.text
+    assert created.json()["name"] == "Только имя"
+    # The old field remains an opaque compatibility key, not user-facing branding.
+    assert len(created.json()["tag"]) == 8
+
+
+@pytest.mark.asyncio
 async def test_team_has_no_member_cap_and_enforces_change_cooldown(client) -> None:
     owner = await authenticate(client, 8_100_000_001)
     created = await client.post(

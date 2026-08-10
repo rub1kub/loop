@@ -448,7 +448,6 @@ async def team_card(slug: str, db: Db) -> Response:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Команда не найдена")
     image = render_team_card(
         entry.name,
-        entry.tag,
         entry.mark,
         entry.rank,
         entry.flow_nano,

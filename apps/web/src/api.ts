@@ -635,7 +635,6 @@ export const api = {
 
   async createTeam(input: {
     name: string;
-    tag: string;
     join_policy: 'open' | 'request' | 'invite';
   }): Promise<TeamDetail> {
     return teamDetailSchema.parse(

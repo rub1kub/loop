@@ -209,6 +209,8 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .story-mark-plush {
+  position: relative;
+  overflow: hidden;
   width: min(42vw, 168px);
   height: auto;
   aspect-ratio: 1;
@@ -218,6 +220,23 @@ summary:focus-visible .disclosure-indicator {
   filter: grayscale(1) contrast(1.06);
   object-fit: cover;
   opacity: 0.92;
+}
+
+.story-mark-plush img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-plush-motion {
+  opacity: 0;
+  transition: opacity 240ms var(--ease-apple);
+}
+
+.story-plush-motion.is-loaded {
+  opacity: 1;
 }
 
 .story-signal {
@@ -3959,8 +3978,8 @@ details[open] > summary .disclosure-indicator svg {
   opacity: 0.55;
 }
 
-.duel-orbit.phase-won .duel-orbit-needle,
-.duel-orbit.phase-lost .duel-orbit-needle {
+.duel-orbit.is-revealing.phase-won .duel-orbit-needle,
+.duel-orbit.is-revealing.phase-lost .duel-orbit-needle {
   animation: duel-orbit-needle-out 260ms ease 2.2s both;
 }
 
@@ -4099,8 +4118,11 @@ details[open] > summary .disclosure-indicator svg {
   justify-items: center;
   translate: -50% -50%;
   color: var(--ink);
-  animation: duel-orbit-result-in 300ms var(--ease-apple) 2.22s both;
   pointer-events: none;
+}
+
+.duel-orbit.is-revealing .duel-orbit-verdict {
+  animation: duel-orbit-result-in 300ms var(--ease-apple) 2.22s both;
 }
 
 .duel-orbit-verdict.is-lost {
@@ -4132,26 +4154,16 @@ details[open] > summary .disclosure-indicator svg {
 
 .duel-orbit.phase-won .duel-orbit-centre,
 .duel-orbit.phase-lost .duel-orbit-centre {
-  animation: duel-orbit-centre-out 180ms ease 2.17s both;
+  visibility: hidden;
+  opacity: 0;
 }
 
-.duel-result-after-orbit,
-.duel-orbit.phase-won ~ .duel-actions,
-.duel-orbit.phase-lost ~ .duel-actions {
+.duel-orbit.is-revealing ~ .duel-result-after-orbit,
+.duel-orbit.is-revealing ~ .duel-actions {
   animation: duel-orbit-result-in 300ms var(--ease-apple) 2.3s both;
 }
 
 @keyframes duel-orbit-resolving-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    visibility: hidden;
-    opacity: 0;
-  }
-}
-
-@keyframes duel-orbit-centre-out {
   from {
     opacity: 1;
   }
@@ -4254,13 +4266,10 @@ details[open] > summary .disclosure-indicator svg {
 @media (prefers-reduced-motion: reduce) {
   .duel-orbit-resolving-label,
   .duel-orbit-verdict,
-  .duel-orbit.phase-won .duel-orbit-needle,
-  .duel-orbit.phase-lost .duel-orbit-needle,
-  .duel-orbit.phase-won .duel-orbit-centre,
-  .duel-orbit.phase-lost .duel-orbit-centre,
+  .duel-orbit.is-revealing.phase-won .duel-orbit-needle,
+  .duel-orbit.is-revealing.phase-lost .duel-orbit-needle,
   .duel-result-after-orbit,
-  .duel-orbit.phase-won ~ .duel-actions,
-  .duel-orbit.phase-lost ~ .duel-actions {
+  .duel-orbit.is-revealing ~ .duel-actions {
     animation-delay: 0s;
     animation-duration: 1ms;
   }

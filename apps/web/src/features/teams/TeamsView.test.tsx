@@ -86,6 +86,7 @@ describe('team forms', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /СОЗДАТЬ СВОЮ/ }));
     const name = await screen.findByRole('textbox', { name: 'НАЗВАНИЕ' });
+    expect(screen.queryByRole('textbox', { name: 'КОРОТКИЙ ТЕГ' })).not.toBeInTheDocument();
 
     await waitFor(() => expect(name).not.toHaveFocus());
     name.focus();

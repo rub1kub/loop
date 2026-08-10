@@ -239,6 +239,14 @@ export function DuelScreen({
           ['boosting', 'revealing'].includes(duel.state),
       )
     : undefined;
+  // Result theatre belongs to the live transition only. A settled duel opened
+  // on another device is already a known fact and must render immediately.
+  const [observedLiveDuelId, setObservedLiveDuelId] = useState<string | null>(
+    activeDuel?.id ?? null,
+  );
+  if (activeDuel && observedLiveDuelId !== activeDuel.id) {
+    setObservedLiveDuelId(activeDuel.id);
+  }
 
   const clearPendingAction = useCallback(() => {
     setPendingAction(null);
@@ -396,18 +404,28 @@ export function DuelScreen({
   const resultWon = Boolean(
     latestDuel?.winner_wallet && sameAddress(latestDuel.winner_wallet, profile.wallet?.address),
   );
+  const revealResult = Boolean(
+    status === 'result' && latestDuel && observedLiveDuelId === latestDuel.id,
+  );
   // The chain already knows the winner. The interface spends 2.35 seconds
   // revealing that fact with the orbit needle; it never rolls a client result.
   // The win gets a burst when the needle lands. The loss gets nothing —
   // celebrating someone's money leaving is mockery, not humour.
   const celebratedDuel = useRef<string | null>(null);
   useEffect(() => {
-    if (status !== 'result' || !latestDuel || celebratedDuel.current === latestDuel.id) return;
+    if (
+      !revealResult ||
+      status !== 'result' ||
+      !latestDuel ||
+      celebratedDuel.current === latestDuel.id
+    ) {
+      return;
+    }
     celebratedDuel.current = latestDuel.id;
     if (!resultWon) return;
     const burst = window.setTimeout(() => celebrate(), 2350);
     return () => window.clearTimeout(burst);
-  }, [latestDuel, resultWon, status]);
+  }, [latestDuel, resultWon, revealResult, status]);
 
   const resultAmountNano = latestDuel
     ? resultWon
@@ -1052,6 +1070,7 @@ export function DuelScreen({
         opponentName={orbitOpponentName}
         latestEvent={orbitEvent}
         resultAmount={`${resultWon ? '+' : '−'}${formatGram(resultAmountNano, 3)} GRAM`}
+        revealResult={revealResult}
         compact={boostPanelOpen}
         setup={status === 'idle' || status === 'searching'}
       />

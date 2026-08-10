@@ -732,12 +732,22 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   },
 
   async finishOnboarding() {
-    if (!isMockTelegram()) await api.updateSettings({ onboarding_seen: true });
     const profile = get().profile;
+    const wasSeen = profile?.user.onboarding_seen === true;
+    // Closing an optional replay must never depend on the network. The first
+    // completion is also optimistic: a slow settings request cannot trap the
+    // user behind a button that appears broken.
     set({
       profile: profile ? { ...profile, user: { ...profile.user, onboarding_seen: true } } : profile,
       showOnboarding: false,
     });
+    if (!isMockTelegram() && !wasSeen) {
+      try {
+        await api.updateSettings({ onboarding_seen: true });
+      } catch {
+        // The local session is usable; a later first-run can retry persistence.
+      }
+    }
   },
 
   replayOnboarding() {

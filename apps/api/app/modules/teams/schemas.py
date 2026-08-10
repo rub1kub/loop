@@ -97,13 +97,20 @@ class TeamMembersPageView(BaseModel):
 
 class TeamCreateRequest(BaseModel):
     name: str = Field(min_length=3, max_length=32)
-    tag: str = Field(min_length=2, max_length=8)
+    # Kept optional for older clients. New clients do not expose an internal
+    # identifier as a second piece of team branding.
+    tag: str | None = Field(default=None, min_length=2, max_length=8)
     join_policy: Literal["open", "request", "invite"] = "open"
 
-    @field_validator("name", "tag")
+    @field_validator("name")
     @classmethod
     def strip_text(cls, value: str) -> str:
         return " ".join(value.strip().split())
+
+    @field_validator("tag")
+    @classmethod
+    def strip_optional_text(cls, value: str | None) -> str | None:
+        return " ".join(value.strip().split()) if value is not None else None
 
 
 class TeamUpdateRequest(BaseModel):

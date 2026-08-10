@@ -24,6 +24,7 @@ const apiMocks = vi.hoisted(() => ({
   teamInvite: vi.fn(() => Promise.resolve(null)),
   results: vi.fn(() => Promise.resolve([])),
   invite: vi.fn(),
+  updateSettings: vi.fn(),
 }));
 
 const telegramState = vi.hoisted(() => ({ startParam: null as string | null }));
@@ -182,5 +183,36 @@ describe('refresh', () => {
     await first;
 
     expect(store.getState().profile?.user.first_name).toBe('Новое состояние');
+  });
+});
+
+describe('onboarding completion', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('closes a settings replay without another network request', async () => {
+    const store = await freshStore();
+    store.setState({
+      profile: {
+        ...baseProfile,
+        user: { ...baseProfile.user, onboarding_seen: true },
+      },
+      showOnboarding: true,
+    });
+
+    await store.getState().finishOnboarding();
+
+    expect(store.getState().showOnboarding).toBe(false);
+    expect(apiMocks.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('does not trap a first-time user when saving the setting fails', async () => {
+    apiMocks.updateSettings.mockRejectedValueOnce(new Error('offline'));
+    const store = await freshStore();
+    store.setState({ profile: baseProfile, showOnboarding: true });
+
+    await store.getState().finishOnboarding();
+
+    expect(store.getState().showOnboarding).toBe(false);
+    expect(store.getState().profile?.user.onboarding_seen).toBe(true);
   });
 });

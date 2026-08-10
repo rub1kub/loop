@@ -857,8 +857,8 @@ describe('DuelScreen', () => {
     );
 
     expect(screen.getByRole('img', { name: 'Результат дуэли: +1,95 GRAM' })).toBeVisible();
-    expect(container.querySelector('.duel-orbit-needle')).not.toBeNull();
-    expect(screen.getByText('ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ')).toBeVisible();
+    expect(container.querySelector('.duel-orbit-needle')).toBeNull();
+    expect(screen.queryByText('ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ')).not.toBeInTheDocument();
     expect(screen.getByText('+1,95 GRAM')).toBeVisible();
     expect(screen.getByText('ПРИШЛО В КОШЕЛЁК')).toBeVisible();
     expect(screen.queryByText('ПОБЕДА')).not.toBeInTheDocument();
@@ -867,6 +867,41 @@ describe('DuelScreen', () => {
     expect(screen.getByText('Пришло в кошелёк').nextElementSibling).not.toBeVisible();
     fireEvent.click(screen.getByText('ПОДРОБНОСТИ'));
     expect(screen.getByText('Пришло в кошелёк').nextElementSibling).toHaveTextContent('1,95 GRAM');
+  });
+
+  it('reveals a result only when this screen observed the duel finish', () => {
+    const offer = matchedOffer();
+    const live = liveDuel({ id: 'same-duel', state: 'revealing', own_revealed: true });
+    const { container, rerender } = render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[offer]}
+        duels={[live]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    rerender(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf('0:aaa') }}
+        offers={[offer]}
+        duels={[
+          settledDuel({
+            id: live.id,
+            offer_id: live.offer_id,
+            winner_wallet: '0:aaa',
+          }),
+        ]}
+        invite={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.duel-orbit')).toHaveClass('is-revealing');
+    expect(container.querySelector('.duel-orbit-needle')).not.toBeNull();
+    expect(screen.getByText('ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ')).toBeVisible();
+    expect(container.querySelector('.duel-orbit-centre')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('lets a settled result be closed so another duel can be opened', () => {

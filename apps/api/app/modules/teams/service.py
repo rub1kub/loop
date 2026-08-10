@@ -283,10 +283,7 @@ async def leaderboard_entries(
     count_statement = select(func.count()).select_from(ranked)
     if query:
         needle = f"%{query.strip().lower()}%"
-        filter_clause = or_(
-            func.lower(ranked.c.name).like(needle),
-            func.lower(ranked.c.tag).like(needle),
-        )
+        filter_clause = func.lower(ranked.c.name).like(needle)
         statement = statement.where(filter_clause)
         count_statement = count_statement.where(filter_clause)
     rows = (await db.execute(statement.order_by(ranked.c.rank).offset(offset).limit(limit))).all()
@@ -515,7 +512,7 @@ async def create_team(
     user: User,
     *,
     name: str,
-    tag: str,
+    tag: str | None,
     join_policy: str,
 ) -> Team:
     now = datetime.now(UTC)
@@ -524,9 +521,19 @@ async def create_team(
         raise HTTPException(status.HTTP_409_CONFLICT, "Сначала покиньте текущую команду")
     await assert_change_cooldown(db, user.id, now)
     normalized_name = normalize_name(name)
-    normalized_tag = normalize_tag(tag)
-    if await db.scalar(select(Team.id).where(Team.tag == normalized_tag)):
-        raise HTTPException(status.HTTP_409_CONFLICT, "Такой тег уже занят")
+    if tag is not None:
+        normalized_tag = normalize_tag(tag)
+        if await db.scalar(select(Team.id).where(Team.tag == normalized_tag)):
+            raise HTTPException(status.HTTP_409_CONFLICT, "Такой тег уже занят")
+    else:
+        # `tag` remains an internal unique key for backward compatibility. It
+        # is generated here so people only have to name their team once.
+        for _ in range(8):
+            normalized_tag = secrets.token_hex(4).upper()
+            if not await db.scalar(select(Team.id).where(Team.tag == normalized_tag)):
+                break
+        else:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Не удалось создать команду")
     slug = secrets.token_urlsafe(8).rstrip("=")
     mark = int(hashlib.sha256(normalized_tag.encode()).hexdigest()[:8], 16) % 12
     team = Team(

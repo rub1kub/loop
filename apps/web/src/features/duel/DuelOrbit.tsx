@@ -42,6 +42,7 @@ export function DuelOrbit({
   opponentName,
   latestEvent,
   resultAmount,
+  revealResult = false,
   compact = false,
   setup = false,
 }: {
@@ -56,6 +57,8 @@ export function DuelOrbit({
   opponentName?: string | null;
   latestEvent?: string | null;
   resultAmount?: string | null;
+  /** Animate only when this mounted screen actually observed the duel settle. */
+  revealResult?: boolean;
   compact?: boolean;
   setup?: boolean;
 }) {
@@ -67,6 +70,7 @@ export function DuelOrbit({
   const seconds = remainingMs == null ? null : Math.max(0, Math.ceil(remainingMs / 1000));
   const urgent = phase === 'boosting' && seconds !== null && seconds <= URGENT_SECONDS;
   const settled = phase === 'won' || phase === 'lost';
+  const revealing = settled && revealResult;
   const spinning = phase === 'waiting';
   const mineSweep = share * 360;
   const targetAngle =
@@ -83,7 +87,7 @@ export function DuelOrbit({
 
   return (
     <div
-      className={`duel-orbit phase-${phase}${urgent ? ' is-urgent' : ''}${compact ? ' is-compact' : ''}${setup ? ' is-setup' : ''}`}
+      className={`duel-orbit phase-${phase}${revealing ? ' is-revealing' : ''}${urgent ? ' is-urgent' : ''}${compact ? ' is-compact' : ''}${setup ? ' is-setup' : ''}`}
       role="img"
       aria-label={label}
     >
@@ -101,7 +105,7 @@ export function DuelOrbit({
       </div>
 
       <div className="duel-orbit-stage">
-        {settled && <p className="duel-orbit-resolving-label">ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ</p>}
+        {revealing && <p className="duel-orbit-resolving-label">ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ</p>}
         <svg className="duel-orbit-chart" viewBox="0 0 200 200" aria-hidden="true">
           <circle className="duel-orbit-outer" cx="100" cy="100" r="95" />
           <circle className="duel-orbit-track" cx="100" cy="100" r="82" />
@@ -124,7 +128,7 @@ export function DuelOrbit({
           />
         </svg>
 
-        {(spinning || settled) && (
+        {(spinning || revealing) && (
           <motion.div
             className={`duel-orbit-needle${spinning ? ' is-waiting' : ''}`}
             initial={
@@ -148,7 +152,7 @@ export function DuelOrbit({
           </motion.div>
         )}
 
-        <div className="duel-orbit-centre">
+        <div className="duel-orbit-centre" aria-hidden={settled || undefined}>
           <strong>{pool}</strong>
           <span>GRAM</span>
           {!settled && time && (

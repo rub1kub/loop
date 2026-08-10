@@ -459,7 +459,6 @@ function TeamHome({
               <div>
                 <span className="eyebrow">ТВОЯ КОМАНДА</span>
                 <h2>{myTeam.name}</h2>
-                <p>#{myTeam.tag}</p>
               </div>
               <strong>#{myTeam.rank}</strong>
             </div>
@@ -566,14 +565,9 @@ function CreateTeam({
   onCreate,
 }: {
   busy: boolean;
-  onCreate: (input: {
-    name: string;
-    tag: string;
-    join_policy: 'open' | 'request' | 'invite';
-  }) => void;
+  onCreate: (input: { name: string; join_policy: 'open' | 'request' | 'invite' }) => void;
 }) {
   const [name, setName] = useState('');
-  const [tag, setTag] = useState('');
   const [policy, setPolicy] = useState<'open' | 'request' | 'invite'>('open');
   return (
     <div className="team-subpage team-create">
@@ -582,7 +576,7 @@ function CreateTeam({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          onCreate({ name, tag, join_policy: policy });
+          onCreate({ name, join_policy: policy });
         }}
       >
         <label>
@@ -593,17 +587,6 @@ function CreateTeam({
             placeholder="VOID"
             minLength={3}
             maxLength={32}
-            required
-          />
-        </label>
-        <label>
-          <span>КОРОТКИЙ ТЕГ</span>
-          <input
-            value={tag}
-            onChange={(event) => setTag(event.target.value.toUpperCase())}
-            placeholder="VOID"
-            minLength={2}
-            maxLength={8}
             required
           />
         </label>

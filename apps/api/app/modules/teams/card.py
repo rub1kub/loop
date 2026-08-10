@@ -12,7 +12,7 @@ from .schemas import TeamEntryView
 
 CARD_WIDTH = 1080
 CARD_HEIGHT = 1080
-CARD_VERSION = 1
+CARD_VERSION = 2
 FONT_REGULAR = (
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
@@ -91,7 +91,6 @@ def format_gram(nano: int) -> str:
 @lru_cache(maxsize=256)
 def render_team_card(
     name: str,
-    tag: str,
     mark: int,
     rank: int,
     flow_nano: int,
@@ -103,8 +102,7 @@ def render_team_card(
     draw.text((72, 64), "∞  LOOP · КОМАНДЫ", fill="white", font=_font(30, bold=True))
     draw.text((72, 114), "НЕДЕЛЬНЫЙ ЗАЧЁТ BANK", fill=muted, font=_font(24))
     _mark(draw, mark, (72, 230, 232, 390))
-    draw.text((272, 230), name, fill="white", font=_fit(draw, name, 720, 86))
-    draw.text((275, 338), f"#{tag}", fill=muted, font=_font(30, bold=True))
+    draw.text((272, 260), name, fill="white", font=_fit(draw, name, 720, 86))
     draw.line((72, 470, 1008, 470), fill=(45, 45, 48), width=2)
     draw.text((72, 540), f"#{rank}", fill="white", font=_font(116, bold=True))
     draw.text((78, 672), "МЕСТО СЕЙЧАС", fill=muted, font=_font(24, bold=True))
@@ -128,7 +126,7 @@ def render_team_card(
 def card_url(settings: Settings, team: TeamEntryView) -> str:
     version = hashlib.sha256(
         (
-            f"{CARD_VERSION}:{team.name}:{team.tag}:{team.mark}:"
+            f"{CARD_VERSION}:{team.name}:{team.mark}:"
             f"{team.flow_nano}:{team.rank}:{team.member_count}"
         ).encode()
     ).hexdigest()[:12]

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { haptic, openPlatformLink, setBackAction } from '../telegram';
 
 const plushBrickLogoUrl = '/assets/plush-brick-loop.webp';
+const plushBrickFallbackUrl = '/assets/plush-brick-mark.webp';
 const plushBrickMarkets = [
   {
     name: 'dTrade',
@@ -49,6 +50,47 @@ const stories = [
   },
 ];
 
+function PlushBrickMark() {
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (!failed || attempt >= 3) return;
+    const timeout = window.setTimeout(
+      () => {
+        setAttempt((value) => value + 1);
+        setFailed(false);
+      },
+      1_500 * 2 ** attempt,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [attempt, failed]);
+  const source = attempt > 0 ? `${plushBrickLogoUrl}?retry=${attempt}` : plushBrickLogoUrl;
+
+  return (
+    <span
+      className="story-mark story-mark-plush"
+      role="img"
+      aria-label="Анимированный логотип PLUSH BRICK"
+    >
+      <img className="story-plush-fallback" src={plushBrickFallbackUrl} alt="" />
+      {!failed && (
+        <img
+          key={source}
+          className={`story-plush-motion${loaded ? ' is-loaded' : ''}`}
+          src={source}
+          alt=""
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            setLoaded(false);
+            setFailed(true);
+          }}
+        />
+      )}
+    </span>
+  );
+}
+
 export function Onboarding({
   onDone,
   initialPage = 0,
@@ -62,6 +104,8 @@ export function Onboarding({
   // The mark lands on the last screen, so it is fetched while the reader is
   // still on the first one and is decoded by the time they swipe to it.
   useEffect(() => {
+    const fallback = new Image();
+    fallback.src = plushBrickFallbackUrl;
     const preload = new Image();
     preload.src = plushBrickLogoUrl;
   }, []);
@@ -94,13 +138,17 @@ export function Onboarding({
             exit={{ opacity: 0, y: -12, filter: 'blur(6px)' }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           >
-            <img
-              className={`story-mark${isPlushBrickStory ? ' story-mark-plush' : ''}`}
-              src={story.mark ?? '/assets/loop-loader.webp'}
-              width={isPlushBrickStory ? 300 : 640}
-              height={isPlushBrickStory ? 300 : 427}
-              alt={isPlushBrickStory ? 'Анимированный логотип PLUSH BRICK' : ''}
-            />
+            {isPlushBrickStory ? (
+              <PlushBrickMark />
+            ) : (
+              <img
+                className="story-mark"
+                src={story.mark ?? '/assets/loop-loader.webp'}
+                width={640}
+                height={427}
+                alt=""
+              />
+            )}
             <p className="story-signal">{story.signal}</p>
             <h1 aria-label={story.title.replace('\n', ' ')}>
               {story.title.split('\n').map((line) => (
