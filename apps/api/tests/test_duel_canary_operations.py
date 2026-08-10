@@ -127,9 +127,7 @@ def test_mainnet_canary_never_requests_an_airdrop(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(
         RUNNER,
         "mainnet_wallet_snapshot",
-        lambda _environment, _first, _second: mainnet_wallets(
-            1_000_000_000, 2_000_000_000
-        ),
+        lambda _environment, _first, _second: mainnet_wallets(1_000_000_000, 2_000_000_000),
     )
     with pytest.raises(SystemExit, match="below the configured safety floor"):
         RUNNER.require_mainnet_funding(
@@ -138,6 +136,48 @@ def test_mainnet_canary_never_requests_an_airdrop(monkeypatch: pytest.MonkeyPatc
             "loop-mainnet-canary-b",
             1_800_000_000,
         )
+
+
+def test_mainnet_balance_snapshot_retries_toncenter_throttling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        RUNNER,
+        "run",
+        lambda *_args, **_kwargs: (
+            "WALLET loop-mainnet-canary-a EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c\n"
+            "WALLET loop-mainnet-canary-b EQBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBByXn\n"
+        ),
+    )
+    responses: Iterator[Any] = iter(
+        [
+            urllib.error.HTTPError(
+                "https://toncenter.com/api/v3/accountStates",
+                429,
+                "rate limited",
+                {},
+                None,
+            ),
+            io.BytesIO(json.dumps({"accounts": [{"balance": "2100000000"}]}).encode()),
+            io.BytesIO(json.dumps({"accounts": [{"balance": "2200000000"}]}).encode()),
+        ]
+    )
+
+    def urlopen(*_args: Any, **_kwargs: Any) -> Any:
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    sleeps: list[int] = []
+    monkeypatch.setattr(RUNNER.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(RUNNER.time, "sleep", sleeps.append)
+
+    snapshot = RUNNER.mainnet_wallet_snapshot({}, "loop-mainnet-canary-a", "loop-mainnet-canary-b")
+
+    assert snapshot["loop-mainnet-canary-a"]["balance"] == 2_100_000_000
+    assert snapshot["loop-mainnet-canary-b"]["balance"] == 2_200_000_000
+    assert sleeps == [RUNNER.FINALITY_POLL_INTERVAL_SECONDS]
 
 
 def test_canary_formats_manifest_ready_finality_evidence() -> None:

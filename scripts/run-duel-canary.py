@@ -96,15 +96,41 @@ def mainnet_wallet_snapshot(
         raise SystemExit("could not resolve both canary wallets on mainnet")
 
     base = TONCENTER_BY_NETWORK["mainnet"]
+    api_key = os.getenv("LOOP_TONCENTER_API_KEY") or os.getenv(
+        "TONCENTER_MAINNET_API_KEY"
+    )
     snapshot: dict[str, dict[str, Any]] = {}
     for name, address in addresses.items():
-        request = urllib.request.Request(
-            f"{base}/api/v3/accountStates?address={urllib.parse.quote(address)}",
-            # TonCenter answers 403 to the default urllib agent.
-            headers={"User-Agent": "loop-canary/1.0"},
-        )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.loads(response.read())
+        payload: dict[str, Any] | None = None
+        use_api_key = bool(api_key)
+        for attempt in range(FINALITY_POLL_ATTEMPTS):
+            request = urllib.request.Request(
+                f"{base}/api/v3/accountStates?address={urllib.parse.quote(address)}",
+                headers={
+                    "User-Agent": "loop-canary/1.0",
+                    **({"X-API-Key": api_key or ""} if use_api_key else {}),
+                },
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    candidate = json.loads(response.read())
+                if isinstance(candidate, dict):
+                    payload = candidate
+                    break
+            except urllib.error.HTTPError as exc:
+                if exc.code in {401, 403} and use_api_key:
+                    use_api_key = False
+                    continue
+                if exc.code not in {429, 500, 502, 503, 504}:
+                    raise SystemExit(
+                        f"TON account provider returned HTTP {exc.code}"
+                    ) from exc
+            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+                pass
+            if attempt + 1 < FINALITY_POLL_ATTEMPTS:
+                time.sleep(FINALITY_POLL_INTERVAL_SECONDS)
+        if payload is None:
+            raise SystemExit("TON account provider stayed unavailable")
         accounts = payload.get("accounts") or []
         balance = int(accounts[0].get("balance", 0)) if accounts else 0
         snapshot[name] = {"name": name, "address": address, "balance": balance}
