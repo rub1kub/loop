@@ -30,3 +30,50 @@ test('BANK keeps its verified fill and physical token layer usable on mobile', a
   expect(viewport.scrollHeight).toBe(viewport.height);
   expect(consoleErrors).toEqual([]);
 });
+
+test('BANK stays centred on a Fold cover screen with an asymmetric safe area', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/?screen=bank-active');
+  await expect(page.locator('.bank-object')).toBeVisible();
+  await page.locator('.announcement-close').click();
+  await page.locator('html').evaluate((root) => {
+    root.style.setProperty('--tg-content-safe-area-inset-left', '24px');
+    root.style.setProperty('--tg-content-safe-area-inset-right', '0px');
+  });
+  await page.waitForTimeout(1_200);
+
+  const layout = await page.evaluate(() => {
+    const centre = (selector: string) => {
+      const bounds = document.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+      return bounds.left + bounds.width / 2;
+    };
+    return {
+      viewport: window.innerWidth / 2,
+      shell: centre('.app-shell'),
+      header: centre('.bank-screen .mode-header'),
+      object: centre('.bank-object'),
+      vessel: centre('.bank-vessel'),
+      state: centre('.bank-state'),
+      paddingLeft: Number.parseFloat(
+        getComputedStyle(document.querySelector('.bank-screen')!).paddingLeft,
+      ),
+      paddingRight: Number.parseFloat(
+        getComputedStyle(document.querySelector('.bank-screen')!).paddingRight,
+      ),
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+
+  expect(layout.overflow).toBeLessThanOrEqual(0);
+  expect(layout.paddingLeft).toBe(layout.paddingRight);
+  expect(layout.paddingLeft).toBeGreaterThanOrEqual(40);
+  for (const key of ['shell', 'header', 'object', 'vessel', 'state'] as const) {
+    expect(layout[key], `${key} must stay on the physical viewport centre`).toBeCloseTo(
+      layout.viewport,
+      0,
+    );
+  }
+  await page.screenshot({ path: testInfo.outputPath('fold-cover-bank.png') });
+});

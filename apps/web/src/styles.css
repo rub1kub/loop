@@ -405,8 +405,10 @@ summary:focus-visible .disclosure-indicator {
 .screen {
   overflow-x: hidden;
   overflow-y: auto;
-  padding: calc(var(--safe-top) + 30px) max(21px, calc(var(--safe-right) + 16px))
-    calc(var(--safe-bottom) + 24px) max(21px, calc(var(--safe-left) + 16px));
+  padding-top: calc(var(--safe-top) + 30px);
+  padding-right: max(21px, calc(var(--safe-left) + 16px), calc(var(--safe-right) + 16px));
+  padding-bottom: calc(var(--safe-bottom) + 24px);
+  padding-left: max(21px, calc(var(--safe-left) + 16px), calc(var(--safe-right) + 16px));
   overscroll-behavior-y: contain;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -661,6 +663,7 @@ summary:focus-visible .disclosure-indicator {
      centres it and lets it overflow evenly on both sides. */
   align-self: center;
   margin: 7px 0 0;
+  padding: 0;
   overflow: hidden;
   place-items: center;
   border: 0;
@@ -669,12 +672,14 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .bank-vessel {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 50%;
   height: 100%;
   aspect-ratio: 900 / 1015;
   justify-self: center;
   scale: 1;
-  translate: 0 0;
+  translate: -50% 0;
   transition:
     filter var(--motion-base) var(--ease-apple),
     scale var(--motion-base) var(--ease-apple-spring),
@@ -685,7 +690,7 @@ summary:focus-visible .disclosure-indicator {
 .bank-object:active .bank-vessel {
   filter: brightness(1.06);
   scale: 0.975;
-  translate: 0 2px;
+  translate: -50% 2px;
   transition-duration: 80ms;
 }
 
@@ -2927,7 +2932,7 @@ details[open] > summary .disclosure-indicator svg {
 
   .bank-object:hover:not(:active) .bank-vessel {
     filter: brightness(1.04);
-    translate: 0 -2px;
+    translate: -50% -2px;
   }
 
   .tab-bar button:hover:not(:active) svg {
@@ -2942,12 +2947,19 @@ details[open] > summary .disclosure-indicator svg {
 
 @media (max-width: 350px), (max-height: 720px) {
   .screen {
-    padding-right: 17px;
-    padding-left: 17px;
+    padding-right: max(17px, calc(var(--safe-left) + 16px), calc(var(--safe-right) + 16px));
+    padding-left: max(17px, calc(var(--safe-left) + 16px), calc(var(--safe-right) + 16px));
   }
 
   .mode-header h1 {
     font-size: 32px;
+  }
+
+  .tab-bar button {
+    min-width: 0;
+    padding-inline: 0;
+    font-size: 9px;
+    letter-spacing: 0;
   }
 
   .bank-object {
@@ -3056,8 +3068,8 @@ details[open] > summary .disclosure-indicator svg {
    genuinely short devices keep their compact layout through the stable class. */
 @media (min-width: 351px) {
   html.keyboard-open:not(.stable-height-compact) .teams-screen {
-    padding-right: max(21px, calc(var(--safe-right) + 16px));
-    padding-left: max(21px, calc(var(--safe-left) + 16px));
+    padding-right: max(21px, calc(var(--safe-left) + 16px), calc(var(--safe-right) + 16px));
+    padding-left: max(21px, calc(var(--safe-left) + 16px), calc(var(--safe-right) + 16px));
   }
 
   html.keyboard-open:not(.stable-height-compact) .teams-screen .mode-header h1 {

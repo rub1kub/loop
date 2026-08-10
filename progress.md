@@ -187,3 +187,14 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   the complete `КОМАНДЫ → СОЗДАТЬ СВОЮ → НАЗВАНИЕ` first-focus flow.
 - Mobile validation keeps the app height, subpage header, name field and screen scroll origin fixed
   after the simulated keyboard reduces the viewport from 839px to 520px.
+
+## 2026-08-10: centred BANK on Fold-sized screens
+
+- Made screen gutters symmetric using the larger Telegram safe-area inset, so a one-sided fold,
+  hinge or cutout no longer shifts BANK and the surrounding interface off the physical centre.
+- Removed the browser's native button padding from the BANK object and anchored the vessel to its
+  true 50% axis, including pressed and hover micro-interactions.
+- Tightened labels in the five-item tab bar below 351px so long Russian names stay inside their
+  columns instead of overflowing on narrow cover screens.
+- Added a 360 × 800 Fold-cover regression with a simulated asymmetric 24px inset. Chromium and
+  WebKit keep the shell, heading, vessel and state centred with no horizontal page overflow.
