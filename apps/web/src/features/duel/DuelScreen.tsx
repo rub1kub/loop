@@ -51,6 +51,10 @@ const PENDING_ACTION_STORAGE_KEY = 'loop.duel.pending-action.v1';
 // same window so a delayed wallet broadcast cannot be signed twice.
 const PENDING_ACTION_TTL_MS = 330_000;
 const PROJECTION_POLL_MS = 2_000;
+// Let the closing animation become visible before Telegram opens the wallet.
+// The result is never calculated here: this only starts the user's required
+// transaction, then the projection poll waits for the chain-authoritative outcome.
+const AUTOMATIC_RESULT_ACTION_DELAY_MS = 650;
 // A boost sent in the final second can reach the indexer a few seconds after
 // the visible clock reaches zero. During this short reconciliation window the
 // contract may legally extend the response time, so do not claim reveal has
@@ -183,6 +187,8 @@ export function DuelScreen({
   const [signedOffer, setSignedOffer] = useState<number | null>(null);
   /** A broadcast action stays locked until the chain projection changes. */
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(readPendingAction);
+  /** One automatic wallet request per duel phase; a rejected request leaves the manual fallback. */
+  const automaticResultAction = useRef<string | null>(null);
   const onRefreshRef = useRef(onRefresh);
 
   useEffect(() => {
@@ -754,6 +760,42 @@ export function DuelScreen({
     wallet,
   ]);
 
+  useEffect(() => {
+    if (
+      status !== 'matched' ||
+      !activeDuel ||
+      duelBoosting ||
+      boostClosing ||
+      busy ||
+      pendingAction ||
+      !wallet
+    ) {
+      return;
+    }
+
+    const operation = duelExpired ? 'expire' : activeDuel.own_revealed ? null : 'reveal';
+    if (!operation) return;
+    const actionKey = `${activeDuel.onchain_duel_id}:${operation}`;
+    if (automaticResultAction.current === actionKey) return;
+
+    const timeout = window.setTimeout(() => {
+      if (automaticResultAction.current === actionKey) return;
+      automaticResultAction.current = actionKey;
+      void runActiveAction();
+    }, AUTOMATIC_RESULT_ACTION_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [
+    activeDuel,
+    boostClosing,
+    busy,
+    duelBoosting,
+    duelExpired,
+    pendingAction,
+    runActiveAction,
+    status,
+    wallet,
+  ]);
+
   const boostDuel = useCallback(async () => {
     if (locked.current || !activeDuel || !activeOffer || !duelBoosting) return;
     if (boostNano < 100_000_000) {
@@ -928,14 +970,16 @@ export function DuelScreen({
       : 'ЖДЁМ ПОДПИСЬ В КОШЕЛЬКЕ'
     : status === 'matched'
       ? pendingAction?.kind === 'reveal' && !activeDuel?.own_revealed
-        ? 'ПОДТВЕРЖДАЕМ ОТКРЫТИЕ'
-        : duelBoosting
-          ? 'УСИЛЕНИЕ ОТКРЫТО'
-          : boostClosing
-            ? 'ПРОВЕРЯЕМ ПОСЛЕДНИЕ СТАВКИ'
-            : activeDuel?.own_revealed
-              ? 'СОПЕРНИК ЕЩЁ НЕ ОТКРЫЛ'
-              : 'ОТКРОЙ РЕЗУЛЬТАТ'
+        ? 'ПОДТВЕРЖДАЕМ РЕЗУЛЬТАТ'
+        : pendingAction?.kind === 'expire_duel'
+          ? 'ЗАВЕРШАЕМ ДУЭЛЬ'
+          : duelBoosting
+            ? 'УСИЛЕНИЕ ОТКРЫТО'
+            : boostClosing
+              ? 'ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ'
+              : activeDuel?.own_revealed
+                ? 'ЖДЁМ ПОДТВЕРЖДЕНИЯ СОПЕРНИКА'
+                : 'ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ'
       : status === 'searching'
         ? offerExpired
           ? 'СРОК ВЫЗОВА ИСТЁК'
@@ -944,16 +988,24 @@ export function DuelScreen({
             : 'ИЩЕМ СОПЕРНИКА'
         : null;
   const latestBoost = activeDuel?.boost_events.at(-1) ?? null;
-  const orbitEvent = latestBoost
-    ? `${latestBoost.side === 'you' ? 'Ты усилился' : 'Соперник усилился'}: +${formatGram(
-        latestBoost.amount_nano,
-        3,
-      )} GRAM`
-    : duelBoosting
-      ? 'У каждого есть минута, чтобы изменить шансы'
-      : activeDuel?.own_revealed
-        ? 'Твой результат открыт. Ждём соперника'
-        : null;
+  const orbitEvent = boostClosing
+    ? 'Сверяем последние ставки'
+    : pendingAction?.kind === 'reveal'
+      ? 'Подтверждаем результат в сети'
+      : pendingAction?.kind === 'expire_duel' || duelExpired
+        ? 'Время вышло. Завершаем дуэль'
+        : activeDuel && !duelBoosting && activeDuel.own_revealed
+          ? 'Твой результат подтверждён. Ждём соперника'
+          : activeDuel && !duelBoosting
+            ? 'Стрелка остановится на подтверждённом результате'
+            : latestBoost
+              ? `${latestBoost.side === 'you' ? 'Ты усилился' : 'Соперник усилился'}: +${formatGram(
+                  latestBoost.amount_nano,
+                  3,
+                )} GRAM`
+              : duelBoosting
+                ? 'У каждого есть минута, чтобы изменить шансы'
+                : null;
   const orbitPhase: DuelOrbitPhase =
     status === 'result'
       ? resultWon
@@ -961,7 +1013,7 @@ export function DuelScreen({
         : 'lost'
       : duelBoosting
         ? 'boosting'
-        : activeDuel?.own_revealed || pendingAction?.kind === 'reveal'
+        : status === 'matched' && activeDuel
           ? 'waiting'
           : 'ready';
   const setupOpponentName = invite

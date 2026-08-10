@@ -29,6 +29,8 @@ const apiMocks = vi.hoisted(() => ({
   contractState: vi.fn<() => Promise<ContractStateMock>>(() => Promise.resolve({ paused: false })),
   discardOffer: vi.fn(() => Promise.resolve(undefined)),
   expireOfferIntent: vi.fn(),
+  revealIntent: vi.fn(),
+  expireDuelIntent: vi.fn(),
   quoteOffer: vi.fn(),
   duelChallengePreview: vi.fn(() =>
     Promise.resolve({
@@ -188,6 +190,8 @@ describe('DuelScreen', () => {
     walletState.current = null;
     apiMocks.contractState.mockResolvedValue({ paused: false });
     apiMocks.expireOfferIntent.mockReset();
+    apiMocks.revealIntent.mockReset();
+    apiMocks.expireDuelIntent.mockReset();
     apiMocks.quoteOffer.mockReset();
     apiMocks.opponentAvatar.mockClear();
     apiMocks.prepareDuelShare.mockClear();
@@ -674,7 +678,11 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByText('ПРОВЕРЯЕМ ПОСЛЕДНИЕ СТАВКИ')).toBeVisible();
+    expect(screen.getByText('ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ')).toBeVisible();
+    expect(screen.getByRole('img', { name: 'Твой шанс 50 процентов' })).toHaveClass(
+      'phase-waiting',
+    );
+    expect(screen.getByText('Сверяем последние ставки')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).not.toBeInTheDocument();
 
     rerender(
@@ -687,9 +695,92 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByText('ОТКРОЙ РЕЗУЛЬТАТ')).toBeVisible();
-    expect(screen.getByText(/ДО АВТОМАТИЧЕСКОГО ИСХОДА/)).toBeVisible();
+    expect(screen.getByText('ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ')).toBeVisible();
+    expect(screen.getByText(/ДО РЕЗУЛЬТАТА/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'ОТКРЫТЬ РЕЗУЛЬТАТ' })).toBeEnabled();
+  });
+
+  it('starts the result animation and automatically opens the reveal transaction', async () => {
+    const walletAddress = `0:${'11'.repeat(32)}`;
+    walletState.current = { account: { address: walletAddress, chain: '-3' } };
+    localStorage.setItem('loop-duel-701', '11'.repeat(32));
+    apiMocks.revealIntent.mockResolvedValue({
+      operation: 'reveal',
+      query_id: 1,
+      offer_id: 701,
+      duel_id: 702,
+      counter_offer_id: 0,
+      contract_address: `0:${'22'.repeat(32)}`,
+      amount_nano: '30000000',
+      valid_until: Math.floor(Date.now() / 1000) + 300,
+      network: -3,
+    });
+    tonConnect.sendTransaction.mockResolvedValue({ boc: 'reveal' });
+
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf(walletAddress) }}
+        offers={[matchedOffer()]}
+        duels={[
+          liveDuel({
+            state: 'revealing',
+            boost_deadline: new Date(Date.now() - 60_000).toISOString(),
+          }),
+        ]}
+        invite={null}
+        onRefresh={vi.fn(() => Promise.resolve())}
+      />,
+    );
+
+    expect(screen.getByRole('img', { name: 'Твой шанс 50 процентов' })).toHaveClass(
+      'phase-waiting',
+    );
+    await waitFor(() => expect(apiMocks.revealIntent).toHaveBeenCalledWith(702), {
+      timeout: 2_000,
+    });
+    expect(tonConnect.sendTransaction).toHaveBeenCalledOnce();
+    expect(await screen.findByRole('button', { name: 'ОТКРЫВАЕМ…' })).toBeDisabled();
+  });
+
+  it('automatically finishes an expired reveal window', async () => {
+    const walletAddress = `0:${'11'.repeat(32)}`;
+    walletState.current = { account: { address: walletAddress, chain: '-3' } };
+    apiMocks.expireDuelIntent.mockResolvedValue({
+      operation: 'expire_duel',
+      query_id: 2,
+      offer_id: 701,
+      duel_id: 702,
+      counter_offer_id: 0,
+      contract_address: `0:${'22'.repeat(32)}`,
+      amount_nano: '30000000',
+      valid_until: Math.floor(Date.now() / 1000) + 300,
+      network: -3,
+    });
+    tonConnect.sendTransaction.mockResolvedValue({ boc: 'expire' });
+
+    render(
+      <DuelScreen
+        profile={{ ...profile, wallet: walletOf(walletAddress) }}
+        offers={[matchedOffer()]}
+        duels={[
+          liveDuel({
+            state: 'revealing',
+            own_revealed: true,
+            boost_deadline: new Date(Date.now() - 60_000).toISOString(),
+            reveal_deadline: new Date(Date.now() - 1_000).toISOString(),
+          }),
+        ]}
+        invite={null}
+        onRefresh={vi.fn(() => Promise.resolve())}
+      />,
+    );
+
+    expect(screen.getByText('Время вышло. Завершаем дуэль')).toBeVisible();
+    await waitFor(() => expect(apiMocks.expireDuelIntent).toHaveBeenCalledWith(702), {
+      timeout: 2_000,
+    });
+    expect(tonConnect.sendTransaction).toHaveBeenCalledOnce();
+    expect(await screen.findByRole('button', { name: 'ЗАВЕРШАЕМ…' })).toBeDisabled();
   });
 
   it('says what happens after this player has revealed', () => {
@@ -712,8 +803,8 @@ describe('DuelScreen', () => {
     // "Ход" здесь ни при чём: игрок не ходит, а открывает ставку, сделанную
     // при входе. Тестер прочитал «ждём ход противника» после отправки
     // транзакции и спросил, какой ход, если результат уже определён.
-    expect(screen.getByText('СОПЕРНИК ЕЩЁ НЕ ОТКРЫЛ')).toBeVisible();
-    expect(screen.getByText(/ДО АВТОМАТИЧЕСКОГО ИСХОДА/)).toBeVisible();
+    expect(screen.getByText('ЖДЁМ ПОДТВЕРЖДЕНИЯ СОПЕРНИКА')).toBeVisible();
+    expect(screen.getByText(/ДО РЕЗУЛЬТАТА/)).toBeVisible();
     expect(screen.queryByText('ЖДЁМ СОПЕРНИКА')).not.toBeInTheDocument();
   });
 

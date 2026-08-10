@@ -1,5 +1,5 @@
-import { cleanup, render, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App';
 
@@ -129,8 +129,21 @@ vi.mock('./features/rating/RatingScreen', () => ({ RatingScreen: () => null }));
 vi.mock('./features/results/ResultSheet', () => ({ ResultSheet: () => null }));
 
 describe('App wallet restoration', () => {
+  beforeEach(() => {
+    walletState.current = {
+      account: {
+        address: `0:${'22'.repeat(32)}`,
+        chain: '-239',
+        publicKey: 'public-key',
+      },
+      connectItems: {},
+    };
+    store.refresh.mockResolvedValue(undefined);
+  });
+
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
@@ -166,5 +179,26 @@ describe('App wallet restoration', () => {
     await waitFor(() => expect(apiMocks.verifyWallet).toHaveBeenCalledOnce());
     // A second challenge is requested without the person touching anything.
     await waitFor(() => expect(apiMocks.walletChallenge.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('keeps the confirmed screen during a transient background refresh failure', async () => {
+    vi.useFakeTimers();
+    walletState.current = {
+      account: {
+        address: `0:${'11'.repeat(32)}`,
+        chain: '-239',
+        publicKey: 'public-key',
+      },
+      connectItems: {},
+    };
+    store.refresh.mockRejectedValueOnce(new TypeError('Load failed'));
+
+    render(<App />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(12_000);
+    });
+
+    expect(store.refresh).toHaveBeenCalledOnce();
+    expect(store.setError).not.toHaveBeenCalled();
   });
 });

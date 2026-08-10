@@ -176,9 +176,10 @@ export default function App() {
     const period = bankActive || duelActive ? 5000 : 12_000;
     const tick = () => {
       if (document.visibilityState === 'hidden') return;
-      void refresh().catch((error: unknown) => {
-        setError(humanError(error, 'Не удалось обновить данные'));
-      });
+      // A poll is opportunistic: keep the last confirmed screen through a
+      // short deploy or mobile-network handoff and retry on the next tick.
+      // Explicit actions and the initial bootstrap still surface their errors.
+      void refresh().catch(() => undefined);
     };
     const timer = window.setInterval(tick, period);
     document.addEventListener('visibilitychange', tick);
@@ -186,7 +187,7 @@ export default function App() {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', tick);
     };
-  }, [refresh, setError, state.activeTab, state.bankPosition, state.offers]);
+  }, [refresh, state.activeTab, state.bankPosition, state.offers]);
 
   // A toast that only clears on tap sits there forever when the error keeps
   // being re-raised, which reads as the app being stuck rather than as one

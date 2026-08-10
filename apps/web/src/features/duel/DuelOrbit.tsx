@@ -154,7 +154,7 @@ export function DuelOrbit({
           {!settled && time && (
             <small>
               <b>{time}</b>
-              <span>{phase === 'boosting' ? 'ДО КОНЦА СТАВОК' : 'ДО АВТОМАТИЧЕСКОГО ИСХОДА'}</span>
+              <span>{phase === 'boosting' ? 'ДО КОНЦА СТАВОК' : 'ДО РЕЗУЛЬТАТА'}</span>
             </small>
           )}
         </div>
