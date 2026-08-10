@@ -3050,6 +3050,21 @@ details[open] > summary .disclosure-indicator svg {
   }
 }
 
+/* A soft keyboard changes the visual viewport height, but it must not switch a
+   previously tall screen into the compact layout. That first switch reduced
+   the TEAMS title by 14px and pulled the whole create form upward. Narrow and
+   genuinely short devices keep their compact layout through the stable class. */
+@media (min-width: 351px) {
+  html.keyboard-open:not(.stable-height-compact) .teams-screen {
+    padding-right: max(21px, calc(var(--safe-right) + 16px));
+    padding-left: max(21px, calc(var(--safe-left) + 16px));
+  }
+
+  html.keyboard-open:not(.stable-height-compact) .teams-screen .mode-header h1 {
+    font-size: 46px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

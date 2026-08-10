@@ -3,6 +3,7 @@ import type { TelegramWebApp } from './types';
 const FOCUS_SETTLE_MS = 360;
 const POINTER_SETTLE_MS = 80;
 const FULLSCREEN_CONTROLS_TOP_INSET_PX = 72;
+const COMPACT_STABLE_HEIGHT_PX = 720;
 
 function isEditable(element: Element | null): element is HTMLElement {
   return (
@@ -98,6 +99,7 @@ export function installViewportBehavior(): () => void {
     root.style.setProperty('--loop-visual-height', `${viewport.height}px`);
     root.style.setProperty('--loop-visual-page-top', `${keyboardOpen ? viewport.pageTop : 0}px`);
     root.classList.toggle('keyboard-open', keyboardOpen);
+    root.classList.toggle('stable-height-compact', stableHeight <= COMPACT_STABLE_HEIGHT_PX);
     syncSafeArea();
     if (keyboardOpen) restoreFocusedScreen();
   };
@@ -218,6 +220,7 @@ export function installViewportBehavior(): () => void {
     subscribedTelegram?.offEvent?.('contentSafeAreaChanged', onTelegramViewport);
     subscribedTelegram?.offEvent?.('fullscreenChanged', onTelegramViewport);
     root.classList.remove('keyboard-open');
+    root.classList.remove('stable-height-compact');
     root.style.removeProperty('--loop-stable-height');
     root.style.removeProperty('--loop-visual-height');
     root.style.removeProperty('--loop-visual-page-top');

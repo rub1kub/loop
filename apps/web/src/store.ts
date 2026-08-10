@@ -470,11 +470,16 @@ const demoTeams: TeamOverview = {
   ],
 };
 demoTeams.leaderboard.push(demoTeams.my_team!);
+const demoTeamsWithoutMembership: TeamOverview = {
+  ...demoTeams,
+  my_team: null,
+  leaderboard: demoTeams.leaderboard.filter((team) => !team.is_mine),
+};
 
 const initialTab: Tab =
   mockScreen?.startsWith('duel') || mockScreen === 'inline'
     ? 'duel'
-    : mockScreen === 'teams'
+    : mockScreen?.startsWith('teams')
       ? 'teams'
       : mockScreen === 'rating'
         ? 'rating'
@@ -577,7 +582,9 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         }
         const empty = mockScreen === 'bank-empty';
         set({
-          profile: mockScreen === 'teams' ? { ...demoProfile, announcement: null } : demoProfile,
+          profile: mockScreen?.startsWith('teams')
+            ? { ...demoProfile, announcement: null }
+            : demoProfile,
           bankPosition: empty ? null : demoBank,
           bankPulse: demoBankPulse,
           bankHistory: empty ? [] : [demoBank],
@@ -590,7 +597,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
           duels: mockScreen === 'duel-result' || mockScreen === 'duel-boost' ? [demoDuel] : [],
           invite: mockScreen === 'duel-invite' ? demoInvite : null,
           rating: demoRating,
-          teams: demoTeams,
+          teams: mockScreen === 'teams-create' ? demoTeamsWithoutMembership : demoTeams,
           results: demoResult ? [demoResult] : [],
           loading: false,
           showOnboarding:

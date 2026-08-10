@@ -168,7 +168,6 @@ export function TeamsView({
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Название или тег"
                 maxLength={32}
-                autoFocus
               />
               <button type="submit" disabled={busy}>
                 НАЙТИ
@@ -456,7 +455,6 @@ function CreateTeam({
             placeholder="VOID"
             minLength={3}
             maxLength={32}
-            autoFocus
             required
           />
         </label>

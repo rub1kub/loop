@@ -179,4 +179,21 @@ describe('Telegram keyboard viewport behavior', () => {
     expect(stage.scrollTop).toBe(0);
     cleanup();
   });
+
+  it('does not switch a tall layout to compact when only the keyboard reduces the viewport', () => {
+    vi.useFakeTimers();
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    const input = document.createElement('input');
+    document.body.append(input);
+    const cleanup = installViewportBehavior();
+
+    expect(document.documentElement).not.toHaveClass('stable-height-compact');
+    input.focus();
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 430 });
+    window.dispatchEvent(new Event('resize'));
+
+    expect(document.documentElement.style.getPropertyValue('--loop-stable-height')).toBe('800px');
+    expect(document.documentElement).not.toHaveClass('stable-height-compact');
+    cleanup();
+  });
 });

@@ -176,3 +176,14 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   extreme speed. Focused BANK tests and production build pass.
 - Chromium mobile inspection confirms a rounded contained pile, separated exterior tokens, full
   screen bounds and no new console errors.
+
+## 2026-08-10: stable first keyboard focus in TEAMS
+
+- Removed mount-time autofocus from team creation and search: Telegram now opens the keyboard only
+  from a real user tap, after the subpage transition has settled.
+- Preserved the pre-keyboard tall/compact layout decision while the visual viewport is reduced, so
+  the 720px responsive breakpoint cannot shrink the TEAMS title and pull the form upward.
+- Added a no-membership TEAMS mock state plus component and mobile Chromium regression coverage for
+  the complete `КОМАНДЫ → СОЗДАТЬ СВОЮ → НАЗВАНИЕ` first-focus flow.
+- Mobile validation keeps the app height, subpage header, name field and screen scroll origin fixed
+  after the simulated keyboard reduces the viewport from 839px to 520px.
