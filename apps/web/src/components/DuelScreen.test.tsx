@@ -580,7 +580,11 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('img', { name: 'Твой шанс 50 процентов' })).toBeVisible();
+    expect(screen.getByRole('img', { name: 'Твой шанс 50 процентов' })).toHaveClass(
+      'duel-orbit',
+      'phase-boosting',
+    );
+    expect(screen.getByText('У каждого есть минута, чтобы изменить шансы')).toBeVisible();
     expect(screen.getByText('ДО КОНЦА СТАВОК')).toBeVisible();
     expect(screen.queryByLabelText('Сумма усиления в GRAM')).not.toBeInTheDocument();
 
@@ -703,7 +707,7 @@ describe('DuelScreen', () => {
   });
 
   it('states the win as net gain and what actually reached the wallet', () => {
-    render(
+    const { container } = render(
       <DuelScreen
         profile={{ ...profile, wallet: walletOf('0:aaa') }}
         offers={[]}
@@ -714,6 +718,9 @@ describe('DuelScreen', () => {
     );
 
     expect(screen.getByRole('img', { name: 'Победа: банк твой' })).toBeVisible();
+    expect(container.querySelector('.duel-orbit-needle')).not.toBeNull();
+    expect(screen.getByText('ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ')).toBeVisible();
+    expect(screen.getByText('РЕЗУЛЬТАТ ПОДТВЕРЖДЁН')).toBeVisible();
     expect(screen.getByText('ПОБЕДА')).toBeVisible();
     expect(screen.getByText('+0,95 GRAM')).toBeVisible();
     expect(screen.getByText('Пришло в кошелёк').nextElementSibling).toHaveTextContent('1,95 GRAM');

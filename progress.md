@@ -198,3 +198,14 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   columns instead of overflowing on narrow cover screens.
 - Added a 360 × 800 Fold-cover regression with a simulated asymmetric 24px inset. Chromium and
   WebKit keep the shell, heading, vessel and state centred with no horizontal page overflow.
+
+## 2026-08-10: circular DUEL arena (in progress)
+
+- Selected the monochrome circular probability direction for the live DUEL surface.
+- The ring reads only contract-confirmed shares; the result needle is a reveal animation and never
+  calculates, changes or substitutes the settled winner.
+- Added live player identities, pool, authoritative countdown, latest confirmed boost and a clear
+  solid boost action while preserving the existing transaction and reveal state machine.
+- Settled results make four restrained rotations and land inside the already-known winner sector;
+  reduced-motion mode skips the suspense safely.
+- Focused DUEL component coverage passes. Responsive browser and production verification remain.

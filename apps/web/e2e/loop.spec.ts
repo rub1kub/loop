@@ -153,7 +153,8 @@ test('BANK, DUEL, РЕЙТИНГ and ПРОФИЛЬ remain usable above the Tele
 
   await page.goto('/?screen=duel-boost');
   await emulateFullscreenControls();
-  await expect(page.getByText('60 / 40')).toBeVisible();
+  await expect(page.locator('.duel-orbit')).toHaveAttribute('aria-label', 'Твой шанс 60 процентов');
+  await expect(page.locator('.duel-orbit-centre')).toContainText('2,5');
   await expect(page.getByText('ДО КОНЦА СТАВОК')).toBeVisible();
   await expect(page.getByLabel('Сумма усиления в GRAM')).toHaveCount(0);
   await page.getByRole('button', { name: 'УВЕЛИЧИТЬ ШАНС' }).click();

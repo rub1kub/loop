@@ -3752,35 +3752,479 @@ details[open] > summary .disclosure-indicator svg {
   color: #9a9a9a;
 }
 
-/* A duel is a person against a person; the strip puts two faces on the bar. */
-.duel-versus {
+/* DUEL's live object. The arcs are data, not decoration: their lengths are
+   the contract-confirmed shares. The pointer only reveals a settled result. */
+.duel-orbit {
+  display: grid;
+  width: 100%;
+  justify-items: center;
+  margin: 8px 0 2px;
+}
+
+.duel-orbit-players {
+  z-index: 2;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  width: min(100%, 370px);
+  align-items: start;
+  justify-content: space-between;
+  margin-bottom: -25px;
+  padding: 0 4px;
+  pointer-events: none;
 }
 
-.duel-versus > i {
-  color: var(--muted);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 500;
+.duel-orbit-player {
+  display: grid;
+  width: 92px;
+  justify-items: center;
+  gap: 3px;
+  color: var(--dim);
+  text-align: center;
 }
 
-.duel-face {
+.duel-orbit-player.is-mine {
+  color: var(--ink);
+}
+
+.duel-orbit-player > span:not(.duel-orbit-avatar) {
+  overflow: hidden;
+  width: 100%;
+  font-size: 9px;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.duel-orbit-player > strong {
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.duel-orbit-avatar {
   display: grid;
   overflow: hidden;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 3px;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  place-items: center;
+}
+
+.duel-orbit-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1);
+}
+
+.duel-orbit-avatar b {
+  font-size: 15px;
+  font-weight: 620;
+}
+
+.duel-orbit-avatar svg {
+  width: 24px;
+  height: 24px;
+}
+
+.duel-orbit-stage {
+  position: relative;
+  display: grid;
+  width: min(76vw, 300px);
+  max-width: 100%;
+  aspect-ratio: 1;
+  place-items: center;
+}
+
+.duel-orbit-chart {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  inset: 0;
+}
+
+.duel-orbit-outer,
+.duel-orbit-track,
+.duel-orbit-mine {
+  fill: none;
+  transform: rotate(90deg);
+  transform-origin: center;
+}
+
+.duel-orbit-outer {
+  stroke: rgb(255 255 255 / 20%);
+  stroke-dasharray: 1.2 4.2;
+  stroke-linecap: round;
+  stroke-width: 0.9;
+}
+
+.duel-orbit-track {
+  stroke: #303030;
+  stroke-width: 6;
+}
+
+.duel-orbit-mine {
+  stroke: #f5f5f7;
+  stroke-linecap: round;
+  stroke-width: 6;
+  filter: drop-shadow(0 0 5px rgb(255 255 255 / 25%));
+}
+
+.duel-orbit-marker {
+  fill: #cfcfcf;
+  stroke: #090909;
+  stroke-width: 1.5;
+}
+
+.duel-orbit-centre {
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
+}
+
+.duel-orbit-centre strong {
+  font-size: clamp(40px, 13vw, 58px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: -0.07em;
+  line-height: 0.95;
+}
+
+.duel-orbit-centre > span {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.22em;
+}
+
+.duel-orbit-centre small {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  margin-top: 13px;
+  color: var(--dim);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 760;
+  letter-spacing: 0.1em;
+}
+
+.duel-orbit-centre small b {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.duel-orbit-centre small span {
+  font-size: 8px;
+}
+
+.duel-orbit.is-urgent .duel-orbit-centre small {
+  color: var(--ink);
+  animation: chance-urgent 1s ease-in-out infinite;
+}
+
+.duel-orbit-needle {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  width: 38%;
+  height: 14px;
+  align-items: center;
+  transform-origin: left center;
+  pointer-events: none;
+}
+
+.duel-orbit-needle > span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--ink);
+  box-shadow: 0 0 8px rgb(255 255 255 / 30%);
+}
+
+.duel-orbit-needle > svg {
+  width: 15px;
+  height: 15px;
+  margin-left: -6px;
+  flex: 0 0 auto;
+  color: var(--ink);
+  filter: drop-shadow(0 0 5px rgb(255 255 255 / 30%));
+}
+
+.duel-orbit-needle::before {
+  position: absolute;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 8px rgb(255 255 255 / 30%);
+  content: '';
+}
+
+.duel-orbit-needle.is-waiting {
+  opacity: 0.55;
+}
+
+.duel-orbit-event,
+.duel-orbit-confirmed {
+  min-height: 18px;
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.duel-orbit.is-compact {
+  margin-top: -2px;
+}
+
+.duel-orbit.is-compact .duel-orbit-players {
+  width: min(100%, 260px);
+  margin-bottom: -12px;
+}
+
+.duel-orbit.is-compact .duel-orbit-avatar {
   width: 30px;
   height: 30px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: #1c1c1c;
-  color: #cfcfcf;
-  font-size: 13px;
-  place-items: center;
+  margin: 0;
+}
+
+.duel-orbit.is-compact .duel-orbit-avatar b {
+  font-size: 11px;
+}
+
+.duel-orbit.is-compact .duel-orbit-player {
+  width: 82px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 7px;
+}
+
+.duel-orbit.is-compact .duel-orbit-player > span:not(.duel-orbit-avatar) {
+  text-align: left;
+}
+
+.duel-orbit.is-compact .duel-orbit-player > strong {
+  grid-column: 2;
+  font-size: 17px;
+  text-align: left;
+}
+
+.duel-orbit.is-compact .duel-orbit-stage {
+  width: min(38vw, 150px);
+}
+
+.duel-orbit.is-compact .duel-orbit-centre strong {
+  font-size: 29px;
+}
+
+.duel-orbit.is-compact .duel-orbit-centre > span {
+  margin-top: 3px;
+  font-size: 8px;
+}
+
+.duel-orbit.is-compact .duel-orbit-centre small {
+  margin-top: 5px;
+}
+
+.duel-orbit.is-compact .duel-orbit-centre small b {
+  font-size: 9px;
+}
+
+.duel-orbit.is-compact .duel-orbit-centre small span,
+.duel-orbit.is-compact .duel-orbit-event {
+  display: none;
+}
+
+.duel-orbit-confirmed {
+  animation: duel-orbit-result-in 260ms ease 2.25s both;
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+}
+
+.duel-orbit-resolving-label {
+  position: absolute;
+  z-index: 4;
+  top: 23%;
+  width: 100%;
+  margin: 0;
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 780;
+  letter-spacing: 0.12em;
+  text-align: center;
+  animation: duel-orbit-resolving-out 220ms ease 2.16s both;
+}
+
+.duel-orbit-verdict {
+  position: absolute;
+  z-index: 4;
+  top: 17%;
+  left: 50%;
+  display: grid;
+  width: max-content;
+  justify-items: center;
+  translate: -50% 0;
+  color: var(--ink);
+  animation: duel-orbit-result-in 300ms var(--ease-apple) 2.22s both;
+  pointer-events: none;
+}
+
+.duel-orbit-verdict.is-lost {
+  color: #a1a1a6;
+}
+
+.duel-orbit-verdict span {
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: 0.16em;
+}
+
+.duel-orbit-verdict strong {
+  margin-top: 5px;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+
+.duel-orbit-verdict small {
+  margin-top: 4px;
+  font-size: 8px;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+}
+
+.duel-orbit.phase-won .duel-orbit-centre,
+.duel-orbit.phase-lost .duel-orbit-centre {
+  animation: duel-orbit-centre-out 180ms ease 2.17s both;
+}
+
+.duel-result-after-orbit,
+.duel-orbit.phase-won ~ .duel-actions,
+.duel-orbit.phase-lost ~ .duel-actions {
+  animation: duel-orbit-result-in 300ms var(--ease-apple) 2.3s both;
+}
+
+@keyframes duel-orbit-resolving-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    visibility: hidden;
+    opacity: 0;
+  }
+}
+
+@keyframes duel-orbit-centre-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    visibility: hidden;
+    opacity: 0;
+  }
+}
+
+@keyframes duel-orbit-result-in {
+  from {
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(5px);
+    pointer-events: none;
+  }
+  to {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+}
+
+@media (max-width: 350px), (max-height: 720px) {
+  .duel-orbit {
+    margin-top: 2px;
+  }
+
+  .duel-orbit-stage {
+    width: min(66vw, 238px);
+  }
+
+  .duel-orbit-players {
+    margin-bottom: -20px;
+  }
+
+  .duel-orbit-avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .duel-orbit-player > strong {
+    font-size: 21px;
+  }
+
+  .duel-orbit-centre strong {
+    font-size: 40px;
+  }
+
+  .duel-orbit-event,
+  .duel-orbit-confirmed {
+    font-size: 10px;
+  }
+
+  .duel-boost-panel {
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .duel-boost-panel .boost-terms {
+    margin: 2px 0;
+  }
+
+  .duel-boost-panel .boost-terms > div {
+    min-height: 34px;
+  }
+
+  .duel-boost-panel > .primary-button {
+    min-height: 50px;
+    border-radius: 16px;
+  }
+
+  .duel-boost-panel .duel-boost-dismiss {
+    min-height: 26px;
+    padding-block: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .duel-orbit-confirmed,
+  .duel-orbit-resolving-label,
+  .duel-orbit-verdict,
+  .duel-orbit.phase-won .duel-orbit-centre,
+  .duel-orbit.phase-lost .duel-orbit-centre,
+  .duel-result-after-orbit,
+  .duel-orbit.phase-won ~ .duel-actions,
+  .duel-orbit.phase-lost ~ .duel-actions {
+    animation-delay: 0s;
+    animation-duration: 1ms;
+  }
 }
 
 .duel-face img {

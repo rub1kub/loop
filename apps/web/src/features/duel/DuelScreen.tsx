@@ -39,6 +39,7 @@ import { requireLinkedWallet, sameAddress } from '../../address';
 import { celebrate } from '../../celebrate';
 import { humanError } from '../../errors';
 import { ChanceBar, type ChancePhase } from './ChanceBar';
+import { DuelOrbit, type DuelOrbitPhase } from './DuelOrbit';
 
 const DEFAULT_CHANCE_BPS = 5000;
 const FUNDING_BROADCAST_NOTICE =
@@ -388,17 +389,16 @@ export function DuelScreen({
   const resultWon = Boolean(
     latestDuel?.winner_wallet && sameAddress(latestDuel.winner_wallet, profile.wallet?.address),
   );
-  // A duel resolves in an instant and the screen simply swaps to the result.
-  // The win gets a burst; the loss gets nothing — celebrating someone's money
-  // leaving is mockery, not humour.
+  // The chain already knows the winner. The interface spends 2.35 seconds
+  // revealing that fact with the orbit needle; it never rolls a client result.
+  // The win gets a burst when the needle lands. The loss gets nothing —
+  // celebrating someone's money leaving is mockery, not humour.
   const celebratedDuel = useRef<string | null>(null);
   useEffect(() => {
     if (status !== 'result' || !latestDuel || celebratedDuel.current === latestDuel.id) return;
     celebratedDuel.current = latestDuel.id;
     if (!resultWon) return;
-    // The bar takes half a second to claim the whole pool. Fire on its landing,
-    // not on its start — otherwise the burst celebrates something still moving.
-    const burst = window.setTimeout(() => celebrate(), 460);
+    const burst = window.setTimeout(() => celebrate(), 2350);
     return () => window.clearTimeout(burst);
   }, [latestDuel, resultWon, status]);
 
@@ -412,7 +412,7 @@ export function DuelScreen({
     mine: null,
     theirs: null,
   });
-  const versusDuelId = activeDuel?.onchain_duel_id ?? null;
+  const versusDuelId = (activeDuel ?? latestDuel)?.onchain_duel_id ?? null;
   useEffect(() => {
     if (isMockTelegram() || versusDuelId === null) return;
     let alive = true;
@@ -452,7 +452,6 @@ export function DuelScreen({
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [challengeOfferId]);
 
   const start = useCallback(
@@ -948,6 +947,27 @@ export function DuelScreen({
       ? (Date.parse(activeDuel.boost_deadline) - now) /
         Math.max(1000, Date.parse(activeDuel.hard_deadline) - now)
       : null;
+  const latestBoost = activeDuel?.boost_events.at(-1) ?? null;
+  const orbitEvent = latestBoost
+    ? `${latestBoost.side === 'you' ? 'Ты усилился' : 'Соперник усилился'}: +${formatGram(
+        latestBoost.amount_nano,
+        3,
+      )} GRAM`
+    : duelBoosting
+      ? 'У каждого есть минута, чтобы изменить шансы'
+      : activeDuel?.own_revealed
+        ? 'Твой результат открыт. Ждём соперника'
+        : null;
+  const orbitPhase: DuelOrbitPhase =
+    status === 'result'
+      ? resultWon
+        ? 'won'
+        : 'lost'
+      : duelBoosting
+        ? 'boosting'
+        : activeDuel?.own_revealed || pendingAction?.kind === 'reveal'
+          ? 'waiting'
+          : 'ready';
 
   return (
     <section className="screen duel-screen" aria-labelledby="duel-title">
@@ -958,22 +978,32 @@ export function DuelScreen({
 
       {liveEyebrow && <p className="duel-live-eyebrow">{liveEyebrow}</p>}
 
-      <ChanceBar
-        mine={chanceShare}
-        phase={chancePhase}
-        opponentName={opponentName}
-        remainingMs={chanceWindowMs}
-        drain={chanceDrain}
-        caption={
-          status === 'matched'
-            ? boostClosing || (pendingAction?.kind === 'reveal' && !activeDuel?.own_revealed)
-              ? undefined
-              : duelBoosting
-                ? 'ДО КОНЦА СТАВОК'
-                : 'ДО АВТОМАТИЧЕСКОГО ИСХОДА'
-            : undefined
-        }
-      />
+      {status !== 'matched' && status !== 'result' && (
+        <ChanceBar
+          mine={chanceShare}
+          phase={chancePhase}
+          opponentName={opponentName}
+          remainingMs={chanceWindowMs}
+          drain={chanceDrain}
+        />
+      )}
+
+      {(status === 'matched' || status === 'result') && identifiedDuel && (
+        <DuelOrbit
+          mine={chanceShare}
+          phase={orbitPhase}
+          remainingMs={chanceWindowMs}
+          pool={formatGram(shownPool, 3)}
+          mineAvatar={faces.mine}
+          mineFallback={profile.user.first_name.slice(0, 1).toUpperCase()}
+          opponentAvatar={faces.theirs}
+          opponentFallback={identifiedDuel.opponent_first_name?.slice(0, 1).toUpperCase() ?? ''}
+          opponentName={opponentName}
+          latestEvent={orbitEvent}
+          resultDelta={`${resultWon ? '+' : '−'}${formatGram(resultDeltaNano, 3)} GRAM`}
+          compact={boostPanelOpen}
+        />
+      )}
 
       {status === 'idle' && duelClosed && (
         <div className="duel-form duel-closed">
@@ -1047,27 +1077,6 @@ export function DuelScreen({
 
       {(status === 'searching' || status === 'matched') && (
         <div className="duel-live-state">
-          {status === 'matched' && activeDuel && (
-            <div className="duel-versus">
-              <span className="duel-face">
-                {faces.mine ? (
-                  <img src={faces.mine} alt="" />
-                ) : (
-                  profile.user.first_name.slice(0, 1).toUpperCase()
-                )}
-              </span>
-              <b>ТЫ</b>
-              <i aria-hidden="true">против</i>
-              <b>{opponentName ?? 'СОПЕРНИК'}</b>
-              <span className="duel-face">
-                {faces.theirs ? (
-                  <img src={faces.theirs} alt="" />
-                ) : (
-                  (activeDuel.opponent_first_name ?? '?').slice(0, 1).toUpperCase()
-                )}
-              </span>
-            </div>
-          )}
           {status === 'searching' && (
             <div className="duel-live-focus">
               <strong>{`${formatGram(activeOffer?.stake_nano ?? terms.stake, 3)} GRAM`}</strong>
@@ -1079,7 +1088,7 @@ export function DuelScreen({
             <>
               {!boostPanelOpen && (
                 <button
-                  className="secondary-button duel-boost-toggle"
+                  className="primary-button duel-boost-toggle"
                   onClick={() => {
                     setBoostPanelDuelId(activeDuel.id);
                     haptic('selection');
@@ -1206,9 +1215,7 @@ export function DuelScreen({
       )}
 
       {status === 'result' && latestDuel && (
-        <div className="duel-result">
-          <p className="eyebrow">{resultWon ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ'}</p>
-          <strong>{`${resultWon ? '+' : '−'}${formatGram(resultDeltaNano, 3)} GRAM`}</strong>
+        <div className="duel-result duel-result-after-orbit">
           <dl className="detail-list duel-result-breakdown">
             <Term
               label="Твоя ставка"
