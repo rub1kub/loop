@@ -138,7 +138,7 @@ async def test_only_owner_can_upload_normalized_team_avatar(client) -> None:
     )
     slug = created.json()["slug"]
     source = BytesIO()
-    Image.new("RGBA", (180, 120), (240, 240, 240, 180)).save(source, format="PNG")
+    Image.new("RGBA", (180, 120), (230, 35, 90, 255)).save(source, format="PNG")
 
     denied = await client.put(
         f"/api/v1/teams/{slug}/avatar",
@@ -164,7 +164,8 @@ async def test_only_owner_can_upload_normalized_team_avatar(client) -> None:
         assert normalized.size == (512, 512)
         assert normalized.mode == "RGB"
         red, green, blue = normalized.getpixel((256, 256))
-        assert red == green == blue
+        assert red > green * 4
+        assert red > blue * 2
 
     unchanged = await client.get(avatar_url, headers={"If-None-Match": avatar.headers["etag"]})
     assert unchanged.status_code == 304

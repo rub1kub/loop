@@ -93,6 +93,24 @@ describe('ProfileScreen', () => {
     expect(revokeObjectUrl).toHaveBeenCalledWith('blob:loop-avatar');
   });
 
+  it('uses the full-colour PLUSH BRICK artwork', () => {
+    const { container } = render(
+      <ProfileScreen
+        profile={profile}
+        rating={null}
+        bankHistory={[]}
+        duels={[]}
+        onReplay={vi.fn()}
+        onResultNotificationsChange={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.row-icon-mark img')).toHaveAttribute(
+      'src',
+      '/assets/plush-brick-mark-color.webp',
+    );
+  });
+
   it('allows vibration to be disabled in settings', () => {
     render(
       <ProfileScreen

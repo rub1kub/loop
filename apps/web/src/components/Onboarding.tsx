@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { haptic, openPlatformLink, setBackAction } from '../telegram';
 
 const plushBrickLogoUrl = '/assets/plush-brick-loop.webp';
-const plushBrickFallbackUrl = '/assets/plush-brick-mark.webp';
+const plushBrickFallbackUrl = '/assets/plush-brick-mark-color.webp';
 const plushBrickMarkets = [
   {
     name: 'dTrade',

@@ -53,7 +53,7 @@ describe('Onboarding', () => {
     // The tiny local mark is visible immediately while the animation downloads.
     expect(mark.querySelector('.story-plush-fallback')).toHaveAttribute(
       'src',
-      '/assets/plush-brick-mark.webp',
+      '/assets/plush-brick-mark-color.webp',
     );
     expect(screen.getByRole('link', { name: 'Купить PLUSH BRICK в dTrade' })).toHaveAttribute(
       'href',

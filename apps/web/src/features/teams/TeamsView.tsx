@@ -111,6 +111,45 @@ function TeamAvatar({
   );
 }
 
+function TeamMemberAvatar({ member }: { member: TeamMember }) {
+  const [failure, setFailure] = useState<{
+    url: string;
+    attempt: number;
+    failed: boolean;
+  } | null>(null);
+  const currentFailure = failure?.url === member.photo_url ? failure : null;
+  const attempt = currentFailure?.attempt ?? 0;
+  const failed = currentFailure?.failed ?? false;
+
+  useEffect(() => {
+    if (!member.photo_url || !failed || attempt >= 3) return;
+    const timeout = window.setTimeout(
+      () => setFailure({ url: member.photo_url!, attempt: attempt + 1, failed: false }),
+      1_500 * 2 ** attempt,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [attempt, failed, member.photo_url]);
+
+  return (
+    <span className="team-member-avatar" aria-hidden="true">
+      {member.photo_url && !failed ? (
+        <img
+          key={`${member.photo_url}:${attempt}`}
+          src={member.photo_url}
+          alt=""
+          draggable={false}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setFailure({ url: member.photo_url!, attempt, failed: true })}
+        />
+      ) : (
+        member.first_name.slice(0, 1).toUpperCase()
+      )}
+    </span>
+  );
+}
+
 type TeamBrand = Pick<TeamEntry, 'name' | 'description' | 'mark' | 'avatar_url' | 'join_policy'>;
 
 function teamBrand(team: TeamEntry): TeamBrand {
@@ -796,7 +835,7 @@ function MemberRow({
   return (
     <div className={member.is_me ? 'is-me' : ''}>
       <b>{rank}</b>
-      <span className="team-member-avatar">{member.first_name.slice(0, 1).toUpperCase()}</span>
+      <TeamMemberAvatar member={member} />
       <p>
         <strong>{member.is_me ? 'ТЫ' : member.first_name}</strong>
         <small>

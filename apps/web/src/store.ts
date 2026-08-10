@@ -379,7 +379,7 @@ const demoTeams: TeamOverview = {
         user_id: 'demo',
         first_name: 'Дмитрий',
         username: 'loop_demo',
-        photo_url: null,
+        photo_url: '/assets/channel-avatar.jpg',
         role: 'owner',
         joined_at: new Date(now - 5 * 86_400_000).toISOString(),
         flow_nano: 4_000_000_000,

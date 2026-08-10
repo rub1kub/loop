@@ -256,4 +256,49 @@ describe('team forms', () => {
       `${withAvatar.avatar_url}&retry=1`,
     );
   });
+
+  it('shows member photos and falls back to an initial after a loading error', async () => {
+    const memberPhoto = 'https://t.me/i/userpic/320/member.jpg';
+    const withMember = {
+      ...ownedTeam,
+      top_members: [
+        {
+          user_id: 'member-1',
+          first_name: 'Мария',
+          username: 'maria',
+          photo_url: memberPhoto,
+          role: 'member' as const,
+          joined_at: '2026-08-10T00:00:00Z',
+          flow_nano: 0,
+          bank_entries: 0,
+          bank_payouts: 0,
+          duel_settlements: 0,
+          is_me: false,
+        },
+      ],
+    };
+    render(
+      <TeamsView
+        overview={{ ...overview, my_team: withMember, leaderboard: [withMember] }}
+        invite={null}
+        onRefresh={vi.fn(() => Promise.resolve())}
+        onDismissInvite={vi.fn()}
+        onError={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть команду DEV' }));
+    await screen.findByRole('heading', { name: 'DEV' });
+    const avatar = await waitFor(() => {
+      const image = document.querySelector('.team-member-avatar img');
+      expect(image).not.toBeNull();
+      return image;
+    });
+    expect(avatar).toHaveAttribute('src', memberPhoto);
+    expect(avatar).toHaveAttribute('referrerpolicy', 'no-referrer');
+
+    fireEvent.error(avatar!);
+    expect(document.querySelector('.team-member-avatar img')).toBeNull();
+    expect(document.querySelector('.team-member-avatar')).toHaveTextContent('М');
+  });
 });
