@@ -392,6 +392,7 @@ summary:focus-visible .disclosure-indicator {
 }
 
 .screen-stage {
+  position: relative;
   height: calc(100% - var(--safe-bottom) - 70px);
   min-width: 0;
 }
@@ -636,6 +637,15 @@ summary:focus-visible .disclosure-indicator {
   align-items: center;
 }
 
+/* The roaming GRAM layer sits behind BANK's interface, so tokens may cross
+   the percentage, copy and button without making any of them unreadable. */
+.bank-screen > .mode-header,
+.bank-screen > .bank-object,
+.bank-screen > .bank-state {
+  position: relative;
+  z-index: 2;
+}
+
 .bank-object {
   position: relative;
   display: grid;
@@ -731,6 +741,15 @@ summary:focus-visible .disclosure-indicator {
   inset: 0;
   width: 100%;
   height: 100%;
+}
+
+.bank-flight-canvas {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .bank-state {

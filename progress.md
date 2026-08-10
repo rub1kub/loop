@@ -150,3 +150,16 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Unit coverage verifies Telegram start/restart, radians-to-gravity mapping, browser fallback,
   cleanup and one-shot permission. Chromium sensor simulation visibly moves the pile both ways,
   including with reduced motion enabled, without console errors.
+
+## 2026-08-10: BANK full-screen token flight
+
+- Split BANK rendering into an inner jar canvas and a transparent screen-stage flight layer, so
+  escaped GRAM tokens can continue below the vessel and pass behind the percentage, copy and CTA.
+- Mapped the real neck into screen coordinates and kept the full token radius inside the visible
+  application stage during flight, bounce and viewport resize.
+- Added an outward impulse at the lip for the restrained idle ejection, preventing the token from
+  immediately retracing its path into the same opening.
+- A returning token now checks whether the neck is occupied and visibly bounces away instead of
+  being inserted into another token; sustained tilt/reversal tests guard pile interpenetration.
+- Focused physics/UI tests and a production build pass. Chromium inspection at the BANK mobile
+  surface shows tokens below the CTA, behind readable controls and still inside the screen bounds.

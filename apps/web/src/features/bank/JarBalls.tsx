@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { telegram } from '../../telegram';
 import {
@@ -14,6 +15,7 @@ import {
   stepFlyingBalls,
   stepPile,
   targetCount,
+  worstOverlap,
 } from './jarPhysics';
 import type { Ball } from './jarPhysics';
 import { startDeviceTilt } from './deviceTilt';
@@ -42,7 +44,13 @@ const GRAM_SPARK_PATH =
  */
 export function JarBalls({ fill }: { fill: number }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const flightCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [flightHost, setFlightHost] = useState<HTMLElement | null>(null);
   const fillRef = useRef(fill);
+
+  useLayoutEffect(() => {
+    setFlightHost(canvasRef.current?.closest<HTMLElement>('.screen-stage') ?? null);
+  }, []);
 
   useEffect(() => {
     fillRef.current = fill;
@@ -50,8 +58,10 @@ export function JarBalls({ fill }: { fill: number }) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    const flightCanvas = flightCanvasRef.current;
     const context = canvas?.getContext('2d');
-    if (!canvas || !context) return;
+    const flightContext = flightCanvas?.getContext('2d');
+    if (!canvas || !flightCanvas || !context || !flightContext) return;
 
     const reducedMotion =
       typeof window.matchMedia === 'function' &&
@@ -67,27 +77,45 @@ export function JarBalls({ fill }: { fill: number }) {
     let idleEjectionClock = IDLE_EJECTION_MIN + Math.random() * IDLE_EJECTION_SPREAD;
     let stageWidth = 0;
     let stageHeight = 0;
+    let flightWidth = 0;
+    let flightHeight = 0;
     let chamberLeft = 0;
     let chamberTop = 0;
+    let flightChamberLeft = 0;
+    let flightChamberTop = 0;
 
     const resize = () => {
       const box = canvas.getBoundingClientRect();
-      if (!box.width || !box.height) return;
-      const previousStageWidth = stageWidth;
-      const previousStageHeight = stageHeight;
+      const flightBox = flightCanvas.getBoundingClientRect();
+      if (!box.width || !box.height || !flightBox.width || !flightBox.height) return;
+      const previousFlightWidth = flightWidth;
+      const previousFlightHeight = flightHeight;
       const previousWidth = pile.width;
       const previousHeight = pile.height;
       stageWidth = box.width;
       stageHeight = box.height;
+      flightWidth = flightBox.width;
+      flightHeight = flightBox.height;
       chamberLeft = stageWidth * CHAMBER_LEFT;
       chamberTop = stageHeight * CHAMBER_TOP;
       const chamberWidth = stageWidth * (1 - CHAMBER_LEFT - CHAMBER_RIGHT);
       const chamberHeight = stageHeight * (1 - CHAMBER_TOP - CHAMBER_BOTTOM);
+      flightChamberLeft = box.left - flightBox.left + chamberLeft;
+      flightChamberTop = box.top - flightBox.top + chamberTop;
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.round(stageWidth * dpr);
       canvas.height = Math.round(stageHeight * dpr);
+      flightCanvas.width = Math.round(flightWidth * dpr);
+      flightCanvas.height = Math.round(flightHeight * dpr);
       resizePile(pile, chamberWidth, chamberHeight);
-      resizeFlightField(flight, stageWidth, stageHeight, chamberLeft, chamberTop, chamberWidth);
+      resizeFlightField(
+        flight,
+        flightWidth,
+        flightHeight,
+        flightChamberLeft,
+        flightChamberTop,
+        chamberWidth,
+      );
 
       if (pile.balls.length && previousWidth > 0 && previousHeight > 0) {
         const scaleX = pile.width / previousWidth;
@@ -102,9 +130,9 @@ export function JarBalls({ fill }: { fill: number }) {
           ball.vy *= scaleY;
         }
       }
-      if (flight.balls.length && previousStageWidth > 0 && previousStageHeight > 0) {
-        const scaleX = stageWidth / previousStageWidth;
-        const scaleY = stageHeight / previousStageHeight;
+      if (flight.balls.length && previousFlightWidth > 0 && previousFlightHeight > 0) {
+        const scaleX = flightWidth / previousFlightWidth;
+        const scaleY = flightHeight / previousFlightHeight;
         for (const ball of flight.balls) {
           ball.x *= scaleX;
           ball.px *= scaleX;
@@ -119,68 +147,86 @@ export function JarBalls({ fill }: { fill: number }) {
     resize();
 
     /** The official GRAM diamond and spark, stamped into a physical token. */
-    const stampGram = (ball: Ball, x: number, y: number) => {
-      context.save();
-      context.translate(x, y);
-      context.rotate(ball.angle);
+    const stampGram = (target: CanvasRenderingContext2D, ball: Ball, x: number, y: number) => {
+      target.save();
+      target.translate(x, y);
+      target.rotate(ball.angle);
       // Tokens turn freely in the screen plane, but the stamp never collapses
       // into an edge-on line: at this size that reads as a broken logo.
-      context.globalAlpha = 0.62;
+      target.globalAlpha = 0.62;
       const markScale = (ball.r * 1.16) / 100;
-      context.scale(markScale, markScale);
-      context.translate(-50, -52);
-      context.fillStyle = 'rgba(10, 10, 10, 0.82)';
-      context.fill(gramDiamond);
-      context.fillStyle = 'rgba(255, 255, 255, 0.92)';
-      context.fill(gramSpark);
-      context.restore();
+      target.scale(markScale, markScale);
+      target.translate(-50, -52);
+      target.fillStyle = 'rgba(10, 10, 10, 0.82)';
+      target.fill(gramDiamond);
+      target.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      target.fill(gramSpark);
+      target.restore();
     };
 
-    const drawToken = (ball: Ball, x: number, y: number) => {
+    const drawToken = (
+      target: CanvasRenderingContext2D,
+      ball: Ball,
+      x: number,
+      y: number,
+      lightWidth: number,
+      lightHeight: number,
+    ) => {
       // One light source belongs to the whole jar. Material variation is kept
       // deliberately narrow; it stops the GRAMчики looking cloned without
       // reverting to the old random checkerboard of unrelated shades.
-      const lightX = stageWidth ? 1 - x / stageWidth : 0.5;
-      const lightY = stageHeight ? 1 - y / stageHeight : 0.5;
+      const lightX = lightWidth ? 1 - x / lightWidth : 0.5;
+      const lightY = lightHeight ? 1 - y / lightHeight : 0.5;
       const grey = Math.round(151 + lightX * 45 + lightY * 12 + ball.material * 10);
 
-      context.beginPath();
-      context.arc(x, y, ball.r, 0, Math.PI * 2);
-      context.fillStyle = `rgb(${grey}, ${grey}, ${grey})`;
-      context.globalAlpha = 0.96;
-      context.fill();
+      target.beginPath();
+      target.arc(x, y, ball.r, 0, Math.PI * 2);
+      target.fillStyle = `rgb(${grey}, ${grey}, ${grey})`;
+      target.globalAlpha = 0.96;
+      target.fill();
 
-      context.beginPath();
-      context.arc(x - ball.r * 0.08, y - ball.r * 0.08, ball.r * 0.78, 3.55, 5.2);
-      context.lineWidth = Math.max(0.55, ball.r * 0.075);
-      context.strokeStyle = 'rgba(255, 255, 255, 0.32)';
-      context.stroke();
+      target.beginPath();
+      target.arc(x - ball.r * 0.08, y - ball.r * 0.08, ball.r * 0.78, 3.55, 5.2);
+      target.lineWidth = Math.max(0.55, ball.r * 0.075);
+      target.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+      target.stroke();
 
-      context.beginPath();
-      context.arc(x + ball.r * 0.08, y + ball.r * 0.08, ball.r * 0.82, 0.15, 1.78);
-      context.lineWidth = Math.max(0.65, ball.r * 0.1);
-      context.strokeStyle = 'rgba(0, 0, 0, 0.28)';
-      context.stroke();
+      target.beginPath();
+      target.arc(x + ball.r * 0.08, y + ball.r * 0.08, ball.r * 0.82, 0.15, 1.78);
+      target.lineWidth = Math.max(0.65, ball.r * 0.1);
+      target.strokeStyle = 'rgba(0, 0, 0, 0.28)';
+      target.stroke();
 
-      stampGram(ball, x, y);
+      stampGram(target, ball, x, y);
     };
 
     const draw = () => {
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, stageWidth, stageHeight);
+      flightContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+      flightContext.clearRect(0, 0, flightWidth, flightHeight);
       // Tokens lower in the pile sit visually in front of those above them.
       // Sorting only the draw order does not interfere with the physics.
       for (const ball of [...pile.balls].sort((a, b) => a.y - b.y)) {
-        drawToken(ball, chamberLeft + ball.x, chamberTop + ball.y);
+        drawToken(
+          context,
+          ball,
+          chamberLeft + ball.x,
+          chamberTop + ball.y,
+          stageWidth,
+          stageHeight,
+        );
       }
       for (const ball of [...flight.balls].sort((a, b) => a.y - b.y)) {
-        drawToken(ball, ball.x, ball.y);
+        drawToken(flightContext, ball, ball.x, ball.y, flightWidth, flightHeight);
       }
       context.globalAlpha = 1;
+      flightContext.globalAlpha = 1;
       canvas.dataset.ballCount = String(pile.balls.length + flight.balls.length);
       canvas.dataset.insideCount = String(pile.balls.length);
       canvas.dataset.flyingCount = String(flight.balls.length);
       canvas.dataset.targetCount = String(targetCount(pile, fillRef.current));
+      flightCanvas.dataset.flyingCount = String(flight.balls.length);
     };
 
     const settleInitialFill = () => {
@@ -231,8 +277,8 @@ export function JarBalls({ fill }: { fill: number }) {
       }
 
       stepPile(pile, dt);
-      releaseEscaped(pile, flight, chamberLeft, chamberTop);
-      stepFlyingBalls(flight, pile, chamberLeft, chamberTop, pile.gravity, dt);
+      releaseEscaped(pile, flight, flightChamberLeft, flightChamberTop);
+      stepFlyingBalls(flight, pile, flightChamberLeft, flightChamberTop, pile.gravity, dt);
       draw();
     };
 
@@ -289,26 +335,41 @@ export function JarBalls({ fill }: { fill: number }) {
         (highest, ball) => (!highest || ball.y < highest.y ? ball : highest),
         null,
       );
+      const smallestRadius = pile.balls.reduce(
+        (smallest, ball) => Math.min(smallest, ball.r),
+        Number.POSITIVE_INFINITY,
+      );
+      const overlap = worstOverlap(pile);
       return JSON.stringify({
-        coordinateSystem: 'canvas origin top-left; x right; y down; pixels',
+        coordinateSystem: 'BANK screen-stage origin top-left; x right; y down; pixels',
         fillPercent: fillRef.current,
-        stage: { width: stageWidth, height: stageHeight },
+        stage: { width: flightWidth, height: flightHeight },
+        jarStage: {
+          left: Number((flightChamberLeft - chamberLeft).toFixed(2)),
+          top: Number((flightChamberTop - chamberTop).toFixed(2)),
+          width: Number(stageWidth.toFixed(2)),
+          height: Number(stageHeight.toFixed(2)),
+        },
         gravity: {
           x: Number(pile.gravity.x.toFixed(3)),
           y: Number(pile.gravity.y.toFixed(3)),
         },
         mouth: { left: flight.mouthLeft, right: flight.mouthRight, y: flight.mouthY },
         inside: pile.balls.length,
+        worstOverlap: Number(overlap.toFixed(3)),
+        overlapRatio: Number.isFinite(smallestRadius)
+          ? Number((overlap / smallestRadius).toFixed(3))
+          : 0,
         insideCentroid: pile.balls.length
           ? {
-              x: Number((chamberLeft + insideCentroid.x / pile.balls.length).toFixed(2)),
-              y: Number((chamberTop + insideCentroid.y / pile.balls.length).toFixed(2)),
+              x: Number((flightChamberLeft + insideCentroid.x / pile.balls.length).toFixed(2)),
+              y: Number((flightChamberTop + insideCentroid.y / pile.balls.length).toFixed(2)),
             }
           : null,
         highestMouthToken: highestMouthToken
           ? {
-              x: Number((highestMouthToken.x + chamberLeft).toFixed(2)),
-              y: Number((highestMouthToken.y + chamberTop).toFixed(2)),
+              x: Number((highestMouthToken.x + flightChamberLeft).toFixed(2)),
+              y: Number((highestMouthToken.y + flightChamberTop).toFixed(2)),
               vy: Number(highestMouthToken.vy.toFixed(2)),
               r: Number(highestMouthToken.r.toFixed(2)),
             }
@@ -340,6 +401,7 @@ export function JarBalls({ fill }: { fill: number }) {
     const observer =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => resize()) : null;
     observer?.observe(canvas);
+    observer?.observe(flightCanvas);
 
     const app = telegram();
     const tilt = startDeviceTilt(app, (gravity) => {
@@ -376,7 +438,16 @@ export function JarBalls({ fill }: { fill: number }) {
       observer?.disconnect();
       tilt.stop();
     };
-  }, []);
+  }, [flightHost]);
 
-  return <canvas ref={canvasRef} className="bank-ball-canvas" aria-hidden="true" />;
+  return (
+    <>
+      <canvas ref={canvasRef} className="bank-ball-canvas" aria-hidden="true" />
+      {flightHost &&
+        createPortal(
+          <canvas ref={flightCanvasRef} className="bank-flight-canvas" aria-hidden="true" />,
+          flightHost,
+        )}
+    </>
+  );
 }

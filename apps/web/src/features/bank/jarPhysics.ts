@@ -365,13 +365,27 @@ export function releaseEscaped(
     const ball = pile.balls[index];
     if (ball.y + ball.r > 0) continue;
     pile.balls.splice(index, 1);
+    const wasEjecting = ball.ejecting;
     ball.ejecting = false;
+    // The quiet idle lift receives a sideways roll as it clears the lip, so it
+    // actually enters the surrounding screen instead of tracing the same
+    // vertical line straight back into the jar. A gravity-driven spill keeps
+    // its own physical velocity.
+    const offsetFromCentre = ball.x - pile.width / 2;
+    const launchDirection =
+      Math.abs(offsetFromCentre) > ball.r * 0.25
+        ? Math.sign(offsetFromCentre)
+        : Math.sin(ball.angle + ball.facePhase) >= 0
+          ? 1
+          : -1;
+    const launchVelocity = wasEjecting ? launchDirection * Math.max(150, pile.width * 1.1) : 0;
     field.balls.push({
       ...ball,
       x: ball.x + chamberLeft,
       px: ball.px + chamberLeft,
       y: ball.y + chamberTop,
       py: ball.py + chamberTop,
+      vx: ball.vx + launchVelocity,
       flightAge: 0,
     });
     released += 1;
@@ -452,15 +466,29 @@ export function stepFlyingBalls(
       if (crossedShoulderDown) {
         const fitsMouth = ball.x - ball.r >= field.mouthLeft && ball.x + ball.r <= field.mouthRight;
         if (fitsMouth) {
-          field.balls.splice(index, 1);
-          pile.balls.push({
-            ...ball,
-            x: ball.x - chamberLeft,
-            px: ball.px - chamberLeft,
-            y: ball.y - chamberTop,
-            py: ball.py - chamberTop,
-          });
-          returned += 1;
+          const localX = ball.x - chamberLeft;
+          const localY = ball.y - chamberTop;
+          const openingOccupied = pile.balls.some(
+            (inside) =>
+              Math.hypot(inside.x - localX, inside.y - localY) < (inside.r + ball.r) * 0.98,
+          );
+          if (!openingOccupied) {
+            field.balls.splice(index, 1);
+            pile.balls.push({
+              ...ball,
+              x: localX,
+              px: ball.px - chamberLeft,
+              y: localY,
+              py: ball.py - chamberTop,
+            });
+            returned += 1;
+            continue;
+          }
+          // Do not insert one body into another. The visible collision at the
+          // lip buys the pile time to clear the opening naturally.
+          ball.y = field.mouthY - ball.r;
+          ball.vy = -Math.max(70, Math.abs(ball.vy) * 0.42);
+          ball.vx += ball.x < (field.mouthLeft + field.mouthRight) / 2 ? -28 : 28;
           continue;
         }
         const touchesJar = ball.x + ball.r > field.jarLeft && ball.x - ball.r < field.jarRight;

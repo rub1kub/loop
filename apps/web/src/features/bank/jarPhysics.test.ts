@@ -135,6 +135,27 @@ describe('jar physics', () => {
     SETTLE_TIMEOUT_MS,
   );
 
+  it(
+    'does not interpenetrate after sustained tilt and a direction reversal',
+    () => {
+      const pile = createPile(214, 277);
+      const random = seeded(33);
+      pour(pile, 62, random, 320);
+      placeSettled(pile, random);
+
+      for (const gravity of [
+        { x: 0.58, y: 0.82 },
+        { x: -0.58, y: 0.82 },
+      ]) {
+        pile.gravity = gravity;
+        for (let frame = 0; frame < 360; frame += 1) stepPile(pile, FRAME);
+        const smallest = Math.min(...pile.balls.map((ball) => ball.r));
+        expect(worstOverlap(pile)).toBeLessThan(smallest * 0.15);
+      }
+    },
+    SETTLE_TIMEOUT_MS,
+  );
+
   it('pours the fill in gradually rather than all at once', () => {
     const pile = createPile(200, 260);
     const random = seeded(3);
@@ -209,6 +230,32 @@ describe('jar physics', () => {
 });
 
 describe('outside the jar', () => {
+  it('lets an idle token travel below the whole jar into the surrounding screen', () => {
+    const pile = createPile(200, 260);
+    pour(pile, 62, seeded(45), 1);
+    const token = pile.balls[0];
+    token.y = -token.r - 1;
+    token.py = token.y;
+    token.ejecting = true;
+    token.vy = -290;
+    token.angle = 0;
+    token.facePhase = 0;
+    const field = createFlightField(390, 700, 95, 140, 200);
+
+    expect(releaseEscaped(pile, field, 95, 140)).toBe(1);
+    expect(Math.abs(field.balls[0].vx)).toBeGreaterThan(150);
+
+    let travelledBelowJar = false;
+    for (let frame = 0; frame < 300 && field.balls.length > 0; frame += 1) {
+      stepFlyingBalls(field, pile, 95, 140, { x: 0, y: 1 }, FRAME);
+      travelledBelowJar ||= field.balls.some((ball) => ball.y > 140 + pile.height);
+    }
+
+    expect(travelledBelowJar).toBe(true);
+    expect(field.balls).toHaveLength(1);
+    expect(field.balls[0].y).toBeLessThanOrEqual(field.height - field.balls[0].r + 0.01);
+  });
+
   it('never lets a flying GRAM token cross any screen edge', () => {
     const pile = createPile(200, 260);
     pour(pile, 100, seeded(47), 1);
@@ -259,6 +306,34 @@ describe('outside the jar', () => {
     expect(field.balls).toHaveLength(0);
     expect(pile.balls).toHaveLength(1);
     expect(pile.balls[0].x).toBeCloseTo(100, 1);
+  });
+
+  it('bounces at an occupied neck instead of inserting one token into another', () => {
+    const pile = createPile(200, 260);
+    pour(pile, 100, seeded(59), 1);
+    const blocker = pile.balls[0];
+    blocker.x = pile.width / 2;
+    blocker.y = -blocker.r + 3;
+    const field = createFlightField(300, 400, 50, 80, 200);
+    const centre = (field.mouthLeft + field.mouthRight) / 2;
+    field.balls.push({
+      ...blocker,
+      x: centre,
+      y: field.mouthY - blocker.r - 0.5,
+      px: centre,
+      py: field.mouthY - blocker.r - 0.5,
+      vx: 0,
+      vy: 240,
+      flightAge: 0.4,
+    });
+
+    const returned = stepFlyingBalls(field, pile, 50, 80, { x: 0, y: 1 }, FRAME);
+
+    expect(returned).toBe(0);
+    expect(field.balls).toHaveLength(1);
+    expect(pile.balls).toHaveLength(1);
+    expect(field.balls[0].vy).toBeLessThan(0);
+    expect(worstOverlap(pile)).toBe(0);
   });
 });
 
