@@ -166,10 +166,15 @@ def public_feed_caption(facts: PublicFeedFacts) -> str:
 
 
 def public_feed_markup(
-    settings: Settings, facts: PublicFeedFacts, proof_url: str
+    settings: Settings,
+    facts: PublicFeedFacts,
+    proof_url: str,
+    referral_code: str | None = None,
 ) -> InlineKeyboardMarkup:
     username = settings.bot_username.strip().lstrip("@")
     start = "duel" if facts.event_kind.startswith("duel_") else "bank"
+    if facts.event_kind.endswith("_payout") and referral_code:
+        start = f"ref_{referral_code}"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [

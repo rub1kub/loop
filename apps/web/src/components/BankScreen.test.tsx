@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BankScreen } from '../features/bank/BankScreen';
-import type { BankPosition, Profile } from '../types';
+import type { BankPosition, BankQueuePulse, Profile } from '../types';
 
 vi.mock('@tonconnect/ui-react', () => ({
   useTonConnectUI: () => [{ openModal: vi.fn() }],
@@ -60,6 +60,14 @@ const position: BankPosition = {
   completed_at: null,
 };
 
+const queuePulse: BankQueuePulse = {
+  active_positions: 124,
+  minimum_entry_nano: 1_000_000_000,
+  minimum_entry_payouts: 2,
+  next_payout_gross_nano: 288_888_889,
+  updated_at: '2026-08-10T12:00:00.000Z',
+};
+
 describe('BankScreen', () => {
   afterEach(cleanup);
 
@@ -68,6 +76,7 @@ describe('BankScreen', () => {
       <BankScreen
         profile={profile}
         position={null}
+        queuePulse={queuePulse}
         pulse={null}
         onRefresh={vi.fn()}
         onMockCreated={vi.fn()}
@@ -76,9 +85,9 @@ describe('BankScreen', () => {
 
     const action = screen.getByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ' });
     expect(action).toBeVisible();
-    // The empty state carries no copy of its own: the metrics and the action
-    // say everything it needs to. The payout warning is not dropped, it lives
-    // where the user actually commits money — see the multiplier step below.
+    expect(screen.getByText('Следующий вход закроет 2 позиции')).toBeVisible();
+    // The payout warning is not dropped, it lives where the user actually
+    // commits money — see the multiplier step below.
     expect(screen.queryByRole('heading', { name: /очередь/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/не гарантирована/)).not.toBeInTheDocument();
     expect(screen.queryByTestId('bank-sand-level')).not.toBeInTheDocument();
@@ -89,6 +98,7 @@ describe('BankScreen', () => {
       <BankScreen
         profile={profile}
         position={position}
+        queuePulse={queuePulse}
         pulse={{ active_participants: 8, active_bank: 5, active_duels: 3, proofs_24h: 4 }}
         onRefresh={vi.fn()}
         onMockCreated={vi.fn()}

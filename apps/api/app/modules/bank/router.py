@@ -14,9 +14,11 @@ from ...schemas import (
     BankPositionQuoteRequest,
     BankPositionQuoteResponse,
     BankPositionView,
+    BankQueuePulseView,
 )
 from ...ton import TonProviderError, explorer_transaction_url
 from .models import BankPayout, BankPosition, BankPositionStatus
+from .pulse import bank_queue_pulse
 
 router = APIRouter(
     prefix="/bank",
@@ -498,6 +500,11 @@ async def discard_unfunded_position(
 @router.get("/limits", response_model=BankLimitView)
 async def limits(db: Db, settings: Config) -> BankLimitView:
     return await bank_limit(db, settings)
+
+
+@router.get("/pulse", response_model=BankQueuePulseView)
+async def pulse(db: Db, settings: Config) -> BankQueuePulseView:
+    return await bank_queue_pulse(db, settings)
 
 
 @router.get("/positions/current", response_model=BankPositionView | None)

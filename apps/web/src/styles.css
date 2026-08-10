@@ -729,6 +729,42 @@ summary:focus-visible .disclosure-indicator {
   line-height: 1.45;
 }
 
+.bank-live-pulse {
+  display: flex;
+  max-width: 330px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.bank-live-pulse i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 8%);
+  animation: bank-pulse 2.4s var(--ease-apple) infinite;
+}
+
+@keyframes bank-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .bank-state .primary-button {
   margin-top: 14px;
 }

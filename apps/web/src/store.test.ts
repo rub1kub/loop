@@ -7,6 +7,15 @@ const apiMocks = vi.hoisted(() => ({
   me: vi.fn(),
   prelaunch: vi.fn(),
   currentBankPosition: vi.fn(() => Promise.resolve(null)),
+  bankPulse: vi.fn(() =>
+    Promise.resolve({
+      active_positions: 0,
+      minimum_entry_nano: 1_000_000_000,
+      minimum_entry_payouts: 0,
+      next_payout_gross_nano: 0,
+      updated_at: '2026-08-10T12:00:00.000Z',
+    }),
+  ),
   bankPositions: vi.fn(() => Promise.resolve([])),
   offers: vi.fn(() => Promise.resolve([])),
   duels: vi.fn(() => Promise.resolve([])),

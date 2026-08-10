@@ -5,6 +5,7 @@ import type {
   ActionIntent,
   ChallengePreview,
   BankPosition,
+  BankQueuePulse,
   BankPreview,
   BankQuote,
   BankLimit,
@@ -112,6 +113,14 @@ const bankPositionSchema = z.object({
   proof_url: z.string().nullable(),
   created_at: z.string(),
   completed_at: z.string().nullable(),
+});
+
+const bankQueuePulseSchema = z.object({
+  active_positions: z.number(),
+  minimum_entry_nano: z.number(),
+  minimum_entry_payouts: z.number(),
+  next_payout_gross_nano: z.number(),
+  updated_at: z.string(),
 });
 
 const resultCardSchema = z.object({
@@ -352,6 +361,10 @@ export const api = {
 
   async bankLimits(): Promise<BankLimit> {
     return await request('/bank/limits');
+  },
+
+  async bankPulse(): Promise<BankQueuePulse> {
+    return bankQueuePulseSchema.parse(await request<unknown>('/bank/pulse'));
   },
 
   async results(): Promise<ResultCard[]> {

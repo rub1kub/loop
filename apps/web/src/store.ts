@@ -9,6 +9,7 @@ import {
 } from './telegram';
 import type {
   BankPosition,
+  BankQueuePulse,
   Duel,
   Invite,
   Offer,
@@ -121,6 +122,14 @@ const demoBank: BankPosition = {
   proof_url: 'https://testnet.tonviewer.com/transaction/demo-bank-funding',
   created_at: new Date(now - 2 * 86_400_000).toISOString(),
   completed_at: null,
+};
+
+const demoBankPulse: BankQueuePulse = {
+  active_positions: 124,
+  minimum_entry_nano: 1_000_000_000,
+  minimum_entry_payouts: 2,
+  next_payout_gross_nano: 288_888_889,
+  updated_at: new Date(now).toISOString(),
 };
 
 const demoOffer: Offer = {
@@ -349,6 +358,7 @@ interface LoopState {
   profile: Profile | null;
   prelaunch: Prelaunch | null;
   bankPosition: BankPosition | null;
+  bankPulse: BankQueuePulse | null;
   bankHistory: BankPosition[];
   offers: Offer[];
   duels: Duel[];
@@ -380,6 +390,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   profile: null,
   prelaunch: null,
   bankPosition: null,
+  bankPulse: null,
   bankHistory: [],
   offers: [],
   duels: [],
@@ -433,6 +444,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         set({
           profile: demoProfile,
           bankPosition: empty ? null : demoBank,
+          bankPulse: demoBankPulse,
           bankHistory: empty ? [] : [demoBank],
           offers:
             mockScreen === 'duel-matchmaking' ||
@@ -460,14 +472,16 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         set({ profile, prelaunch: await api.prelaunch(), loading: false });
         return;
       }
-      const [bankPosition, bankHistory, offers, duels, rating, results] = await Promise.all([
-        api.currentBankPosition(),
-        api.bankPositions(),
-        api.offers(),
-        api.duels(),
-        api.rating().catch(() => null),
-        api.results(),
-      ]);
+      const [bankPosition, bankPulse, bankHistory, offers, duels, rating, results] =
+        await Promise.all([
+          api.currentBankPosition(),
+          api.bankPulse(),
+          api.bankPositions(),
+          api.offers(),
+          api.duels(),
+          api.rating().catch(() => null),
+          api.results(),
+        ]);
       let invite: Invite | null = null;
       let challengeOfferId: number | null = null;
       // A shared duel now carries the sharer's referral at the end, after
@@ -487,6 +501,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         profile,
         challengeOfferId,
         bankPosition,
+        bankPulse,
         bankHistory,
         offers,
         duels,
@@ -508,18 +523,21 @@ export const useLoopStore = create<LoopState>((set, get) => ({
   async refresh() {
     if (isMockTelegram()) return;
     const requestId = ++refreshRequestId;
-    const [profile, bankPosition, bankHistory, offers, duels, results] = await Promise.all([
-      api.me(),
-      api.currentBankPosition(),
-      api.bankPositions(),
-      api.offers(),
-      api.duels(),
-      api.results(),
-    ]);
+    const [profile, bankPosition, bankPulse, bankHistory, offers, duels, results] =
+      await Promise.all([
+        api.me(),
+        api.currentBankPosition(),
+        api.bankPulse(),
+        api.bankPositions(),
+        api.offers(),
+        api.duels(),
+        api.results(),
+      ]);
     if (requestId !== refreshRequestId) return;
     set({
       profile,
       bankPosition,
+      bankPulse,
       bankHistory,
       offers,
       duels,

@@ -176,6 +176,14 @@ class BankLimitView(BaseModel):
     double_limit_nano: int = 0
 
 
+class BankQueuePulseView(BaseModel):
+    active_positions: int
+    minimum_entry_nano: int
+    minimum_entry_payouts: int
+    next_payout_gross_nano: int
+    updated_at: datetime
+
+
 class BankContractCall(BaseModel):
     operation: str
     query_id: int

@@ -14,7 +14,14 @@ import {
   newOfferId,
   parseGram,
 } from '../../ton';
-import type { BankLimit, BankPosition, BankPreview, Profile, RatingPulse } from '../../types';
+import type {
+  BankLimit,
+  BankPosition,
+  BankPreview,
+  BankQueuePulse,
+  Profile,
+  RatingPulse,
+} from '../../types';
 
 import { JarBalls } from './JarBalls';
 import { queueNote } from './queueNote';
@@ -44,12 +51,14 @@ const statusCopy: Record<BankPosition['current_status'], string> = {
 export function BankScreen({
   profile,
   position,
+  queuePulse,
   pulse,
   onRefresh,
   onMockCreated,
 }: {
   profile: Profile;
   position: BankPosition | null;
+  queuePulse: BankQueuePulse | null;
   pulse: RatingPulse | null;
   onRefresh: () => Promise<void>;
   onMockCreated: (position: BankPosition) => void;
@@ -289,6 +298,7 @@ export function BankScreen({
   // Other people's deposits move this while the screen is open, so it counts
   // across rather than snapping to the new figure.
   const shownPercent = useCountUp(progressPercent);
+  const pulseCopy = queuePulseCopy(queuePulse);
 
   if (wizard) {
     return (
@@ -476,6 +486,7 @@ export function BankScreen({
         <div className="bank-state bank-active-state">
           <strong>{Math.round(shownPercent)}%</strong>
           <p className="bank-queue-note">{queueNote(ahead, aheadNano, etaSeconds, position)}</p>
+          {pulseCopy && <BankLivePulse copy={pulseCopy} />}
           <div className="bank-cycle-metrics">
             <CycleMetric
               value={position.queue_position ? `#${position.queue_position}` : '—'}
@@ -489,6 +500,7 @@ export function BankScreen({
         </div>
       ) : (
         <div className="bank-state bank-empty-state">
+          {pulseCopy && <BankLivePulse copy={pulseCopy} />}
           <div className="bank-cycle-metrics is-empty">
             <CycleMetric value={pulse?.active_bank ?? '—'} label="В ОЧЕРЕДИ" />
             <CycleMetric value={pulse?.active_participants ?? '—'} label="СЕЙЧАС В LOOP" />
@@ -622,4 +634,29 @@ function CycleMetric({ value, label }: { value: string | number; label: string }
       <small>{label}</small>
     </span>
   );
+}
+
+function BankLivePulse({ copy }: { copy: string }) {
+  return (
+    <div className="bank-live-pulse" aria-live="polite">
+      <i aria-hidden="true" />
+      <span>{copy}</span>
+    </div>
+  );
+}
+
+function queuePulseCopy(pulse: BankQueuePulse | null): string | null {
+  if (!pulse) return null;
+  if (pulse.active_positions === 0) return 'Очередь ждёт первую позицию';
+  if (pulse.minimum_entry_payouts === 1) return 'Следующий вход закроет ближайшую позицию';
+  if (pulse.minimum_entry_payouts > 1) {
+    return `Следующий вход закроет ${pulse.minimum_entry_payouts} ${positionsWord(pulse.minimum_entry_payouts)}`;
+  }
+  return `До ближайшей выплаты — ${formatGram(pulse.next_payout_gross_nano, 3)} GRAM`;
+}
+
+function positionsWord(count: number): string {
+  if (count % 10 === 1 && count % 100 !== 11) return 'позицию';
+  if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) return 'позиции';
+  return 'позиций';
 }

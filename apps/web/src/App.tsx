@@ -247,6 +247,7 @@ export default function App() {
       <BankScreen
         profile={state.profile}
         position={state.bankPosition}
+        queuePulse={state.bankPulse}
         pulse={state.rating?.pulse ?? null}
         onRefresh={() => state.refresh()}
         onMockCreated={(position) => state.setMockBankPosition(position)}

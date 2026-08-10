@@ -6,8 +6,9 @@ from PIL import Image
 from sqlalchemy import func, select
 
 from app.config import get_settings
-from app.models import NotificationOutbox, User
-from app.notification_worker import claim_due, deliver_one
+from app.models import NotificationOutbox, TelegramChatState, User
+from app.modules.bank.models import BankPosition, BankPositionStatus
+from app.notification_worker import claim_due, deliver_one, refresh_bank_pulse_message
 from app.public_feed import (
     KIND_PUBLIC_FEED,
     PublicFeedFacts,
@@ -162,7 +163,7 @@ async def test_public_feed_delivery_is_rich_and_ignores_private_notification_tog
     assert "+1,5 GRAM" in call["caption"]
     assert call["photo"].endswith(f"/{item_id}.jpg?v=1")
     buttons = call["reply_markup"].inline_keyboard[0]
-    assert buttons[0].url == "https://t.me/getloopbot?startapp=duel"
+    assert buttons[0].url.startswith("https://t.me/getloopbot?startapp=ref_")
     assert "transaction" in buttons[1].url
 
     async with app.state.session_factory() as db:
@@ -199,3 +200,64 @@ async def test_public_feed_card_route_serves_only_public_outbox(client, app) -> 
     assert Image.open(io.BytesIO(response.content)).size == (1080, 1080)
     missing = await client.get("/api/v1/public-feed/cards/not-an-id.jpg")
     assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_bank_pulse_is_sent_pinned_and_then_edited(app) -> None:
+    settings = get_settings().model_copy(
+        update={"public_feed_chat_id": -1003933253277, "bot_username": "getloopbot"}
+    )
+    async with app.state.session_factory() as db:
+        position = BankPosition(
+            position_id=930_001,
+            owner_wallet="0:" + "44" * 32,
+            network=settings.ton_network_id,
+            contract_address=settings.bank_contract_address,
+            query_id=930_101,
+            principal_nano=1_000_000_000,
+            multiplier_bps=12_500,
+            target_payout_nano=1_250_000_000,
+            funded_amount_nano=470_000_000,
+            remaining_amount_nano=780_000_000,
+            queue_index=0,
+            current_status=BankPositionStatus.PARTIALLY_FUNDED.value,
+        )
+        db.add(position)
+        await db.commit()
+        position_id = position.id
+
+    class FakeBot:
+        def __init__(self) -> None:
+            self.sent: list[dict] = []
+            self.edited: list[dict] = []
+            self.pinned: list[dict] = []
+
+        async def send_message(self, **kwargs):
+            self.sent.append(kwargs)
+            return SimpleNamespace(message_id=700)
+
+        async def edit_message_text(self, **kwargs):
+            self.edited.append(kwargs)
+
+        async def pin_chat_message(self, **kwargs):
+            self.pinned.append(kwargs)
+
+    bot = FakeBot()
+    await refresh_bank_pulse_message(bot, app.state.session_factory, settings)  # type: ignore[arg-type]
+    assert len(bot.sent) == 1
+    assert len(bot.pinned) == 1
+    assert "закроет ближайшую позицию" in bot.sent[0]["text"]
+
+    async with app.state.session_factory() as db:
+        position = await db.get(BankPosition, position_id)
+        assert position is not None
+        position.remaining_amount_nano = 1_200_000_000
+        await db.commit()
+
+    await refresh_bank_pulse_message(bot, app.state.session_factory, settings)  # type: ignore[arg-type]
+    assert len(bot.edited) == 1
+    assert "До ближайшей выплаты" in bot.edited[0]["text"]
+    async with app.state.session_factory() as db:
+        state = await db.get(TelegramChatState, settings.public_feed_chat_id)
+        assert state is not None
+        assert state.bank_pulse_message_id == 700

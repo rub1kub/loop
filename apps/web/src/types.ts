@@ -239,6 +239,14 @@ export interface BankLimit {
   double_limit_nano: number;
 }
 
+export interface BankQueuePulse {
+  active_positions: number;
+  minimum_entry_nano: number;
+  minimum_entry_payouts: number;
+  next_payout_gross_nano: number;
+  updated_at: string;
+}
+
 export interface Offer {
   id: string;
   onchain_offer_id: number;

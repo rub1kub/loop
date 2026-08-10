@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
@@ -12,7 +13,7 @@ from aiogram.exceptions import (
     TelegramForbiddenError,
     TelegramRetryAfter,
 )
-from aiogram.types import Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from anyio import Path
 from sqlalchemy import select, update
 
@@ -27,7 +28,8 @@ from .duel_notifications import (
     referral_text,
     reveal_reminder_text,
 )
-from .models import NotificationOutbox, ResultCard, User
+from .models import NotificationOutbox, ResultCard, TelegramChatState, User
+from .modules.bank.pulse import bank_queue_pulse, bank_queue_pulse_text
 from .modules.duel.models import Duel, DuelState
 from .public_feed import (
     KIND_PUBLIC_FEED,
@@ -283,6 +285,7 @@ async def deliver_public_feed(
     settings: Settings,
     outbox: NotificationOutbox,
     user: User | None,
+    referral_code: str | None,
 ) -> None:
     try:
         payload = json.loads(outbox.payload_json)
@@ -294,7 +297,7 @@ async def deliver_public_feed(
             caption=public_feed_caption(facts),
             parse_mode="HTML",
             show_caption_above_media=True,
-            reply_markup=public_feed_markup(settings, facts, proof_url),
+            reply_markup=public_feed_markup(settings, facts, proof_url, referral_code),
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
         await update_delivery(
@@ -329,6 +332,86 @@ async def deliver_public_feed(
             state="sent",
             message_id=message.message_id,
         )
+        if facts.event_kind.startswith("bank_"):
+            try:
+                await refresh_bank_pulse_message(bot, session_factory, settings)
+            except Exception as exc:  # noqa: BLE001 - the verified feed event is already delivered
+                logger.warning("bank_pulse_refresh_failed", error=type(exc).__name__)
+
+
+def bank_pulse_markup(settings: Settings) -> InlineKeyboardMarkup:
+    username = settings.bot_username.strip().lstrip("@")
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="ОТКРЫТЬ BANK",
+                    url=f"https://t.me/{username}?startapp=bank",
+                )
+            ]
+        ]
+    )
+
+
+async def refresh_bank_pulse_message(
+    bot: Bot,
+    session_factory: Any,
+    settings: Settings,
+) -> None:
+    """Edit one pinned message instead of flooding the public chat with counters."""
+
+    async with session_factory() as db:
+        pulse = await bank_queue_pulse(db, settings)
+        state = await db.get(TelegramChatState, settings.public_feed_chat_id)
+        message_id = state.bank_pulse_message_id if state else None
+        text = bank_queue_pulse_text(pulse)
+        digest = hashlib.sha256(text.encode()).hexdigest()
+        if state and state.bank_pulse_digest == digest and message_id:
+            return
+
+    markup = bank_pulse_markup(settings)
+    if message_id:
+        try:
+            await bot.edit_message_text(
+                chat_id=settings.public_feed_chat_id,
+                message_id=message_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=markup,
+            )
+        except TelegramBadRequest:
+            message_id = None
+
+    if not message_id:
+        try:
+            sent = await bot.send_message(
+                chat_id=settings.public_feed_chat_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=markup,
+            )
+        except TelegramAPIError as exc:
+            logger.warning("bank_pulse_send_failed", error=type(exc).__name__)
+            return
+        message_id = sent.message_id
+
+    try:
+        await bot.pin_chat_message(
+            chat_id=settings.public_feed_chat_id,
+            message_id=message_id,
+            disable_notification=True,
+        )
+    except TelegramAPIError as exc:
+        logger.warning("bank_pulse_pin_failed", error=type(exc).__name__)
+
+    async with session_factory() as db:
+        state = await db.get(TelegramChatState, settings.public_feed_chat_id)
+        if state is None:
+            state = TelegramChatState(chat_id=settings.public_feed_chat_id)
+            db.add(state)
+        state.bank_pulse_message_id = message_id
+        state.bank_pulse_digest = digest
+        await db.commit()
 
 
 async def deliver_one(
@@ -353,6 +436,9 @@ async def deliver_one(
         elif kind == KIND_PUBLIC_FEED:
             public_outbox = outbox
             public_user = await db.get(User, outbox.user_id)
+            public_referral = (
+                await get_or_create_referral_code(db, outbox.user_id) if public_user else None
+            )
         else:
             payload = None
             card = await db.get(ResultCard, outbox.result_card_id)
@@ -370,7 +456,12 @@ async def deliver_one(
         return
     if kind == KIND_PUBLIC_FEED:
         await deliver_public_feed(
-            bot, session_factory, settings, public_outbox, public_user
+            bot,
+            session_factory,
+            settings,
+            public_outbox,
+            public_user,
+            public_referral.code if public_referral else None,
         )
         return
     if card is None or user is None:

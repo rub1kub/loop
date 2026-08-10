@@ -251,6 +251,16 @@ class ApplicationControl(Base):
     )
 
 
+class TelegramChatState(Base):
+    __tablename__ = "telegram_chat_state"
+    chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    bank_pulse_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    bank_pulse_digest: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
 class ContractControl(Base):
     __tablename__ = "contract_control"
     key: Mapped[str] = mapped_column(String(160), primary_key=True)
