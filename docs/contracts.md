@@ -1,26 +1,28 @@
 # Contracts and reproducible verification
 
-Both contracts are built from Tolk sources with Acton and deployed independently on TON testnet.
+Both contracts are built from Tolk sources with Acton and deployed independently on TON mainnet.
 
-| Contract   | Address                                                                                         | Code hash         |  Fee |
-| ---------- | ----------------------------------------------------------------------------------------------- | ----------------- | ---: |
-| BankQueue  | [`kQCq…50Il3`](https://testnet.tonviewer.com/kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3)  | `BA0A33E5…1FB3E2` |   1% |
-| DuelEscrow | [`kQD7…w4lg3M`](https://testnet.tonviewer.com/kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M) | `5BDAED2F…3C17FB` | 2.5% |
+| Contract   | Address                                                                                | Code hash         | Fee |
+| ---------- | -------------------------------------------------------------------------------------- | ----------------- | --: |
+| BankQueue  | [`EQDn…Ht8Mn`](https://tonviewer.com/EQDnfQuYXg2V-IyQ39L9qmkiCYKgNra7s3QZhADvaLQHt8Mn) | `5F6E4DD8…EF834`  | 10% |
+| DuelEscrow | [`EQBN…YogMv`](https://tonviewer.com/EQBN4TO22cyYn15CHhwwbp6zazZaAGYWMG5f_Jr8yotYogMv) | `E934E407…2F4B3A` | 10% |
 
 Complete addresses, code/data hashes, deployment transaction, logical time, compiler version,
-parameters, opcodes and getters are committed in `deployments/testnet/bank.json` and
-`deployments/testnet/duel.json`. Mutable live fields such as balance, locked value and pause state
+parameters, opcodes and getters are committed in `deployments/mainnet/bank.json` and
+`deployments/mainnet/duel.json`. Mutable live fields such as balance, locked value and pause state
 must be read from the network rather than treated as constants from a deployment manifest.
 
 ## Verification
 
 ```bash
 make contracts-build
-make contracts-verify
-make contracts-inspect
+make contracts-mainnet-verify
+acton script --net mainnet scripts/verify-mainnet-state.tolk \
+  "$(jq -r .address deployments/mainnet/bank.json)" \
+  "$(jq -r .address deployments/mainnet/duel.json)"
 ```
 
-`contracts-verify` fails unless:
+`contracts-mainnet-verify` fails unless:
 
 - the local build hash equals the manifest;
 - the live account is active;
@@ -29,8 +31,8 @@ make contracts-inspect
 - the transaction has masterchain finality.
 - when a manifest contains `verified_smoke`, the recorded BANK or DUEL smoke has the expected
   distinct senders, values, message bodies, fees, payouts and masterchain finality;
-- BANK v1.3 reports the finalized completion counter and current principal limit;
-- DUEL v1.3 reports the pinned network global ID, self-address and invite signer public key.
+- BANK reports the finalized completion counter and current principal limit;
+- DUEL reports the pinned network global ID, self-address and invite signer public key.
 
 The BANK manifest now contains a finalized two-wallet deposit → payout proof: both create messages,
 both protocol fees, the 1.25 GRAM payout and the remaining second position are independently
@@ -56,7 +58,8 @@ Pausing blocks new activity but never blocks user recovery paths. Current owner 
 - fee and treasury changes while paused;
 - ownership transfer while paused.
 
-The contracts reserve all locked user value plus at least `0.2 GRAM`; no administrative message can
-withdraw through that boundary. DUEL refuses a fee change while any stake is locked. A new financial
-rule, invite signer rotation or code change still requires a new audited address and manifest; the
-backend is not allowed to emulate a contract payout rule.
+DUEL reserves all locked user value plus at least `0.2 GRAM` and refuses a fee change while a stake
+is locked. BANK intentionally permits the owner to withdraw everything above `0.2 GRAM`, including
+funding expected by open positions; the risk is disclosed in `docs/no-audit-disclosure.md`. A new
+financial rule, invite signer rotation or code change still requires a new address and manifest;
+the backend is not allowed to emulate a contract payout rule.

@@ -28,7 +28,9 @@ randomness.
 Both current contracts expose explicit owner commands for pause, reserve funding, bounded surplus
 withdrawal, fee/treasury changes and ownership transfer. Configuration changes require a paused
 contract. DUEL additionally requires zero locked stakes before changing its fee. A withdrawal can
-only target the configured treasury and cannot cross `locked + 0.2 GRAM` retained on the contract.
+only target the configured treasury. DUEL cannot cross `locked + 0.2 GRAM`; BANK intentionally
+protects only the `0.2 GRAM` retained reserve, so its owner can withdraw funding expected by open
+positions. This BANK authority is disclosed as a product risk.
 
 ## Chain worker
 
@@ -53,13 +55,14 @@ Each projection checks contract address, message direction, sender, value, opcod
 
 ## Known limits
 
-- The published project is testnet-only and has not received the independent audit required by the
-  mainnet gate.
-- Automated checks reduce known implementation risk; they are not proof that no vulnerability
-  exists. Mainnet remains fail-closed until an independent reviewer audits the exact release commit.
+- The published project is active on mainnet without an independent external audit. Automated
+  checks reduce known implementation risk; they are not proof that no vulnerability exists.
 - The immutable direct-invite signer cannot be rotated in place; suspected key compromise requires pausing new activity and deploying a new contract after all recovery paths clear.
 - Referral anti-abuse prevents direct self-referral and duplicate qualification but cannot prove two Telegram accounts are unrelated people.
-- PLUSH BRICK is a mainnet Jetton while contracts are testnet, so holder ownership is proven off chain: the backend checks the balance against the Jetton master and signs a permit the contract verifies. A compromised backend or provider can therefore waive protocol fees, but cannot reach user stakes or change an outcome. Fee-exempt settlements are exported as metrics so unexplained volume is visible.
+- PLUSH BRICK holder ownership is proven off chain: the backend checks the mainnet balance against
+  the Jetton master and signs a permit the DUEL contract verifies. A compromised backend or
+  provider can therefore waive protocol fees, but cannot reach user stakes or change an outcome.
+  Fee-exempt settlements are exported as metrics so unexplained volume is visible.
 - BANK depends entirely on later deposits; a stalled queue is expected behavior, not a solvency guarantee.
 - Ownership transfer is intentionally powerful and immediate; the browser requires an explicit confirmation, but the final authority is the owner-signed contract message.
 

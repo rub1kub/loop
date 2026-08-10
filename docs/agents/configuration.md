@@ -121,6 +121,11 @@ Debug progress меняет только API-представление акти
 | `LOOP_DUEL_CANARY_ALERT_BALANCE_NANO` | alert threshold                         |
 
 Canary aliases хранятся в защищённом Acton store и не описываются mnemonic в environment.
+Для mainnet этот store находится только на защищённой машине оператора: VPS не получает ключи и
+не запускает `loop-duel-canary.timer`. VPS принимает доказательство завершённой транзакции через
+internal API, а `loop-duel-monitor.timer` следит за его возрастом и балансами. Текущее рабочее окно
+mainnet — `2678400` секунд (31 день); новый canary запускается вручную до истечения окна и после
+изменения DUEL-контракта, signer domain или сетевой конфигурации.
 
 ## PLUSH BRICK
 
@@ -132,8 +137,9 @@ Canary aliases хранятся в защищённом Acton store и не оп
 | `LOOP_HOLDER_MIN_BALANCE_NANO`   | порог статуса holder                             |
 | `LOOP_PLUSH_BRICK_FEE_BPS`       | зарезервированный параметр, runtime discount off |
 
-Проверка PLUSH отделена от пользовательской testnet-сети. Текущий API всегда сообщает
-`fee_discount_active=false`, потому что DuelEscrow имеет одну глобальную комиссию.
+Проверка PLUSH выполняется в mainnet. API выдаёт address-bound holder permit только когда
+`LOOP_DUEL_HOLDER_FEE_ENABLED=true`, а startup подтвердил поддержку этой схемы живым DUEL
+bytecode. Без обеих проверок скидка закрыта.
 
 ## Web build
 

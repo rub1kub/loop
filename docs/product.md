@@ -1,14 +1,17 @@
 # Product
 
-LOOP is a Telegram Mini App with two deliberately independent testnet modes.
+LOOP is a Telegram Mini App with two deliberately independent mainnet modes.
 
 ## BANK
 
-BANK is a transparent simulation of a FIFO financial pyramid. A user contributes test GRAM and selects a 1.25×, 1.5× or 2× target. Each later contribution first pays the oldest unfinished position, then continues through the queue. There is no yield source, guarantee or DUEL subsidy. If contributions stop, payouts stop.
+BANK is a transparent FIFO financial pyramid. A user contributes GRAM and selects a 1.25×, 1.5×
+or 2× target within the current limit. Each later contribution first fills the oldest unfinished
+position, then continues through the queue. There is no yield source, guarantee or DUEL subsidy.
+If contributions stop, payouts stop.
 
 ## DUEL
 
-DUEL is an equal 50/50 two-player challenge. A player chooses a test-GRAM stake and the
+DUEL is an equal 50/50 two-player challenge. A player chooses a GRAM stake and the
 counterparty contributes the same amount. Commit–reveal prevents either player or the backend
 from selecting the result after matching. Timeouts preserve permissionless recovery. The
 deployed escrow retains legacy 25/75 decoding only so older funded invitations can finish safely.
@@ -45,6 +48,6 @@ LOOP has no wallet creation, portfolio, internal balance or custody. A wallet co
 
 ## Network boundary
 
-The published release accepts financial actions only on TON testnet (`-3`). Mainnet (`-239`) is
-compiled but remains fail-closed until the audited release, live contract proofs and explicit
-production switches all match. The browser demo never broadcasts transactions.
+The published release accepts financial actions on TON mainnet (`-239`) only when the configured
+addresses, code hashes and release evidence match. Historical testnet (`-3`) deployments remain
+available to contract tests. The browser landing page never broadcasts transactions.

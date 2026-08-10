@@ -2,8 +2,7 @@
 
 ## Граница TON
 
-Текущий пользовательский runtime LOOP работает с TON testnet, global ID `-3`. Код также
-поддерживает mainnet `-239`, но этот путь закрыт evidence gate и не активирован. Пользователь
+Текущий пользовательский runtime LOOP работает в TON mainnet, global ID `-239`. Пользователь
 подписывает действия внешним кошельком через TON Connect. Backend не имеет пользовательских
 ключей и не может подписать финансовую транзакцию вместо пользователя.
 
@@ -12,51 +11,49 @@
 
 ## Активные deployments
 
-| Контракт   | Version | Address                                            | Code hash                                                          | Fee  |
-| ---------- | ------- | -------------------------------------------------- | ------------------------------------------------------------------ | ---- |
-| BankQueue  | 1.3.0   | `kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3` | `BA0A33E5D7A39358732E89720981EA421374A453AAF5B44C552569C5C71FB3E2` | 1%   |
-| DuelEscrow | 1.3.0   | `kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M` | `5BDAED2F56EF9F51B33F0B388EF7B31DDE843961D23876A16243BA06D53C17FB` | 2.5% |
+| Контракт   | Version | Address                                            | Code hash                                                          | Fee |
+| ---------- | ------- | -------------------------------------------------- | ------------------------------------------------------------------ | --- |
+| BankQueue  | 1.4.0   | `EQDnfQuYXg2V-IyQ39L9qmkiCYKgNra7s3QZhADvaLQHt8Mn` | `5F6E4DD83A7A38E4486B7A9C5C649B18CDE35093B7E53C6905BEF2DCD8DEF834` | 10% |
+| DuelEscrow | 1.5.0   | `EQBN4TO22cyYn15CHhwwbp6zazZaAGYWMG5f_Jr8yotYogMv` | `E934E407353B47FE20F1874A4A8DEB6A0E5CAE7D08407CF927DC34ABDB2F4B3A` | 10% |
 
 Explorer:
 
-- [BankQueue](https://testnet.tonviewer.com/kQCqjhisqfxDrsPOEMWFE6AI1OWBtIQy_VVfXZU25zD50Il3)
-- [DuelEscrow](https://testnet.tonviewer.com/kQD7JaRbyRrkGFzk9Xk3rfpRqNBSAUF2T-kXxfDlXYw4lg3M)
+- [BankQueue](https://tonviewer.com/EQDnfQuYXg2V-IyQ39L9qmkiCYKgNra7s3QZhADvaLQHt8Mn)
+- [DuelEscrow](https://tonviewer.com/EQBN4TO22cyYn15CHhwwbp6zazZaAGYWMG5f_Jr8yotYogMv)
 
-Owner и treasury обоих deployments — публичный адрес
-`kQC820tGBtPVavhCbFZHnFavQObnCLitBKlGaEZ6-eyQTIY6`.
+Owner обоих deployments — `EQBwDl1aiPL8-Yx2a1VJgkapvFIZGUB5dViMJSNnpYxzI1w8`, treasury —
+`EQBQlkBiBOwKHFGmAVgBs3gaOuPRWJ1xlXRkBMxTQafUKRXN`.
 
 Полные deployment transaction, LT, initial data hash, toolchain и getters находятся в:
 
-- `deployments/testnet/bank.json`;
-- `deployments/testnet/duel.json`.
+- `deployments/mainnet/bank.json`;
+- `deployments/mainnet/duel.json`.
 
 Manifest доказывает развёртывание и начальную конфигурацию. Он не является live state для
 `locked`, balance, paused, fee, owner или treasury.
 
-Поле `source_commit=21e604…` в testnet manifests — commit, из которого был собран неизменившийся
-bytecode контрактов. Оно не обязано совпадать с более новым application runtime commit
-`fc9f786…`: verifier отдельно доказывает, что текущая локальная сборка всё ещё имеет тот же code
-hash.
+Поле `source_commit=9cba342…` — commit проверенной сборки контрактов. Оно не обязано совпадать с
+более новым application runtime commit: verifier отдельно доказывает совпадение bytecode.
 
 ## BankQueue 1.4.0
 
 ### Константы
 
-| Параметр                | Значение                      |
-| ----------------------- | ----------------------------- |
-| minimum principal       | `1 GRAM`                      |
-| initial principal limit | `5 GRAM`                      |
-| maturity thresholds     | `10 @ 25`, `15 @ 100` GRAM    |
-| later expansion         | `+5 GRAM / 250 completions`   |
-| absolute limit          | `100 GRAM`                    |
-| multiplier              | `12500`, `15000`, `20000` bps |
-| максимальная fee        | `1000 bps`                    |
-| текущая fee             | `100 bps`                     |
-| create gas buffer       | `0.08 GRAM`                   |
-| admin minimum gas       | `0.02 GRAM`                   |
-| withdraw gas buffer     | `0.05 GRAM`                   |
-| retained reserve        | `0.2 GRAM`                    |
-| max allocation steps/tx | `81`                          |
+| Параметр                | Значение                               |
+| ----------------------- | -------------------------------------- |
+| minimum principal       | `1 GRAM`                               |
+| initial principal limit | `1 GRAM`                               |
+| maturity ladder         | `1,2,3,5,7,10,15,20,30,50,75,100 GRAM` |
+| expansion rule          | ступень `N` после `5 × N` выплат       |
+| absolute limit          | `100 GRAM`                             |
+| multiplier              | `12500`, `15000`, `20000` bps          |
+| максимальная fee        | `1000 bps`                             |
+| текущая fee             | `1000 bps`                             |
+| create gas buffer       | `0.08 GRAM`                            |
+| admin minimum gas       | `0.02 GRAM`                            |
+| withdraw gas buffer     | `0.05 GRAM`                            |
+| retained reserve        | `0.2 GRAM`                             |
+| max allocation steps/tx | `81`                                   |
 
 ### Формулы
 
@@ -145,7 +142,7 @@ Getters: `contractConfig`, `queueData`, `positionData`, `activePosition`, `admin
 | boost range              | `1000–9000` bps                 |
 | minimum boost            | `0.1 GRAM`                      |
 | boost / extension / cap  | `60 / 20 / 180` секунд          |
-| текущая fee              | `250 bps`                       |
+| текущая fee              | `1000 bps`                      |
 | open gas buffer          | `0.05 GRAM`                     |
 | action/admin minimum gas | `0.02 GRAM`                     |
 | withdraw gas buffer      | `0.05 GRAM`                     |
@@ -169,10 +166,9 @@ payout   = stake_A + stake_B − fee
 Для нового матча оба начинают с половины pool. После каждого boost оба offers получают новый
 итоговый pool/chance; `locked` увеличивается ровно на подтверждённую сумму.
 
-### Holder fee exemption (v1.4)
+### Holder fee exemption
 
-Локальный source репозитория — DuelEscrow **1.4.0**; testnet deployment остаётся 1.3.0 до
-следующего явного broadcast. v1.4 добавляет:
+Механика появилась в v1.4 и входит в активный mainnet DuelEscrow **1.5.0**:
 
 - `HolderFeePermit { validUntil, signature }` — опциональный maybe-ref в конце `OpenOffer`,
   `OpenDirectOffer` и `AcceptDirectOffer`;
@@ -320,23 +316,36 @@ DUEL manifest содержит masterchain-finalized доказательств�
 direct pair → boost → reveal → settlement. Verifier декодирует boost context, читает mutable
 `locked` из сети и проверяет покрытие обязательств резервом.
 
-## Проверка сети 2026-07-26 16:32 UTC
+## Проверка сети 2026-08-10
 
-`scripts/verify-contracts.py --network testnet --require-smoke` показал:
+Mainnet-манифесты содержат финализированные deployment и smoke proofs. Рабочая PostgreSQL-проекция
+на момент снимка видела `110` завершённых DUEL, `220` завершённых offers и `180` выплат BANK.
+Это оперативные числа, а не константы; перед финансовым действием повторно читай getters и сеть.
 
-- BankQueue v1.3 active, `completedPositions=1`, `principalLimit=5 GRAM`,
-  `lockedFunding=0.73 GRAM`, live balance `1.417633799 GRAM`, reserve covered.
-- DuelEscrow v1.3 active, active offers/duels пусты, `locked=0`.
-- BANK limit smoke принял ровно 5 GRAM при стартовом лимите.
-- BANK two-wallet smoke подтвердил два deposits, две fees и payout `1.25 GRAM`; остаток второго
-  contributor стал текущей активной позицией и не является surplus.
-- DUEL smoke открыл и отменил offer с полным возвратом.
-- Двухкошельковый canary подтвердил boost `0.1 GRAM`, шанс `54.54%`, реальный deadline,
-  settlement и masterchain finality.
+Проверка выполняется так:
+
+```bash
+acton build
+.venv/bin/python scripts/verify-contracts.py --network mainnet --require-smoke
+.venv/bin/python scripts/check-mainnet-readiness.py --phase post-deploy
+```
+
+Живой двухкошельковый DUEL canary использует отдельные mainnet aliases, делает fork rehearsal,
+после явного разрешения выполняет open → accept → boost → reveal → settlement и передаёт API
+только финализированный hash. Сервис не должен подменять mainnet-адреса testnet-адресами.
+
+Последний операторский прогон подтверждён 2026-08-10: duel `8500172769228737`, settlement
+[`7a104273…58cd2`](https://tonviewer.com/transaction/7a104273738bd365126c071e5aa5dcef573ab4b5897537acb26325421bc58cd2),
+LT `95909397000001`, masterchain seqno `85257810`. Mainnet keys не хранятся на VPS: там работает
+только проверка доказательства и монитор возраста.
 
 Полный операционный снимок: [current-state.md](current-state.md).
 
 ## Предыдущие контракты
+
+Полный список testnet deployments сохранён в `deployments/testnet/` как история и тестовая база;
+он не является пользовательским runtime. Снятый mainnet BANK сохранён в
+`deployments/mainnet/bank.v1.4.0-2026-08-01.json`.
 
 - Previous BankQueue v1.2:
   `kQAQRNh3sG80ykjME39tnWnfswnjCDcRtrrCDOQP4jv4FL_y`, paused, `locked=0`.
@@ -367,7 +376,8 @@ Canary использует две заранее созданные изоли�
 
 Canary не создаёт кошельки автоматически, не использует user wallets и не запускается в CI.
 Testnet faucet запрашивается только ниже заданного balance floor; mainnet никогда не вызывает
-faucet и требует отдельного явного разрешения. Private material остаётся в защищённом Acton store.
+faucet и требует отдельного явного разрешения. Mainnet private material остаётся на защищённой
+машине оператора, а серверный `loop-duel-canary.timer` отключён.
 
 ## Изменение контракта
 

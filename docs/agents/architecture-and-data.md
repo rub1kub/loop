@@ -182,15 +182,21 @@ Browser и API не могут выполнить admin действие без 
 
 ### Control
 
-| Method   | Path                    | Назначение                                 |
-| -------- | ----------------------- | ------------------------------------------ |
-| `POST`   | `/control/challenge`    | owner TON proof payload                    |
-| `POST`   | `/control/session`      | создать owner cookie                       |
-| `GET`    | `/control/session`      | проверить session                          |
-| `DELETE` | `/control/session`      | logout                                     |
-| `GET`    | `/control/overview`     | intake, metrics, live contracts и audit    |
-| `PATCH`  | `/control/application`  | maintenance/BANK/DUEL intake               |
-| `POST`   | `/control/transactions` | подготовить owner-signed admin transaction |
+| Method   | Path                                         | Назначение                                 |
+| -------- | -------------------------------------------- | ------------------------------------------ |
+| `POST`   | `/control/challenge`                         | owner TON proof payload                    |
+| `POST`   | `/control/session`                           | создать owner cookie                       |
+| `GET`    | `/control/session`                           | проверить session                          |
+| `DELETE` | `/control/session`                           | logout                                     |
+| `GET`    | `/control/overview`                          | intake, metrics, live contracts и audit    |
+| `GET`    | `/control/participants`                      | участники и подтверждённая статистика      |
+| `GET`    | `/control/analytics`                         | серверная воронка и динамика 7/30/90 дней  |
+| `GET`    | `/control/referral-payouts`                  | очередь реферальных выплат                 |
+| `POST`   | `/control/referral-payouts/{id}/transaction` | перевод из live BANK treasury              |
+| `POST`   | `/control/referral-payouts/{id}/confirm`     | проверка BOC, суммы и финальности TON      |
+| `POST`   | `/control/referral-payouts/{id}/reject`      | отклонить ещё не подписанную заявку        |
+| `PATCH`  | `/control/application`                       | maintenance/BANK/DUEL intake               |
+| `POST`   | `/control/transactions`                      | подготовить owner-signed admin transaction |
 
 ### Result cards
 
@@ -211,24 +217,25 @@ Browser и API не могут выполнить admin действие без 
 
 ## PostgreSQL
 
-Текущая Alembic head: `20260810_0020`.
+Текущая Alembic head: `20260810_0021`.
 
 ### Shared
 
-| Таблица                 | Назначение                                           |
-| ----------------------- | ---------------------------------------------------- |
-| `users`                 | Telegram identity и onboarding                       |
-| `auth_exchanges`        | одноразовый digest принятого initData                |
-| `wallets`               | доказанные адреса, один active wallet на user        |
-| `referral_codes`        | один код на owner user                               |
-| `referral_attributions` | один inviter edge на invitee и qualification         |
-| `referral_rewards`      | legacy/product reward history                        |
-| `chain_checkpoints`     | per-contract last LT и heartbeat                     |
-| `application_control`   | durable intake switches                              |
-| `contract_control`      | последняя проверенная admin-конфигурация контракта   |
-| `admin_audit_events`    | prepared/applied/confirmed административные действия |
-| `result_cards`          | неизменяемые факты подтверждённых BANK/DUEL выплат   |
-| `notification_outbox`   | одна попытка личной доставки на карточку             |
+| Таблица                    | Назначение                                            |
+| -------------------------- | ----------------------------------------------------- |
+| `users`                    | Telegram identity и onboarding                        |
+| `auth_exchanges`           | одноразовый digest принятого initData                 |
+| `wallets`                  | доказанные адреса, один active wallet на user         |
+| `referral_codes`           | один код на owner user                                |
+| `referral_attributions`    | один inviter edge на invitee и qualification          |
+| `referral_rewards`         | начисления, reservation request и proof выплаты       |
+| `referral_payout_requests` | фиксированная очередь request → signature → TON proof |
+| `chain_checkpoints`        | per-contract last LT и heartbeat                      |
+| `application_control`      | durable intake switches                               |
+| `contract_control`         | последняя проверенная admin-конфигурация контракта    |
+| `admin_audit_events`       | prepared/applied/confirmed административные действия  |
+| `result_cards`             | неизменяемые факты подтверждённых BANK/DUEL выплат    |
+| `notification_outbox`      | одна попытка личной доставки на карточку              |
 
 ### Teams bounded context
 

@@ -321,7 +321,7 @@ CLI diagnostics после локальной настройки:
 
 ## Актуальное production-состояние
 
-- Проверенный runtime commit на снимке 2026-07-26: `fc9f786d4954ab538bf095c0518064ac5dc57516`.
+- Проверенный runtime commit фиксируется после каждого выпуска в [current-state.md](current-state.md).
 - Production delivery выполняется напрямую через `scripts/deploy-vps.sh`, без GitHub Actions.
 - Активные адреса и проверяемые данные находятся только в `deployments/<network>/`.
 - Release и web release должны указывать на один Git SHA после полного выпуска.

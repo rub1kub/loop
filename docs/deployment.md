@@ -1,8 +1,9 @@
 # Deployment and operations
 
 The published environment uses Docker Compose behind Apache and nginx at `app.tonsuite.org`.
-The active release is testnet-only. Mainnet support exists behind an evidence gate and is not
-active.
+The active financial runtime is TON mainnet (`-239`) and is bound to the addresses and code hashes
+in `deployments/mainnet/`. Historical testnet manifests are retained for tests and incident
+analysis, not used for user transactions.
 
 ## Required configuration
 
@@ -110,10 +111,11 @@ ALLOW_TESTNET_DEPLOY=1 LOOP_DUEL_INVITE_PUBLIC_KEY=<64-hex-public-key> \
 After any deployment, update the relevant manifest and environment hash, run
 `make contracts-verify`, then release the application.
 
-### Mainnet release gate
+### Mainnet contract release gate
 
-Mainnet remains blocked until a specific clean `main` commit has an independent audit report.
-Create `deployments/mainnet/release.json` from the example and run:
+Any new mainnet deployment or contract switch remains blocked until a specific clean `main`
+commit has the required release evidence. Create `deployments/mainnet/release.json` from the
+example and run:
 
 ```bash
 make contracts-mainnet-technical
@@ -187,8 +189,11 @@ acton wallet list --balance
 ```
 
 The faucet is testnet-only and rate-limited. The hourly job never creates wallets or handles user
-keys. Mainnet uses the separate `loop-mainnet-canary-a/b` aliases and stays disabled until the
-mainnet release gate is complete.
+keys. Mainnet uses the separate `loop-mainnet-canary-a/b` aliases. Production VPS intentionally
+does not store their signing material: a maintainer runs the real-funds canary from a protected
+workstation, while the VPS only verifies the submitted transaction proof and monitors its age.
+The server-side `loop-duel-canary.timer` therefore remains disabled on mainnet. The monitor stays
+enabled and treats the last verified operator run as fresh for the configured operational window.
 
 ## Backup and recovery
 

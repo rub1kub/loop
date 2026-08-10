@@ -119,7 +119,8 @@ type.
 
 - Используй Tolk + Acton, не backend emulation.
 - Докажи value conservation, replay protection, bounded loops и recovery.
-- Owner не должен выводить locked user value.
+- Для DUEL докажи, что owner не выводит locked user value. Для BANK сохрани намеренное правило:
+  защищён только резерв `0.2 GRAM`, а не `lockedFunding`.
 - Pause не должен выключать recovery.
 - Новый behavior/signer/storage означает новый deployment и manifest.
 - Live broadcast никогда не является неявным шагом теста.
@@ -223,13 +224,14 @@ Wrappers обновляются штатной Acton-командой при и�
 
 Канонический полный список находится в [current-state.md](current-state.md). Кратко:
 
-1. testnet BANK имеет действующее обязательство `0.73 GRAM` после двухкошелькового smoke;
+1. BANK зависит от последующих взносов; owner powers и отсутствие гарантии описаны публично;
 2. profile reward `100` и monthly rating referral score `25` остаются разными счётчиками;
-3. пользовательской browser-версии игры нет: без Telegram доступен только лендинг;
-4. PLUSH BRICK fee-free обещан текстами как mainnet-модель (решение владельца); исполняет
-   DuelEscrow v1.4, buyback остаётся ручным намерением;
-5. mainnet выключен, независимого аудита и deployments нет;
-6. direct-invite signer immutable и меняется только новым deployment.
+3. без Telegram доступен лендинг, а `/control` — отдельная browser-поверхность владельца;
+4. PLUSH BRICK fee-free исполняет DuelEscrow 1.5; первый ручной выкуп и сжигание подтверждены;
+5. mainnet активен, но независимого внешнего аудита контрактов нет;
+6. direct-invite signer immutable и меняется только новым deployment;
+7. mainnet DUEL canary нельзя запускать testnet aliases; выделенные low-value ключи хранятся
+   только на защищённой машине оператора, а VPS проверяет proof и его возраст.
 
 Не исправляй эти пункты попутно в несвязанной задаче. Если задача касается пункта — сначала
 повтори фактическую проверку.

@@ -1,6 +1,6 @@
 # BANK
 
-BANK is an explicit testnet pyramid simulation implemented as a FIFO queue of positions.
+BANK is an explicit mainnet financial pyramid implemented as a FIFO queue of positions.
 
 ## Position math
 
@@ -12,16 +12,25 @@ BANK fee      = floor(P × F / 10,000)
 ```
 
 Supported multipliers are 12,500, 15,000 and 20,000. The minimum principal is 1 GRAM and the
-fee is 1%. The upper limit matures with the queue:
+current fee is 10%. The contract limit matures with the queue:
 
 | Completed positions | Maximum principal |
 | ------------------: | ----------------: |
-|                0–24 |            5 GRAM |
-|               25–99 |           10 GRAM |
-|             100–349 |           15 GRAM |
+|                 0–9 |            1 GRAM |
+|               10–14 |            2 GRAM |
+|               15–24 |            3 GRAM |
+|               25–34 |            5 GRAM |
+|               35–49 |            7 GRAM |
+|               50–74 |           10 GRAM |
+|               75–99 |           15 GRAM |
+|             100–149 |           20 GRAM |
+|             150–249 |           30 GRAM |
+|             250–374 |           50 GRAM |
+|             375–499 |           75 GRAM |
+|                500+ |          100 GRAM |
 
-After that it grows by 5 GRAM every 250 completed positions and stops at 100 GRAM. Only completed
-on-chain payouts move the counter. The attached gas value is not part of the principal.
+Only completed on-chain payouts move the counter. The application may impose a lower cap than the
+live contract. The attached gas value is not part of the principal.
 
 ## Allocation
 
@@ -45,10 +54,12 @@ Older positions always have priority. No distributable value leaves the user cyc
 
 The jar is the primary object. An empty jar explains the FIFO cycle before starting a three-step
 position wizard. An active jar shows BANK progress, the current rank among unfinished
-positions, live active-position count, remaining funding, status and a testnet explorer proof.
+positions, live active-position count, remaining funding, status and a TON explorer proof.
 The absolute on-chain queue index is retained for audit, while the API calculates the
 reader-facing rank from unfinished earlier positions. DUEL financial events remain absent.
 
 ## Risk
 
-There is no underlying return. A target can remain partially funded forever when later deposits stop. An on-chain BANK position has no cancellation or early-refund message; once confirmed, it remains in FIFO order until its target is funded. This is why the public build is testnet-only and presents the mechanism plainly before TON Connect confirmation.
+There is no underlying return. A target can remain partially funded forever when later deposits
+stop. A user cannot cancel a confirmed position; while paused, the owner can refund a selected
+position. The public mainnet build presents this mechanism plainly before TON Connect confirmation.
