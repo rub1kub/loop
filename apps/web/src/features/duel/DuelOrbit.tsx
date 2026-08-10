@@ -1,4 +1,4 @@
-import { ArrowRight, User } from '@phosphor-icons/react';
+import { NavigationArrow, User } from '@phosphor-icons/react';
 import { motion, useReducedMotion } from 'motion/react';
 
 export type DuelOrbitPhase = 'boosting' | 'ready' | 'waiting' | 'won' | 'lost';
@@ -41,8 +41,9 @@ export function DuelOrbit({
   opponentFallback,
   opponentName,
   latestEvent,
-  resultDelta,
+  resultAmount,
   compact = false,
+  setup = false,
 }: {
   mine: number;
   phase: DuelOrbitPhase;
@@ -54,8 +55,9 @@ export function DuelOrbit({
   opponentFallback: string;
   opponentName?: string | null;
   latestEvent?: string | null;
-  resultDelta?: string | null;
+  resultAmount?: string | null;
   compact?: boolean;
+  setup?: boolean;
 }) {
   const reduced = useReducedMotion();
   const share = clampShare(mine);
@@ -76,14 +78,12 @@ export function DuelOrbit({
   const markerX = 100 + Math.cos(markerRadians) * 82;
   const markerY = 100 + Math.sin(markerRadians) * 82;
   const label = settled
-    ? phase === 'won'
-      ? 'Победа: банк твой'
-      : `Поражение: банк ушёл ${opponentName ?? 'сопернику'}`
+    ? `Результат дуэли: ${resultAmount ?? (phase === 'won' ? 'выигрыш' : 'проигрыш')}`
     : `Твой шанс ${minePercent} процентов`;
 
   return (
     <div
-      className={`duel-orbit phase-${phase}${urgent ? ' is-urgent' : ''}${compact ? ' is-compact' : ''}`}
+      className={`duel-orbit phase-${phase}${urgent ? ' is-urgent' : ''}${compact ? ' is-compact' : ''}${setup ? ' is-setup' : ''}`}
       role="img"
       aria-label={label}
     >
@@ -127,7 +127,9 @@ export function DuelOrbit({
         {(spinning || settled) && (
           <motion.div
             className={`duel-orbit-needle${spinning ? ' is-waiting' : ''}`}
-            initial={reduced ? { rotate: targetAngle } : { rotate: targetAngle - RESULT_TURNS * 360 }}
+            initial={
+              reduced ? { rotate: targetAngle } : { rotate: targetAngle - RESULT_TURNS * 360 }
+            }
             animate={
               spinning && !reduced
                 ? { rotate: [targetAngle, targetAngle + 360] }
@@ -142,8 +144,7 @@ export function DuelOrbit({
             }
             aria-hidden="true"
           >
-            <span />
-            <ArrowRight weight="fill" />
+            <NavigationArrow weight="regular" />
           </motion.div>
         )}
 
@@ -153,32 +154,20 @@ export function DuelOrbit({
           {!settled && time && (
             <small>
               <b>{time}</b>
-              <span>
-                {phase === 'boosting'
-                  ? 'ДО КОНЦА СТАВОК'
-                  : 'ДО АВТОМАТИЧЕСКОГО ИСХОДА'}
-              </span>
+              <span>{phase === 'boosting' ? 'ДО КОНЦА СТАВОК' : 'ДО АВТОМАТИЧЕСКОГО ИСХОДА'}</span>
             </small>
           )}
         </div>
 
         {settled && (
           <div className={`duel-orbit-verdict${phase === 'lost' ? ' is-lost' : ''}`}>
-            <span>{phase === 'won' ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ'}</span>
-            {resultDelta && <strong>{resultDelta}</strong>}
-            <small>
-              {phase === 'won'
-                ? 'БАНК ТВОЙ'
-                : opponentName
-                  ? `БАНК ЗАБРАЛ ${opponentName}`
-                  : 'БАНК УШЁЛ СОПЕРНИКУ'}
-            </small>
+            {resultAmount && <strong>{resultAmount}</strong>}
+            <small>{phase === 'won' ? 'ПРИШЛО В КОШЕЛЁК' : 'СТАВКА УШЛА'}</small>
           </div>
         )}
       </div>
 
       {!settled && latestEvent && <p className="duel-orbit-event">{latestEvent}</p>}
-      {settled && <p className="duel-orbit-confirmed">РЕЗУЛЬТАТ ПОДТВЕРЖДЁН</p>}
     </div>
   );
 }

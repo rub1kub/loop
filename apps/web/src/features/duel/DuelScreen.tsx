@@ -38,7 +38,6 @@ import { requireLinkedWallet, sameAddress } from '../../address';
 
 import { celebrate } from '../../celebrate';
 import { humanError } from '../../errors';
-import { ChanceBar, type ChancePhase } from './ChanceBar';
 import { DuelOrbit, type DuelOrbitPhase } from './DuelOrbit';
 
 const DEFAULT_CHANCE_BPS = 5000;
@@ -205,8 +204,11 @@ export function DuelScreen({
     return () => window.clearInterval(timer);
   }, []);
 
-  const activeOffer = offers.find((offer) =>
-    ['pending_funding', 'open', 'reserved', 'matched'].includes(offer.state),
+  const latestDuel = duels[0];
+  const activeOffer = offers.find(
+    (offer) =>
+      ['pending_funding', 'open', 'reserved', 'matched'].includes(offer.state) &&
+      !(latestDuel?.state === 'settled' && latestDuel.offer_id === offer.onchain_offer_id),
   );
 
   useEffect(() => {
@@ -284,7 +286,6 @@ export function DuelScreen({
       if (timeout !== undefined) window.clearTimeout(timeout);
     };
   }, [projectionWatchKey]);
-  const latestDuel = duels[0];
   const offerExpired = activeOffer ? Date.parse(activeOffer.expires_at) <= now : false;
   const duelExpired = activeDuel ? Date.parse(activeDuel.reveal_deadline) <= now : false;
   const boostDeadline = activeDuel?.boost_deadline ? Date.parse(activeDuel.boost_deadline) : null;
@@ -402,9 +403,9 @@ export function DuelScreen({
     return () => window.clearTimeout(burst);
   }, [latestDuel, resultWon, status]);
 
-  const resultDeltaNano = latestDuel
+  const resultAmountNano = latestDuel
     ? resultWon
-      ? latestDuel.payout_nano - latestDuel.stake_nano
+      ? latestDuel.payout_nano
       : latestDuel.stake_nano
     : 0;
 
@@ -886,22 +887,9 @@ export function DuelScreen({
         : mockExpiresAt;
   const liveMode = activeOffer?.mode ?? mode;
 
-  // Everything the bar shows, derived once. `live` covers both the boost window
-  // and the reveal window: in both the odds are settled facts and the clock is
-  // the thing under pressure.
   // A quote holds the wallet's offer slot before the wallet has answered,
   // and that is not a search: nothing is on chain to find an opponent for.
   const awaitingSignature = activeOffer?.state === 'pending_funding';
-  const chancePhase: ChancePhase =
-    status === 'result'
-      ? resultWon
-        ? 'won'
-        : 'lost'
-      : status === 'matched'
-        ? 'live'
-        : awaitingSignature
-          ? 'idle'
-          : status;
   const chanceShare =
     status === 'matched' && activeDuel ? activeDuel.chance_bps / 10_000 : chance / 10_000;
   const chanceWindowMs =
@@ -910,7 +898,8 @@ export function DuelScreen({
   // cap the contract will not extend past however many boosts arrive.
   // Four digits everywhere: at three a 0,01 stake rounded the payout up to the
   // bank and the card claimed the fee was both taken and not taken.
-  const identifiedDuel = activeDuel ?? latestDuel;
+  const identifiedDuel =
+    status === 'matched' ? activeDuel : status === 'result' ? latestDuel : undefined;
   const opponentName = identifiedDuel
     ? identifiedDuel.opponent_username
       ? `@${identifiedDuel.opponent_username}`
@@ -942,11 +931,6 @@ export function DuelScreen({
             ? 'ПРЯМОЙ ВЫЗОВ'
             : 'ИЩЕМ СОПЕРНИКА'
         : null;
-  const chanceDrain =
-    duelBoosting && activeDuel?.boost_deadline && activeDuel.hard_deadline
-      ? (Date.parse(activeDuel.boost_deadline) - now) /
-        Math.max(1000, Date.parse(activeDuel.hard_deadline) - now)
-      : null;
   const latestBoost = activeDuel?.boost_events.at(-1) ?? null;
   const orbitEvent = latestBoost
     ? `${latestBoost.side === 'you' ? 'Ты усилился' : 'Соперник усилился'}: +${formatGram(
@@ -968,6 +952,16 @@ export function DuelScreen({
         : activeDuel?.own_revealed || pendingAction?.kind === 'reveal'
           ? 'waiting'
           : 'ready';
+  const setupOpponentName = invite
+    ? invite.creator_username
+      ? `@${invite.creator_username}`
+      : invite.creator_name
+    : challenge?.open
+      ? challenge.creator_username
+        ? `@${challenge.creator_username}`
+        : challenge.creator_first_name
+      : null;
+  const orbitOpponentName = opponentName ?? setupOpponentName;
 
   return (
     <section className="screen duel-screen" aria-labelledby="duel-title">
@@ -978,32 +972,25 @@ export function DuelScreen({
 
       {liveEyebrow && <p className="duel-live-eyebrow">{liveEyebrow}</p>}
 
-      {status !== 'matched' && status !== 'result' && (
-        <ChanceBar
-          mine={chanceShare}
-          phase={chancePhase}
-          opponentName={opponentName}
-          remainingMs={chanceWindowMs}
-          drain={chanceDrain}
-        />
-      )}
-
-      {(status === 'matched' || status === 'result') && identifiedDuel && (
-        <DuelOrbit
-          mine={chanceShare}
-          phase={orbitPhase}
-          remainingMs={chanceWindowMs}
-          pool={formatGram(shownPool, 3)}
-          mineAvatar={faces.mine}
-          mineFallback={profile.user.first_name.slice(0, 1).toUpperCase()}
-          opponentAvatar={faces.theirs}
-          opponentFallback={identifiedDuel.opponent_first_name?.slice(0, 1).toUpperCase() ?? ''}
-          opponentName={opponentName}
-          latestEvent={orbitEvent}
-          resultDelta={`${resultWon ? '+' : '−'}${formatGram(resultDeltaNano, 3)} GRAM`}
-          compact={boostPanelOpen}
-        />
-      )}
+      <DuelOrbit
+        mine={chanceShare}
+        phase={orbitPhase}
+        remainingMs={chanceWindowMs}
+        pool={formatGram(shownPool, 3)}
+        mineAvatar={faces.mine ?? profile.user.photo_url}
+        mineFallback={profile.user.first_name.slice(0, 1).toUpperCase()}
+        opponentAvatar={faces.theirs}
+        opponentFallback={
+          identifiedDuel?.opponent_first_name?.slice(0, 1).toUpperCase() ??
+          setupOpponentName?.replace('@', '').slice(0, 1).toUpperCase() ??
+          ''
+        }
+        opponentName={orbitOpponentName}
+        latestEvent={orbitEvent}
+        resultAmount={`${resultWon ? '+' : '−'}${formatGram(resultAmountNano, 3)} GRAM`}
+        compact={boostPanelOpen}
+        setup={status === 'idle' || status === 'searching'}
+      />
 
       {status === 'idle' && duelClosed && (
         <div className="duel-form duel-closed">
@@ -1215,7 +1202,11 @@ export function DuelScreen({
       )}
 
       {status === 'result' && latestDuel && (
-        <div className="duel-result duel-result-after-orbit">
+        <details className="technical-details duel-result-details duel-result-after-orbit">
+          <summary>
+            <span>ПОДРОБНОСТИ</span>
+            <DisclosureIndicator />
+          </summary>
           <dl className="detail-list duel-result-breakdown">
             <Term
               label="Твоя ставка"
@@ -1243,7 +1234,7 @@ export function DuelScreen({
               )} GRAM`}
             />
           </dl>
-        </div>
+        </details>
       )}
 
       <AnimatePresence mode="wait">

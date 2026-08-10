@@ -3756,6 +3756,7 @@ details[open] > summary .disclosure-indicator svg {
    the contract-confirmed shares. The pointer only reveals a settled result. */
 .duel-orbit {
   display: grid;
+  flex: 0 0 auto;
   width: 100%;
   justify-items: center;
   margin: 8px 0 2px;
@@ -3938,55 +3939,73 @@ details[open] > summary .disclosure-indicator svg {
   z-index: 3;
   top: 50%;
   left: 50%;
-  display: flex;
-  width: 38%;
-  height: 14px;
-  align-items: center;
-  transform-origin: left center;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  transform-origin: center;
+  place-items: center;
   pointer-events: none;
 }
 
-.duel-orbit-needle > span {
-  display: block;
-  width: 100%;
-  height: 2px;
-  border-radius: 99px;
-  background: var(--ink);
-  box-shadow: 0 0 8px rgb(255 255 255 / 30%);
-}
-
 .duel-orbit-needle > svg {
-  width: 15px;
-  height: 15px;
-  margin-left: -6px;
-  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
   color: var(--ink);
-  filter: drop-shadow(0 0 5px rgb(255 255 255 / 30%));
-}
-
-.duel-orbit-needle::before {
-  position: absolute;
-  left: -4px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ink);
-  box-shadow: 0 0 8px rgb(255 255 255 / 30%);
-  content: '';
+  filter: drop-shadow(0 2px 5px rgb(255 255 255 / 18%));
 }
 
 .duel-orbit-needle.is-waiting {
   opacity: 0.55;
 }
 
-.duel-orbit-event,
-.duel-orbit-confirmed {
+.duel-orbit-event {
   min-height: 18px;
   margin: 2px 0 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
   text-align: center;
+}
+
+.duel-orbit.is-setup {
+  margin-top: 0;
+}
+
+.duel-orbit.is-setup .duel-orbit-players {
+  width: min(100%, 286px);
+  margin-bottom: -17px;
+}
+
+.duel-orbit.is-setup .duel-orbit-avatar {
+  width: 34px;
+  height: 34px;
+  margin-bottom: 1px;
+}
+
+.duel-orbit.is-setup .duel-orbit-player > strong {
+  font-size: 20px;
+}
+
+.duel-orbit.is-setup .duel-orbit-stage {
+  width: min(52vw, 205px);
+}
+
+.duel-orbit.is-setup .duel-orbit-centre strong {
+  font-size: 36px;
+}
+
+.duel-orbit.is-setup .duel-orbit-centre > span {
+  margin-top: 4px;
+  font-size: 8px;
+}
+
+.duel-orbit.phase-boosting:not(.is-compact) {
+  margin-top: 96px;
+}
+
+.duel-orbit.phase-boosting:not(.is-compact) + .duel-live-state {
+  margin-top: 88px;
 }
 
 .duel-orbit.is-compact {
@@ -4051,14 +4070,6 @@ details[open] > summary .disclosure-indicator svg {
   display: none;
 }
 
-.duel-orbit-confirmed {
-  animation: duel-orbit-result-in 260ms ease 2.25s both;
-  color: var(--ink);
-  font-size: 9px;
-  font-weight: 760;
-  letter-spacing: 0.12em;
-}
-
 .duel-orbit-resolving-label {
   position: absolute;
   z-index: 4;
@@ -4091,25 +4102,27 @@ details[open] > summary .disclosure-indicator svg {
   color: #a1a1a6;
 }
 
-.duel-orbit-verdict span {
-  font-size: 10px;
-  font-weight: 780;
-  letter-spacing: 0.16em;
-}
-
 .duel-orbit-verdict strong {
-  margin-top: 5px;
-  font-size: 24px;
+  font-size: 26px;
   font-variant-numeric: tabular-nums;
   font-weight: 650;
   letter-spacing: -0.04em;
 }
 
 .duel-orbit-verdict small {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 8px;
   font-weight: 720;
   letter-spacing: 0.08em;
+}
+
+.duel-result-details {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.duel-result-details summary {
+  min-height: 48px;
 }
 
 .duel-orbit.phase-won .duel-orbit-centre,
@@ -4163,6 +4176,14 @@ details[open] > summary .disclosure-indicator svg {
     margin-top: 2px;
   }
 
+  .duel-orbit.phase-boosting:not(.is-compact) {
+    margin-top: 18px;
+  }
+
+  .duel-orbit.phase-boosting:not(.is-compact) + .duel-live-state {
+    margin-top: 24px;
+  }
+
   .duel-orbit-stage {
     width: min(66vw, 238px);
   }
@@ -4184,8 +4205,7 @@ details[open] > summary .disclosure-indicator svg {
     font-size: 40px;
   }
 
-  .duel-orbit-event,
-  .duel-orbit-confirmed {
+  .duel-orbit-event {
     font-size: 10px;
   }
 
@@ -4214,7 +4234,6 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .duel-orbit-confirmed,
   .duel-orbit-resolving-label,
   .duel-orbit-verdict,
   .duel-orbit.phase-won .duel-orbit-centre,

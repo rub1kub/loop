@@ -495,7 +495,11 @@ describe('DuelScreen', () => {
     );
 
     // Равный старт теперь показывает сама шкала, а не подпись под ней.
-    expect(screen.getByRole('img', { name: 'Твой шанс 50 процентов' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Твой шанс 50 процентов' })).toHaveClass(
+      'duel-orbit',
+      'is-setup',
+    );
+    expect(document.querySelector('.chance-bar')).not.toBeInTheDocument();
     expect(screen.queryByText('РАВНЫЙ СТАРТ')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Ставка в GRAM')).toBeInTheDocument();
     expect(screen.queryByText('ВВЕДИ СУММУ')).not.toBeInTheDocument();
@@ -698,15 +702,18 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('img', { name: 'Поражение: банк ушёл сопернику' })).toBeVisible();
-    expect(screen.getByText('ПОРАЖЕНИЕ')).toBeVisible();
+    expect(screen.getByRole('img', { name: 'Результат дуэли: −1 GRAM' })).toBeVisible();
     expect(screen.getByText('−1 GRAM')).toBeVisible();
+    expect(screen.getByText('СТАВКА УШЛА')).toBeVisible();
+    expect(screen.getByText('ПОДРОБНОСТИ').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('Ушло сопернику').nextElementSibling).not.toBeVisible();
+    fireEvent.click(screen.getByText('ПОДРОБНОСТИ'));
     expect(screen.getByText('Ушло сопернику').nextElementSibling).toHaveTextContent('1 GRAM');
     expect(screen.queryByText(/1,95/)).not.toBeInTheDocument();
     expect(screen.queryByText('ЗАВЕРШЕНО')).not.toBeInTheDocument();
   });
 
-  it('states the win as net gain and what actually reached the wallet', () => {
+  it('states a win once as the amount that actually reached the wallet', () => {
     const { container } = render(
       <DuelScreen
         profile={{ ...profile, wallet: walletOf('0:aaa') }}
@@ -717,12 +724,16 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('img', { name: 'Победа: банк твой' })).toBeVisible();
+    expect(screen.getByRole('img', { name: 'Результат дуэли: +1,95 GRAM' })).toBeVisible();
     expect(container.querySelector('.duel-orbit-needle')).not.toBeNull();
     expect(screen.getByText('ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ')).toBeVisible();
-    expect(screen.getByText('РЕЗУЛЬТАТ ПОДТВЕРЖДЁН')).toBeVisible();
-    expect(screen.getByText('ПОБЕДА')).toBeVisible();
-    expect(screen.getByText('+0,95 GRAM')).toBeVisible();
+    expect(screen.getByText('+1,95 GRAM')).toBeVisible();
+    expect(screen.getByText('ПРИШЛО В КОШЕЛЁК')).toBeVisible();
+    expect(screen.queryByText('ПОБЕДА')).not.toBeInTheDocument();
+    expect(screen.queryByText('РЕЗУЛЬТАТ ПОДТВЕРЖДЁН')).not.toBeInTheDocument();
+    expect(screen.getByText('ПОДРОБНОСТИ').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('Пришло в кошелёк').nextElementSibling).not.toBeVisible();
+    fireEvent.click(screen.getByText('ПОДРОБНОСТИ'));
     expect(screen.getByText('Пришло в кошелёк').nextElementSibling).toHaveTextContent('1,95 GRAM');
   });
 
@@ -730,8 +741,8 @@ describe('DuelScreen', () => {
     render(
       <DuelScreen
         profile={{ ...profile, wallet: walletOf('0:aaa') }}
-        offers={[]}
-        duels={[settledDuel({ winner_wallet: '0:bbb' })]}
+        offers={[matchedOffer()]}
+        duels={[settledDuel({ offer_id: 701, winner_wallet: '0:bbb' })]}
         invite={null}
         onRefresh={vi.fn()}
       />,
@@ -740,7 +751,7 @@ describe('DuelScreen', () => {
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /ИГРАТЬ ЕЩЁ|ПОПРОБОВАТЬ СНОВА/ }));
 
-    expect(screen.queryByText('ПОРАЖЕНИЕ')).not.toBeInTheDocument();
+    expect(screen.queryByText('СТАВКА УШЛА')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Ставка в GRAM')).toBeVisible();
     expect(screen.getByRole('button', { name: 'НАЙТИ СОПЕРНИКА' })).toBeVisible();
   });
@@ -880,9 +891,7 @@ describe('DuelScreen', () => {
     expect(screen.queryByLabelText('Ставка в GRAM')).not.toBeInTheDocument();
   });
 
-  it('names the loss inside the drained bar instead of leaving a void', () => {
-    // The lost bar drains to zero on purpose — the pool left. Without words the
-    // empty frame read as a broken element, and a tester reported it as one.
+  it('names the loss once instead of repeating who took the bank', () => {
     render(
       <DuelScreen
         profile={{ ...profile, wallet: walletOf('0:aaa') }}
@@ -893,7 +902,8 @@ describe('DuelScreen', () => {
       />,
     );
 
-    expect(screen.getByText('БАНК ЗАБРАЛ @vasya')).toBeVisible();
+    expect(screen.getByText('СТАВКА УШЛА')).toBeVisible();
+    expect(screen.queryByText('БАНК ЗАБРАЛ @vasya')).not.toBeInTheDocument();
   });
 
   it('puts the shared challenge in front of the person who tapped it', async () => {
