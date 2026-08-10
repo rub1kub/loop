@@ -73,16 +73,54 @@ function TeamAvatar({
   url: string | null;
   compact?: boolean;
 }) {
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const visibleUrl = url && url !== failedUrl ? url : null;
+  const [failure, setFailure] = useState<{
+    url: string;
+    attempt: number;
+    failed: boolean;
+  } | null>(null);
+  const currentFailure = failure?.url === url ? failure : null;
+  const attempt = currentFailure?.attempt ?? 0;
+  const failed = currentFailure?.failed ?? false;
+  useEffect(() => {
+    if (!url || !failed || attempt >= 3) return;
+    const timeout = window.setTimeout(
+      () => {
+        setFailure({ url, attempt: attempt + 1, failed: false });
+      },
+      1_500 * 2 ** attempt,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [attempt, failed, url]);
+  const retryUrl =
+    url && attempt > 0 ? `${url}${url.includes('?') ? '&' : '?'}retry=${attempt}` : url;
   return (
     <span className={`team-avatar${compact ? ' is-compact' : ''}`} aria-hidden="true">
       <TeamMark mark={mark} compact={compact} />
-      {visibleUrl && (
-        <img src={visibleUrl} alt="" draggable={false} onError={() => setFailedUrl(visibleUrl)} />
+      {retryUrl && !failed && (
+        <img
+          key={retryUrl}
+          src={retryUrl}
+          alt=""
+          draggable={false}
+          onError={() => {
+            if (url) setFailure({ url, attempt, failed: true });
+          }}
+        />
       )}
     </span>
   );
+}
+
+type TeamBrand = Pick<TeamEntry, 'name' | 'description' | 'mark' | 'avatar_url' | 'join_policy'>;
+
+function teamBrand(team: TeamEntry): TeamBrand {
+  return {
+    name: team.name,
+    description: team.description,
+    mark: team.mark,
+    avatar_url: team.avatar_url,
+    join_policy: team.join_policy,
+  };
 }
 
 export function TeamsView({
@@ -99,22 +137,55 @@ export function TeamsView({
   const [searchResults, setSearchResults] = useState<TeamEntry[]>([]);
   const [searchTotal, setSearchTotal] = useState(0);
   const [members, setMembers] = useState<TeamMember[]>(overview?.my_team?.top_members ?? []);
+  const [loadingTeam, setLoadingTeam] = useState<TeamEntry | null>(null);
+  // The mutation response is already authoritative. Keep it visible while the
+  // broader overview refresh catches up, instead of reverting the new avatar
+  // to the copy that was on screen before the upload.
+  const [ownBrand, setOwnBrand] = useState<{ id: string; value: TeamBrand } | null>(null);
+  const effectiveOverview = useMemo(() => {
+    if (!overview || !ownBrand || overview.my_team?.id !== ownBrand.id) return overview;
+    return {
+      ...overview,
+      my_team: { ...overview.my_team, ...ownBrand.value },
+      leaderboard: overview.leaderboard.map((team) =>
+        team.id === ownBrand.id ? { ...team, ...ownBrand.value } : team,
+      ),
+    };
+  }, [overview, ownBrand]);
+  const effectiveMyTeam = effectiveOverview?.my_team ?? null;
   const backToTeams = useCallback(() => {
     setPage('home');
+    setLoadingTeam(null);
     haptic('selection');
   }, []);
 
   useEffect(() => setBackAction(page === 'home' ? undefined : backToTeams), [backToTeams, page]);
 
   const openDetail = async (team: TeamEntry | TeamDetail) => {
-    setBusy(true);
-    try {
-      const loaded = 'top_members' in team ? team : await api.team(team.slug);
-      setDetail(loaded);
-      setMembers(loaded.top_members);
+    const known =
+      'top_members' in team ? team : effectiveMyTeam?.id === team.id ? effectiveMyTeam : null;
+    if (known) {
+      setDetail(known);
+      setMembers(known.top_members);
+      setLoadingTeam(null);
       setPage('detail');
       haptic('selection');
+      return;
+    }
+
+    setLoadingTeam(team);
+    setDetail(null);
+    setPage('detail');
+    setBusy(true);
+    try {
+      const loaded = await api.team(team.slug);
+      setDetail(loaded);
+      setMembers(loaded.top_members);
+      setLoadingTeam(null);
+      haptic('selection');
     } catch (error) {
+      setLoadingTeam(null);
+      setPage('home');
       onError(message(error));
     } finally {
       setBusy(false);
@@ -127,6 +198,13 @@ export function TeamsView({
     setDetail(loaded);
     setMembers(loaded.top_members);
     await onRefresh();
+  };
+
+  const applyTeamUpdate = (updated: TeamDetail) => {
+    setDetail(updated);
+    setMembers(updated.top_members);
+    if (updated.is_mine) setOwnBrand({ id: updated.id, value: teamBrand(updated) });
+    void onRefresh();
   };
 
   const run = async (action: () => Promise<void>) => {
@@ -212,53 +290,61 @@ export function TeamsView({
               onOpen={(team) => void openDetail(team)}
             />
           </div>
-        ) : page === 'detail' && detail ? (
-          <TeamDetailPanel
-            detail={detail}
-            leaderboard={overview.leaderboard}
-            seasonEndsAt={overview.season.ends_at}
-            members={members}
-            busy={busy}
-            onRefresh={() => void run(refreshDetail)}
-            onJoin={() => {
-              void run(async () => {
-                const result = await api.joinTeam(detail.slug);
-                await onRefresh();
-                setDetail(result.team);
-              });
-            }}
-            onLeave={() => {
-              void run(async () => {
-                if (!window.confirm('Покинуть команду? Новый вход будет доступен через 24 часа.')) {
-                  return;
-                }
-                await api.leaveTeam(detail.slug);
-                await onRefresh();
-                setDetail(null);
-                setPage('home');
-              });
-            }}
-            onShare={() => {
-              void run(async () => {
-                const prepared = await api.prepareTeamShare(detail.slug);
-                if (
-                  !(await sharePreparedResult(
-                    prepared.prepared_message_id,
-                    prepared.fallback_query,
-                  ))
-                ) {
-                  throw new Error('Telegram не открыл отправку сообщения');
-                }
-              });
-            }}
-            onLoadMore={() => {
-              void run(async () => {
-                const page = await api.teamMembers(detail.slug, members.length);
-                setMembers((current) => [...current, ...page.items]);
-              });
-            }}
-            onError={onError}
-          />
+        ) : page === 'detail' ? (
+          detail ? (
+            <TeamDetailPanel
+              detail={detail}
+              leaderboard={effectiveOverview?.leaderboard ?? overview.leaderboard}
+              seasonEndsAt={overview.season.ends_at}
+              members={members}
+              busy={busy}
+              onRefresh={() => void run(refreshDetail)}
+              onUpdated={applyTeamUpdate}
+              onJoin={() => {
+                void run(async () => {
+                  const result = await api.joinTeam(detail.slug);
+                  await onRefresh();
+                  setDetail(result.team);
+                });
+              }}
+              onLeave={() => {
+                void run(async () => {
+                  if (
+                    !window.confirm('Покинуть команду? Новый вход будет доступен через 24 часа.')
+                  ) {
+                    return;
+                  }
+                  await api.leaveTeam(detail.slug);
+                  await onRefresh();
+                  setDetail(null);
+                  setOwnBrand(null);
+                  setPage('home');
+                });
+              }}
+              onShare={() => {
+                void run(async () => {
+                  const prepared = await api.prepareTeamShare(detail.slug);
+                  if (
+                    !(await sharePreparedResult(
+                      prepared.prepared_message_id,
+                      prepared.fallback_query,
+                    ))
+                  ) {
+                    throw new Error('Telegram не открыл отправку сообщения');
+                  }
+                });
+              }}
+              onLoadMore={() => {
+                void run(async () => {
+                  const page = await api.teamMembers(detail.slug, members.length);
+                  setMembers((current) => [...current, ...page.items]);
+                });
+              }}
+              onError={onError}
+            />
+          ) : (
+            <TeamDetailLoading team={loadingTeam} />
+          )
         ) : (
           <>
             <header className="mode-header">
@@ -266,7 +352,7 @@ export function TeamsView({
               <h1>КОМАНДЫ</h1>
             </header>
             <TeamHome
-              overview={overview}
+              overview={effectiveOverview ?? overview}
               invite={invite}
               busy={busy}
               onDismissInvite={onDismissInvite}
@@ -304,6 +390,17 @@ export function TeamsView({
         )}
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+function TeamDetailLoading({ team }: { team: TeamEntry | null }) {
+  return (
+    <div className="team-subpage team-detail-loading" aria-live="polite">
+      {team && <TeamAvatar mark={team.mark} url={team.avatar_url} />}
+      <p className="eyebrow">ОТКРЫВАЕМ КОМАНДУ</p>
+      {team && <h2>{team.name}</h2>}
+      <span className="waiting-ring" aria-hidden="true" />
+    </div>
   );
 }
 
@@ -350,36 +447,43 @@ function TeamHome({
       )}
 
       {myTeam ? (
-        <section className="my-team-card" onClick={() => onOpen(myTeam)}>
-          <div className="my-team-head">
-            <TeamAvatar mark={myTeam.mark} url={myTeam.avatar_url} />
-            <div>
-              <span className="eyebrow">ТВОЯ КОМАНДА</span>
-              <h2>{myTeam.name}</h2>
-              <p>#{myTeam.tag}</p>
+        <section className="my-team-card">
+          <button
+            className="my-team-open"
+            type="button"
+            aria-label={`Открыть команду ${myTeam.name}`}
+            onClick={() => onOpen(myTeam)}
+          >
+            <div className="my-team-head">
+              <TeamAvatar mark={myTeam.mark} url={myTeam.avatar_url} />
+              <div>
+                <span className="eyebrow">ТВОЯ КОМАНДА</span>
+                <h2>{myTeam.name}</h2>
+                <p>#{myTeam.tag}</p>
+              </div>
+              <strong>#{myTeam.rank}</strong>
             </div>
-            <strong>#{myTeam.rank}</strong>
-          </div>
-          <div className="my-team-score">
-            <strong>{formatGram(myTeam.flow_nano, 2)}</strong>
-            <span>GRAM ЗА НЕДЕЛЮ</span>
-          </div>
-          <div className="my-team-chase">
-            <span>{seasonLeft(overview.season.ends_at)}</span>
-            <span>
-              {rival
-                ? `${formatGram(Math.max(0, rival.flow_nano - myTeam.flow_nano), 2)} ДО #${rival.rank}`
-                : 'ВЫ ВЕДЁТЕ'}
-            </span>
-          </div>
-          <div className="my-team-progress" aria-hidden="true">
-            <span
-              style={{
-                width: `${Math.min(100, rival ? (myTeam.flow_nano / rival.flow_nano) * 100 : 100)}%`,
-              }}
-            />
-          </div>
-          <div className="my-team-actions" onClick={(event) => event.stopPropagation()}>
+            <div className="my-team-score">
+              <strong>{formatGram(myTeam.flow_nano, 2)}</strong>
+              <span>GRAM ЗА НЕДЕЛЮ</span>
+            </div>
+            <div className="my-team-chase">
+              <span>{seasonLeft(overview.season.ends_at)}</span>
+              <span>
+                {rival
+                  ? `${formatGram(Math.max(0, rival.flow_nano - myTeam.flow_nano), 2)} ДО #${rival.rank}`
+                  : 'ВЫ ВЕДЁТЕ'}
+              </span>
+            </div>
+            <div className="my-team-progress" aria-hidden="true">
+              <span
+                style={{
+                  width: `${Math.min(100, rival ? (myTeam.flow_nano / rival.flow_nano) * 100 : 100)}%`,
+                }}
+              />
+            </div>
+          </button>
+          <div className="my-team-actions">
             <button className="primary-button" onClick={onShare} disabled={busy}>
               <PaperPlaneTilt aria-hidden="true" /> ПРИГЛАСИТЬ
             </button>
@@ -533,6 +637,7 @@ function TeamDetailPanel({
   members,
   busy,
   onRefresh,
+  onUpdated,
   onJoin,
   onLeave,
   onShare,
@@ -545,6 +650,7 @@ function TeamDetailPanel({
   members: TeamMember[];
   busy: boolean;
   onRefresh: () => void;
+  onUpdated: (updated: TeamDetail) => void;
   onJoin: () => void;
   onLeave: () => void;
   onShare: () => void;
@@ -658,7 +764,13 @@ function TeamDetailPanel({
       )}
 
       {canManage && (
-        <TeamManagement detail={detail} busy={busy} onRefresh={onRefresh} onError={onError} />
+        <TeamManagement
+          detail={detail}
+          busy={busy}
+          onRefresh={onRefresh}
+          onUpdated={onUpdated}
+          onError={onError}
+        />
       )}
       {detail.my_role && detail.my_role !== 'owner' && (
         <button className="team-danger-action" onClick={onLeave} disabled={busy}>
@@ -772,11 +884,13 @@ function TeamManagement({
   detail,
   busy,
   onRefresh,
+  onUpdated,
   onError,
 }: {
   detail: TeamDetail;
   busy: boolean;
   onRefresh: () => void;
+  onUpdated: (updated: TeamDetail) => void;
   onError: (message: string) => void;
 }) {
   const [policy, setPolicy] = useState(detail.join_policy);
@@ -796,8 +910,8 @@ function TeamManagement({
   const savePolicy = async (value: TeamDetail['join_policy']) => {
     setPolicy(value);
     try {
-      await api.updateTeam(detail.slug, { join_policy: value });
-      onRefresh();
+      const updated = await api.updateTeam(detail.slug, { join_policy: value });
+      onUpdated(updated);
     } catch (error) {
       setPolicy(detail.join_policy);
       onError(message(error));
@@ -806,15 +920,15 @@ function TeamManagement({
   const saveBrand = async () => {
     setSaving(true);
     try {
-      await api.updateTeam(detail.slug, { name, description });
+      let updated = await api.updateTeam(detail.slug, { name, description });
       if (avatarFile) {
-        await api.updateTeamAvatar(detail.slug, avatarFile);
+        updated = await api.updateTeamAvatar(detail.slug, avatarFile);
       } else if (avatarRemoved) {
-        await api.deleteTeamAvatar(detail.slug);
+        updated = await api.deleteTeamAvatar(detail.slug);
       }
       setAvatarFile(null);
       setAvatarRemoved(false);
-      onRefresh();
+      onUpdated(updated);
     } catch (error) {
       onError(message(error));
     } finally {

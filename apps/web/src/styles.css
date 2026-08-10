@@ -3959,6 +3959,11 @@ details[open] > summary .disclosure-indicator svg {
   opacity: 0.55;
 }
 
+.duel-orbit.phase-won .duel-orbit-needle,
+.duel-orbit.phase-lost .duel-orbit-needle {
+  animation: duel-orbit-needle-out 260ms ease 2.2s both;
+}
+
 .duel-orbit-event {
   min-height: 18px;
   margin: 2px 0 0;
@@ -4087,12 +4092,12 @@ details[open] > summary .disclosure-indicator svg {
 .duel-orbit-verdict {
   position: absolute;
   z-index: 4;
-  top: 17%;
+  top: 50%;
   left: 50%;
   display: grid;
   width: max-content;
   justify-items: center;
-  translate: -50% 0;
+  translate: -50% -50%;
   color: var(--ink);
   animation: duel-orbit-result-in 300ms var(--ease-apple) 2.22s both;
   pointer-events: none;
@@ -4103,7 +4108,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .duel-orbit-verdict strong {
-  font-size: 26px;
+  font-size: clamp(29px, 8vw, 36px);
   font-variant-numeric: tabular-nums;
   font-weight: 650;
   letter-spacing: -0.04em;
@@ -4153,6 +4158,19 @@ details[open] > summary .disclosure-indicator svg {
   to {
     visibility: hidden;
     opacity: 0;
+  }
+}
+
+@keyframes duel-orbit-needle-out {
+  from {
+    visibility: visible;
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    visibility: hidden;
+    opacity: 0;
+    scale: 0.82;
   }
 }
 
@@ -4236,6 +4254,8 @@ details[open] > summary .disclosure-indicator svg {
 @media (prefers-reduced-motion: reduce) {
   .duel-orbit-resolving-label,
   .duel-orbit-verdict,
+  .duel-orbit.phase-won .duel-orbit-needle,
+  .duel-orbit.phase-lost .duel-orbit-needle,
   .duel-orbit.phase-won .duel-orbit-centre,
   .duel-orbit.phase-lost .duel-orbit-centre,
   .duel-result-after-orbit,
@@ -4607,7 +4627,21 @@ details[open] > summary .disclosure-indicator svg {
 
 .my-team-card {
   padding: 19px;
+}
+
+.my-team-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
   cursor: pointer;
+}
+
+.my-team-open:active {
+  transform: scale(0.992);
 }
 
 .my-team-head {
@@ -5040,6 +5074,24 @@ details[open] > summary .disclosure-indicator svg {
   display: grid;
   justify-items: center;
   text-align: center;
+}
+
+.team-detail-loading {
+  display: grid;
+  min-height: 52vh;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.team-detail-loading .team-avatar {
+  margin-bottom: 18px;
+}
+
+.team-detail-loading h2 {
+  margin: 8px 0 24px;
+  font-size: 32px;
+  letter-spacing: -0.05em;
 }
 
 .team-detail-hero .team-avatar {
