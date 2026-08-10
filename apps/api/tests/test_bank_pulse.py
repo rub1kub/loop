@@ -5,6 +5,7 @@ import pytest
 from app.config import get_settings
 from app.modules.bank.models import BankPosition, BankPositionStatus
 from app.modules.bank.pulse import bank_queue_pulse, bank_queue_pulse_text, gross_needed
+from app.schemas import BankQueuePulseView
 
 
 def position(position_id: int, queue_index: int, remaining_nano: int) -> BankPosition:
@@ -28,6 +29,20 @@ def position(position_id: int, queue_index: int, remaining_nano: int) -> BankPos
 
 def test_gross_needed_rounds_up_after_the_protocol_fee() -> None:
     assert gross_needed(260_000_000, 1_000) == 288_888_889
+
+
+def test_public_pulse_uses_two_decimal_places_and_a_dot() -> None:
+    text = bank_queue_pulse_text(
+        BankQueuePulseView(
+            active_positions=2,
+            minimum_entry_nano=1_000_000_000,
+            minimum_entry_payouts=0,
+            next_payout_gross_nano=4_389_000_000,
+            updated_at=datetime.now(UTC),
+        )
+    )
+    assert "4.38 GRAM" in text
+    assert "4,389" not in text
 
 
 @pytest.mark.asyncio

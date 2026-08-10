@@ -113,5 +113,10 @@ def _positions_word(count: int) -> str:
 
 
 def _format_gram(amount_nano: int) -> str:
-    amount = amount_nano / 1_000_000_000
-    return f"{amount:.3f}".rstrip("0").rstrip(".").replace(".", ",")
+    # Telegram readers mistook the decimal comma in `4,389` for a thousands
+    # separator. Keep the public counter deliberately coarse and use a dot.
+    hundredths = amount_nano // 10_000_000
+    whole, fraction = divmod(hundredths, 100)
+    if fraction == 0:
+        return str(whole)
+    return f"{whole}.{fraction:02d}".rstrip("0")
