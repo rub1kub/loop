@@ -1,8 +1,11 @@
 import type {
   ApplicationControl,
   ControlActionInput,
+  ControlAnalytics,
   ControlOverview,
   ControlParticipants,
+  ControlReferralPayout,
+  ControlReferralPayouts,
   ControlTransaction,
 } from './types';
 
@@ -65,6 +68,35 @@ export const controlApi = {
 
   participants(limit = 100): Promise<ControlParticipants> {
     return request(`/participants?limit=${limit}`);
+  },
+
+  analytics(days = 30): Promise<ControlAnalytics> {
+    return request(`/analytics?days=${days}`);
+  },
+
+  referralPayouts(limit = 100): Promise<ControlReferralPayouts> {
+    return request(`/referral-payouts?limit=${limit}`);
+  },
+
+  prepareReferralPayout(id: string): Promise<ControlTransaction> {
+    return request(`/referral-payouts/${encodeURIComponent(id)}/transaction`, {
+      method: 'POST',
+      body: '{}',
+    });
+  },
+
+  confirmReferralPayout(id: string, signedBoc?: string): Promise<ControlReferralPayout> {
+    return request(`/referral-payouts/${encodeURIComponent(id)}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ signed_boc: signedBoc ?? null }),
+    });
+  },
+
+  rejectReferralPayout(id: string, reason: string): Promise<ControlReferralPayout> {
+    return request(`/referral-payouts/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
   },
 
   updateApplication(input: Partial<ApplicationControl>): Promise<ApplicationControl> {

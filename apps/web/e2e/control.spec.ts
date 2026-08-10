@@ -31,7 +31,7 @@ test('browser control is a desktop site independent from Telegram Mini App', asy
           {
             mode: 'bank',
             address: contractAddress,
-            network: -3,
+            network: -239,
             status: 'active',
             code_hash: 'AA'.repeat(32),
             code_hash_matches: true,
@@ -40,7 +40,7 @@ test('browser control is a desktop site independent from Telegram Mini App', asy
             withdrawable_nano: 5_600_000_000,
             owner,
             treasury: owner,
-            fee_bps: 100,
+            fee_bps: 1000,
             paused: false,
             owner_matches_session: true,
             extended_controls: true,
@@ -50,7 +50,7 @@ test('browser control is a desktop site independent from Telegram Mini App', asy
           {
             mode: 'duel',
             address: `0:${'33'.repeat(32)}`,
-            network: -3,
+            network: -239,
             status: 'active',
             code_hash: 'BB'.repeat(32),
             code_hash_matches: true,
@@ -59,7 +59,7 @@ test('browser control is a desktop site independent from Telegram Mini App', asy
             withdrawable_nano: 1_300_000_000,
             owner,
             treasury: owner,
-            fee_bps: 250,
+            fee_bps: 1000,
             paused: true,
             owner_matches_session: true,
             extended_controls: true,
@@ -91,13 +91,70 @@ test('browser control is a desktop site independent from Telegram Mini App', asy
       },
     });
   });
+  await page.route('**/api/v1/control/referral-payouts?*', async (route) => {
+    await route.fulfill({
+      json: {
+        treasury_address: owner,
+        payouts: [
+          {
+            id: 'payout-1',
+            telegram_id: 6001,
+            username: 'owner',
+            first_name: 'Owner',
+            address: `0:${'44'.repeat(32)}`,
+            amount_nano: 700_000_000,
+            state: 'requested',
+            payout_tx_hash: null,
+            created_at: '2026-08-10T17:00:00Z',
+            prepared_at: null,
+            settled_at: null,
+          },
+        ],
+        generated_at: '2026-08-10T18:00:00Z',
+      },
+    });
+  });
+  await page.route('**/api/v1/control/analytics?*', async (route) => {
+    await route.fulfill({
+      json: {
+        days: 30,
+        started_at: '2026-07-11T18:00:00Z',
+        active_users: 81,
+        funnel: {
+          registered: 64,
+          wallet_connected: 42,
+          bank_started: 18,
+          duel_started: 12,
+        },
+        bank_positions: 27,
+        bank_volume_nano: 31_000_000_000,
+        bank_payout_nano: 22_000_000_000,
+        duel_settled: 19,
+        referral_qualified: 9,
+        teams_created: 3,
+        team_joins: 14,
+        daily: [
+          {
+            date: '2026-08-10',
+            active_users: 11,
+            bank_positions: 3,
+            bank_volume_nano: 4_000_000_000,
+            duel_settled: 2,
+            referrals_qualified: 1,
+            team_joins: 4,
+          },
+        ],
+        generated_at: '2026-08-10T18:00:00Z',
+      },
+    });
+  });
 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/control');
 
-  await expect(page).toHaveTitle('LOOP — Панель управления');
+  await expect(page).toHaveTitle('LOOP');
   await expect(page.getByRole('heading', { name: 'LOOP работает частично' })).toBeVisible();
-  await expect(page.getByText('142')).toBeVisible();
+  await expect(page.getByText('142', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /Пополнить резерв/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Вывести доступное/ })).toBeVisible();
   await expect(page.locator('.service-money').getByText('Участникам', { exact: true })).toHaveCount(
@@ -119,6 +176,13 @@ test('browser control is a desktop site independent from Telegram Mini App', asy
   expect(header).not.toBeNull();
   expect(header!.height).toBeLessThan(90);
   expect(shell!.width).toBe(1440);
+
+  await page.locator('#referral-payouts > summary').click();
+  await expect(page.getByText('@owner')).toBeVisible();
+  await expect(page.getByText('0,7 GRAM')).toBeVisible();
+  await page.locator('#analytics > summary').click();
+  await expect(page.locator('#analytics').getByText('81', { exact: true })).toBeVisible();
+  await expect(page.locator('#analytics').getByText('Подключили кошелёк')).toBeVisible();
 
   await page.getByRole('button', { name: /Пополнить резерв/ }).click();
   await expect(page.getByRole('heading', { name: 'Пополнить резерв' })).toBeVisible();

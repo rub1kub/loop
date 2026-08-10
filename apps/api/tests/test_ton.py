@@ -11,6 +11,7 @@ from app.ton import (
     TonProviderError,
     duel_invite_public_key,
     sign_direct_accept_permit,
+    transaction_has_wallet_transfer,
     verify_direct_accept_permit,
 )
 
@@ -24,6 +25,14 @@ def message_body(*values: tuple[int, int]) -> dict[str, dict[str, str]]:
     for value, bits in values:
         cell.bits.write_uint(value, bits)
     return {"message_content": {"body": base64.b64encode(cell.to_boc(False)).decode()}}
+
+
+def text_payload(value: str) -> tuple[str, dict[str, object]]:
+    cell = Cell()
+    cell.bits.write_uint(0, 32)
+    cell.bits.write_bytes(value.encode())
+    encoded = base64.b64encode(cell.to_boc(False)).decode()
+    return encoded, {"message_content": {"body": encoded}}
 
 
 def address_stack(address: str) -> list[object]:
@@ -51,6 +60,25 @@ def test_direct_permit_is_bound_to_network_contract_offer_and_invited_wallet() -
         **{**context, "invited_address": "0:" + "44" * 32},
     )
     assert not verify_direct_accept_permit(public_key, signature, **{**context, "network": -239})
+
+
+def test_wallet_transfer_proof_requires_exact_destination_value_and_payload() -> None:
+    destination = "0:" + "55" * 32
+    payload_boc, content = text_payload("LOOP referral request-id")
+    transaction = {
+        "out_msgs": [
+            {
+                "destination": destination,
+                "value": "700000000",
+                **content,
+            }
+        ]
+    }
+
+    assert transaction_has_wallet_transfer(transaction, destination, 700_000_000, payload_boc)
+    assert not transaction_has_wallet_transfer(transaction, destination, 700_000_001, payload_boc)
+    other_payload, _ = text_payload("LOOP referral another-id")
+    assert not transaction_has_wallet_transfer(transaction, destination, 700_000_000, other_payload)
 
 
 @pytest.mark.asyncio
@@ -128,6 +156,64 @@ async def test_contract_transaction_and_jetton_proofs_are_fail_closed() -> None:
 
         with pytest.raises(TonProviderError, match="account mismatch"):
             await client.verify_transaction(tx_hash, "0:" + "aa" * 32)
+
+
+@pytest.mark.asyncio
+async def test_ton_connect_boc_resolves_to_exact_finalized_wallet_transfer() -> None:
+    sender = "0:" + "11" * 32
+    destination = "0:" + "22" * 32
+    transaction_hash = hash_b64(9)
+    payload_boc, content = text_payload("LOOP referral payout-id")
+    external = Cell()
+    external.bits.write_uint(123, 32)
+    signed_boc = base64.b64encode(external.to_boc(False)).decode()
+    transaction = {
+        "account": sender,
+        "hash": transaction_hash,
+        "lt": "91",
+        "now": 1_800_000_000,
+        "mc_block_seqno": 57,
+        "emulated": False,
+        "description": {
+            "aborted": False,
+            "compute_ph": {"success": True},
+            "action": {"success": True},
+        },
+        "out_msgs": [
+            {
+                "destination": destination,
+                "value": "700000000",
+                **content,
+            }
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/transactionsByMessage"):
+            assert request.url.params["direction"] == "in"
+            return httpx.Response(200, json={"transactions": [{"hash": transaction_hash}]})
+        if request.url.path.endswith("/transactions"):
+            return httpx.Response(200, json={"transactions": [transaction]})
+        raise AssertionError(f"unexpected request: {request.url}")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        client = TonClient(http, get_settings())
+        proof = await client.verify_wallet_transfer(
+            signed_boc,
+            sender,
+            destination,
+            700_000_000,
+            payload_boc,
+        )
+        assert proof.masterchain_seqno == 57
+        with pytest.raises(TonProviderError, match="destination, amount or label"):
+            await client.verify_wallet_transfer(
+                signed_boc,
+                sender,
+                destination,
+                700_000_001,
+                payload_boc,
+            )
 
 
 @pytest.mark.asyncio

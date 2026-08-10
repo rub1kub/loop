@@ -3,11 +3,12 @@ import base64
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, update
+from sqlalchemy.sql import Select
 from tonsdk.boc import Cell  # type: ignore[import-untyped]
 from tonsdk.utils import Address  # type: ignore[import-untyped]
 
@@ -17,14 +18,18 @@ from .dependencies import Config, ControlWallet, Db
 from .models import (
     AdminAuditEvent,
     ApplicationControl,
+    AuthExchange,
     ChainCheckpoint,
     ContractControl,
     ReferralAttribution,
+    ReferralPayoutRequest,
+    ReferralReward,
     User,
     Wallet,
 )
-from .modules.bank.models import BankPosition, BankPositionStatus
+from .modules.bank.models import BankPayout, BankPosition, BankPositionStatus
 from .modules.duel.models import Duel, DuelOffer, DuelState, OfferState
+from .modules.teams.models import Team, TeamMembership
 from .schemas import WalletChallengeResponse, WalletVerifyRequest
 from .security import (
     AuthenticationError,
@@ -32,7 +37,13 @@ from .security import (
     issue_control_session,
     verify_ton_proof,
 )
-from .ton import ContractAdminState, ContractState, TonProviderError, normalize_address
+from .ton import (
+    ContractAdminState,
+    ContractState,
+    TonProviderError,
+    normalize_address,
+    normalize_hash,
+)
 
 router = APIRouter(prefix="/api/v1/control", tags=["Control"])
 
@@ -185,6 +196,68 @@ class ControlTransactionView(BaseModel):
     valid_until: int
     query_id: int
     network: int
+    sender_address: str | None = None
+
+
+class ControlReferralPayoutView(BaseModel):
+    id: str
+    telegram_id: int
+    username: str | None
+    first_name: str
+    address: str
+    amount_nano: int
+    state: str
+    payout_tx_hash: str | None
+    created_at: datetime
+    prepared_at: datetime | None
+    settled_at: datetime | None
+
+
+class ControlReferralPayoutsView(BaseModel):
+    treasury_address: str
+    payouts: list[ControlReferralPayoutView]
+    generated_at: datetime
+
+
+class ControlReferralPayoutConfirm(BaseModel):
+    signed_boc: str | None = Field(default=None, min_length=16, max_length=16_384)
+
+
+class ControlReferralPayoutReject(BaseModel):
+    reason: str = Field(min_length=3, max_length=160)
+
+
+class ControlAnalyticsFunnelView(BaseModel):
+    registered: int
+    wallet_connected: int
+    bank_started: int
+    duel_started: int
+
+
+class ControlAnalyticsDayView(BaseModel):
+    date: str
+    active_users: int = 0
+    bank_positions: int = 0
+    bank_volume_nano: int = 0
+    duel_settled: int = 0
+    referrals_qualified: int = 0
+    team_joins: int = 0
+
+
+class ControlAnalyticsView(BaseModel):
+    days: int
+    started_at: datetime
+    active_users: int
+    funnel: ControlAnalyticsFunnelView
+    bank_positions: int
+    bank_volume_nano: int
+    bank_payout_nano: int
+    duel_settled: int
+    referral_qualified: int
+    teams_created: int
+    team_joins: int
+    daily: list[ControlAnalyticsDayView]
+    generated_at: datetime
 
 
 def _application_view(control: ApplicationControl) -> ApplicationControlView:
@@ -216,6 +289,30 @@ def _write_admin_payload(body: ControlActionRequest, query_id: int) -> str:
     elif body.action in {"set_treasury", "set_owner"}:
         cell.bits.write_address(Address(body.address))
     return base64.b64encode(cell.to_boc(False)).decode()
+
+
+def _referral_payout_payload(payout_id: str) -> str:
+    """A stable human-readable label bound to exactly one payout request."""
+    cell = Cell()
+    cell.bits.write_uint(0, 32)
+    cell.bits.write_bytes(f"LOOP referral {payout_id}".encode())
+    return base64.b64encode(cell.to_boc(False)).decode()
+
+
+def _referral_payout_view(payout: ReferralPayoutRequest, user: User) -> ControlReferralPayoutView:
+    return ControlReferralPayoutView(
+        id=payout.id,
+        telegram_id=user.telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        address=payout.address,
+        amount_nano=payout.amount_nano,
+        state=payout.state,
+        payout_tx_hash=payout.payout_tx_hash,
+        created_at=payout.created_at,
+        prepared_at=payout.prepared_at,
+        settled_at=payout.settled_at,
+    )
 
 
 async def _live_contract(
@@ -532,9 +629,9 @@ async def control_participants(
         select(
             BankPosition.user_id.label("user_id"),
             func.count().label("positions"),
-            func.sum(
-                case((BankPosition.current_status.in_(active_bank_states), 1), else_=0)
-            ).label("active"),
+            func.sum(case((BankPosition.current_status.in_(active_bank_states), 1), else_=0)).label(
+                "active"
+            ),
             func.sum(BankPosition.principal_nano).label("deposited"),
             func.sum(
                 case(
@@ -611,6 +708,461 @@ async def control_participants(
         participants=participants,
         total=total,
         generated_at=datetime.now(UTC),
+    )
+
+
+async def _verified_referral_treasury(request: Request, settings: Settings, wallet: str) -> str:
+    _, admin, code_hash_matches = await _live_contract(request, settings, wallet, "bank")
+    if not code_hash_matches:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "configured BANK contract code does not match"
+        )
+    if normalize_address(admin.owner) != normalize_address(wallet):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "connected wallet is not contract owner")
+    return normalize_address(admin.treasury)
+
+
+async def _reserve_legacy_payout_rewards(
+    db: Db, payout: ReferralPayoutRequest
+) -> list[ReferralReward]:
+    """Attach rewards to a request created before reservation was introduced."""
+    reserved = (
+        await db.scalars(
+            select(ReferralReward)
+            .where(ReferralReward.payout_request_id == payout.id)
+            .order_by(ReferralReward.created_at, ReferralReward.id)
+            .with_for_update()
+        )
+    ).all()
+    if reserved:
+        if sum(item.reward_nano for item in reserved) != payout.amount_nano:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "reserved referral rewards do not match request"
+            )
+        return list(reserved)
+
+    candidates = (
+        await db.scalars(
+            select(ReferralReward)
+            .join(
+                ReferralAttribution,
+                ReferralReward.attribution_id == ReferralAttribution.id,
+            )
+            .where(
+                ReferralAttribution.inviter_user_id == payout.user_id,
+                ReferralReward.payout_tx_hash.is_(None),
+                ReferralReward.payout_request_id.is_(None),
+            )
+            .order_by(ReferralReward.created_at, ReferralReward.id)
+            .with_for_update()
+        )
+    ).all()
+    selected: list[ReferralReward] = []
+    amount = 0
+    for reward in candidates:
+        if amount >= payout.amount_nano:
+            break
+        selected.append(reward)
+        amount += reward.reward_nano
+    if amount != payout.amount_nano:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "referral request no longer matches unpaid rewards"
+        )
+    for reward in selected:
+        reward.payout_request_id = payout.id
+    return selected
+
+
+@router.get("/referral-payouts", response_model=ControlReferralPayoutsView)
+async def control_referral_payouts(
+    wallet: ControlWallet,
+    db: Db,
+    request: Request,
+    settings: Config,
+    limit: int = 100,
+) -> ControlReferralPayoutsView:
+    try:
+        treasury = await _verified_referral_treasury(request, settings, wallet)
+    except TonProviderError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    rows = (
+        await db.execute(
+            select(ReferralPayoutRequest, User)
+            .join(User, User.id == ReferralPayoutRequest.user_id)
+            .order_by(
+                case(
+                    (ReferralPayoutRequest.state == "requested", 0),
+                    (ReferralPayoutRequest.state == "prepared", 1),
+                    else_=2,
+                ),
+                ReferralPayoutRequest.created_at.desc(),
+            )
+            .limit(max(1, min(limit, 500)))
+        )
+    ).all()
+    return ControlReferralPayoutsView(
+        treasury_address=treasury,
+        payouts=[_referral_payout_view(payout, user) for payout, user in rows],
+        generated_at=datetime.now(UTC),
+    )
+
+
+@router.post(
+    "/referral-payouts/{payout_id}/transaction",
+    response_model=ControlTransactionView,
+)
+async def prepare_referral_payout(
+    payout_id: str,
+    wallet: ControlWallet,
+    db: Db,
+    request: Request,
+    settings: Config,
+) -> ControlTransactionView:
+    try:
+        treasury = await _verified_referral_treasury(request, settings, wallet)
+    except TonProviderError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    payout = await db.scalar(
+        select(ReferralPayoutRequest).where(ReferralPayoutRequest.id == payout_id).with_for_update()
+    )
+    if payout is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "referral payout not found")
+    if payout.state not in {"requested", "prepared"}:
+        raise HTTPException(status.HTTP_409_CONFLICT, "referral payout is already closed")
+    await _reserve_legacy_payout_rewards(db, payout)
+    payout.prepared_by_wallet = wallet
+    payout.prepared_at = datetime.now(UTC)
+    event = AdminAuditEvent(
+        wallet=wallet,
+        action="referral.payout",
+        target=payout.id,
+        payload_json=json.dumps(
+            {
+                "sender": treasury,
+                "destination": payout.address,
+                "amount_nano": payout.amount_nano,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+    )
+    db.add(event)
+    await db.commit()
+    return ControlTransactionView(
+        audit_id=event.id,
+        operation="referral_payout",
+        address=payout.address,
+        amount_nano=str(payout.amount_nano),
+        payload=_referral_payout_payload(payout.id),
+        valid_until=int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
+        query_id=0,
+        network=settings.ton_network_id,
+        sender_address=treasury,
+    )
+
+
+@router.post(
+    "/referral-payouts/{payout_id}/confirm",
+    response_model=ControlReferralPayoutView,
+)
+async def confirm_referral_payout(
+    payout_id: str,
+    body: ControlReferralPayoutConfirm,
+    wallet: ControlWallet,
+    db: Db,
+    request: Request,
+    settings: Config,
+) -> ControlReferralPayoutView:
+    try:
+        treasury = await _verified_referral_treasury(request, settings, wallet)
+    except TonProviderError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    payout = await db.get(ReferralPayoutRequest, payout_id)
+    if payout is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "referral payout not found")
+    user = await db.get(User, payout.user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "referral payout user is missing")
+    if payout.state == "paid":
+        return _referral_payout_view(payout, user)
+    if payout.state not in {"requested", "prepared"}:
+        raise HTTPException(status.HTTP_409_CONFLICT, "prepare referral payout first")
+    if body.signed_boc:
+        payout.state = "prepared"
+        payout.signed_boc = body.signed_boc
+        payout.prepared_at = payout.prepared_at or datetime.now(UTC)
+        await db.commit()
+    elif payout.state != "prepared" or not payout.signed_boc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "signed referral payout is missing")
+    try:
+        if payout.signed_boc:
+            proof = await request.app.state.ton_client.verify_wallet_transfer(
+                payout.signed_boc,
+                treasury,
+                payout.address,
+                payout.amount_nano,
+                _referral_payout_payload(payout.id),
+            )
+        else:
+            proof = await request.app.state.ton_client.find_wallet_transfer(
+                treasury,
+                payout.address,
+                payout.amount_nano,
+                _referral_payout_payload(payout.id),
+                payout.prepared_at or payout.created_at,
+            )
+    except TonProviderError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+    payout = await db.scalar(
+        select(ReferralPayoutRequest).where(ReferralPayoutRequest.id == payout_id).with_for_update()
+    )
+    if payout is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "referral payout not found")
+    if payout.state == "paid":
+        return _referral_payout_view(payout, user)
+    rewards = await _reserve_legacy_payout_rewards(db, payout)
+    if any(reward.payout_tx_hash is not None for reward in rewards):
+        raise HTTPException(status.HTTP_409_CONFLICT, "referral reward is already paid")
+    transaction_hash = normalize_hash(proof.transaction_hash)
+    for reward in rewards:
+        reward.payout_tx_hash = transaction_hash
+    payout.state = "paid"
+    payout.payout_tx_hash = transaction_hash
+    payout.settled_at = proof.confirmed_at
+    db.add(
+        AdminAuditEvent(
+            wallet=wallet,
+            action="chain.referral_payout",
+            target=payout.id,
+            payload_json=json.dumps(
+                {
+                    "transaction_hash": transaction_hash,
+                    "logical_time": proof.logical_time,
+                    "masterchain_seqno": proof.masterchain_seqno,
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+            status="confirmed",
+        )
+    )
+    await db.commit()
+    return _referral_payout_view(payout, user)
+
+
+@router.post(
+    "/referral-payouts/{payout_id}/reject",
+    response_model=ControlReferralPayoutView,
+)
+async def reject_referral_payout(
+    payout_id: str,
+    body: ControlReferralPayoutReject,
+    wallet: ControlWallet,
+    db: Db,
+    request: Request,
+    settings: Config,
+) -> ControlReferralPayoutView:
+    await _assert_contract_owner(request, settings, wallet)
+    payout = await db.scalar(
+        select(ReferralPayoutRequest).where(ReferralPayoutRequest.id == payout_id).with_for_update()
+    )
+    if payout is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "referral payout not found")
+    if payout.state != "requested":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "only an unsigned referral payout can be rejected",
+        )
+    user = await db.get(User, payout.user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "referral payout user is missing")
+    await db.execute(
+        update(ReferralReward)
+        .where(ReferralReward.payout_request_id == payout.id)
+        .values(payout_request_id=None)
+    )
+    payout.state = "rejected"
+    payout.settled_at = datetime.now(UTC)
+    db.add(
+        AdminAuditEvent(
+            wallet=wallet,
+            action="referral.reject",
+            target=payout.id,
+            payload_json=json.dumps({"reason": body.reason}, separators=(",", ":")),
+            status="applied",
+        )
+    )
+    await db.commit()
+    return _referral_payout_view(payout, user)
+
+
+@router.get("/analytics", response_model=ControlAnalyticsView)
+async def control_analytics(
+    wallet: ControlWallet,
+    db: Db,
+    days: int = 30,
+) -> ControlAnalyticsView:
+    del wallet
+    days = max(7, min(days, 90))
+    now = datetime.now(UTC)
+    started_at = now - timedelta(days=days)
+    cohort = select(User.id.label("user_id")).where(User.created_at >= started_at).subquery()
+
+    async def count(statement: Select[tuple[Any]]) -> int:
+        return int(await db.scalar(statement) or 0)
+
+    registered = await count(select(func.count()).select_from(cohort))
+    wallet_connected = await count(
+        select(func.count(func.distinct(Wallet.user_id)))
+        .select_from(Wallet)
+        .join(cohort, cohort.c.user_id == Wallet.user_id)
+    )
+    bank_started = await count(
+        select(func.count(func.distinct(BankPosition.user_id)))
+        .select_from(BankPosition)
+        .join(cohort, cohort.c.user_id == BankPosition.user_id)
+        .where(BankPosition.confirmed_at.is_not(None))
+    )
+    duel_started = await count(
+        select(func.count(func.distinct(DuelOffer.user_id)))
+        .select_from(DuelOffer)
+        .join(cohort, cohort.c.user_id == DuelOffer.user_id)
+        .where(DuelOffer.funding_tx_hash.is_not(None))
+    )
+    active_users = await count(
+        select(func.count(func.distinct(AuthExchange.user_id))).where(
+            AuthExchange.created_at >= started_at
+        )
+    )
+    bank_summary = (
+        await db.execute(
+            select(func.count(), func.coalesce(func.sum(BankPosition.principal_nano), 0)).where(
+                BankPosition.confirmed_at >= started_at
+            )
+        )
+    ).one()
+    bank_payout_nano = await count(
+        select(func.coalesce(func.sum(BankPayout.amount_nano), 0)).where(
+            BankPayout.created_at >= started_at
+        )
+    )
+    duel_settled = await count(
+        select(func.count())
+        .select_from(Duel)
+        .where(Duel.settled_at >= started_at, Duel.state == DuelState.SETTLED.value)
+    )
+    referral_qualified = await count(
+        select(func.count())
+        .select_from(ReferralAttribution)
+        .where(ReferralAttribution.qualified_at >= started_at)
+    )
+    teams_created = await count(
+        select(func.count()).select_from(Team).where(Team.created_at >= started_at)
+    )
+    team_joins = await count(
+        select(func.count())
+        .select_from(TeamMembership)
+        .where(TeamMembership.joined_at >= started_at)
+    )
+
+    daily = {
+        (started_at.date() + timedelta(days=index)).isoformat(): ControlAnalyticsDayView(
+            date=(started_at.date() + timedelta(days=index)).isoformat()
+        )
+        for index in range(days + 1)
+        if started_at.date() + timedelta(days=index) <= now.date()
+    }
+
+    auth_day = func.date(AuthExchange.created_at)
+    auth_rows = (
+        await db.execute(
+            select(auth_day, func.count(func.distinct(AuthExchange.user_id)))
+            .where(AuthExchange.created_at >= started_at)
+            .group_by(auth_day)
+            .order_by(auth_day)
+        )
+    ).all()
+    for day, value in auth_rows:
+        if str(day) in daily:
+            daily[str(day)].active_users = int(value or 0)
+
+    bank_day = func.date(BankPosition.confirmed_at)
+    bank_rows = (
+        await db.execute(
+            select(
+                bank_day,
+                func.count(),
+                func.coalesce(func.sum(BankPosition.principal_nano), 0),
+            )
+            .where(BankPosition.confirmed_at >= started_at)
+            .group_by(bank_day)
+            .order_by(bank_day)
+        )
+    ).all()
+    for day, positions, volume in bank_rows:
+        if str(day) in daily:
+            daily[str(day)].bank_positions = int(positions or 0)
+            daily[str(day)].bank_volume_nano = int(volume or 0)
+
+    duel_day = func.date(Duel.settled_at)
+    duel_rows = (
+        await db.execute(
+            select(duel_day, func.count())
+            .where(Duel.settled_at >= started_at, Duel.state == DuelState.SETTLED.value)
+            .group_by(duel_day)
+            .order_by(duel_day)
+        )
+    ).all()
+    for day, value in duel_rows:
+        if str(day) in daily:
+            daily[str(day)].duel_settled = int(value or 0)
+
+    referral_day = func.date(ReferralAttribution.qualified_at)
+    referral_rows = (
+        await db.execute(
+            select(referral_day, func.count())
+            .where(ReferralAttribution.qualified_at >= started_at)
+            .group_by(referral_day)
+            .order_by(referral_day)
+        )
+    ).all()
+    for day, value in referral_rows:
+        if str(day) in daily:
+            daily[str(day)].referrals_qualified = int(value or 0)
+
+    team_day = func.date(TeamMembership.joined_at)
+    team_rows = (
+        await db.execute(
+            select(team_day, func.count())
+            .where(TeamMembership.joined_at >= started_at)
+            .group_by(team_day)
+            .order_by(team_day)
+        )
+    ).all()
+    for day, value in team_rows:
+        if str(day) in daily:
+            daily[str(day)].team_joins = int(value or 0)
+
+    return ControlAnalyticsView(
+        days=days,
+        started_at=started_at,
+        active_users=active_users,
+        funnel=ControlAnalyticsFunnelView(
+            registered=registered,
+            wallet_connected=wallet_connected,
+            bank_started=bank_started,
+            duel_started=duel_started,
+        ),
+        bank_positions=int(bank_summary[0] or 0),
+        bank_volume_nano=int(bank_summary[1] or 0),
+        bank_payout_nano=bank_payout_nano,
+        duel_settled=duel_settled,
+        referral_qualified=referral_qualified,
+        teams_created=teams_created,
+        team_joins=team_joins,
+        daily=list(daily.values()),
+        generated_at=now,
     )
 
 
@@ -717,9 +1269,7 @@ async def prepare_control_transaction(
     query_id = secrets.randbelow(2**63 - 1) + 1
     payload = _write_admin_payload(body, query_id)
     gas = WITHDRAW_GAS_NANO if body.action == "withdraw_surplus" else ADMIN_GAS_NANO
-    amount = gas + (
-        body.amount_nano if body.action == "fund_reserve" and body.amount_nano else 0
-    )
+    amount = gas + (body.amount_nano if body.action == "fund_reserve" and body.amount_nano else 0)
     event = AdminAuditEvent(
         wallet=wallet,
         action=f"{body.mode}.{body.action}",

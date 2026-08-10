@@ -286,7 +286,7 @@ class TonClient:
             extended = False
             stack = await self._run_get_method(address, "contractConfig")
             owner_index, treasury_index, fee_index = 0, 1, 2
-            paused_index, locked_index = ((3, 6) if mode == "bank" else (6, 7))
+            paused_index, locked_index = (3, 6) if mode == "bank" else (6, 7)
         try:
             owner = _stack_address(stack[owner_index])
             treasury = _stack_address(stack[treasury_index])
@@ -321,11 +321,7 @@ class TonClient:
             holder_fee_supported = len(stack) == 9 and _stack_number(stack[8]) != 0
         except (IndexError, TypeError, ValueError) as exc:
             raise TonProviderError("malformed DUEL contract domain") from exc
-        if (
-            not -(2**31) <= network_id < 2**31
-            or not 0 < invite_signer < 2**256
-            or locked_nano < 0
-        ):
+        if not -(2**31) <= network_id < 2**31 or not 0 < invite_signer < 2**256 or locked_nano < 0:
             raise TonProviderError("DUEL contract domain is outside valid bounds")
         return DuelContractDomain(
             network_id=network_id,
@@ -397,6 +393,90 @@ class TonClient:
 
     async def verify_transaction(self, transaction_hash: str, account: str) -> TransactionProof:
         proof, _ = await self._verified_transaction(transaction_hash, account)
+        return proof
+
+    async def verify_wallet_transfer(
+        self,
+        signed_boc: str,
+        sender: str,
+        destination: str,
+        amount_nano: int,
+        payload_boc: str,
+    ) -> TransactionProof:
+        """Resolve a TON Connect result and prove its exact outgoing payment.
+
+        TON Connect returns the signed external-message BOC, not a transaction
+        hash. The indexer is used only to locate the finalized wallet
+        transaction; the transaction is then reloaded by hash and every value
+        bearing field is checked fail-closed.
+        """
+        if not 0 < amount_nano < 2**63 or len(signed_boc) > 16_384:
+            raise TonProviderError("invalid wallet transfer proof")
+        try:
+            roots = Cell.one_from_boc(base64.b64decode(signed_boc, validate=True))
+            root = roots[0] if isinstance(roots, list) else roots
+            message_hash = base64.b64encode(bytes(root.bytes_hash())).decode()
+        except Exception as exc:
+            raise TonProviderError("malformed TON Connect transaction proof") from exc
+
+        response = await self.http.get(
+            f"{self.base_url}/api/v3/transactionsByMessage",
+            headers=self.headers,
+            params={"msg_hash": message_hash, "direction": "in", "limit": 2},
+        )
+        if response.status_code != 200:
+            raise TonProviderError("TON transfer is not indexed yet")
+        body: Any = response.json()
+        transactions = body.get("transactions") if isinstance(body, dict) else None
+        if not isinstance(transactions, list) or len(transactions) != 1:
+            raise TonProviderError("TON transfer is not finalized yet")
+        transaction_hash = transactions[0].get("hash")
+        if not isinstance(transaction_hash, str):
+            raise TonProviderError("TON transfer hash is missing")
+
+        proof, transaction = await self._verified_transaction(transaction_hash, sender)
+        if not transaction_has_wallet_transfer(transaction, destination, amount_nano, payload_boc):
+            raise TonProviderError("TON transfer destination, amount or label does not match")
+        return proof
+
+    async def find_wallet_transfer(
+        self,
+        sender: str,
+        destination: str,
+        amount_nano: int,
+        payload_boc: str,
+        not_before: datetime,
+    ) -> TransactionProof:
+        """Find the uniquely labelled payout after a page reload or slow wallet."""
+        response = await self.http.get(
+            f"{self.base_url}/api/v3/transactions",
+            headers=self.headers,
+            params={
+                "account": sender,
+                "start_utime": max(0, int(not_before.timestamp()) - 60),
+                "limit": 50,
+                "sort": "desc",
+            },
+        )
+        if response.status_code != 200:
+            raise TonProviderError("TON transfer provider unavailable")
+        body: Any = response.json()
+        transactions = body.get("transactions") if isinstance(body, dict) else None
+        if not isinstance(transactions, list):
+            raise TonProviderError("TON transfer history is malformed")
+        matches = [
+            item
+            for item in transactions
+            if isinstance(item, dict)
+            and transaction_has_wallet_transfer(item, destination, amount_nano, payload_boc)
+        ]
+        if not matches:
+            raise TonProviderError("TON transfer is not finalized yet")
+        if len(matches) != 1 or not isinstance(matches[0].get("hash"), str):
+            raise TonProviderError("TON transfer proof is ambiguous")
+        proof, transaction = await self._verified_transaction(matches[0]["hash"], sender)
+        if not transaction_has_wallet_transfer(transaction, destination, amount_nano, payload_boc):
+            raise TonProviderError("TON transfer proof changed during verification")
         return proof
 
     async def verify_duel_settlement(
@@ -497,6 +577,44 @@ def message_body_parser(message: dict[str, Any]) -> Any:
         return cell.begin_parse()
     except Exception as exc:
         raise TonProviderError("malformed TON message body") from exc
+
+
+def transaction_has_wallet_transfer(
+    transaction: dict[str, Any],
+    destination: str,
+    amount_nano: int,
+    payload_boc: str,
+) -> bool:
+    try:
+        expected_destination = normalize_address(destination)
+        payload_roots = Cell.one_from_boc(base64.b64decode(payload_boc, validate=True))
+        payload_cell = payload_roots[0] if isinstance(payload_roots, list) else payload_roots
+        expected_payload_hash = bytes(payload_cell.bytes_hash())
+    except Exception:
+        return False
+    matches = 0
+    outgoing = transaction.get("out_msgs")
+    if not isinstance(outgoing, list):
+        return False
+    for message in outgoing:
+        if not isinstance(message, dict):
+            continue
+        try:
+            actual_destination = normalize_address(str(message["destination"]))
+            actual_value = int(message["value"])
+            content = message["message_content"]
+            encoded_body = content["body"]
+            cells = Cell.one_from_boc(base64.b64decode(encoded_body))
+            body_cell = cells[0] if isinstance(cells, list) else cells
+        except (KeyError, TypeError, ValueError, TonProviderError):
+            continue
+        if (
+            actual_destination == expected_destination
+            and actual_value == amount_nano
+            and bytes(body_cell.bytes_hash()) == expected_payload_hash
+        ):
+            matches += 1
+    return matches == 1
 
 
 def normalize_hash(value: str) -> str:

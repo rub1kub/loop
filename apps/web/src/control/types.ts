@@ -66,6 +66,58 @@ export type ControlTransaction = {
   valid_until: number;
   query_id: number;
   network: number;
+  sender_address: string | null;
+};
+
+export type ControlReferralPayout = {
+  id: string;
+  telegram_id: number;
+  username: string | null;
+  first_name: string;
+  address: string;
+  amount_nano: number;
+  state: 'requested' | 'prepared' | 'paid' | 'rejected';
+  payout_tx_hash: string | null;
+  created_at: string;
+  prepared_at: string | null;
+  settled_at: string | null;
+};
+
+export type ControlReferralPayouts = {
+  treasury_address: string;
+  payouts: ControlReferralPayout[];
+  generated_at: string;
+};
+
+export type ControlAnalyticsDay = {
+  date: string;
+  active_users: number;
+  bank_positions: number;
+  bank_volume_nano: number;
+  duel_settled: number;
+  referrals_qualified: number;
+  team_joins: number;
+};
+
+export type ControlAnalytics = {
+  days: number;
+  started_at: string;
+  active_users: number;
+  funnel: {
+    registered: number;
+    wallet_connected: number;
+    bank_started: number;
+    duel_started: number;
+  };
+  bank_positions: number;
+  bank_volume_nano: number;
+  bank_payout_nano: number;
+  duel_settled: number;
+  referral_qualified: number;
+  teams_created: number;
+  team_joins: number;
+  daily: ControlAnalyticsDay[];
+  generated_at: string;
 };
 
 export type ControlParticipant = {

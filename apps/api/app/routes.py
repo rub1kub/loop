@@ -765,7 +765,7 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
     pending = await db.scalar(
         select(ReferralPayoutRequest).where(
             ReferralPayoutRequest.user_id == user.id,
-            ReferralPayoutRequest.state == "requested",
+            ReferralPayoutRequest.state.in_(["requested", "prepared"]),
         )
     )
     available = max(int(totals[1]) - int(paid or 0) - (pending.amount_nano if pending else 0), 0)
@@ -820,10 +820,9 @@ async def request_referral_payout(
 ) -> ReferralPayoutRequestView:
     """Ask for the referral share to be sent to a wallet.
 
-    Paying is still done by hand from the treasury; what this adds is a place
-    to ask. The amount is fixed at the moment of asking, so later accruals do
-    not silently change what was agreed, and one open request at a time keeps
-    the same money from being requested twice.
+    The amount and the exact reward rows are fixed at the moment of asking.
+    Later accruals stay available for the next request, while the reserved rows
+    cannot be paid twice.
     """
     try:
         address = normalize_address(body.address)
@@ -834,7 +833,7 @@ async def request_referral_payout(
     open_request = await db.scalar(
         select(ReferralPayoutRequest).where(
             ReferralPayoutRequest.user_id == user.id,
-            ReferralPayoutRequest.state == "requested",
+            ReferralPayoutRequest.state.in_(["requested", "prepared"]),
         )
     )
     if open_request is not None:
@@ -842,19 +841,23 @@ async def request_referral_payout(
             status.HTTP_409_CONFLICT,
             "Заявка уже отправлена. Дождись выплаты, потом можно подать новую.",
         )
-    earned = await db.scalar(
-        select(func.coalesce(func.sum(ReferralReward.reward_nano), 0))
-        .select_from(ReferralReward)
-        .join(
-            ReferralAttribution,
-            ReferralReward.attribution_id == ReferralAttribution.id,
+    rewards = (
+        await db.scalars(
+            select(ReferralReward)
+            .join(
+                ReferralAttribution,
+                ReferralReward.attribution_id == ReferralAttribution.id,
+            )
+            .where(
+                ReferralAttribution.inviter_user_id == user.id,
+                ReferralReward.payout_tx_hash.is_(None),
+                ReferralReward.payout_request_id.is_(None),
+            )
+            .order_by(ReferralReward.created_at, ReferralReward.id)
+            .with_for_update()
         )
-        .where(
-            ReferralAttribution.inviter_user_id == user.id,
-            ReferralReward.payout_tx_hash.is_(None),
-        )
-    )
-    amount = int(earned or 0)
+    ).all()
+    amount = sum(reward.reward_nano for reward in rewards)
     if amount < settings.referral_min_payout_nano:
         floor = settings.referral_min_payout_nano / 1_000_000_000
         raise HTTPException(
@@ -868,6 +871,9 @@ async def request_referral_payout(
         amount_nano=amount,
     )
     db.add(payout)
+    await db.flush()
+    for reward in rewards:
+        reward.payout_request_id = payout.id
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -926,9 +932,7 @@ async def prelaunch(user: CurrentUser, db: Db, settings: Config) -> PrelaunchVie
     top_ids = sorted(by_inviter, key=lambda key: (-by_inviter[key], key))[:10]
     leaders = {
         leader.id: leader
-        for leader in (
-            await db.scalars(select(User).where(User.id.in_(top_ids)))
-        ).all()
+        for leader in (await db.scalars(select(User).where(User.id.in_(top_ids)))).all()
     }
     participants = int(await db.scalar(select(func.count()).select_from(User)) or 0)
     return PrelaunchView(
@@ -936,9 +940,7 @@ async def prelaunch(user: CurrentUser, db: Db, settings: Config) -> PrelaunchVie
         referral_code=referral.code,
         referral_url=f"https://t.me/{settings.bot_username}?startapp=ref_{referral.code}",
         invited=mine,
-        rank=(
-            sum(1 for count in by_inviter.values() if count > mine) + 1 if mine > 0 else None
-        ),
+        rank=(sum(1 for count in by_inviter.values() if count > mine) + 1 if mine > 0 else None),
         leaderboard=[
             PrelaunchLeaderView(
                 first_name=leaders[leader_id].first_name,
@@ -1033,9 +1035,7 @@ async def prepare_invite_share(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "there is nothing to announce")
     bot = request.app.state.bot
     if bot is None:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE, "Telegram sharing is unavailable"
-        )
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Telegram sharing is unavailable")
     try:
         referral = await get_or_create_referral_code(db, user.id)
     except RuntimeError as exc:

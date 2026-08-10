@@ -194,7 +194,13 @@ class ReferralReward(Base):
     # The inviter's share of the fee from one confirmed deposit, in nanoGRAM.
     # Accrued here, paid from the treasury; payout_tx_hash закрывает строку.
     reward_nano: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
-    payout_tx_hash: Mapped[str | None] = mapped_column(String(96), unique=True)
+    # One treasury transfer can close several accrued rewards. The hash is
+    # therefore deliberately non-unique here; uniqueness belongs to the payout
+    # request that owns the transfer.
+    payout_tx_hash: Mapped[str | None] = mapped_column(String(96), index=True)
+    payout_request_id: Mapped[str | None] = mapped_column(
+        ForeignKey("referral_payout_requests.id"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
@@ -215,8 +221,15 @@ class ReferralPayoutRequest(Base):
             "uq_open_referral_payout_request",
             "user_id",
             unique=True,
-            postgresql_where=text("state = 'requested'"),
-            sqlite_where=text("state = 'requested'"),
+            postgresql_where=text("state IN ('requested', 'prepared')"),
+            sqlite_where=text("state IN ('requested', 'prepared')"),
+        ),
+        Index(
+            "uq_referral_payout_tx_hash",
+            "payout_tx_hash",
+            unique=True,
+            postgresql_where=text("payout_tx_hash IS NOT NULL"),
+            sqlite_where=text("payout_tx_hash IS NOT NULL"),
         ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -225,6 +238,9 @@ class ReferralPayoutRequest(Base):
     amount_nano: Mapped[int] = mapped_column(BigInteger, nullable=False)
     state: Mapped[str] = mapped_column(String(16), default="requested", nullable=False)
     payout_tx_hash: Mapped[str | None] = mapped_column(String(96))
+    signed_boc: Mapped[str | None] = mapped_column(Text)
+    prepared_by_wallet: Mapped[str | None] = mapped_column(String(68))
+    prepared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

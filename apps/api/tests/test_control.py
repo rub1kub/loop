@@ -1,5 +1,6 @@
 import base64
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import HTTPException
@@ -9,7 +10,7 @@ from app import control_routes
 from app.config import get_settings
 from app.control_state import application_control, ensure_mode_enabled
 from app.security import issue_control_session
-from app.ton import ContractAdminState, ContractState
+from app.ton import ContractAdminState, ContractState, TransactionProof
 
 OWNER = "0:" + "22" * 32
 
@@ -30,9 +31,7 @@ class FakeControlTonClient:
             last_transaction_lt=99,
         )
 
-    async def get_contract_admin_state(
-        self, mode: str, address: str
-    ) -> ContractAdminState:
+    async def get_contract_admin_state(self, mode: str, address: str) -> ContractAdminState:
         del address
         return ContractAdminState(
             owner=OWNER,
@@ -41,6 +40,27 @@ class FakeControlTonClient:
             paused=mode == "duel",
             locked_nano=1_000_000_000,
             extended_controls=True,
+        )
+
+    async def verify_wallet_transfer(
+        self,
+        signed_boc: str,
+        sender: str,
+        destination: str,
+        amount_nano: int,
+        payload_boc: str,
+    ) -> TransactionProof:
+        assert signed_boc
+        assert sender == OWNER
+        assert destination.startswith("0:")
+        assert amount_nano > 0
+        assert payload_boc
+        return TransactionProof(
+            transaction_hash="ab" * 32,
+            account=sender,
+            logical_time=123,
+            masterchain_seqno=456,
+            confirmed_at=datetime.now(UTC),
         )
 
 
@@ -148,6 +168,7 @@ async def test_application_control_follows_on_chain_ownership(client, app) -> No
     the app down. Every other control action already asks the chain; this one
     does too now.
     """
+
     class TransferredOwner(FakeControlTonClient):
         async def get_contract_admin_state(self, mode: str, address: str):
             state = await super().get_contract_admin_state(mode, address)
@@ -275,3 +296,188 @@ async def test_participants_report_what_each_person_actually_did(client, app) ->
 async def test_participants_stay_behind_the_owner_session(client, app) -> None:
     app.state.ton_client = FakeControlTonClient()
     assert (await client.get("/api/v1/control/participants")).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_referral_payout_queue_closes_only_after_ton_proof(client, app) -> None:
+    from sqlalchemy import select
+
+    from app.models import (
+        ReferralAttribution,
+        ReferralPayoutRequest,
+        ReferralReward,
+        User,
+    )
+
+    app.state.ton_client = FakeControlTonClient()
+    async with app.state.session_factory() as db:
+        inviter = User(telegram_id=6001, first_name="Owner", username="owner")
+        invitee = User(telegram_id=6002, first_name="Guest")
+        db.add_all([inviter, invitee])
+        await db.flush()
+        attribution = ReferralAttribution(
+            inviter_user_id=inviter.id,
+            invitee_user_id=invitee.id,
+            code="proof-code",
+            status="qualified",
+        )
+        db.add(attribution)
+        await db.flush()
+        payout = ReferralPayoutRequest(
+            user_id=inviter.id,
+            address="0:" + "44" * 32,
+            amount_nano=700_000_000,
+        )
+        db.add(payout)
+        await db.flush()
+        db.add_all(
+            [
+                ReferralReward(
+                    attribution_id=attribution.id,
+                    cause="fee_share:a",
+                    reward_nano=300_000_000,
+                    payout_request_id=payout.id,
+                ),
+                ReferralReward(
+                    attribution_id=attribution.id,
+                    cause="fee_share:b",
+                    reward_nano=400_000_000,
+                    payout_request_id=payout.id,
+                ),
+            ]
+        )
+        await db.commit()
+        payout_id = payout.id
+
+    authorize_control(client)
+    queue = await client.get("/api/v1/control/referral-payouts")
+    assert queue.status_code == 200, queue.text
+    assert queue.json()["payouts"][0]["state"] == "requested"
+
+    prepared = await client.post(
+        f"/api/v1/control/referral-payouts/{payout_id}/transaction", json={}
+    )
+    assert prepared.status_code == 200, prepared.text
+    assert prepared.json()["sender_address"] == OWNER
+    assert prepared.json()["amount_nano"] == "700000000"
+
+    confirmed = await client.post(
+        f"/api/v1/control/referral-payouts/{payout_id}/confirm",
+        json={"signed_boc": "A" * 32},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["state"] == "paid"
+    assert confirmed.json()["payout_tx_hash"] == "AB" * 32
+
+    async with app.state.session_factory() as db:
+        rewards = (
+            await db.scalars(
+                select(ReferralReward).where(ReferralReward.payout_request_id == payout_id)
+            )
+        ).all()
+        assert len(rewards) == 2
+        assert {reward.payout_tx_hash for reward in rewards} == {"AB" * 32}
+
+
+@pytest.mark.asyncio
+async def test_control_analytics_uses_server_confirmed_events(client, app) -> None:
+    from app.models import AuthExchange, User, Wallet
+    from app.modules.duel.models import Duel, DuelOffer, DuelState, OfferState
+
+    now = datetime.now(UTC)
+    async with app.state.session_factory() as db:
+        user = User(telegram_id=7001, first_name="Analytics", created_at=now)
+        pending_user = User(telegram_id=7002, first_name="Pending", created_at=now)
+        db.add_all([user, pending_user])
+        await db.flush()
+        db.add_all(
+            [
+                AuthExchange(
+                    digest=b"x" * 32,
+                    user_id=user.id,
+                    auth_date=now,
+                    expires_at=now,
+                    created_at=now,
+                ),
+                Wallet(
+                    user_id=user.id,
+                    network=get_settings().ton_network_id,
+                    address="0:" + "55" * 32,
+                    public_key="55" * 32,
+                ),
+            ]
+        )
+        settings = get_settings()
+        funded_offer = DuelOffer(
+            onchain_offer_id=7001,
+            query_id=7001,
+            user_id=user.id,
+            owner_wallet="0:" + "66" * 32,
+            network=settings.ton_network_id,
+            contract_address=settings.effective_duel_contract_address,
+            chance_bps=5_000,
+            total_pool_nano=2_000_000_000,
+            stake_nano=1_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+            fee_bps=1_000,
+            payout_nano=1_800_000_000,
+            commitment_hex="66" * 32,
+            state=OfferState.SETTLED.value,
+            funding_tx_hash="66" * 32,
+            expires_at=now,
+        )
+        pending_offer = DuelOffer(
+            onchain_offer_id=7002,
+            query_id=7002,
+            user_id=pending_user.id,
+            owner_wallet="0:" + "77" * 32,
+            network=settings.ton_network_id,
+            contract_address=settings.effective_duel_contract_address,
+            chance_bps=5_000,
+            total_pool_nano=2_000_000_000,
+            stake_nano=1_000_000_000,
+            opponent_stake_nano=1_000_000_000,
+            fee_bps=1_000,
+            payout_nano=1_800_000_000,
+            commitment_hex="77" * 32,
+            state=OfferState.PENDING_FUNDING.value,
+            expires_at=now,
+        )
+        db.add_all([funded_offer, pending_offer])
+        await db.flush()
+        db.add_all(
+            [
+                Duel(
+                    onchain_duel_id=7001,
+                    network=settings.ton_network_id,
+                    offer_a_id=funded_offer.id,
+                    offer_b_id=pending_offer.id,
+                    state=DuelState.SETTLED.value,
+                    reveal_deadline=now,
+                    settled_at=now,
+                ),
+                Duel(
+                    onchain_duel_id=7002,
+                    network=settings.ton_network_id,
+                    offer_a_id=funded_offer.id,
+                    offer_b_id=pending_offer.id,
+                    state=DuelState.REFUNDED.value,
+                    reveal_deadline=now,
+                    settled_at=now,
+                ),
+            ]
+        )
+        await db.commit()
+
+    authorize_control(client)
+    response = await client.get("/api/v1/control/analytics?days=7")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["days"] == 7
+    assert body["active_users"] == 1
+    assert body["funnel"]["registered"] == 2
+    assert body["funnel"]["wallet_connected"] == 1
+    assert body["funnel"]["duel_started"] == 1
+    assert body["duel_settled"] == 1
+    assert body["daily"][-1]["active_users"] == 1
+    assert body["daily"][-1]["duel_settled"] == 1

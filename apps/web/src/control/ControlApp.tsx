@@ -21,13 +21,16 @@ import {
 } from '@phosphor-icons/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { sameAddress } from '../address';
 import { controlApi, ControlApiError } from './api';
 import type {
   ApplicationControl,
   ContractControl,
   ControlActionInput,
+  ControlAnalytics,
   ControlOverview,
   ControlParticipant,
+  ControlReferralPayout,
 } from './types';
 
 const NANO = 1_000_000_000;
@@ -791,6 +794,215 @@ function ParticipantsSection({ total }: { total: number }) {
   );
 }
 
+function AnalyticsSection() {
+  const [days, setDays] = useState(30);
+  const [analytics, setAnalytics] = useState<ControlAnalytics | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const load = useCallback((period: number) => {
+    setFailure(null);
+    setAnalytics(null);
+    controlApi
+      .analytics(period)
+      .then(setAnalytics)
+      .catch((reason: unknown) =>
+        setFailure(reason instanceof Error ? reason.message : 'Не удалось загрузить аналитику'),
+      );
+  }, []);
+
+  const maxActivity = Math.max(1, ...(analytics?.daily.map((day) => day.active_users) ?? [1]));
+  return (
+    <details
+      id="analytics"
+      className="history-section history-disclosure analytics-disclosure"
+      onToggle={(event) => {
+        if (event.currentTarget.open && analytics === null && failure === null) load(days);
+      }}
+    >
+      <summary>
+        <div>
+          <span className="eyebrow">ПРОДУКТ</span>
+          <strong>Аналитика</strong>
+          <small>{analytics ? `${analytics.active_users} активных` : `${days} дней`}</small>
+        </div>
+        <CaretDown size={20} />
+      </summary>
+      <div className="analytics-body">
+        <div className="analytics-periods">
+          {[7, 30, 90].map((period) => (
+            <button
+              key={period}
+              className={days === period ? 'active' : ''}
+              onClick={() => {
+                setDays(period);
+                load(period);
+              }}
+            >
+              {period} ДНЕЙ
+            </button>
+          ))}
+        </div>
+        {failure ? (
+          <p className="empty-history">{failure}</p>
+        ) : analytics === null ? (
+          <p className="empty-history">Считаем…</p>
+        ) : (
+          <>
+            <div className="analytics-cards">
+              <div>
+                <span>Активные</span>
+                <strong>{analytics.active_users}</strong>
+              </div>
+              <div>
+                <span>В BANK</span>
+                <strong>{analytics.bank_positions}</strong>
+              </div>
+              <div>
+                <span>Объём BANK</span>
+                <strong>{gram(analytics.bank_volume_nano)}</strong>
+              </div>
+              <div>
+                <span>Дуэли</span>
+                <strong>{analytics.duel_settled}</strong>
+              </div>
+              <div>
+                <span>Рефералы</span>
+                <strong>{analytics.referral_qualified}</strong>
+              </div>
+              <div>
+                <span>Вступления в команды</span>
+                <strong>{analytics.team_joins}</strong>
+              </div>
+            </div>
+            <div className="analytics-funnel">
+              <span>Новые пользователи</span>
+              <strong>{analytics.funnel.registered}</strong>
+              <span>Подключили кошелёк</span>
+              <strong>{analytics.funnel.wallet_connected}</strong>
+              <span>Создали позицию</span>
+              <strong>{analytics.funnel.bank_started}</strong>
+              <span>Вошли в DUEL</span>
+              <strong>{analytics.funnel.duel_started}</strong>
+            </div>
+            <div className="activity-chart" aria-label="Активные пользователи по дням">
+              {analytics.daily.map((day) => (
+                <i
+                  key={day.date}
+                  title={`${new Date(`${day.date}T00:00:00`).toLocaleDateString('ru-RU')}: ${day.active_users}`}
+                  style={{ height: `${Math.max(4, (day.active_users / maxActivity) * 100)}%` }}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function ReferralPayoutsSection({
+  connectedAddress,
+  busy,
+  onPay,
+  onSwitchWallet,
+}: {
+  connectedAddress: string | null;
+  busy: boolean;
+  onPay: (payout: ControlReferralPayout) => Promise<boolean>;
+  onSwitchWallet: () => Promise<void>;
+}) {
+  const [payouts, setPayouts] = useState<ControlReferralPayout[] | null>(null);
+  const [treasury, setTreasury] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const load = useCallback(() => {
+    setFailure(null);
+    controlApi
+      .referralPayouts()
+      .then((result) => {
+        setPayouts(result.payouts);
+        setTreasury(result.treasury_address);
+      })
+      .catch((reason: unknown) =>
+        setFailure(reason instanceof Error ? reason.message : 'Не удалось загрузить выплаты'),
+      );
+  }, []);
+  const readyWallet = sameAddress(connectedAddress, treasury);
+  const openCount = (payouts ?? []).filter((item) =>
+    ['requested', 'prepared'].includes(item.state),
+  ).length;
+
+  return (
+    <details
+      id="referral-payouts"
+      className="history-section history-disclosure payouts-disclosure"
+      onToggle={(event) => {
+        if (event.currentTarget.open && payouts === null && failure === null) load();
+      }}
+    >
+      <summary>
+        <div>
+          <span className="eyebrow">ВЫПЛАТЫ</span>
+          <strong>Реферальные заявки</strong>
+          <small>{payouts ? `${openCount} ожидают` : 'Очередь'}</small>
+        </div>
+        <CaretDown size={20} />
+      </summary>
+      <div className="payouts-body">
+        {treasury && !readyWallet && (
+          <div className="payout-wallet-warning">
+            <span>Для перевода нужен кошелёк казны {shortAddress(treasury)}</span>
+            <button onClick={() => void onSwitchWallet()}>СМЕНИТЬ КОШЕЛЁК</button>
+          </div>
+        )}
+        {failure ? (
+          <p className="empty-history">{failure}</p>
+        ) : payouts === null ? (
+          <p className="empty-history">Загружаем…</p>
+        ) : payouts.length === 0 ? (
+          <p className="empty-history">Заявок пока нет.</p>
+        ) : (
+          <div className="payouts-list">
+            {payouts.map((payout) => (
+              <article key={payout.id}>
+                <div>
+                  <strong>
+                    {payout.username
+                      ? `@${payout.username}`
+                      : payout.first_name || payout.telegram_id}
+                  </strong>
+                  <small>
+                    {shortAddress(payout.address)} ·{' '}
+                    {new Date(payout.created_at).toLocaleString('ru-RU')}
+                  </small>
+                </div>
+                <b>{gram(payout.amount_nano)} GRAM</b>
+                <span className={`payout-state ${payout.state}`}>
+                  {payout.state === 'paid'
+                    ? 'ВЫПЛАЧЕНО'
+                    : payout.state === 'rejected'
+                      ? 'ОТКЛОНЕНО'
+                      : payout.state === 'prepared'
+                        ? 'ПОДПИСЬ'
+                        : 'НОВАЯ'}
+                </span>
+                {['requested', 'prepared'].includes(payout.state) && (
+                  <button
+                    className="payout-button"
+                    disabled={busy || !readyWallet}
+                    onClick={() => void onPay(payout).then((done) => done && load())}
+                  >
+                    {payout.state === 'prepared' ? 'ПРОВЕРИТЬ' : 'ВЫПЛАТИТЬ'}
+                  </button>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 export default function ControlApp() {
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
@@ -931,6 +1143,71 @@ export default function ControlApp() {
       return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Команда не выполнена');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const switchTransactionWallet = async () => {
+    setError(null);
+    await tonConnectUI.disconnect().catch(() => undefined);
+    await tonConnectUI.openModal();
+  };
+
+  const runReferralPayout = async (payout: ControlReferralPayout) => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      let signedBoc: string | undefined;
+      if (payout.state === 'requested') {
+        const transaction = await controlApi.prepareReferralPayout(payout.id);
+        if (
+          !wallet ||
+          !transaction.sender_address ||
+          !sameAddress(wallet.account.address, transaction.sender_address)
+        ) {
+          throw new Error(
+            `Подключи кошелёк казны ${shortAddress(transaction.sender_address ?? '')}`,
+          );
+        }
+        const result = await tonConnectUI.sendTransaction({
+          validUntil: transaction.valid_until,
+          network: String(transaction.network),
+          messages: [
+            {
+              address: transaction.address,
+              amount: transaction.amount_nano,
+              payload: transaction.payload,
+            },
+          ],
+        });
+        signedBoc = result.boc;
+        setMessage('Перевод подписан. Проверяем подтверждение TON.');
+      }
+
+      const delays = [0, 2_500, 5_000, 10_000, 20_000];
+      for (const delay of delays) {
+        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        try {
+          const confirmed = await controlApi.confirmReferralPayout(payout.id, signedBoc);
+          if (confirmed.state === 'paid') {
+            setMessage('Реферальная выплата подтверждена TON и закрыта.');
+            await refresh();
+            return true;
+          }
+        } catch (reason) {
+          if (!(reason instanceof ControlApiError) || reason.status !== 409) throw reason;
+        }
+        signedBoc = undefined;
+      }
+      setMessage(
+        'Перевод ещё подтверждается. Нажми «Проверить» позже — повторно платить не нужно.',
+      );
+      return false;
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Выплата не выполнена');
       return false;
     } finally {
       setBusy(false);
@@ -1234,6 +1511,15 @@ export default function ControlApp() {
             </div>
           )}
         </section>
+
+        <ReferralPayoutsSection
+          connectedAddress={wallet?.account.address ?? null}
+          busy={busy}
+          onPay={runReferralPayout}
+          onSwitchWallet={switchTransactionWallet}
+        />
+
+        <AnalyticsSection />
 
         <ParticipantsSection total={overview.metrics.users} />
 
