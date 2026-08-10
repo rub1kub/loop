@@ -125,3 +125,16 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   prelaunch state to the narrow-screen overflow suite.
 - Browser checks at 800 × 1280 and 1024 × 768 confirm a centred 430 px surface with no horizontal
   page overflow.
+
+## 2026-08-10: BANK neck ejection
+
+- Removed the redundant `До ближайшей выплаты — … GRAM` pulse while preserving actionable
+  messages about how many positions the next entry closes.
+- Expanded token simulation from the inner chamber to the full visible vessel: glass shoulders
+  are solid, only the real central neck is open, and a token crosses the lip continuously.
+- Added a restrained powered lift through the empty headroom, followed by ordinary gravity,
+  rotation, rim collision and return through the neck; the animation emits at most one idle token.
+- Every exterior physics substep clamps the full token radius inside the BANK stage, including
+  extreme velocity, device tilt and viewport resize cases. Reduced-motion mode remains static.
+- Mock-only deterministic time/state hooks cover visual QA. Focused physics/UI tests pass, and
+  Chromium checks at 390 × 844 and 1024 × 768 show no nearest-payout copy, overflow or console errors.

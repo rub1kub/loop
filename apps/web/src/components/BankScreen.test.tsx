@@ -119,4 +119,24 @@ describe('BankScreen', () => {
     expect(screen.getByText('Осталось собрать')).toBeInTheDocument();
     expect(screen.getAllByText('#2').length).toBeGreaterThan(0);
   });
+
+  it('does not show the nearest-payout amount in BANK', () => {
+    render(
+      <BankScreen
+        profile={profile}
+        position={position}
+        queuePulse={{
+          ...queuePulse,
+          minimum_entry_payouts: 0,
+          next_payout_gross_nano: 4_389_000_000,
+        }}
+        pulse={null}
+        onRefresh={vi.fn()}
+        onMockCreated={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/до ближайшей выплаты/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/4[,.]389\s*GRAM/i)).not.toBeInTheDocument();
+  });
 });

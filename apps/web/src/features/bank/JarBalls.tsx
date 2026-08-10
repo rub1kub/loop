@@ -1,10 +1,29 @@
 import { useEffect, useRef } from 'react';
 
 import { telegram } from '../../telegram';
-import { createPile, placeSettled, pointerRadius, pour, stepPile, targetCount } from './jarPhysics';
+import {
+  createFlightField,
+  createPile,
+  liftSurfaceToken,
+  placeSettled,
+  pointerRadius,
+  pour,
+  releaseEscaped,
+  resizeFlightField,
+  resizePile,
+  stepFlyingBalls,
+  stepPile,
+  targetCount,
+} from './jarPhysics';
 import type { Ball } from './jarPhysics';
 
 const NEW_TOKEN_INTERVAL = 0.095;
+const CHAMBER_LEFT = 0.178;
+const CHAMBER_RIGHT = 0.178;
+const CHAMBER_TOP = 0.185;
+const CHAMBER_BOTTOM = 0.075;
+const IDLE_EJECTION_MIN = 18;
+const IDLE_EJECTION_SPREAD = 10;
 
 // Normalized from TON's official Gram Diamond Mark asset. Keeping the original
 // paths matters here: the small white spark in the upper-right is what makes a
@@ -38,22 +57,36 @@ export function JarBalls({ fill }: { fill: number }) {
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const pile = createPile(0, 0);
+    const flight = createFlightField(0, 0, 0, 0, 0);
     const gramDiamond = new Path2D(GRAM_DIAMOND_PATH);
     const gramSpark = new Path2D(GRAM_SPARK_PATH);
     let dpr = 1;
     let raf = 0;
     let pourClock = 0;
+    let idleEjectionClock = IDLE_EJECTION_MIN + Math.random() * IDLE_EJECTION_SPREAD;
+    let stageWidth = 0;
+    let stageHeight = 0;
+    let chamberLeft = 0;
+    let chamberTop = 0;
 
     const resize = () => {
       const box = canvas.getBoundingClientRect();
       if (!box.width || !box.height) return;
+      const previousStageWidth = stageWidth;
+      const previousStageHeight = stageHeight;
       const previousWidth = pile.width;
       const previousHeight = pile.height;
+      stageWidth = box.width;
+      stageHeight = box.height;
+      chamberLeft = stageWidth * CHAMBER_LEFT;
+      chamberTop = stageHeight * CHAMBER_TOP;
+      const chamberWidth = stageWidth * (1 - CHAMBER_LEFT - CHAMBER_RIGHT);
+      const chamberHeight = stageHeight * (1 - CHAMBER_TOP - CHAMBER_BOTTOM);
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      pile.width = box.width;
-      pile.height = box.height;
-      canvas.width = Math.round(pile.width * dpr);
-      canvas.height = Math.round(pile.height * dpr);
+      canvas.width = Math.round(stageWidth * dpr);
+      canvas.height = Math.round(stageHeight * dpr);
+      resizePile(pile, chamberWidth, chamberHeight);
+      resizeFlightField(flight, stageWidth, stageHeight, chamberLeft, chamberTop, chamberWidth);
 
       if (pile.balls.length && previousWidth > 0 && previousHeight > 0) {
         const scaleX = pile.width / previousWidth;
@@ -68,13 +101,26 @@ export function JarBalls({ fill }: { fill: number }) {
           ball.vy *= scaleY;
         }
       }
+      if (flight.balls.length && previousStageWidth > 0 && previousStageHeight > 0) {
+        const scaleX = stageWidth / previousStageWidth;
+        const scaleY = stageHeight / previousStageHeight;
+        for (const ball of flight.balls) {
+          ball.x *= scaleX;
+          ball.px *= scaleX;
+          ball.y *= scaleY;
+          ball.py *= scaleY;
+          ball.r *= scaleX;
+          ball.vx *= scaleX;
+          ball.vy *= scaleY;
+        }
+      }
     };
     resize();
 
     /** The official GRAM diamond and spark, stamped into a physical token. */
-    const stampGram = (ball: Ball) => {
+    const stampGram = (ball: Ball, x: number, y: number) => {
       context.save();
-      context.translate(ball.x, ball.y);
+      context.translate(x, y);
       context.rotate(ball.angle);
       // Tokens turn freely in the screen plane, but the stamp never collapses
       // into an edge-on line: at this size that reads as a broken logo.
@@ -89,49 +135,57 @@ export function JarBalls({ fill }: { fill: number }) {
       context.restore();
     };
 
-    const drawToken = (ball: Ball) => {
+    const drawToken = (ball: Ball, x: number, y: number) => {
       // One light source belongs to the whole jar. Material variation is kept
       // deliberately narrow; it stops the GRAMчики looking cloned without
       // reverting to the old random checkerboard of unrelated shades.
-      const lightX = pile.width ? 1 - ball.x / pile.width : 0.5;
-      const lightY = pile.height ? 1 - ball.y / pile.height : 0.5;
+      const lightX = stageWidth ? 1 - x / stageWidth : 0.5;
+      const lightY = stageHeight ? 1 - y / stageHeight : 0.5;
       const grey = Math.round(151 + lightX * 45 + lightY * 12 + ball.material * 10);
 
       context.beginPath();
-      context.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+      context.arc(x, y, ball.r, 0, Math.PI * 2);
       context.fillStyle = `rgb(${grey}, ${grey}, ${grey})`;
       context.globalAlpha = 0.96;
       context.fill();
 
       context.beginPath();
-      context.arc(ball.x - ball.r * 0.08, ball.y - ball.r * 0.08, ball.r * 0.78, 3.55, 5.2);
+      context.arc(x - ball.r * 0.08, y - ball.r * 0.08, ball.r * 0.78, 3.55, 5.2);
       context.lineWidth = Math.max(0.55, ball.r * 0.075);
       context.strokeStyle = 'rgba(255, 255, 255, 0.32)';
       context.stroke();
 
       context.beginPath();
-      context.arc(ball.x + ball.r * 0.08, ball.y + ball.r * 0.08, ball.r * 0.82, 0.15, 1.78);
+      context.arc(x + ball.r * 0.08, y + ball.r * 0.08, ball.r * 0.82, 0.15, 1.78);
       context.lineWidth = Math.max(0.65, ball.r * 0.1);
       context.strokeStyle = 'rgba(0, 0, 0, 0.28)';
       context.stroke();
 
-      stampGram(ball);
+      stampGram(ball, x, y);
     };
 
     const draw = () => {
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      context.clearRect(0, 0, pile.width, pile.height);
+      context.clearRect(0, 0, stageWidth, stageHeight);
       // Tokens lower in the pile sit visually in front of those above them.
       // Sorting only the draw order does not interfere with the physics.
-      for (const ball of [...pile.balls].sort((a, b) => a.y - b.y)) drawToken(ball);
+      for (const ball of [...pile.balls].sort((a, b) => a.y - b.y)) {
+        drawToken(ball, chamberLeft + ball.x, chamberTop + ball.y);
+      }
+      for (const ball of [...flight.balls].sort((a, b) => a.y - b.y)) {
+        drawToken(ball, ball.x, ball.y);
+      }
       context.globalAlpha = 1;
-      canvas.dataset.ballCount = String(pile.balls.length);
+      canvas.dataset.ballCount = String(pile.balls.length + flight.balls.length);
+      canvas.dataset.insideCount = String(pile.balls.length);
+      canvas.dataset.flyingCount = String(flight.balls.length);
       canvas.dataset.targetCount = String(targetCount(pile, fillRef.current));
     };
 
     const settleStatic = () => {
       // Reduced motion: lay the balls out settled, no simulation.
       pile.balls.length = 0;
+      flight.balls.length = 0;
       for (let i = 0; i < 400 && pile.balls.length < targetCount(pile, fillRef.current); i += 1) {
         pour(pile, fillRef.current);
       }
@@ -149,24 +203,53 @@ export function JarBalls({ fill }: { fill: number }) {
       draw();
     };
 
-    let last = performance.now();
-    const frame = (now: number) => {
-      const dt = Math.min((now - last) / 1000, 1 / 30);
-      last = now;
+    const simulate = (dt: number) => {
       const target = targetCount(pile, fillRef.current);
-      if (pile.balls.length > target) {
-        pour(pile, fillRef.current, Math.random, 0);
-      } else if (pile.balls.length < target) {
+      const total = pile.balls.length + flight.balls.length;
+      if (total > target) {
+        const excess = total - target;
+        const fromPile = Math.min(excess, pile.balls.length);
+        pile.balls.length -= fromPile;
+        if (excess > fromPile) flight.balls.length -= excess - fromPile;
+      } else if (total < target) {
         pourClock += dt;
         if (pourClock >= NEW_TOKEN_INTERVAL) {
-          pour(pile, fillRef.current, Math.random, 1);
+          pour(pile, fillRef.current, Math.random, 1, flight.balls.length);
           pourClock = 0;
         }
       } else {
         pourClock = 0;
       }
+
+      // The jar is alive, not boiling: only one surface token gets a gentle
+      // breath every 18–28 seconds, and only when the jar is at least a third
+      // full, untouched and upright. Pointer and device tilt remain physical.
+      if (
+        fillRef.current >= 30 &&
+        flight.balls.length === 0 &&
+        pile.pointer === null &&
+        pile.gravity.y > 0.72
+      ) {
+        idleEjectionClock -= dt;
+        if (idleEjectionClock <= 0) {
+          liftSurfaceToken(pile);
+          idleEjectionClock = IDLE_EJECTION_MIN + Math.random() * IDLE_EJECTION_SPREAD;
+        }
+      } else {
+        idleEjectionClock = Math.max(idleEjectionClock, 3);
+      }
+
       stepPile(pile, dt);
+      releaseEscaped(pile, flight, chamberLeft, chamberTop);
+      stepFlyingBalls(flight, pile, chamberLeft, chamberTop, pile.gravity, dt);
       draw();
+    };
+
+    let last = performance.now();
+    const frame = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 1 / 30);
+      last = now;
+      simulate(dt);
       raf = window.requestAnimationFrame(frame);
     };
 
@@ -177,8 +260,8 @@ export function JarBalls({ fill }: { fill: number }) {
     const trackPointer = (event: PointerEvent) => {
       if (reducedMotion || !pile.width) return;
       const box = canvas.getBoundingClientRect();
-      const x = event.clientX - box.left;
-      const y = event.clientY - box.top;
+      const x = event.clientX - box.left - chamberLeft;
+      const y = event.clientY - box.top - chamberTop;
       const radius = pointerRadius(pile.width);
       const outside =
         x < -radius || y < -radius || x > box.width + radius || y > box.height + radius;
@@ -197,6 +280,57 @@ export function JarBalls({ fill }: { fill: number }) {
     window.addEventListener('pointerup', releasePointer, { passive: true });
     window.addEventListener('pointercancel', dropPointer, { passive: true });
     window.addEventListener('blur', dropPointer);
+
+    type JarDebugWindow = Window & {
+      advanceTime?: (milliseconds: number) => void;
+      render_game_to_text?: () => string;
+    };
+    const debugWindow = window as JarDebugWindow;
+    const renderJarState = () => {
+      const mouthTokens = pile.balls.filter(
+        (ball) => ball.x - ball.r >= pile.mouth.left && ball.x + ball.r <= pile.mouth.right,
+      );
+      const highestMouthToken = mouthTokens.reduce<(typeof mouthTokens)[number] | null>(
+        (highest, ball) => (!highest || ball.y < highest.y ? ball : highest),
+        null,
+      );
+      return JSON.stringify({
+        coordinateSystem: 'canvas origin top-left; x right; y down; pixels',
+        fillPercent: fillRef.current,
+        stage: { width: stageWidth, height: stageHeight },
+        mouth: { left: flight.mouthLeft, right: flight.mouthRight, y: flight.mouthY },
+        inside: pile.balls.length,
+        highestMouthToken: highestMouthToken
+          ? {
+              x: Number((highestMouthToken.x + chamberLeft).toFixed(2)),
+              y: Number((highestMouthToken.y + chamberTop).toFixed(2)),
+              vy: Number(highestMouthToken.vy.toFixed(2)),
+              r: Number(highestMouthToken.r.toFixed(2)),
+            }
+          : null,
+        flying: flight.balls.map((ball) => ({
+          x: Number(ball.x.toFixed(2)),
+          y: Number(ball.y.toFixed(2)),
+          vx: Number(ball.vx.toFixed(2)),
+          vy: Number(ball.vy.toFixed(2)),
+          r: Number(ball.r.toFixed(2)),
+        })),
+        target: targetCount(pile, fillRef.current),
+      });
+    };
+    const debugEject = (event: KeyboardEvent) => {
+      if (event.code !== 'Space') return;
+      event.preventDefault();
+      liftSurfaceToken(pile, () => 0.72);
+    };
+    if (import.meta.env.VITE_MOCK_TELEGRAM === 'true' && !reducedMotion) {
+      debugWindow.render_game_to_text = renderJarState;
+      debugWindow.advanceTime = (milliseconds: number) => {
+        const frames = Math.max(1, Math.ceil(milliseconds / (1000 / 60)));
+        for (let index = 0; index < frames; index += 1) simulate(1 / 60);
+      };
+      window.addEventListener('keydown', debugEject);
+    }
 
     const observer =
       typeof ResizeObserver !== 'undefined'
@@ -245,6 +379,11 @@ export function JarBalls({ fill }: { fill: number }) {
       window.removeEventListener('pointerup', releasePointer);
       window.removeEventListener('pointercancel', dropPointer);
       window.removeEventListener('blur', dropPointer);
+      window.removeEventListener('keydown', debugEject);
+      if (debugWindow.render_game_to_text === renderJarState) {
+        delete debugWindow.render_game_to_text;
+        delete debugWindow.advanceTime;
+      }
       observer?.disconnect();
       if (tiltStarted) orientation?.stop();
       app?.offEvent?.('deviceOrientationChanged', onTilt);

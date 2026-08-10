@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createFlightField,
   createPile,
   fastestSpeed,
+  liftSurfaceToken,
   nominalRadius,
   placeSettled,
   pointerRadius,
   pour,
+  releaseEscaped,
+  stepFlyingBalls,
   stepPile,
   worstOverlap,
 } from './jarPhysics';
@@ -138,6 +142,56 @@ describe('jar physics', () => {
     expect(pile.balls.length).toBe(3);
   });
 
+  it('opens only the real neck and keeps the glass shoulders solid', () => {
+    const pile = createPile(200, 260);
+    pour(pile, 100, seeded(41), 2);
+    pile.gravity = { x: 0, y: 0 };
+
+    const shoulderBall = pile.balls[0];
+    shoulderBall.x = shoulderBall.r;
+    shoulderBall.y = shoulderBall.r;
+    shoulderBall.vy = -600;
+    const mouthBall = pile.balls[1];
+    mouthBall.x = pile.width / 2;
+    mouthBall.y = mouthBall.r;
+    mouthBall.vy = -600;
+
+    stepPile(pile, FRAME);
+
+    expect(shoulderBall.y).toBeGreaterThanOrEqual(shoulderBall.r - 0.01);
+    expect(mouthBall.y).toBeLessThan(mouthBall.r);
+  });
+
+  it('lets a surface GRAM token cross the neck as one continuous body', () => {
+    for (const [fill, seed] of [
+      [30, 7],
+      [62, 43],
+      [100, 71],
+    ] as const) {
+      // Matches the live phone chamber closely and covers sparse, current and
+      // completely full layouts. Random packing must not decide whether the
+      // selected token actually reaches the opening.
+      const pile = createPile(214, 277);
+      const random = seeded(seed);
+      pour(pile, fill, random, 320);
+      placeSettled(pile, random);
+      const field = createFlightField(332, 374, 59, 69, 214);
+
+      expect(liftSurfaceToken(pile, () => 0.6)).toBe(true);
+      let released = 0;
+      for (let frame = 0; frame < 180 && released === 0; frame += 1) {
+        stepPile(pile, FRAME);
+        released += releaseEscaped(pile, field, 59, 69);
+      }
+
+      expect(released).toBe(1);
+      expect(field.balls).toHaveLength(1);
+      expect(field.balls[0].x).toBeGreaterThan(field.mouthLeft);
+      expect(field.balls[0].x).toBeLessThan(field.mouthRight);
+      expect(field.balls[0].ejecting).toBe(false);
+    }
+  });
+
   it(
     'drops the surface when the fill falls',
     () => {
@@ -152,6 +206,60 @@ describe('jar physics', () => {
     },
     SETTLE_TIMEOUT_MS,
   );
+});
+
+describe('outside the jar', () => {
+  it('never lets a flying GRAM token cross any screen edge', () => {
+    const pile = createPile(200, 260);
+    pour(pile, 100, seeded(47), 1);
+    const source = pile.balls.pop()!;
+    const field = createFlightField(300, 400, 50, 80, 200);
+    field.balls.push({
+      ...source,
+      x: source.r + 1,
+      y: source.r + 1,
+      px: source.r + 1,
+      py: source.r + 1,
+      vx: -5000,
+      vy: -5000,
+      flightAge: 0,
+    });
+
+    for (let frame = 0; frame < 240; frame += 1) {
+      stepFlyingBalls(field, pile, 50, 80, { x: 0.8, y: 0.6 }, FRAME);
+      for (const ball of field.balls) {
+        expect(ball.x).toBeGreaterThanOrEqual(ball.r - 0.01);
+        expect(ball.x).toBeLessThanOrEqual(field.width - ball.r + 0.01);
+        expect(ball.y).toBeGreaterThanOrEqual(ball.r - 0.01);
+        expect(ball.y).toBeLessThanOrEqual(field.height - ball.r + 0.01);
+      }
+    }
+  });
+
+  it('lets a descending token fall back through the mouth', () => {
+    const pile = createPile(200, 260);
+    pour(pile, 100, seeded(53), 1);
+    const source = pile.balls.pop()!;
+    const field = createFlightField(300, 400, 50, 80, 200);
+    const centre = (field.mouthLeft + field.mouthRight) / 2;
+    field.balls.push({
+      ...source,
+      x: centre,
+      y: field.mouthY - source.r - 0.5,
+      px: centre,
+      py: field.mouthY - source.r - 0.5,
+      vx: 0,
+      vy: 240,
+      flightAge: 0.4,
+    });
+
+    const returned = stepFlyingBalls(field, pile, 50, 80, { x: 0, y: 1 }, FRAME);
+
+    expect(returned).toBe(1);
+    expect(field.balls).toHaveLength(0);
+    expect(pile.balls).toHaveLength(1);
+    expect(pile.balls[0].x).toBeCloseTo(100, 1);
+  });
 });
 
 describe('cursor', () => {

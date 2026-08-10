@@ -652,7 +652,7 @@ function queuePulseCopy(pulse: BankQueuePulse | null): string | null {
   if (pulse.minimum_entry_payouts > 1) {
     return `Следующий вход закроет ${pulse.minimum_entry_payouts} ${positionsWord(pulse.minimum_entry_payouts)}`;
   }
-  return `До ближайшей выплаты — ${formatGram(pulse.next_payout_gross_nano, 3)} GRAM`;
+  return null;
 }
 
 function positionsWord(count: number): string {
