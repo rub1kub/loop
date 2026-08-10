@@ -163,3 +163,16 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   being inserted into another token; sustained tilt/reversal tests guard pile interpenetration.
 - Focused physics/UI tests and a production build pass. Chromium inspection at the BANK mobile
   surface shows tokens below the CTA, behind readable controls and still inside the screen bounds.
+
+## 2026-08-10: solid BANK flight collisions
+
+- Added equal-mass collisions for escaped GRAM tokens, including positional separation and a
+  spatial grid so several tokens cannot overlap without turning the animation into an O(n²) loop.
+- The complete glass body now blocks exterior tokens at its sides, shoulder and bottom; a bounded
+  flight step prevents high-speed tunnelling while the real neck remains the only way back inside.
+- Modelled the vessel's rounded lower corners and a subpixel wall clearance so tokens remain fully
+  inside the visible glass instead of peeking through the image at its curved edges.
+- Regression tests reproduce token-on-token penetration, side tunnelling and bottom tunnelling at
+  extreme speed. Focused BANK tests and production build pass.
+- Chromium mobile inspection confirms a rounded contained pile, separated exterior tokens, full
+  screen bounds and no new console errors.

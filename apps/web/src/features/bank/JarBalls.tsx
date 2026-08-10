@@ -68,7 +68,7 @@ export function JarBalls({ fill }: { fill: number }) {
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const pile = createPile(0, 0);
-    const flight = createFlightField(0, 0, 0, 0, 0);
+    const flight = createFlightField(0, 0, 0, 0, 0, 0);
     const gramDiamond = new Path2D(GRAM_DIAMOND_PATH);
     const gramSpark = new Path2D(GRAM_SPARK_PATH);
     let dpr = 1;
@@ -115,6 +115,7 @@ export function JarBalls({ fill }: { fill: number }) {
         flightChamberLeft,
         flightChamberTop,
         chamberWidth,
+        chamberHeight,
       );
 
       if (pile.balls.length && previousWidth > 0 && previousHeight > 0) {
@@ -355,6 +356,7 @@ export function JarBalls({ fill }: { fill: number }) {
           y: Number(pile.gravity.y.toFixed(3)),
         },
         mouth: { left: flight.mouthLeft, right: flight.mouthRight, y: flight.mouthY },
+        jarBottom: Number(flight.jarBottom.toFixed(2)),
         inside: pile.balls.length,
         worstOverlap: Number(overlap.toFixed(3)),
         overlapRatio: Number.isFinite(smallestRadius)

@@ -23,6 +23,8 @@ const DRAG = 0.995;
 const FLIGHT_GRAVITY = 1120;
 const FLIGHT_DRAG = 0.997;
 const EDGE_RESTITUTION = 0.58;
+const FLIGHT_CONTACT_PASSES = 3;
+const WALL_CLEARANCE = 0.6;
 
 // The visible neck is narrower than the body. These values are relative to
 // the old chamber width and line up with the dark opening in empty-jar.webp.
@@ -30,6 +32,7 @@ const EDGE_RESTITUTION = 0.58;
 // nothing can leak through a glass shoulder and pretend it used the neck.
 export const MOUTH_LEFT = 0.18;
 export const MOUTH_RIGHT = 0.82;
+export const BOTTOM_CORNER_RATIO = 0.15;
 
 export interface Ball {
   x: number;
@@ -285,14 +288,39 @@ function solvePointer(pile: Pile): void {
 function solveWalls(pile: Pile): void {
   const { balls, width, height, mouth } = pile;
   for (const ball of balls) {
-    if (ball.x < ball.r) ball.x = ball.r;
-    else if (ball.x > width - ball.r) ball.x = width - ball.r;
-    if (ball.y > height - ball.r) ball.y = height - ball.r;
-    const fitsThroughMouth = ball.x - ball.r >= mouth.left && ball.x + ball.r <= mouth.right;
+    const insideEdge = ball.r + WALL_CLEARANCE;
+    if (ball.x < insideEdge) ball.x = insideEdge;
+    else if (ball.x > width - insideEdge) ball.x = width - insideEdge;
+    if (ball.y > height - insideEdge) ball.y = height - insideEdge;
+    const fitsThroughMouth =
+      ball.x - ball.r >= mouth.left + WALL_CLEARANCE &&
+      ball.x + ball.r <= mouth.right - WALL_CLEARANCE;
     // The glass shoulder is a ceiling. Only the actual central mouth is open,
     // in both directions: new tokens fall in there and an energetic token can
     // leave there. Previously the whole body width was silently open.
-    if (ball.y < ball.r && !fitsThroughMouth) ball.y = ball.r;
+    if (ball.y < insideEdge && !fitsThroughMouth) ball.y = insideEdge;
+
+    // The image is a rounded glass vessel, not a rectangular box. Erode each
+    // lower corner by the token radius so no part of a token can peek through
+    // the curved outline by a few pixels.
+    const cornerRadius = Math.min(width * BOTTOM_CORNER_RATIO, height * 0.18);
+    const cornerY = height - cornerRadius;
+    const effectiveRadius = Math.max(0, cornerRadius - insideEdge);
+    const cornerX = ball.x < width / 2 ? cornerRadius : width - cornerRadius;
+    if (
+      effectiveRadius > 0 &&
+      ball.y > cornerY &&
+      (ball.x < cornerRadius || ball.x > width - cornerRadius)
+    ) {
+      const dx = ball.x - cornerX;
+      const dy = ball.y - cornerY;
+      const distance = Math.hypot(dx, dy);
+      if (distance > effectiveRadius) {
+        const scale = effectiveRadius / Math.max(distance, 0.0001);
+        ball.x = cornerX + dx * scale;
+        ball.y = cornerY + dy * scale;
+      }
+    }
   }
 }
 
@@ -311,6 +339,7 @@ export interface FlightField {
   /** Body edges at the shoulder line, used as a solid roof. */
   jarLeft: number;
   jarRight: number;
+  jarBottom: number;
 }
 
 export function createFlightField(
@@ -319,6 +348,7 @@ export function createFlightField(
   jarLeft: number,
   mouthY: number,
   chamberWidth: number,
+  chamberHeight = height - mouthY,
 ): FlightField {
   return {
     balls: [],
@@ -326,6 +356,7 @@ export function createFlightField(
     height,
     jarLeft,
     jarRight: jarLeft + chamberWidth,
+    jarBottom: mouthY + chamberHeight,
     mouthLeft: jarLeft + chamberWidth * MOUTH_LEFT,
     mouthRight: jarLeft + chamberWidth * MOUTH_RIGHT,
     mouthY,
@@ -339,14 +370,132 @@ export function resizeFlightField(
   jarLeft: number,
   mouthY: number,
   chamberWidth: number,
+  chamberHeight = height - mouthY,
 ): void {
   field.width = width;
   field.height = height;
   field.jarLeft = jarLeft;
   field.jarRight = jarLeft + chamberWidth;
+  field.jarBottom = mouthY + chamberHeight;
   field.mouthLeft = jarLeft + chamberWidth * MOUTH_LEFT;
   field.mouthRight = jarLeft + chamberWidth * MOUTH_RIGHT;
   field.mouthY = mouthY;
+}
+
+function clampFlyingBallToScreen(ball: FlyingBall, field: FlightField): void {
+  if (ball.x < ball.r) {
+    ball.x = ball.r;
+    ball.vx = Math.abs(ball.vx) * EDGE_RESTITUTION;
+  } else if (ball.x > field.width - ball.r) {
+    ball.x = field.width - ball.r;
+    ball.vx = -Math.abs(ball.vx) * EDGE_RESTITUTION;
+  }
+  if (ball.y < ball.r) {
+    ball.y = ball.r;
+    ball.vy = Math.abs(ball.vy) * EDGE_RESTITUTION;
+  } else if (ball.y > field.height - ball.r) {
+    ball.y = field.height - ball.r;
+    ball.vy = -Math.abs(ball.vy) * 0.32;
+    ball.vx *= 0.88;
+  }
+}
+
+/** Keeps an exterior token outside the complete glass body, not only its roof. */
+function solveJarExterior(ball: FlyingBall, field: FlightField): void {
+  const left = field.jarLeft - ball.r - WALL_CLEARANCE;
+  const right = field.jarRight + ball.r + WALL_CLEARANCE;
+  const top = field.mouthY - ball.r - WALL_CLEARANCE;
+  const bottom = field.jarBottom + ball.r + WALL_CLEARANCE;
+  if (ball.x <= left || ball.x >= right || ball.y <= top || ball.y >= bottom) return;
+
+  let edge: 'left' | 'right' | 'top' | 'bottom';
+  if (ball.px <= left) edge = 'left';
+  else if (ball.px >= right) edge = 'right';
+  else if (ball.py <= top) edge = 'top';
+  else if (ball.py >= bottom) edge = 'bottom';
+  else {
+    const distances = [
+      ['left', ball.x - left],
+      ['right', right - ball.x],
+      ['top', ball.y - top],
+      ['bottom', bottom - ball.y],
+    ] as const;
+    edge = distances.reduce((nearest, candidate) =>
+      candidate[1] < nearest[1] ? candidate : nearest,
+    )[0];
+  }
+
+  if (edge === 'left') {
+    ball.x = left;
+    ball.vx = -Math.abs(ball.vx) * EDGE_RESTITUTION;
+  } else if (edge === 'right') {
+    ball.x = right;
+    ball.vx = Math.abs(ball.vx) * EDGE_RESTITUTION;
+  } else if (edge === 'top') {
+    ball.y = top;
+    ball.vy = -Math.abs(ball.vy) * EDGE_RESTITUTION;
+    const direction = ball.x < (field.jarLeft + field.jarRight) / 2 ? -1 : 1;
+    ball.vx += direction * 34;
+  } else {
+    ball.y = bottom;
+    ball.vy = Math.abs(ball.vy) * EDGE_RESTITUTION;
+  }
+}
+
+/** Resolves exterior token contacts with equal-mass impulses and positional separation. */
+function solveFlyingContacts(field: FlightField): void {
+  const { balls } = field;
+  for (let pass = 0; pass < FLIGHT_CONTACT_PASSES; pass += 1) {
+    const cell = Math.max(1, ...balls.map((ball) => ball.r * 2));
+    const grid: Grid = new Map();
+    balls.forEach((ball, index) => {
+      const key = cellKey(Math.floor(ball.x / cell), Math.floor(ball.y / cell));
+      const bucket = grid.get(key);
+      if (bucket) bucket.push(index);
+      else grid.set(key, [index]);
+    });
+
+    for (let i = 0; i < balls.length; i += 1) {
+      const a = balls[i];
+      const cx = Math.floor(a.x / cell);
+      const cy = Math.floor(a.y / cell);
+      for (let gx = cx - 1; gx <= cx + 1; gx += 1) {
+        for (let gy = cy - 1; gy <= cy + 1; gy += 1) {
+          for (const j of grid.get(cellKey(gx, gy)) ?? []) {
+            if (j <= i) continue;
+            const b = balls[j];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const minimum = a.r + b.r;
+            const squared = dx * dx + dy * dy;
+            if (squared >= minimum * minimum) continue;
+
+            const distance = Math.sqrt(squared);
+            const nx = distance > 0.0001 ? dx / distance : i % 2 === 0 ? 1 : -1;
+            const ny = distance > 0.0001 ? dy / distance : 0;
+            const correction = (minimum - distance) / 2 + 0.01;
+            a.x -= nx * correction;
+            a.y -= ny * correction;
+            b.x += nx * correction;
+            b.y += ny * correction;
+
+            const relativeNormal = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+            if (relativeNormal < 0) {
+              const impulse = (-(1 + EDGE_RESTITUTION) * relativeNormal) / 2;
+              a.vx -= impulse * nx;
+              a.vy -= impulse * ny;
+              b.vx += impulse * nx;
+              b.vy += impulse * ny;
+            }
+          }
+        }
+      }
+    }
+    for (const ball of balls) {
+      clampFlyingBallToScreen(ball, field);
+      solveJarExterior(ball, field);
+    }
+  }
 }
 
 /**
@@ -440,31 +589,28 @@ export function stepFlyingBalls(
       ball.flightAge += dt;
       ball.vx = (ball.vx + gravity.x * FLIGHT_GRAVITY * dt) * FLIGHT_DRAG;
       ball.vy = (ball.vy + gravity.y * FLIGHT_GRAVITY * dt) * FLIGHT_DRAG;
+      // A token cannot travel far enough in one substep to jump through another
+      // token or from one side of the glass body to the other.
+      const reach = Math.hypot(ball.vx, ball.vy) * dt;
+      const limit = ball.r * 0.65;
+      if (reach > limit) {
+        const scale = limit / reach;
+        ball.vx *= scale;
+        ball.vy *= scale;
+      }
       ball.px = ball.x;
       ball.py = ball.y;
       ball.x += ball.vx * dt;
       ball.y += ball.vy * dt;
 
-      if (ball.x < ball.r) {
-        ball.x = ball.r;
-        ball.vx = Math.abs(ball.vx) * EDGE_RESTITUTION;
-      } else if (ball.x > field.width - ball.r) {
-        ball.x = field.width - ball.r;
-        ball.vx = -Math.abs(ball.vx) * EDGE_RESTITUTION;
-      }
-      if (ball.y < ball.r) {
-        ball.y = ball.r;
-        ball.vy = Math.abs(ball.vy) * EDGE_RESTITUTION;
-      } else if (ball.y > field.height - ball.r) {
-        ball.y = field.height - ball.r;
-        ball.vy = -Math.abs(ball.vy) * 0.32;
-        ball.vx *= 0.88;
-      }
+      clampFlyingBallToScreen(ball, field);
 
       const crossedShoulderDown =
         ball.vy > 0 && ball.py + ball.r <= field.mouthY && ball.y + ball.r > field.mouthY;
       if (crossedShoulderDown) {
-        const fitsMouth = ball.x - ball.r >= field.mouthLeft && ball.x + ball.r <= field.mouthRight;
+        const fitsMouth =
+          ball.x - ball.r >= field.mouthLeft + WALL_CLEARANCE &&
+          ball.x + ball.r <= field.mouthRight - WALL_CLEARANCE;
         if (fitsMouth) {
           const localX = ball.x - chamberLeft;
           const localY = ball.y - chamberTop;
@@ -511,6 +657,7 @@ export function stepFlyingBalls(
       ball.angularVelocity *= angularDrag;
       ball.faceVelocity *= angularDrag;
     }
+    solveFlyingContacts(field);
   }
   return returned;
 }

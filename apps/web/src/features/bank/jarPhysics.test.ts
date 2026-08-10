@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BOTTOM_CORNER_RATIO,
   createFlightField,
   createPile,
   fastestSpeed,
@@ -130,6 +131,15 @@ describe('jar physics', () => {
         expect(ball.x).toBeGreaterThanOrEqual(ball.r - 0.01);
         expect(ball.x).toBeLessThanOrEqual(pile.width - ball.r + 0.01);
         expect(ball.y).toBeLessThanOrEqual(pile.height - ball.r + 0.01);
+
+        const cornerRadius = Math.min(pile.width * BOTTOM_CORNER_RATIO, pile.height * 0.18);
+        const cornerX = ball.x < pile.width / 2 ? cornerRadius : pile.width - cornerRadius;
+        const cornerY = pile.height - cornerRadius;
+        if (ball.y > cornerY && (ball.x < cornerRadius || ball.x > pile.width - cornerRadius)) {
+          expect(Math.hypot(ball.x - cornerX, ball.y - cornerY)).toBeLessThanOrEqual(
+            cornerRadius - ball.r + 0.01,
+          );
+        }
       }
     },
     SETTLE_TIMEOUT_MS,
@@ -280,6 +290,96 @@ describe('outside the jar', () => {
         expect(ball.y).toBeGreaterThanOrEqual(ball.r - 0.01);
         expect(ball.y).toBeLessThanOrEqual(field.height - ball.r + 0.01);
       }
+    }
+  });
+
+  it('keeps flying GRAM tokens out of each other', () => {
+    const pile = createPile(200, 260);
+    pour(pile, 100, seeded(61), 2);
+    const [left, right] = pile.balls.splice(0, 2);
+    const field = createFlightField(390, 700, 95, 140, 200, 260);
+    field.balls.push(
+      {
+        ...left,
+        x: 130,
+        y: 470,
+        px: 130,
+        py: 470,
+        vx: 720,
+        vy: 0,
+        flightAge: 0,
+      },
+      {
+        ...right,
+        x: 180,
+        y: 470,
+        px: 180,
+        py: 470,
+        vx: -720,
+        vy: 0,
+        flightAge: 0,
+      },
+    );
+
+    let closest = Number.POSITIVE_INFINITY;
+    for (let frame = 0; frame < 45; frame += 1) {
+      stepFlyingBalls(field, pile, 95, 140, { x: 0, y: 0 }, FRAME);
+      const distance = Math.hypot(
+        field.balls[1].x - field.balls[0].x,
+        field.balls[1].y - field.balls[0].y,
+      );
+      closest = Math.min(closest, distance);
+      expect(distance).toBeGreaterThanOrEqual(field.balls[0].r + field.balls[1].r - 0.02);
+    }
+
+    expect(closest).toBeLessThan(left.r + right.r + 0.5);
+  });
+
+  it('cannot cross the jar side even at extreme speed', () => {
+    const pile = createPile(200, 260);
+    pour(pile, 100, seeded(67), 1);
+    const source = pile.balls.pop()!;
+    const field = createFlightField(390, 700, 95, 140, 200, 260);
+    field.balls.push({
+      ...source,
+      x: 40,
+      y: 240,
+      px: 40,
+      py: 240,
+      vx: 5000,
+      vy: 0,
+      flightAge: 0,
+    });
+
+    for (let frame = 0; frame < 90; frame += 1) {
+      stepFlyingBalls(field, pile, 95, 140, { x: 0, y: 0 }, FRAME);
+      const ball = field.balls[0];
+      expect(
+        ball.x + ball.r <= field.jarLeft + 0.01 || ball.x - ball.r >= field.jarRight - 0.01,
+      ).toBe(true);
+    }
+  });
+
+  it('cannot cross the jar bottom even at extreme speed', () => {
+    const pile = createPile(200, 260);
+    pour(pile, 100, seeded(71), 1);
+    const source = pile.balls.pop()!;
+    const field = createFlightField(390, 700, 95, 140, 200, 260);
+    field.balls.push({
+      ...source,
+      x: 195,
+      y: 500,
+      px: 195,
+      py: 500,
+      vx: 0,
+      vy: -5000,
+      flightAge: 0,
+    });
+
+    for (let frame = 0; frame < 90; frame += 1) {
+      stepFlyingBalls(field, pile, 95, 140, { x: 0, y: 0 }, FRAME);
+      const ball = field.balls[0];
+      expect(ball.y - ball.r).toBeGreaterThanOrEqual(field.jarBottom - 0.01);
     }
   });
 
