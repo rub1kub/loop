@@ -552,7 +552,11 @@ describe('DuelScreen', () => {
     expect(screen.getByText('ПРАВИЛА').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('ПРАВИЛА').closest('summary')).toHaveTextContent('ОТКРЫТЬ');
     expect(screen.getByText(/^Комиссия /)).not.toBeVisible();
-    expect(screen.getByText(/Открыл только один — он и выигрывает/)).not.toBeVisible();
+    expect(screen.getByText(/Первый не выигрывает сразу/)).not.toBeVisible();
+    fireEvent.click(screen.getByText('ПРАВИЛА'));
+    expect(screen.getByText(/Первый не выигрывает сразу/)).toBeVisible();
+    expect(screen.getByText(/контракт выбирает победителя по текущим шансам/)).toBeVisible();
+    expect(screen.getByText(/Подтвердил только один — после таймера выигрывает он/)).toBeVisible();
     expect(screen.queryByText(/Можно закрыть приложение/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ПРИГЛАСИТЬ СРАЗИТЬСЯ/ })).toBeInTheDocument();
     expect(screen.queryByText(/Одинаковая ставка/)).not.toBeInTheDocument();
