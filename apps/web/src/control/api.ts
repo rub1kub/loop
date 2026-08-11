@@ -106,4 +106,8 @@ export const controlApi = {
   transaction(input: ControlActionInput): Promise<ControlTransaction> {
     return request('/transactions', { method: 'POST', body: JSON.stringify(input) });
   },
+
+  waveTransaction(): Promise<ControlTransaction> {
+    return request('/wave/transaction', { method: 'POST', body: '{}' });
+  },
 };

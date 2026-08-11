@@ -1,6 +1,7 @@
 import base64
 from dataclasses import replace
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -136,6 +137,49 @@ async def test_control_overview_and_safe_transaction_preparation(client, app) ->
         json={"mode": "duel", "action": "set_owner", "address": "0:" + "44" * 32},
     )
     assert missing_confirmation.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_wave_position_is_prepared_only_for_the_configured_external_wallet(
+    client, app, monkeypatch
+) -> None:
+    app.state.ton_client = FakeControlTonClient()
+    authorize_control(client)
+    settings = get_settings().model_copy(
+        update={
+            "bank_wave_enabled": True,
+            "bank_wave_wallet": OWNER,
+            "bank_wave_boost_nano": 5_000_000_000,
+        }
+    )
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    async def ready_wave(*_args, **_kwargs):
+        return SimpleNamespace(
+            id="2026-08-16",
+            state="goal_reached",
+            boost_nano=5_000_000_000,
+            boost_confirmed=False,
+        )
+
+    monkeypatch.setattr(control_routes, "bank_wave_view", ready_wave)
+    try:
+        response = await client.post("/api/v1/control/wave/transaction", json={})
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["sender_address"] == OWNER
+    assert int(body["amount_nano"]) == 5_000_000_000 + settings.bank_position_gas_nano
+    cells = Cell.one_from_boc(base64.b64decode(body["payload"]))
+    cell = cells[0] if isinstance(cells, list) else cells
+    parser = cell.begin_parse()
+    assert parser.read_uint(32) == 0x4C424E01
+    assert parser.read_uint(64) == body["query_id"]
+    assert parser.read_uint(64) == body["query_id"]
+    assert parser.read_coins() == 5_000_000_000
+    assert parser.read_uint(16) == 12_500
 
 
 @pytest.mark.asyncio

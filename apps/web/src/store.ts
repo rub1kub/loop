@@ -132,6 +132,20 @@ const demoBankPulse: BankQueuePulse = {
   minimum_entry_payouts: 2,
   next_payout_gross_nano: 288_888_889,
   updated_at: new Date(now).toISOString(),
+  wave: {
+    id: '2026-08-16',
+    state: mockScreen === 'bank-wave' ? 'active' : 'upcoming',
+    starts_at: new Date(now + (mockScreen === 'bank-wave' ? -10 : 4_000) * 60_000).toISOString(),
+    ends_at: new Date(now + (mockScreen === 'bank-wave' ? 20 : 34) * 60_000).toISOString(),
+    participants: mockScreen === 'bank-wave' ? 6 : 0,
+    goal: 8,
+    boost_nano: 5_000_000_000,
+    boost_confirmed: false,
+    proof_url: null,
+    closer_name: null,
+    closer_username: null,
+    is_closer: false,
+  },
 };
 
 const demoOffer: Offer = {
@@ -586,7 +600,7 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         }
         const empty = mockScreen === 'bank-empty';
         set({
-          profile: mockScreen?.startsWith('teams')
+          profile: mockScreen?.startsWith('teams') || mockScreen === 'bank-wave'
             ? { ...demoProfile, announcement: null }
             : demoProfile,
           bankPosition: empty ? null : demoBank,

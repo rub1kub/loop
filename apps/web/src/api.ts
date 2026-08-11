@@ -120,12 +120,28 @@ const bankPositionSchema = z.object({
   completed_at: z.string().nullable(),
 });
 
+const bankWaveSchema = z.object({
+  id: z.string(),
+  state: z.enum(['upcoming', 'active', 'goal_reached', 'missed', 'awaiting_boost', 'completed']),
+  starts_at: z.string(),
+  ends_at: z.string(),
+  participants: z.number(),
+  goal: z.number(),
+  boost_nano: z.number(),
+  boost_confirmed: z.boolean(),
+  proof_url: z.string().nullable(),
+  closer_name: z.string().nullable(),
+  closer_username: z.string().nullable(),
+  is_closer: z.boolean(),
+});
+
 const bankQueuePulseSchema = z.object({
   active_positions: z.number(),
   minimum_entry_nano: z.number(),
   minimum_entry_payouts: z.number(),
   next_payout_gross_nano: z.number(),
   updated_at: z.string(),
+  wave: bankWaveSchema.nullable().default(null),
 });
 
 const resultCardSchema = z.object({

@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowSquareOut, Check, X } from '@phosphor-icons/react';
+import { ArrowRight, ArrowSquareOut, Check, ShareNetwork, X } from '@phosphor-icons/react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -19,6 +19,7 @@ import type {
   BankPosition,
   BankPreview,
   BankQueuePulse,
+  BankWave,
   Profile,
   RatingPulse,
 } from '../../types';
@@ -67,6 +68,7 @@ export function BankScreen({
   const [tonConnectUI] = useTonConnectUI();
   const [wizard, setWizard] = useState<WizardStep | null>(null);
   const [details, setDetails] = useState(false);
+  const [waveOpen, setWaveOpen] = useState(false);
   const [amount, setAmount] = useState('1');
   const [multiplier, setMultiplier] = useState<(typeof multipliers)[number]>(12500);
   const [fetchedPreview, setFetchedPreview] = useState<BankPreview | null>(null);
@@ -102,12 +104,14 @@ export function BankScreen({
   const effectiveMultiplier = doubleBlocked && multiplier === 20000 ? 15000 : multiplier;
 
   useEffect(() => {
+    if (waveOpen) return setBackAction(() => setWaveOpen(false));
+    if (details) return setBackAction(() => setDetails(false));
     if (!wizard) return setBackAction();
     return setBackAction(() => {
       if (wizard === 'amount') setWizard(null);
       else if (wizard === 'multiplier') setWizard('amount');
     });
-  }, [wizard]);
+  }, [details, waveOpen, wizard]);
 
   useEffect(() => {
     if (isMockTelegram()) return;
@@ -517,7 +521,47 @@ export function BankScreen({
         </div>
       )}
 
+      {queuePulse?.wave && (
+        <button className="bank-wave-teaser" onClick={() => setWaveOpen(true)}>
+          <span>{waveTeaser(queuePulse.wave)}</span>
+          <ArrowRight aria-hidden="true" />
+        </button>
+      )}
+
       <AnimatePresence>
+        {waveOpen && queuePulse?.wave && (
+          <motion.div
+            className="sheet-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setWaveOpen(false)}
+          >
+            <motion.div
+              className="sheet bank-wave-sheet"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <SheetTitle title="Волна" onClose={() => setWaveOpen(false)} />
+              <BankWaveDetails
+                wave={queuePulse.wave}
+                onEnter={() => {
+                  setWaveOpen(false);
+                  if (
+                    !position &&
+                    ['active', 'goal_reached'].includes(queuePulse.wave?.state ?? '')
+                  ) {
+                    setMessage('');
+                    setWizard('amount');
+                  }
+                }}
+              />
+            </motion.div>
+          </motion.div>
+        )}
         {details && position && (
           <motion.div
             className="sheet-backdrop"
@@ -596,6 +640,67 @@ export function BankScreen({
   );
 }
 
+function BankWaveDetails({ wave, onEnter }: { wave: BankWave; onEnter: () => void }) {
+  const active = wave.state === 'active' || wave.state === 'goal_reached';
+  const completed = wave.state === 'completed';
+  const closer = wave.closer_username
+    ? `@${wave.closer_username}`
+    : wave.closer_name || 'последний участник';
+  const shareText = encodeURIComponent(
+    `Я закрыл Волну LOOP. ${wave.goal} участников — и LOOP добавил ${formatGram(wave.boost_nano, 0)} GRAM в BANK.`,
+  );
+
+  return (
+    <div className="bank-wave-content">
+      <p className="eyebrow">ВОСКРЕСЕНЬЕ · 20:00–20:30 МСК</p>
+      {active ? (
+        <div className="bank-wave-count">
+          <strong>{Math.min(wave.participants, wave.goal)}</strong>
+          <span>ИЗ {wave.goal}</span>
+        </div>
+      ) : completed ? (
+        <div className="bank-wave-count is-complete">
+          <strong>{closer}</strong>
+          <span>ЗАКРЫЛ ВОЛНУ</span>
+        </div>
+      ) : (
+        <h3>Полчаса, чтобы войти вместе.</h3>
+      )}
+      <p className="bank-wave-rule">
+        Если войдут {wave.goal} человек, LOOP внесёт {formatGram(wave.boost_nano, 0)} GRAM в BANK.
+        Последний участник закроет Волну.
+      </p>
+      {wave.state === 'missed' && (
+        <p className="bank-wave-status">В этот раз Волна не собралась.</p>
+      )}
+      {wave.state === 'awaiting_boost' && (
+        <p className="bank-wave-status">Цель собрана. Взнос LOOP готовится.</p>
+      )}
+      {completed && wave.proof_url && (
+        <a className="secondary-button" href={wave.proof_url} target="_blank" rel="noreferrer">
+          ПРОВЕРИТЬ ВЗНОС LOOP
+          <ArrowSquareOut aria-hidden="true" />
+        </a>
+      )}
+      {wave.is_closer && completed ? (
+        <a
+          className="primary-button"
+          href={`https://t.me/share/url?url=${encodeURIComponent(window.location.origin)}&text=${shareText}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <ShareNetwork aria-hidden="true" />
+          ПОДЕЛИТЬСЯ
+        </a>
+      ) : (
+        <button className="primary-button" onClick={onEnter}>
+          {active ? 'ВОЙТИ В ВОЛНУ' : 'ПОНЯТНО'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function SheetTitle({
   title,
   titleId,
@@ -643,6 +748,16 @@ function BankLivePulse({ copy }: { copy: string }) {
       <span>{copy}</span>
     </div>
   );
+}
+
+function waveTeaser(wave: BankWave): string {
+  if (wave.state === 'active' || wave.state === 'goal_reached') {
+    return `ВОЛНА · ${Math.min(wave.participants, wave.goal)} ИЗ ${wave.goal} · ДО 20:30`;
+  }
+  if (wave.state === 'completed') return 'ВОЛНА ЗАКРЫТА · ВЗНОС LOOP ПОДТВЕРЖДЁН';
+  if (wave.state === 'awaiting_boost') return 'ВОЛНА СОБРАНА · ГОТОВИМ ВЗНОС';
+  if (wave.state === 'missed') return 'ВОЛНА ЗАВЕРШЕНА · СЛЕДУЮЩАЯ В ВОСКРЕСЕНЬЕ';
+  return `ВОЛНА · ВС 20:00 · +${formatGram(wave.boost_nano, 0)} GRAM В BANK`;
 }
 
 function queuePulseCopy(pulse: BankQueuePulse | null): string | null {

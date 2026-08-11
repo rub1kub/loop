@@ -1149,6 +1149,42 @@ export default function ControlApp() {
     }
   };
 
+  const runWaveContribution = async () => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const transaction = await controlApi.waveTransaction();
+      if (
+        !wallet ||
+        !transaction.sender_address ||
+        !sameAddress(wallet.account.address, transaction.sender_address)
+      ) {
+        throw new Error(`Подключи кошелёк Волны ${shortAddress(transaction.sender_address ?? '')}`);
+      }
+      await tonConnectUI.sendTransaction({
+        validUntil: transaction.valid_until,
+        network: String(transaction.network),
+        messages: [
+          {
+            address: transaction.address,
+            amount: transaction.amount_nano,
+            payload: transaction.payload,
+          },
+        ],
+      });
+      setMessage('5 GRAM подписаны. Волна закроется после подтверждения сети.');
+      refreshTimers.current.forEach((timer) => window.clearTimeout(timer));
+      refreshTimers.current = [4_000, 12_000, 30_000].map((delay) =>
+        window.setTimeout(() => void refresh().catch(() => undefined), delay),
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Взнос Волны не выполнен');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const switchTransactionWallet = async () => {
     setError(null);
     await tonConnectUI.disconnect().catch(() => undefined);
@@ -1285,6 +1321,7 @@ export default function ControlApp() {
   }
 
   const currentStatus = systemStatus(overview);
+  const waveReady = ['goal_reached', 'awaiting_boost'].includes(overview.wave?.state ?? '');
 
   return (
     <main className="control-shell">
@@ -1400,6 +1437,28 @@ export default function ControlApp() {
               </span>
               <ArrowRight size={18} />
             </button>
+            {overview.wave && (
+              <button
+                className={`command-action ${waveReady ? 'primary' : ''}`}
+                disabled={busy || !waveReady}
+                onClick={() => void runWaveContribution()}
+              >
+                <span className="command-icon">
+                  <span className="metric-symbol">≈</span>
+                </span>
+                <span>
+                  <strong>Взнос за Волну</strong>
+                  <small>
+                    {overview.wave.state === 'completed'
+                      ? '5 GRAM подтверждены сетью'
+                      : waveReady
+                        ? 'Цель собрана · внести 5 GRAM'
+                        : `${overview.wave.participants} из ${overview.wave.goal} участников`}
+                  </small>
+                </span>
+                <ArrowRight size={18} />
+              </button>
+            )}
           </div>
           <div className="metric-strip">
             <div>

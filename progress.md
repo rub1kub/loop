@@ -209,3 +209,21 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Settled results make four restrained rotations and land inside the already-known winner sector;
   reduced-motion mode skips the suspense safely.
 - Focused DUEL component coverage passes. Responsive browser and production verification remain.
+
+## 2026-08-12: weekly BANK Wave
+
+- Added one restrained Sunday activation: eight distinct confirmed BANK entrants between 20:00
+  and 20:30 Moscow time unlock a real 5 GRAM operator position.
+- Kept the BANK surface compact: one teaser opens a separate sheet with the counter and plain
+  rules; there is no cash prize, campaign tab or permanent explanatory block.
+- Wave completion depends on an indexed on-chain position from the configured public operator
+  wallet. The last distinct entrant receives only the closing status and a Telegram share action.
+- Added durable, deduplicated opening/result Telegram messages behind the existing notification
+  toggle, plus schedule, counting, proof and UI regression coverage.
+- Capped the first season at four verified 5 GRAM positions (20 GRAM from the 33.27 GRAM reserve)
+  and stop advertising further Waves once the cap is reached.
+- Added a guarded control-panel transaction: after eight people enter, only the configured Wave
+  wallet can sign the promised position; repeated preparation is blocked while confirmation is
+  pending and the public result stays honest until the indexer sees the proof.
+- API, migration, notification and frontend regression tests pass. The supplied Playwright game
+  client shows a compact teaser and a clean separate rules sheet with no console errors.

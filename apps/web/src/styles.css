@@ -879,6 +879,94 @@ summary:focus-visible .disclosure-indicator {
   margin-top: 12px;
 }
 
+.bank-wave-teaser {
+  display: flex;
+  width: min(100%, 330px);
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: rgb(255 255 255 / 3%);
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: 0.09em;
+  text-align: left;
+}
+
+.bank-wave-teaser svg {
+  width: 16px;
+  flex: 0 0 auto;
+}
+
+.bank-wave-content {
+  display: grid;
+  gap: 18px;
+}
+
+.bank-wave-content h3 {
+  max-width: 310px;
+  margin: 2px 0 0;
+  font-size: clamp(28px, 8vw, 42px);
+  letter-spacing: -0.05em;
+  line-height: 0.98;
+}
+
+.bank-wave-count {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.bank-wave-count strong {
+  font-size: 70px;
+  font-weight: 620;
+  letter-spacing: -0.07em;
+  line-height: 0.9;
+}
+
+.bank-wave-count span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+}
+
+.bank-wave-count.is-complete {
+  display: grid;
+  gap: 7px;
+}
+
+.bank-wave-count.is-complete strong {
+  overflow: hidden;
+  font-size: 34px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-wave-rule,
+.bank-wave-status {
+  max-width: 330px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.bank-wave-status {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.bank-wave-content .primary-button,
+.bank-wave-content .secondary-button {
+  margin-top: 2px;
+}
+
 .bank-details-intro {
   max-width: 310px;
   margin: -4px 0 16px;

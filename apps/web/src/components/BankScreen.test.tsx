@@ -66,6 +66,7 @@ const queuePulse: BankQueuePulse = {
   minimum_entry_payouts: 2,
   next_payout_gross_nano: 288_888_889,
   updated_at: '2026-08-10T12:00:00.000Z',
+  wave: null,
 };
 
 describe('BankScreen', () => {
@@ -138,5 +139,40 @@ describe('BankScreen', () => {
 
     expect(screen.queryByText(/до ближайшей выплаты/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/4[,.]389\s*GRAM/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps Wave compact until the user opens its rules', () => {
+    render(
+      <BankScreen
+        profile={profile}
+        position={null}
+        queuePulse={{
+          ...queuePulse,
+          wave: {
+            id: '2026-08-16',
+            state: 'active',
+            starts_at: '2026-08-16T17:00:00Z',
+            ends_at: '2026-08-16T17:30:00Z',
+            participants: 6,
+            goal: 8,
+            boost_nano: 5_000_000_000,
+            boost_confirmed: false,
+            proof_url: null,
+            closer_name: null,
+            closer_username: null,
+            is_closer: false,
+          },
+        }}
+        pulse={null}
+        onRefresh={vi.fn()}
+        onMockCreated={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /ВОЛНА · 6 ИЗ 8/i })).toBeVisible();
+    expect(screen.queryByText(/Если войдут 8 человек/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /ВОЛНА · 6 ИЗ 8/i }));
+    expect(screen.getByText(/Если войдут 8 человек/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ВОЙТИ В ВОЛНУ' })).toBeInTheDocument();
   });
 });

@@ -66,6 +66,20 @@ class Settings(BaseSettings):
     # logic and is forbidden by the mainnet gate below.
     bank_debug_telegram_ids: str = ""
     bank_debug_progress_bps: int = Field(default=0, ge=0, le=9_999)
+    # One deliberately simple recurring activation: on Sunday evening eight
+    # distinct confirmed BANK entrants unlock a transparent 5 GRAM operator
+    # position. The signing wallet remains external; this only describes and
+    # verifies the public event.
+    bank_wave_enabled: bool = False
+    bank_wave_wallet: str = ""
+    bank_wave_weekday: int = Field(default=6, ge=0, le=6)
+    bank_wave_hour_moscow: int = Field(default=20, ge=0, le=23)
+    bank_wave_duration_minutes: int = Field(default=30, ge=5, le=180)
+    bank_wave_goal: int = Field(default=8, ge=2, le=100)
+    bank_wave_boost_nano: int = Field(default=5_000_000_000, ge=1_000_000_000)
+    bank_wave_campaign_starts_at: datetime | None = None
+    bank_wave_max_boosts: int = Field(default=4, ge=1, le=52)
+    bank_wave_operator_telegram_id: int = 0
     duel_contract_address: str = ""
     duel_contract_code_hash: str = ""
     duel_fee_bps: int = 1000
@@ -270,6 +284,8 @@ class Settings(BaseSettings):
             "LOOP_CONTROL_ADMIN_WALLET": self.control_admin_wallet,
         }
         missing = [name for name, value in required.items() if not value]
+        if self.bank_wave_enabled and not self.bank_wave_wallet:
+            missing.append("LOOP_BANK_WAVE_WALLET")
         if missing:
             raise ValueError(f"missing production settings: {', '.join(missing)}")
         if not self.public_origin.startswith("https://"):

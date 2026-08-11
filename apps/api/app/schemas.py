@@ -176,12 +176,28 @@ class BankLimitView(BaseModel):
     double_limit_nano: int = 0
 
 
+class BankWaveView(BaseModel):
+    id: str
+    state: str
+    starts_at: datetime
+    ends_at: datetime
+    participants: int
+    goal: int
+    boost_nano: int
+    boost_confirmed: bool
+    proof_url: str | None
+    closer_name: str | None
+    closer_username: str | None
+    is_closer: bool
+
+
 class BankQueuePulseView(BaseModel):
     active_positions: int
     minimum_entry_nano: int
     minimum_entry_payouts: int
     next_payout_gross_nano: int
     updated_at: datetime
+    wave: BankWaveView | None = None
 
 
 class BankContractCall(BaseModel):

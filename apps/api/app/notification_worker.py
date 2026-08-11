@@ -17,6 +17,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from anyio import Path
 from sqlalchemy import select, update
 
+from .bank_wave_notifications import KIND_BANK_WAVE, bank_wave_text, ensure_bank_wave_notifications
 from .config import Settings, get_settings
 from .database import create_database
 from .duel_notifications import (
@@ -124,9 +125,7 @@ async def update_delivery(
         values["sent_at"] = now
     async with session_factory() as db:
         await db.execute(
-            update(NotificationOutbox)
-            .where(NotificationOutbox.id == outbox_id)
-            .values(**values)
+            update(NotificationOutbox).where(NotificationOutbox.id == outbox_id).values(**values)
         )
         await db.commit()
 
@@ -163,7 +162,12 @@ async def deliver_plain_alert(
         await update_delivery(session_factory, outbox_id, state="failed", error="user_missing")
         return
     now = datetime.now(UTC)
-    if kind == KIND_DUEL_REVEAL_SOON:
+    markup = match_notification_markup(settings)
+    if kind == KIND_BANK_WAVE:
+        text = bank_wave_text(payload)
+        effect = settings.result_effect_id.strip() if payload.get("event") == "closer" else ""
+        markup = bank_pulse_markup(settings)
+    elif kind == KIND_DUEL_REVEAL_SOON:
         deadline = datetime.fromisoformat(str(payload["reveal_deadline"]))
         if deadline.tzinfo is None:
             deadline = deadline.replace(tzinfo=UTC)
@@ -185,7 +189,8 @@ async def deliver_plain_alert(
             lambda value: bot.send_message(
                 chat_id=user.telegram_id,
                 text=text,
-                reply_markup=match_notification_markup(settings),
+                parse_mode="HTML" if kind == KIND_BANK_WAVE else None,
+                reply_markup=markup,
                 message_effect_id=value,
             ),
         )
@@ -204,9 +209,7 @@ async def deliver_plain_alert(
     except TelegramAPIError as exc:
         await update_delivery(session_factory, outbox_id, state="retry", error=str(exc)[:180])
         return
-    await update_delivery(
-        session_factory, outbox_id, state="sent", message_id=message.message_id
-    )
+    await update_delivery(session_factory, outbox_id, state="sent", message_id=message.message_id)
 
 
 async def deliver_match_alert(
@@ -430,7 +433,7 @@ async def deliver_one(
             payload = json.loads(outbox.payload_json)
             player = await db.get(User, outbox.user_id)
             duel = await db.get(Duel, payload["duel_id"])
-        elif kind in (KIND_DUEL_REVEAL_SOON, KIND_REFERRAL_QUALIFIED):
+        elif kind in (KIND_DUEL_REVEAL_SOON, KIND_REFERRAL_QUALIFIED, KIND_BANK_WAVE):
             payload = json.loads(outbox.payload_json)
             plain_user = await db.get(User, outbox.user_id)
         elif kind == KIND_PUBLIC_FEED:
@@ -449,7 +452,16 @@ async def deliver_one(
     if kind == KIND_DUEL_MATCHED:
         await deliver_match_alert(bot, session_factory, settings, outbox_id, player, duel, payload)
         return
-    if kind in (KIND_DUEL_REVEAL_SOON, KIND_REFERRAL_QUALIFIED):
+    if kind in (KIND_DUEL_REVEAL_SOON, KIND_REFERRAL_QUALIFIED, KIND_BANK_WAVE):
+        if (
+            plain_user is not None
+            and not plain_user.result_notifications_enabled
+            and payload.get("event") != "operator"
+        ):
+            await update_delivery(
+                session_factory, outbox_id, state="blocked", error="notifications_disabled"
+            )
+            return
         await deliver_plain_alert(
             bot, session_factory, settings, outbox_id, kind, plain_user, payload
         )
@@ -539,6 +551,7 @@ async def process_once(
     settings: Settings,
 ) -> int:
     await fail_stale_claims(session_factory)
+    await ensure_bank_wave_notifications(session_factory, settings)
     outbox_ids = await claim_due(session_factory)
     for outbox_id in outbox_ids:
         await deliver_one(bot, session_factory, settings, outbox_id)

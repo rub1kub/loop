@@ -103,7 +103,7 @@ class NotificationOutbox(Base):
         ),
         CheckConstraint(
             "kind IN ('result', 'duel_matched', 'referral_qualified', "
-            "'duel_reveal_soon', 'public_feed')",
+            "'duel_reveal_soon', 'public_feed', 'bank_wave')",
             name="notification_kind",
         ),
         Index("ix_notification_outbox_due", "state", "next_attempt_at"),

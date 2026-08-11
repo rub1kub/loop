@@ -146,7 +146,7 @@ describe('ProfileScreen', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Настройки' }));
-    fireEvent.click(screen.getByRole('switch', { name: 'Карточки в Telegram' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Сообщения в Telegram' }));
 
     await waitFor(() => expect(change).toHaveBeenCalledWith(false));
   });

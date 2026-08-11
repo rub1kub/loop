@@ -44,6 +44,17 @@ export type ControlOverview = {
     status: string;
     created_at: string;
   }>;
+  wave: {
+    id: string;
+    state: 'upcoming' | 'active' | 'goal_reached' | 'missed' | 'awaiting_boost' | 'completed';
+    starts_at: string;
+    ends_at: string;
+    participants: number;
+    goal: number;
+    boost_nano: number;
+    boost_confirmed: boolean;
+    proof_url: string | null;
+  } | null;
   generated_at: string;
 };
 

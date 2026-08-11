@@ -503,8 +503,8 @@ async def limits(db: Db, settings: Config) -> BankLimitView:
 
 
 @router.get("/pulse", response_model=BankQueuePulseView)
-async def pulse(db: Db, settings: Config) -> BankQueuePulseView:
-    return await bank_queue_pulse(db, settings)
+async def pulse(user: CurrentUser, db: Db, settings: Config) -> BankQueuePulseView:
+    return await bank_queue_pulse(db, settings, user_id=user.id)
 
 
 @router.get("/positions/current", response_model=BankPositionView | None)

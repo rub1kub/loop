@@ -28,9 +28,10 @@ from .models import (
     Wallet,
 )
 from .modules.bank.models import BankPayout, BankPosition, BankPositionStatus
+from .modules.bank.wave import bank_wave_view
 from .modules.duel.models import Duel, DuelOffer, DuelState, OfferState
 from .modules.teams.models import Team, TeamMembership
-from .schemas import WalletChallengeResponse, WalletVerifyRequest
+from .schemas import BankWaveView, WalletChallengeResponse, WalletVerifyRequest
 from .security import (
     AuthenticationError,
     canonical_raw_address,
@@ -54,6 +55,7 @@ CONTROL_COOKIE = "loop_control"
 ADMIN_GAS_NANO = 30_000_000
 WITHDRAW_GAS_NANO = 60_000_000
 MIN_RETAINED_RESERVE_NANO = 200_000_000
+BANK_CREATE_POSITION = 0x4C424E01
 
 BANK_OPCODES = {
     "pause": 0x4C424E02,
@@ -143,6 +145,7 @@ class ControlOverviewView(BaseModel):
     metrics: ControlMetricsView
     contracts: list[ControlContractView]
     audit: list[ControlAuditView]
+    wave: BankWaveView | None = None
     generated_at: datetime
 
 
@@ -288,6 +291,16 @@ def _write_admin_payload(body: ControlActionRequest, query_id: int) -> str:
         cell.bits.write_uint(body.fee_bps, 16)
     elif body.action in {"set_treasury", "set_owner"}:
         cell.bits.write_address(Address(body.address))
+    return base64.b64encode(cell.to_boc(False)).decode()
+
+
+def _write_wave_position_payload(query_id: int, principal_nano: int) -> str:
+    cell = Cell()
+    cell.bits.write_uint(BANK_CREATE_POSITION, 32)
+    cell.bits.write_uint(query_id, 64)
+    cell.bits.write_uint(query_id, 64)
+    cell.bits.write_coins(principal_nano)
+    cell.bits.write_uint(12_500, 16)
     return base64.b64encode(cell.to_boc(False)).decode()
 
 
@@ -598,6 +611,7 @@ async def control_overview(
             )
             for event in events
         ],
+        wave=await bank_wave_view(db, settings),
         generated_at=datetime.now(UTC),
     )
 
@@ -1297,4 +1311,74 @@ async def prepare_control_transaction(
         valid_until=int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
         query_id=query_id,
         network=settings.ton_network_id,
+    )
+
+
+@router.post("/wave/transaction", response_model=ControlTransactionView)
+async def prepare_wave_position(
+    wallet: ControlWallet,
+    db: Db,
+    request: Request,
+    settings: Config,
+) -> ControlTransactionView:
+    """Prepare the promised Wave position without ever storing its wallet key."""
+
+    if not settings.bank_wave_enabled or not settings.bank_wave_wallet:
+        raise HTTPException(status.HTTP_409_CONFLICT, "BANK Wave is not enabled")
+    try:
+        _chain, admin, code_hash_matches = await _live_contract(request, settings, wallet, "bank")
+    except TonProviderError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    if not code_hash_matches:
+        raise HTTPException(status.HTTP_409_CONFLICT, "configured contract code does not match")
+    if admin.paused:
+        raise HTTPException(status.HTTP_409_CONFLICT, "BANK сейчас закрыт")
+
+    wave = await bank_wave_view(db, settings)
+    if wave is None or wave.state not in {"goal_reached", "awaiting_boost"}:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Волна ещё не собрана или уже закрыта")
+    if wave.boost_confirmed:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Взнос LOOP уже подтверждён")
+
+    now = datetime.now(UTC)
+    recent = await db.scalar(
+        select(AdminAuditEvent.id).where(
+            AdminAuditEvent.action == "bank.wave_position",
+            AdminAuditEvent.created_at >= now - timedelta(minutes=6),
+            AdminAuditEvent.status == "prepared",
+        )
+    )
+    if recent is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Транзакция Волны уже подготовлена. Подожди подтверждение сети.",
+        )
+
+    query_id = secrets.randbelow(2**63 - 1) + 1
+    event = AdminAuditEvent(
+        wallet=normalize_address(wallet),
+        action="bank.wave_position",
+        target=normalize_address(settings.bank_contract_address),
+        payload_json=json.dumps(
+            {
+                "event_id": wave.id,
+                "principal_nano": wave.boost_nano,
+                "position_id": query_id,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+    )
+    db.add(event)
+    await db.commit()
+    return ControlTransactionView(
+        audit_id=event.id,
+        operation="create_wave_position",
+        address=settings.bank_contract_address,
+        amount_nano=str(wave.boost_nano + settings.bank_position_gas_nano),
+        payload=_write_wave_position_payload(query_id, wave.boost_nano),
+        valid_until=int((now + timedelta(minutes=5)).timestamp()),
+        query_id=query_id,
+        network=settings.ton_network_id,
+        sender_address=normalize_address(settings.bank_wave_wallet),
     )

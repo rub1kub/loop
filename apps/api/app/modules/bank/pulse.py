@@ -9,6 +9,7 @@ from ...config import Settings
 from ...control_state import effective_contract_fee
 from ...schemas import BankQueuePulseView
 from .models import BankPosition, BankPositionStatus
+from .wave import bank_wave_view
 
 QUEUE_STATES = (
     BankPositionStatus.QUEUED.value,
@@ -28,7 +29,12 @@ def gross_needed(net_nano: int, fee_bps: int) -> int:
     return (net_nano * 10_000 + distributable_bps - 1) // distributable_bps
 
 
-async def bank_queue_pulse(db: Any, settings: Settings) -> BankQueuePulseView:
+async def bank_queue_pulse(
+    db: Any,
+    settings: Settings,
+    *,
+    user_id: str | None = None,
+) -> BankQueuePulseView:
     """One source of truth for the in-app and Telegram queue pulse."""
 
     filters = (
@@ -79,6 +85,7 @@ async def bank_queue_pulse(db: Any, settings: Settings) -> BankQueuePulseView:
         minimum_entry_payouts=closed,
         next_payout_gross_nano=gross_needed(next_remaining, fee_bps),
         updated_at=datetime.now(UTC),
+        wave=await bank_wave_view(db, settings, user_id=user_id),
     )
 
 

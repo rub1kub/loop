@@ -468,12 +468,12 @@ export function ProfileScreen({
               </label>
               <label className="settings-toggle">
                 <span>
-                  <BellRinging /> Карточки в Telegram
+                  <BellRinging /> Сообщения в Telegram
                 </span>
                 <input
                   type="checkbox"
                   role="switch"
-                  aria-label="Карточки в Telegram"
+                  aria-label="Сообщения в Telegram"
                   checked={profile.user.result_notifications_enabled}
                   disabled={notificationPending}
                   onChange={(event) => {

@@ -245,6 +245,22 @@ export interface BankQueuePulse {
   minimum_entry_payouts: number;
   next_payout_gross_nano: number;
   updated_at: string;
+  wave: BankWave | null;
+}
+
+export interface BankWave {
+  id: string;
+  state: 'upcoming' | 'active' | 'goal_reached' | 'missed' | 'awaiting_boost' | 'completed';
+  starts_at: string;
+  ends_at: string;
+  participants: number;
+  goal: number;
+  boost_nano: number;
+  boost_confirmed: boolean;
+  proof_url: string | null;
+  closer_name: string | null;
+  closer_username: string | null;
+  is_closer: boolean;
 }
 
 export interface Offer {
