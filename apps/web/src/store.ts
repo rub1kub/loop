@@ -600,9 +600,10 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         }
         const empty = mockScreen === 'bank-empty';
         set({
-          profile: mockScreen?.startsWith('teams') || mockScreen === 'bank-wave'
-            ? { ...demoProfile, announcement: null }
-            : demoProfile,
+          profile:
+            mockScreen?.startsWith('teams') || mockScreen === 'bank-wave'
+              ? { ...demoProfile, announcement: null }
+              : demoProfile,
           bankPosition: empty ? null : demoBank,
           bankPulse: demoBankPulse,
           bankHistory: empty ? [] : [demoBank],
