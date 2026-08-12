@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from .bank_momentum_notifications import enqueue_bank_momentum
 from .config import Settings
 from .models import NotificationOutbox, User
 from .modules.bank.models import BankPosition
@@ -54,6 +55,17 @@ async def ensure_bank_wave_notifications(
                     next_attempt_at=max(starts_at, current),
                     payload={"event": "start", "goal": settings.bank_wave_goal},
                 )
+
+        remaining = max(settings.bank_wave_goal - wave.participants, 0)
+        if starts_at <= current < ends_at and wave.state == "active" and remaining in {1, 2}:
+            users = (await db.scalars(select(User.id))).all()
+            queued += await enqueue_bank_momentum(
+                db,
+                user_ids=users,
+                event_key=f"wave_near:{event_id}:{remaining}",
+                payload={"event": "wave_near", "remaining": remaining},
+                now=current,
+            )
 
         if (
             settings.bank_wave_operator_telegram_id

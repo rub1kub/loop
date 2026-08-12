@@ -149,6 +149,21 @@ describe('team forms', () => {
     expect(apiMocks.team).not.toHaveBeenCalled();
   });
 
+  it('names only a real weekly leader as the team that holds BANK', () => {
+    const leader = { ...ownedTeam, flow_nano: 5_000_000_000, bank_entries: 3 };
+    render(
+      <TeamsView
+        overview={{ ...overview, my_team: leader, leaderboard: [leader] }}
+        invite={null}
+        onRefresh={vi.fn(() => Promise.resolve())}
+        onDismissInvite={vi.fn()}
+        onError={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText(/ДЕРЖИТ BANK/).length).toBeGreaterThan(0);
+  });
+
   it('shows an immediate transition while another team is loading', async () => {
     let finish!: (team: TeamDetail) => void;
     apiMocks.team.mockReturnValue(

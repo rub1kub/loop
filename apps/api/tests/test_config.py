@@ -187,13 +187,13 @@ def test_a_personal_referral_rate_applies_only_to_whoever_is_named() -> None:
 
     settings = Settings(referral_special_bps="630786537:1000, 373473908:1000")
 
-    assert settings.referral_share_bps_for(630786537, 300) == 1000
-    assert settings.referral_share_bps_for(373473908, 300) == 1000
-    assert settings.referral_share_bps_for(999999999, 300) == 300
-    assert settings.referral_share_bps_for(None, 300) == 300
+    assert settings.referral_share_bps_for(630786537, 500) == 1000
+    assert settings.referral_share_bps_for(373473908, 500) == 1000
+    assert settings.referral_share_bps_for(999999999, 500) == 500
+    assert settings.referral_share_bps_for(None, 500) == 500
 
     # Nothing configured means nobody is special.
-    assert Settings().referral_share_bps_for(630786537, 300) == 300
+    assert Settings().referral_share_bps_for(630786537, 500) == 500
 
 
 def test_a_malformed_personal_rate_is_refused_rather_than_guessed() -> None:
@@ -201,4 +201,4 @@ def test_a_malformed_personal_rate_is_refused_rather_than_guessed() -> None:
 
     for broken in ("630786537:сто", "630786537:20000", "630786537:-5"):
         with pytest.raises(ValueError):
-            Settings(referral_special_bps=broken).referral_share_bps_for(630786537, 300)
+            Settings(referral_special_bps=broken).referral_share_bps_for(630786537, 500)

@@ -510,7 +510,9 @@ function TeamHome({
               <span>
                 {rival
                   ? `${formatGram(Math.max(0, rival.flow_nano - myTeam.flow_nano), 2)} ДО #${rival.rank}`
-                  : 'ВЫ ВЕДЁТЕ'}
+                  : myTeam.flow_nano > 0
+                    ? 'ДЕРЖИТ BANK'
+                    : 'НЕДЕЛЯ ЕЩЁ НЕ НАЧАЛАСЬ'}
               </span>
             </div>
             <div className="my-team-progress" aria-hidden="true">
@@ -589,7 +591,9 @@ function TeamList({
           <span>
             <strong>{team.name}</strong>
             <small>
-              {team.member_count} человек · {team.active_members} в зачёте
+              {team.rank === 1 && team.flow_nano > 0
+                ? `ДЕРЖИТ BANK · ${team.member_count} человек`
+                : `${team.member_count} человек · ${team.active_members} в зачёте`}
             </small>
           </span>
           <em>{formatGram(team.flow_nano, 2)}</em>
@@ -700,7 +704,9 @@ function TeamDetailPanel({
           <span>
             {rival
               ? `${formatGram(Math.max(0, rival.flow_nano - detail.flow_nano), 2)} ДО #${rival.rank}`
-              : 'ЛИДЕР ЗАЧЁТА'}
+              : detail.flow_nano > 0
+                ? 'ДЕРЖИТ BANK'
+                : 'НЕДЕЛЯ ЕЩЁ НЕ НАЧАЛАСЬ'}
           </span>
         </div>
       </section>

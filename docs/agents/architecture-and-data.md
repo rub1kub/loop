@@ -235,7 +235,7 @@ Browser и API не могут выполнить admin действие без 
 | `contract_control`         | последняя проверенная admin-конфигурация контракта    |
 | `admin_audit_events`       | prepared/applied/confirmed административные действия  |
 | `result_cards`             | неизменяемые факты подтверждённых BANK/DUEL выплат    |
-| `notification_outbox`      | одна попытка личной доставки на карточку              |
+| `notification_outbox`      | идемпотентная доставка карточек и личных сигналов     |
 
 ### Teams bounded context
 

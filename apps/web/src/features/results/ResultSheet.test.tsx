@@ -75,4 +75,27 @@ describe('ResultSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
     await waitFor(() => expect(close).toHaveBeenCalledOnce());
   });
+
+  it('turns a confirmed BANK entry into one clear pass-the-turn action', async () => {
+    render(
+      <ResultSheet
+        card={{
+          ...card,
+          id: 'entry-1',
+          mode: 'bank_entry',
+          payout_nano: 0,
+          contributed_nano: 1_500_000_000,
+          result_nano: 0,
+          queue_position: 8,
+        }}
+        onClose={vi.fn()}
+        onError={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Ты в LOOP.' })).toBeInTheDocument();
+    expect(screen.getByText(/ты №8 в очереди/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'ПЕРЕДАТЬ ХОД' }));
+    await waitFor(() => expect(apiMocks.prepareResultShare).toHaveBeenCalledWith('entry-1'));
+  });
 });

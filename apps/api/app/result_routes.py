@@ -9,10 +9,12 @@ from .dependencies import Config, CurrentUser, Db
 from .models import ResultCard
 from .referrals import get_or_create_referral_code
 from .result_cards import (
+    CARD_TEMPLATE_VERSION,
     CardFacts,
     build_result_inline,
     duel_opponent_label,
     render_result_card,
+    render_turn_card,
 )
 from .schemas import PreparedResultShareView, ResultCardView
 
@@ -28,7 +30,10 @@ def card_view(card: ResultCard, settings: Config) -> ResultCardView:
         result_nano=card.result_nano,
         queue_position=card.queue_position,
         proof_url=card.proof_url,
-        image_url=f"{settings.public_origin}/api/v1/results/cards/{card.public_id}.jpg",
+        image_url=(
+            f"{settings.public_origin}/api/v1/results/cards/{card.public_id}.jpg"
+            f"?v={CARD_TEMPLATE_VERSION}"
+        ),
         seen_at=card.seen_at,
         created_at=card.created_at,
     )
@@ -80,6 +85,38 @@ async def result_image(public_id: str, db: Db) -> Response:
             queue_position=card.queue_position,
             opponent=await duel_opponent_label(db, card),
         )
+    )
+    return Response(
+        content=content,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@router.get("/turn/{public_id}.jpg", include_in_schema=False)
+async def turn_image(public_id: str, db: Db) -> Response:
+    if not 20 <= len(public_id) <= 32 or not all(
+        character.isalnum() or character in "-_" for character in public_id
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "result not found")
+    card = await db.scalar(
+        select(ResultCard).where(
+            ResultCard.public_id == public_id,
+            ResultCard.mode == "bank_entry",
+        )
+    )
+    if card is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "result not found")
+    content = await run_in_threadpool(
+        render_turn_card,
+        CardFacts(
+            public_id=card.public_id,
+            mode=card.mode,
+            payout_nano=card.payout_nano,
+            contributed_nano=card.contributed_nano,
+            result_nano=card.result_nano,
+            queue_position=card.queue_position,
+        ),
     )
     return Response(
         content=content,

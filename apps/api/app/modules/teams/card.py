@@ -12,7 +12,7 @@ from .schemas import TeamEntryView
 
 CARD_WIDTH = 1080
 CARD_HEIGHT = 1080
-CARD_VERSION = 2
+CARD_VERSION = 3
 FONT_REGULAR = (
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
@@ -105,7 +105,12 @@ def render_team_card(
     draw.text((272, 260), name, fill="white", font=_fit(draw, name, 720, 86))
     draw.line((72, 470, 1008, 470), fill=(45, 45, 48), width=2)
     draw.text((72, 540), f"#{rank}", fill="white", font=_font(116, bold=True))
-    draw.text((78, 672), "МЕСТО СЕЙЧАС", fill=muted, font=_font(24, bold=True))
+    draw.text(
+        (78, 672),
+        "ДЕРЖИТ BANK" if rank == 1 and flow_nano > 0 else "МЕСТО СЕЙЧАС",
+        fill=muted,
+        font=_font(24, bold=True),
+    )
     flow = format_gram(flow_nano)
     flow_font = _fit(draw, flow, 450, 116)
     draw.text((552, 540), flow, fill="white", font=flow_font)
@@ -151,11 +156,16 @@ def build_team_invite_inline(
         photo_width=CARD_WIDTH,
         photo_height=CARD_HEIGHT,
         title=f"Команда {team.name}",
-        description=f"#{team.rank} · {format_gram(team.flow_nano)} GRAM за неделю",
+        description=(
+            "Держит BANK"
+            if team.rank == 1 and team.flow_nano > 0
+            else f"#{team.rank} · {format_gram(team.flow_nano)} GRAM за неделю"
+        ),
         caption=(
             f"{inviter_name} зовёт тебя в команду {team.name}.\n\n"
-            f"Сейчас #{team.rank}. За неделю подтверждено "
-            f"{format_gram(team.flow_nano)} GRAM.\n\n"
+            f"Сейчас #{team.rank}"
+            f"{' — держит BANK' if team.rank == 1 and team.flow_nano > 0 else ''}. "
+            f"За неделю подтверждено {format_gram(team.flow_nano)} GRAM.\n\n"
             "Вступай — или собирай свою команду и обходи."
         ),
         reply_markup=InlineKeyboardMarkup(

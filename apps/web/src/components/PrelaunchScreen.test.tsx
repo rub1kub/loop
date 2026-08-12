@@ -54,7 +54,7 @@ describe('PrelaunchScreen', () => {
     expect(clock.textContent).toContain('04');
     expect(clock.textContent).toContain('05');
 
-    expect(screen.getByText('3% с каждого взноса приглашённых. Навсегда.')).toBeInTheDocument();
+    expect(screen.getByText('5% с каждого взноса приглашённых. Навсегда.')).toBeInTheDocument();
     expect(screen.getByText('@akxiemy')).toBeInTheDocument();
     expect(screen.getByText('Уже внутри: 41')).toBeInTheDocument();
     // Покупка кирпича ведёт на маркеты, а не на сайт.

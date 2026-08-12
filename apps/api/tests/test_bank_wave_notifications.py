@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.bank_wave_notifications import bank_wave_text, ensure_bank_wave_notifications
 from app.config import get_settings
 from app.models import NotificationOutbox, User
+from app.modules.bank.models import BankPosition, BankPositionStatus
 from app.notification_worker import claim_due, deliver_one
 
 
@@ -68,6 +69,46 @@ def test_wave_messages_are_short_and_do_not_promise_a_cash_prize() -> None:
     assert "5 GRAM в BANK" in opening
     assert "Ты закрыл Волну" in closer
     assert "приз" not in (opening + closer).lower()
+
+
+@pytest.mark.asyncio
+async def test_wave_near_signal_appears_at_two_people_remaining(app) -> None:
+    config = settings()
+    now = datetime(2026, 8, 16, 17, 10, tzinfo=UTC)
+    async with app.state.session_factory() as db:
+        users = [User(telegram_id=835_000 + index, first_name=str(index)) for index in range(6)]
+        db.add_all(users)
+        await db.flush()
+        for index, user in enumerate(users):
+            db.add(
+                BankPosition(
+                    position_id=835 + index,
+                    query_id=835 + index,
+                    user_id=user.id,
+                    owner_wallet=f"0:{index + 1:064x}",
+                    network=config.ton_network_id,
+                    contract_address=config.bank_contract_address,
+                    principal_nano=1_000_000_000,
+                    multiplier_bps=12_500,
+                    target_payout_nano=1_250_000_000,
+                    remaining_amount_nano=1_250_000_000,
+                    queue_index=index,
+                    current_status=BankPositionStatus.QUEUED.value,
+                    funding_transaction=f"wave-near-{index}",
+                    confirmed_at=now - timedelta(minutes=6 - index),
+                )
+            )
+        await db.commit()
+
+    await ensure_bank_wave_notifications(app.state.session_factory, config, now=now)
+    async with app.state.session_factory() as db:
+        notices = (
+            await db.scalars(
+                select(NotificationOutbox).where(NotificationOutbox.kind == "bank_momentum")
+            )
+        ).all()
+    assert len(notices) == 6
+    assert all(json.loads(item.payload_json)["remaining"] == 2 for item in notices)
 
 
 @pytest.mark.asyncio

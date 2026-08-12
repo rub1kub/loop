@@ -13,7 +13,12 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.models import NotificationOutbox, ReferralCode, ResultCard, User
 from app.notification_worker import claim_due, deliver_one
-from app.result_cards import CardFacts, create_result_card, render_result_card
+from app.result_cards import (
+    CardFacts,
+    create_entry_card,
+    create_result_card,
+    render_result_card,
+)
 
 
 def signed_init_data(telegram_id: int) -> str:
@@ -114,6 +119,38 @@ async def test_result_api_is_owner_bound_but_card_image_is_public(client, app) -
         json={},
     )
     assert forbidden.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_pass_the_turn_image_is_public_only_for_a_confirmed_entry(client, app) -> None:
+    headers = await authenticate(client, 830_006)
+    async with app.state.session_factory() as db:
+        user = await db.scalar(select(User).where(User.telegram_id == 830_006))
+        assert user is not None
+        entry = await create_entry_card(
+            db,
+            user_id=user.id,
+            entity_id="bank-turn-route",
+            event_key="bank_entry:turn-route",
+            network=-3,
+            contributed_nano=1_500_000_000,
+            queue_position=8,
+            tx_hash="fa" * 32,
+        )
+        assert entry is not None
+        await db.commit()
+
+    listed = await client.get("/api/v1/results", headers=headers)
+    assert listed.status_code == 200
+    assert listed.json()[0]["image_url"].endswith(".jpg?v=4")
+    image = await client.get(f"/api/v1/results/turn/{entry.public_id}.jpg?v=4")
+    assert image.status_code == 200
+    assert image.headers["content-type"] == "image/jpeg"
+    assert image.content.startswith(b"\xff\xd8")
+
+    payout = await add_result(app, 830_006, "bank:turn-route-negative")
+    not_a_turn = await client.get(f"/api/v1/results/turn/{payout.public_id}.jpg")
+    assert not_a_turn.status_code == 404
 
 
 @pytest.mark.asyncio

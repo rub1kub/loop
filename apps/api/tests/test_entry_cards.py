@@ -14,6 +14,7 @@ from app.result_cards import (
     create_entry_card,
     entry_variant,
     render_result_card,
+    render_turn_card,
     result_caption,
 )
 
@@ -84,6 +85,10 @@ def test_an_entry_card_renders_and_never_claims_a_payout() -> None:
     image = render_result_card(facts)
     assert image.startswith(b"\xff\xd8")
     assert len(image) > 10_000
+
+    turn = render_turn_card(facts)
+    assert turn.startswith(b"\xff\xd8")
+    assert len(turn) > 10_000
 
 
 def test_rendering_refuses_an_entry_card_that_reports_a_result() -> None:
@@ -176,7 +181,7 @@ def test_no_headline_overflows_the_card_at_any_plausible_amount() -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_entry_card_carries_no_referral_code(app) -> None:
+async def test_an_entry_card_passes_the_turn_with_the_owners_referral_code(app) -> None:
     settings = get_settings()
     async with app.state.session_factory() as db:
         user = User(telegram_id=920_003, first_name="Entrant")
@@ -197,6 +202,7 @@ async def test_an_entry_card_carries_no_referral_code(app) -> None:
     assert entry is not None
     inline = build_result_inline(entry, settings, "SOMECODE")
     urls = [button.url for row in inline.reply_markup.inline_keyboard for button in row]
-    assert not any(url and "ref_" in url for url in urls), (
-        "a confession card must not double as a paid recruitment link"
-    )
+    assert any(url and "ref_SOMECODE" in url for url in urls)
+    assert inline.reply_markup.inline_keyboard[0][0].text == "ПРИНЯТЬ ХОД"
+    assert "/results/turn/" in inline.photo_url
+    assert "Теперь твой ход" in inline.caption

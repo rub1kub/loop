@@ -17,6 +17,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from anyio import Path
 from sqlalchemy import select, update
 
+from .bank_momentum_notifications import KIND_BANK_MOMENTUM, bank_momentum_text
 from .bank_wave_notifications import KIND_BANK_WAVE, bank_wave_text, ensure_bank_wave_notifications
 from .config import Settings, get_settings
 from .database import create_database
@@ -167,6 +168,10 @@ async def deliver_plain_alert(
         text = bank_wave_text(payload)
         effect = settings.result_effect_id.strip() if payload.get("event") == "closer" else ""
         markup = bank_pulse_markup(settings)
+    elif kind == KIND_BANK_MOMENTUM:
+        text = bank_momentum_text(payload)
+        effect = ""
+        markup = bank_pulse_markup(settings)
     elif kind == KIND_DUEL_REVEAL_SOON:
         deadline = datetime.fromisoformat(str(payload["reveal_deadline"]))
         if deadline.tzinfo is None:
@@ -189,7 +194,9 @@ async def deliver_plain_alert(
             lambda value: bot.send_message(
                 chat_id=user.telegram_id,
                 text=text,
-                parse_mode="HTML" if kind == KIND_BANK_WAVE else None,
+                parse_mode=(
+                    "HTML" if kind in (KIND_BANK_WAVE, KIND_BANK_MOMENTUM) else None
+                ),
                 reply_markup=markup,
                 message_effect_id=value,
             ),
@@ -433,7 +440,12 @@ async def deliver_one(
             payload = json.loads(outbox.payload_json)
             player = await db.get(User, outbox.user_id)
             duel = await db.get(Duel, payload["duel_id"])
-        elif kind in (KIND_DUEL_REVEAL_SOON, KIND_REFERRAL_QUALIFIED, KIND_BANK_WAVE):
+        elif kind in (
+            KIND_DUEL_REVEAL_SOON,
+            KIND_REFERRAL_QUALIFIED,
+            KIND_BANK_WAVE,
+            KIND_BANK_MOMENTUM,
+        ):
             payload = json.loads(outbox.payload_json)
             plain_user = await db.get(User, outbox.user_id)
         elif kind == KIND_PUBLIC_FEED:
@@ -452,7 +464,12 @@ async def deliver_one(
     if kind == KIND_DUEL_MATCHED:
         await deliver_match_alert(bot, session_factory, settings, outbox_id, player, duel, payload)
         return
-    if kind in (KIND_DUEL_REVEAL_SOON, KIND_REFERRAL_QUALIFIED, KIND_BANK_WAVE):
+    if kind in (
+        KIND_DUEL_REVEAL_SOON,
+        KIND_REFERRAL_QUALIFIED,
+        KIND_BANK_WAVE,
+        KIND_BANK_MOMENTUM,
+    ):
         if (
             plain_user is not None
             and not plain_user.result_notifications_enabled

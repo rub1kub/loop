@@ -26,7 +26,7 @@ from .ton import explorer_transaction_url
 CARD_WIDTH = 1080
 CARD_HEIGHT = 1350
 CARD_JPEG_QUALITY = 92
-CARD_TEMPLATE_VERSION = 3
+CARD_TEMPLATE_VERSION = 4
 FONT_REGULAR_CANDIDATES = (
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
@@ -315,6 +315,22 @@ def result_card_image_url(settings: Settings, card: ResultCard) -> str:
     )
 
 
+def turn_card_image_url(settings: Settings, card: ResultCard) -> str:
+    return (
+        f"{settings.public_origin}/api/v1/results/turn/{card.public_id}.jpg"
+        f"?v={CARD_TEMPLATE_VERSION}"
+    )
+
+
+def turn_caption(card: ResultCard) -> str:
+    return (
+        "Я вошёл в LOOP. Теперь твой ход.\n\n"
+        f"Взнос: {format_gram(card.contributed_nano)} GRAM. "
+        f"Место в очереди: №{card.queue_position or '—'}.\n\n"
+        "BANK — финансовая пирамида. Выплата не гарантирована."
+    )
+
+
 def result_deep_link(settings: Settings, referral_code: str | None) -> str:
     base = f"https://t.me/{settings.bot_username.removeprefix('@')}?startapp"
     return f"{base}=ref_{referral_code}" if referral_code else base
@@ -326,8 +342,12 @@ def build_result_inline(
     referral_code: str | None,
     opponent_label: str | None = None,
 ) -> InlineQueryResultPhoto:
-    image_url = result_card_image_url(settings, card)
     entry = card.mode == "bank_entry"
+    image_url = (
+        turn_card_image_url(settings, card)
+        if entry
+        else result_card_image_url(settings, card)
+    )
     return InlineQueryResultPhoto(
         id=card.public_id,
         photo_url=image_url,
@@ -340,13 +360,13 @@ def build_result_inline(
             if entry
             else f"+{format_gram(card.result_nano)} GRAM"
         ),
-        caption=result_caption(card, opponent_label),
+        caption=turn_caption(card) if entry else result_caption(card, opponent_label),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="ОТКРЫТЬ LOOP",
-                        url=result_deep_link(settings, None if entry else referral_code),
+                        text="ПРИНЯТЬ ХОД" if entry else "ОТКРЫТЬ LOOP",
+                        url=result_deep_link(settings, referral_code),
                     ),
                     InlineKeyboardButton(text="ПРОВЕРИТЬ", url=card.proof_url),
                 ]
@@ -651,6 +671,78 @@ def _render_entry_card(facts: CardFacts) -> bytes:
         anchor="ma",
     )
 
+    output = io.BytesIO()
+    image.convert("RGB").save(output, format="JPEG", quality=CARD_JPEG_QUALITY, optimize=True)
+    return output.getvalue()
+
+
+def render_turn_card(facts: CardFacts) -> bytes:
+    if facts.mode != "bank_entry" or facts.contributed_nano <= 0:
+        raise ValueError("a turn card needs a confirmed BANK entry")
+    image = Image.new("RGBA", (CARD_WIDTH, CARD_HEIGHT), (0, 0, 0, 255))
+    draw = ImageDraw.Draw(image)
+    seed = int.from_bytes(hashlib.sha256(f"turn:{facts.public_id}".encode()).digest()[:8], "big")
+    rng = random.Random(seed)  # noqa: S311 - deterministic visual noise, not security
+    for _ in range(520):
+        shade = rng.randint(14, 42)
+        draw.point(
+            (rng.randrange(CARD_WIDTH), rng.randrange(CARD_HEIGHT)),
+            fill=(shade, shade, shade, rng.randint(60, 150)),
+        )
+    draw.text((70, 64), "∞  LOOP", font=_font(30, bold=True), fill=(245, 245, 245), anchor="la")
+    draw.text(
+        (CARD_WIDTH - 70, 68),
+        "ТВОЙ ХОД",
+        font=_font(20, bold=True),
+        fill=(142, 142, 142),
+        anchor="ra",
+    )
+    _draw_infinity(image, 330)
+    draw = ImageDraw.Draw(image)
+    _centered_text(
+        draw,
+        (CARD_WIDTH // 2, 650),
+        "Я ВОШЁЛ В LOOP.\nТЕПЕРЬ ТВОЙ ХОД.",
+        font=_font(72, bold=True),
+        fill=(250, 250, 250),
+        spacing=18,
+    )
+    _centered_text(
+        draw,
+        (CARD_WIDTH // 2, 850),
+        f"№ {facts.queue_position or '—'}",
+        font=_font(92, bold=True),
+        fill=(255, 255, 255),
+    )
+    _centered_text(
+        draw,
+        (CARD_WIDTH // 2, 932),
+        "МОЁ МЕСТО В ОЧЕРЕДИ",
+        font=_font(20, bold=True),
+        fill=(135, 135, 135),
+    )
+    draw.line((70, 1176, CARD_WIDTH - 70, 1176), fill=(54, 54, 54), width=2)
+    draw.text(
+        (70, 1222),
+        f"ВНЕСЕНО  {format_gram(facts.contributed_nano)} GRAM",
+        font=_font(22, bold=True),
+        fill=(212, 212, 212),
+        anchor="la",
+    )
+    draw.text(
+        (CARD_WIDTH - 70, 1222),
+        "ВЫПЛАТА НЕ ГАРАНТИРОВАНА",
+        font=_font(18, bold=True),
+        fill=(150, 150, 150),
+        anchor="ra",
+    )
+    draw.text(
+        (CARD_WIDTH // 2, 1318),
+        "LOOP · TONSUITE.ORG",
+        font=_font(16, bold=True),
+        fill=(95, 95, 95),
+        anchor="ma",
+    )
     output = io.BytesIO()
     image.convert("RGB").save(output, format="JPEG", quality=CARD_JPEG_QUALITY, optimize=True)
     return output.getvalue()

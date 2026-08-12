@@ -42,9 +42,10 @@ const demoReferral: Referral = {
   url: 'https://t.me/getloopbot?startapp=ref_LOOPDEMO',
   invited: 3,
   qualified: 2,
+  turns_accepted: 2,
   reward_points: 200,
   reward_nano: 960_000_000,
-  share_bps: 300,
+  share_bps: 500,
   available_nano: 900_000_000,
   minimum_payout_nano: 500_000_000,
   pending_payout: null,
@@ -237,7 +238,7 @@ export function ProfileScreen({
       <div className="referral-earnings">
         <strong>{formatGram(referral?.reward_nano ?? 0, 2)} GRAM</strong>
         <span>
-          заработано на {String((referral?.share_bps ?? 300) / 100).replace('.', ',')}% со взносов
+          заработано на {String((referral?.share_bps ?? 500) / 100).replace('.', ',')}% со взносов
           приглашённых — навсегда
         </span>
         {referral?.pending_payout ? (
@@ -305,10 +306,10 @@ export function ProfileScreen({
           <UsersThree />
         </span>
         <div>
-          <b>Позвать в LOOP</b>
+          <b>Передать ход</b>
           <small>
             {referral
-              ? `${referral.qualified} внесли из ${referral.invited} приглашённых`
+              ? `Ход приняли: ${referral.turns_accepted} из ${referral.invited}`
               : 'Загружаем ссылку'}
           </small>
         </div>

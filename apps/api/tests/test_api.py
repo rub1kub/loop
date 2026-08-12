@@ -1576,7 +1576,7 @@ async def test_a_referral_payout_can_be_asked_for_once_and_is_fixed_when_asked(
 async def test_referrals_reports_the_persons_actual_rate_not_the_standard_one(
     client, app
 ) -> None:
-    # The screen printed a bare "3%" for everybody. Two inviters were promised
+    # The screen printed a bare standard rate for everybody. Some inviters were promised
     # 10%, and nothing told the screen — a raised rate is worthless if the
     # person can't see it changed. /referrals must answer with the rate that
     # will actually apply to this person's next accrual.
@@ -1595,6 +1595,7 @@ async def test_referrals_reports_the_persons_actual_rate_not_the_standard_one(
 
     ordinary = (await client.get("/api/v1/referrals", headers=ordinary_headers)).json()
     assert ordinary["share_bps"] == REFERRAL_FEE_SHARE_BPS
+    assert ordinary["turns_accepted"] == 0
 
     settings.referral_special_bps = ""
 

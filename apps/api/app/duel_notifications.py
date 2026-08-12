@@ -68,7 +68,12 @@ def reveal_reminder_text(payload: dict[str, Any], now: datetime) -> str:
 
 def referral_text(payload: dict[str, Any]) -> str:
     confirmed = int(payload.get("qualified", 0))
+    if payload.get("event") == "turn_accepted":
+        return (
+            "Ход принят. Цепочка продолжается.\n\n"
+            f"Подтверждённых приглашений: {confirmed}."
+        )
     return (
-        "Твой друг сделал первый взнос.\n\n"
+        "Твой друг подтвердил участие в LOOP.\n\n"
         f"Подтверждённых приглашений: {confirmed}."
     )

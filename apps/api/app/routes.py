@@ -702,6 +702,18 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
             ReferralAttribution.status == "qualified",
         )
     )
+    turns_accepted = await db.scalar(
+        select(func.count(func.distinct(ReferralReward.attribution_id)))
+        .select_from(ReferralReward)
+        .join(
+            ReferralAttribution,
+            ReferralReward.attribution_id == ReferralAttribution.id,
+        )
+        .where(
+            ReferralAttribution.inviter_user_id == user.id,
+            ReferralReward.cause.like("bank_entry:%"),
+        )
+    )
     # Totals over everything ever accrued. They used to be summed over the
     # fifty rows the feed happens to show, so the headline figure silently
     # stopped growing at whatever the fifty-first reward brought.
@@ -774,10 +786,11 @@ async def referrals(user: CurrentUser, db: Db, settings: Config) -> ReferralView
         url=f"https://t.me/{settings.bot_username}?startapp=ref_{referral.code}",
         invited=invited or 0,
         qualified=qualified or 0,
+        turns_accepted=turns_accepted or 0,
         reward_points=int(totals[0]),
         reward_nano=int(totals[1]),
-        # The screen used to print a bare "3%" for everybody. Two inviters were
-        # promised 10%, and nothing told them or the screen that it changed —
+        # The screen used to print one standard rate for everybody. Personal
+        # 10% rates exist, and nothing told their owners that it changed —
         # the rate here is the one that will actually apply to their next
         # accrual, not the standard one.
         share_bps=settings.referral_share_bps_for(user.telegram_id, REFERRAL_FEE_SHARE_BPS),

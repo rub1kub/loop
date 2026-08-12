@@ -401,6 +401,7 @@ export interface Referral {
   url: string;
   invited: number;
   qualified: number;
+  turns_accepted: number;
   reward_points: number;
   reward_nano: number;
   /** Личная ставка человека в базисных пунктах — не всегда общая. */

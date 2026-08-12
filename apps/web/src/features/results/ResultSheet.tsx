@@ -39,7 +39,7 @@ export function ResultSheet({
   }, [card.mode]);
   const entry = card.mode === 'bank_entry';
   const modeLabel = entry
-    ? 'Ты в очереди.'
+    ? 'Ты в LOOP.'
     : card.mode === 'bank'
       ? 'Цикл замкнулся.'
       : 'DUEL завершён.';
@@ -127,7 +127,7 @@ export function ResultSheet({
           onClick={() => void share()}
         >
           <ShareNetwork aria-hidden="true" />
-          {sharing ? 'ГОТОВИМ…' : 'ПОДЕЛИТЬСЯ'}
+          {sharing ? 'ГОТОВИМ…' : entry ? 'ПЕРЕДАТЬ ХОД' : 'ПОДЕЛИТЬСЯ'}
         </button>
         <button className="result-proof" onClick={() => openPlatformLink(card.proof_url)}>
           ПРОВЕРИТЬ

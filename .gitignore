@@ -25,6 +25,7 @@ output/
 build/
 gen/
 .acton/
+.lazyweb/
 wallets.toml
 libraries.toml
 *.boc

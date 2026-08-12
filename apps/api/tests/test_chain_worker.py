@@ -1,4 +1,5 @@
 import base64
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -1196,7 +1197,7 @@ async def test_funding_projects_the_observed_contract_fee_not_the_quote(app) -> 
 
 @pytest.mark.asyncio
 async def test_confirmed_referred_deposit_accrues_the_inviter_fee_share(app) -> None:
-    """2% of every confirmed deposit by an invited person, funded by the fee.
+    """5% of every confirmed deposit by an invited person, funded by the fee.
 
     Accrued at confirmation rather than promised at sign-up: a fake account
     has to move real money and pay a real fee before a single nanoGRAM lands.
@@ -1255,8 +1256,17 @@ async def test_confirmed_referred_deposit_accrues_the_inviter_fee_share(app) -> 
             select(ReferralReward).where(ReferralReward.cause == f"fee_share:{position.id}")
         )
         assert reward is not None
-        assert reward.reward_nano == 60_000_000  # 3% of 2 GRAM
+        assert reward.reward_nano == 100_000_000  # 5% of 2 GRAM
         assert reward.reward_points == 0
+        attribution = await db.scalar(select(ReferralAttribution))
+        assert attribution is not None
+        assert attribution.status == "qualified"
+        assert attribution.qualified_tx_hash == "tx-60"
+        qualified_notice = await db.scalar(
+            select(NotificationOutbox).where(NotificationOutbox.kind == "referral_qualified")
+        )
+        assert qualified_notice is not None
+        assert json.loads(qualified_notice.payload_json)["event"] == "turn_accepted"
 
         # The same transaction seen again accrues nothing new.
         assert await apply_transaction(db, settings, tx, "bank") == ProjectionResult.IGNORED

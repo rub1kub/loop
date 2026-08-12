@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from tonsdk.boc import Cell  # type: ignore[import-untyped]
 
+from .bank_momentum_notifications import enqueue_confirmed_entry_momentum_safely
 from .config import get_settings
 from .control_state import contract_control_key
 from .database import create_database
@@ -739,6 +740,13 @@ async def apply_bank_transaction(
         event_at=position.confirmed_at,
     )
     await accrue_referral_fee_share(db, position=position)
+    await qualify_referral(
+        db,
+        user_id=position.user_id,
+        owner_wallet=position.owner_wallet,
+        cause=f"bank_entry:{position.position_id}",
+        tx_hash=tx_hash,
+    )
     ahead = await db.scalar(
         select(func.count())
         .select_from(BankPosition)
@@ -776,6 +784,7 @@ async def apply_bank_transaction(
         network=position.network,
         tx_hash=tx_hash,
     )
+    await enqueue_confirmed_entry_momentum_safely(db, settings, position=position)
     event = BankChainEvent(
         network=position.network,
         account=position.contract_address,
@@ -791,11 +800,11 @@ async def apply_bank_transaction(
     return ProjectionResult.APPLIED
 
 
-# Из десяти процентов комиссии двадцатая часть взноса уходит пригласившему:
-# 3% с каждого подтверждённого депозита приведённого человека, навсегда.
-# Поднято с 2% решением владельца 2026-08-06; прежние начисления не
+# Из десяти процентов комиссии половина комиссии уходит пригласившему:
+# 5% с каждого подтверждённого депозита приведённого человека, навсегда.
+# Поднято с 3% решением владельца 2026-08-13; прежние начисления не
 # пересчитываются — ключ по позиции фиксирует ставку момента взноса.
-REFERRAL_FEE_SHARE_BPS = 300
+REFERRAL_FEE_SHARE_BPS = 500
 
 
 async def accrue_referral_fee_share(db: Any, *, position: Any) -> None:
@@ -894,7 +903,15 @@ async def qualify_referral(
                     kind=KIND_REFERRAL_QUALIFIED,
                     dedupe_key=f"referral:{attribution.id}",
                     payload_json=json.dumps(
-                        {"qualified": qualified_count}, separators=(",", ":")
+                        {
+                            "qualified": qualified_count,
+                            "event": (
+                                "turn_accepted"
+                                if cause.startswith("bank_entry:")
+                                else "qualified"
+                            ),
+                        },
+                        separators=(",", ":"),
                     ),
                 )
             )
