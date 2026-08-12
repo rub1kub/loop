@@ -306,10 +306,10 @@ export function ProfileScreen({
           <UsersThree />
         </span>
         <div>
-          <b>Передать ход</b>
+          <b>Пригласить в LOOP</b>
           <small>
             {referral
-              ? `Ход приняли: ${referral.turns_accepted} из ${referral.invited}`
+              ? `Приглашено: ${referral.invited} · участвуют: ${referral.qualified}`
               : 'Загружаем ссылку'}
           </small>
         </div>

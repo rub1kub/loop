@@ -111,6 +111,22 @@ describe('ProfileScreen', () => {
     );
   });
 
+  it('describes the referral action as a direct invitation', () => {
+    render(
+      <ProfileScreen
+        profile={profile}
+        rating={null}
+        bankHistory={[]}
+        duels={[]}
+        onReplay={vi.fn()}
+        onResultNotificationsChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Пригласить в LOOP')).toBeInTheDocument();
+    expect(screen.queryByText('Передать ход')).not.toBeInTheDocument();
+  });
+
   it('allows vibration to be disabled in settings', () => {
     render(
       <ProfileScreen
