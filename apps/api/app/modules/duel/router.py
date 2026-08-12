@@ -41,6 +41,7 @@ from .models import (
     DuelState,
     OfferState,
 )
+from .reservations import expire_unfunded_quote
 
 
 def _format_gram(nano: int) -> str:
@@ -171,15 +172,25 @@ async def create_offer_quote(
     if wallet is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Подтверди поддерживаемый кошелёк TON")
     now = datetime.now(UTC)
-    await db.execute(
-        update(DuelOffer)
-        .where(
-            DuelOffer.wallet_id == wallet.id,
-            DuelOffer.state == OfferState.PENDING_FUNDING.value,
-            DuelOffer.expires_at < now,
+    stale_quotes = (
+        await db.scalars(
+            select(DuelOffer)
+            .where(
+                DuelOffer.wallet_id == wallet.id,
+                DuelOffer.state == OfferState.PENDING_FUNDING.value,
+                # The transaction itself is valid for five minutes. After one
+                # extra minute it cannot still arrive, even though the eventual
+                # on-chain offer would have had a longer lifetime.
+                or_(
+                    DuelOffer.expires_at < now,
+                    DuelOffer.created_at < now - timedelta(minutes=6),
+                ),
+            )
+            .with_for_update()
         )
-        .values(state=OfferState.EXPIRED.value)
-    )
+    ).all()
+    for stale in stale_quotes:
+        await expire_unfunded_quote(db, stale)
     active = await db.scalar(
         select(DuelOffer.id).where(
             DuelOffer.wallet_id == wallet.id,
@@ -610,27 +621,29 @@ async def discard_unfunded_offer(
     db: Db,
     settings: Config,
 ) -> Response:
-    """Drop a quote the player never signed.
+    """Drop a quote after an explicit wallet refusal.
 
     A quote reserves the wallet's single offer slot before the wallet is even
     opened, so a declined signature used to leave the player "searching" for
-    fifteen minutes against nothing, unable to start again. Refusing in the
-    wallet must cost nothing, and it costs nothing to undo: without a funding
-    transaction this row has no counterpart on chain.
+    fifteen minutes against nothing, unable to start again. Ambiguous wallet
+    responses must not call this endpoint: only the chain projection can prove
+    whether a message broadcast just before an SDK error was accepted.
     """
     offer = await db.scalar(
-        select(DuelOffer).where(
+        select(DuelOffer)
+        .where(
             DuelOffer.onchain_offer_id == offer_id,
             DuelOffer.user_id == user.id,
             DuelOffer.network == settings.ton_network_id,
         )
+        .with_for_update()
     )
     if offer is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "offer not found")
     # Anything the chain has already seen belongs to the chain, not to a button.
     if offer.state != OfferState.PENDING_FUNDING.value or offer.funding_tx_hash:
         raise HTTPException(status.HTTP_409_CONFLICT, "offer is already funded")
-    offer.state = OfferState.EXPIRED.value
+    await expire_unfunded_quote(db, offer)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

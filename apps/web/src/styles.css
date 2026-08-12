@@ -4040,31 +4040,28 @@ details[open] > summary .disclosure-indicator svg {
 .duel-orbit-needle {
   position: absolute;
   z-index: 3;
-  top: 50%;
-  left: 50%;
-  display: grid;
-  width: 44px;
-  height: 44px;
-  margin: -22px 0 0 -22px;
+  top: 9%;
+  left: 9%;
+  width: 82%;
+  height: 82%;
   transform-origin: center;
-  place-items: center;
   pointer-events: none;
 }
 
 .duel-orbit-needle > svg {
-  width: 40px;
-  height: 40px;
+  position: absolute;
+  top: 50%;
+  right: -15px;
+  width: 30px;
+  height: 30px;
   color: var(--ink);
-  filter: drop-shadow(0 2px 5px rgb(255 255 255 / 18%));
-}
-
-.duel-orbit-needle.is-waiting {
-  opacity: 0.55;
+  filter: drop-shadow(0 0 7px rgb(255 255 255 / 38%));
+  transform: translateY(-50%);
 }
 
 .duel-orbit.is-revealing.phase-won .duel-orbit-needle,
 .duel-orbit.is-revealing.phase-lost .duel-orbit-needle {
-  animation: duel-orbit-needle-out 260ms ease 2.2s both;
+  animation: duel-orbit-needle-out 220ms ease 1.86s both;
 }
 
 .duel-orbit-event {
@@ -4189,7 +4186,7 @@ details[open] > summary .disclosure-indicator svg {
   font-weight: 780;
   letter-spacing: 0.12em;
   text-align: center;
-  animation: duel-orbit-resolving-out 220ms ease 2.16s both;
+  animation: duel-orbit-resolving-out 200ms ease 1.84s both;
 }
 
 .duel-orbit-verdict {
@@ -4206,7 +4203,7 @@ details[open] > summary .disclosure-indicator svg {
 }
 
 .duel-orbit.is-revealing .duel-orbit-verdict {
-  animation: duel-orbit-result-in 300ms var(--ease-apple) 2.22s both;
+  animation: duel-orbit-result-in 280ms var(--ease-apple) 1.92s both;
 }
 
 .duel-orbit-verdict.is-lost {
@@ -4244,7 +4241,7 @@ details[open] > summary .disclosure-indicator svg {
 
 .duel-orbit.is-revealing ~ .duel-result-after-orbit,
 .duel-orbit.is-revealing ~ .duel-actions {
-  animation: duel-orbit-result-in 300ms var(--ease-apple) 2.3s both;
+  animation: duel-orbit-result-in 280ms var(--ease-apple) 1.98s both;
 }
 
 @keyframes duel-orbit-resolving-out {

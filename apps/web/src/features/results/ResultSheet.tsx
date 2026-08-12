@@ -100,9 +100,9 @@ export function ResultSheet({
             <strong>
               {entry
                 ? `${formatGram(card.contributed_nano, 3)} GRAM`
-                : `+${formatGram(card.result_nano, 3)} GRAM`}
+                : `+${formatGram(card.payout_nano, 3)} GRAM`}
             </strong>
-            <small>{entry ? 'ВЫПЛАЧЕНО 0 GRAM' : 'СВЕРХ СТАВКИ'}</small>
+            <small>{entry ? 'ВЫПЛАЧЕНО 0 GRAM' : 'ВЫПЛАТА'}</small>
           </div>
         )}
 
@@ -112,12 +112,12 @@ export function ResultSheet({
           <strong>
             {entry
               ? `${formatGram(card.contributed_nano, 3)} GRAM`
-              : `+${formatGram(card.result_nano, 3)} GRAM`}
+              : `+${formatGram(card.payout_nano, 3)} GRAM`}
           </strong>
           <span>
             {entry
               ? `Взнос подтверждён сетью${card.queue_position ? `, ты №${card.queue_position} в очереди` : ''}.`
-              : `В кошелёк пришло ${formatGram(card.payout_nano, 3)} GRAM. Результат подтверждён.`}
+              : 'Выплата подтверждена сетью.'}
           </span>
         </div>
 

@@ -37,20 +37,24 @@ import type { ActionIntent, ChallengePreview, Duel, Invite, Offer, Profile } fro
 import { requireLinkedWallet, sameAddress } from '../../address';
 
 import { celebrate } from '../../celebrate';
-import { humanError } from '../../errors';
+import { humanError, isWalletRefusal } from '../../errors';
 import { DuelOrbit, type DuelOrbitPhase } from './DuelOrbit';
 
 const DEFAULT_CHANCE_BPS = 5000;
 const FUNDING_BROADCAST_NOTICE =
   'Ставка отправлена. Обычно она появляется в DUEL за несколько секунд.';
+const FUNDING_RECONCILIATION_NOTICE =
+  'Проверяем, дошла ли ставка. Кошелёк мог отправить её даже после ошибки.';
 const FUNDING_CONFIRMED_NOTICE = 'Ставка в игре. Можно пригласить соперника.';
 const DIRECT_FUNDING_CONFIRMED_NOTICE = 'Ставка в игре. Отправь вызов другу.';
 const REVEAL_BROADCAST_NOTICE = 'Кошелёк отправил открытие. Ждём подтверждение в сети.';
 const PENDING_ACTION_STORAGE_KEY = 'loop.duel.pending-action.v1';
+const FUNDING_CHECK_STORAGE_KEY = 'loop.duel.pending-funding.v1';
 // A wallet message is valid for five minutes. Keep the action locked for the
 // same window so a delayed wallet broadcast cannot be signed twice.
 const PENDING_ACTION_TTL_MS = 330_000;
 const PROJECTION_POLL_MS = 2_000;
+const FUNDING_RECONCILIATION_MS = PENDING_ACTION_TTL_MS;
 // Let the closing animation become visible before Telegram opens the wallet.
 // The result is never calculated here: this only starts the user's required
 // transaction, then the projection poll waits for the chain-authoritative outcome.
@@ -69,6 +73,39 @@ type PendingAction = {
   kind: PendingActionKind;
   startedAt: number;
 };
+
+type FundingCheck = {
+  offerId: number;
+  startedAt: number;
+};
+
+function readFundingCheck(): FundingCheck | null {
+  try {
+    const raw = window.localStorage.getItem(FUNDING_CHECK_STORAGE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<FundingCheck>;
+    if (
+      typeof value.offerId !== 'number' ||
+      typeof value.startedAt !== 'number' ||
+      Date.now() - value.startedAt >= FUNDING_RECONCILIATION_MS
+    ) {
+      window.localStorage.removeItem(FUNDING_CHECK_STORAGE_KEY);
+      return null;
+    }
+    return value as FundingCheck;
+  } catch {
+    return null;
+  }
+}
+
+function storeFundingCheck(value: FundingCheck | null): void {
+  try {
+    if (value) window.localStorage.setItem(FUNDING_CHECK_STORAGE_KEY, JSON.stringify(value));
+    else window.localStorage.removeItem(FUNDING_CHECK_STORAGE_KEY);
+  } catch {
+    // A private WebView may disable storage. The in-memory guard still works.
+  }
+}
 
 function readPendingAction(): PendingAction | null {
   try {
@@ -183,8 +220,9 @@ export function DuelScreen({
   const quotedOffer = useRef<number | null>(null);
   /** Null until the contract has been asked; then whether it accepts deposits. */
   const [duelClosed, setDuelClosed] = useState<boolean | null>(null);
-  /** Set the moment the wallet accepts, so the screen stops asking for a signature. */
-  const [signedOffer, setSignedOffer] = useState<number | null>(null);
+  /** Persisted while a wallet broadcast is reconciled with the chain projection. */
+  const [fundingCheck, setFundingCheck] = useState<FundingCheck | null>(readFundingCheck);
+  const signedOffer = fundingCheck?.offerId ?? null;
   /** A broadcast action stays locked until the chain projection changes. */
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(readPendingAction);
   /** One automatic wallet request per duel phase; a rejected request leaves the manual fallback. */
@@ -226,11 +264,31 @@ export function DuelScreen({
       return;
     }
     const confirmation = window.setTimeout(() => {
-      setSignedOffer(null);
+      setFundingCheck(null);
+      storeFundingCheck(null);
       haptic('success');
     }, 0);
     return () => window.clearTimeout(confirmation);
   }, [activeOffer, signedOffer]);
+
+  useEffect(() => {
+    if (!fundingCheck) return;
+    const remaining = FUNDING_RECONCILIATION_MS - (Date.now() - fundingCheck.startedAt);
+    const timeout = window.setTimeout(
+      () => {
+        setFundingCheck(null);
+        storeFundingCheck(null);
+        if (
+          activeOffer?.onchain_offer_id === fundingCheck.offerId &&
+          activeOffer.state === 'pending_funding'
+        ) {
+          setMessage('Ставка не появилась в сети. Отмени запрос и попробуй снова.');
+        }
+      },
+      Math.max(0, remaining),
+    );
+    return () => window.clearTimeout(timeout);
+  }, [activeOffer?.onchain_offer_id, activeOffer?.state, fundingCheck, setMessage]);
 
   const activeDuel = activeOffer
     ? duels.find(
@@ -320,7 +378,7 @@ export function DuelScreen({
   // visible copy from the chain projection so a broadcast notice cannot stay
   // behind after confirmation.
   const message =
-    notice.text === FUNDING_BROADCAST_NOTICE
+    notice.text === FUNDING_BROADCAST_NOTICE || notice.text === FUNDING_RECONCILIATION_NOTICE
       ? activeOffer?.state === 'open' || activeOffer?.state === 'reserved'
         ? activeOffer.mode === 'direct'
           ? DIRECT_FUNDING_CONFIRMED_NOTICE
@@ -330,7 +388,7 @@ export function DuelScreen({
           : notice.text
       : notice.text === REVEAL_BROADCAST_NOTICE
         ? activeDuel?.own_revealed
-          ? 'Твой результат открыт. Ждём, когда откроет соперник.'
+          ? ''
           : activeDuel || activeOffer
             ? notice.text
             : ''
@@ -407,7 +465,7 @@ export function DuelScreen({
   const revealResult = Boolean(
     status === 'result' && latestDuel && observedLiveDuelId === latestDuel.id,
   );
-  // The chain already knows the winner. The interface spends 2.35 seconds
+  // The chain already knows the winner. The interface spends two seconds
   // revealing that fact with the orbit needle; it never rolls a client result.
   // The win gets a burst when the needle lands. The loss gets nothing —
   // celebrating someone's money leaving is mockery, not humour.
@@ -423,7 +481,7 @@ export function DuelScreen({
     }
     celebratedDuel.current = latestDuel.id;
     if (!resultWon) return;
-    const burst = window.setTimeout(() => celebrate(), 2350);
+    const burst = window.setTimeout(() => celebrate(), 2000);
     return () => window.clearTimeout(burst);
   }, [latestDuel, resultWon, revealResult, status]);
 
@@ -489,6 +547,7 @@ export function DuelScreen({
       locked.current = true;
       setBusy(true);
       setMode(selectedMode);
+      let walletRequestStarted = false;
       try {
         if (!invite && (requestedStake < minStake || requestedStake > maxStake)) {
           throw new Error(
@@ -563,20 +622,31 @@ export function DuelScreen({
         });
         await storeDuelSecret(offerId, secret.toString(16).padStart(64, '0'));
         setMessage('Подтверди ставку в кошельке.');
-        await tonConnectUI.sendTransaction(
-          buildOpenOfferTransaction(quote, from, wallet.account.chain),
-        );
+        const transaction = buildOpenOfferTransaction(quote, from, wallet.account.chain);
+        walletRequestStarted = true;
+        await tonConnectUI.sendTransaction(transaction);
         quotedOffer.current = null;
-        setSignedOffer(offerId);
+        const check = { offerId, startedAt: Date.now() } satisfies FundingCheck;
+        setFundingCheck(check);
+        storeFundingCheck(check);
         setMessage(FUNDING_BROADCAST_NOTICE);
         haptic('success');
       } catch (error) {
-        // A refused signature must leave the screen exactly as it was. The
-        // quote already holds this wallet's only offer slot, so it has to go
-        // before anything else — otherwise the player watches a search for a
-        // duel that does not exist and cannot start another for fifteen minutes.
+        // TON Connect can throw after a wallet has already broadcast. Only an
+        // explicit refusal proves that the local quote is safe to discard;
+        // every ambiguous transport error enters the same projection poll as a
+        // successful wallet response.
         const abandoned = quotedOffer.current;
         quotedOffer.current = null;
+        if (abandoned !== null && walletRequestStarted && !isWalletRefusal(error)) {
+          const check = { offerId: abandoned, startedAt: Date.now() } satisfies FundingCheck;
+          setFundingCheck(check);
+          storeFundingCheck(check);
+          setMessage(FUNDING_RECONCILIATION_NOTICE);
+          await onRefresh().catch(() => undefined);
+          haptic('warning');
+          return;
+        }
         if (abandoned !== null) {
           await api.discardOffer(abandoned).catch(() => undefined);
           await onRefresh().catch(() => undefined);
@@ -615,7 +685,8 @@ export function DuelScreen({
       setBusy(true);
       try {
         await api.discardOffer(offerId);
-        setSignedOffer(null);
+        setFundingCheck(null);
+        storeFundingCheck(null);
         setMessage('');
         await onRefresh();
         haptic('success');
@@ -994,10 +1065,10 @@ export function DuelScreen({
           : duelBoosting
             ? 'УСИЛЕНИЕ ОТКРЫТО'
             : boostClosing
-              ? 'ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ'
+              ? 'СВЕРЯЕМ ПОСЛЕДНИЕ СТАВКИ'
               : activeDuel?.own_revealed
-                ? 'ЖДЁМ ПОДТВЕРЖДЕНИЯ СОПЕРНИКА'
-                : 'ОПРЕДЕЛЯЕМ ПОБЕДИТЕЛЯ'
+                ? 'ТЫ ГОТОВ · ЖДЁМ СОПЕРНИКА'
+                : 'ОТКРЫВАЕМ РЕЗУЛЬТАТ'
       : status === 'searching'
         ? offerExpired
           ? 'СРОК ВЫЗОВА ИСТЁК'
@@ -1009,21 +1080,19 @@ export function DuelScreen({
   const orbitEvent = boostClosing
     ? 'Сверяем последние ставки'
     : pendingAction?.kind === 'reveal'
-      ? 'Подтверждаем результат в сети'
+      ? null
       : pendingAction?.kind === 'expire_duel' || duelExpired
         ? 'Время вышло. Завершаем дуэль'
-        : activeDuel && !duelBoosting && activeDuel.own_revealed
-          ? 'Твой результат подтверждён. Ждём соперника'
-          : activeDuel && !duelBoosting
-            ? 'Стрелка остановится на подтверждённом результате'
-            : latestBoost
-              ? `${latestBoost.side === 'you' ? 'Ты усилился' : 'Соперник усилился'}: +${formatGram(
-                  latestBoost.amount_nano,
-                  3,
-                )} GRAM`
-              : duelBoosting
-                ? 'У каждого есть минута, чтобы изменить шансы'
-                : null;
+        : activeDuel && !duelBoosting
+          ? null
+          : latestBoost
+            ? `${latestBoost.side === 'you' ? 'Ты усилился' : 'Соперник усилился'}: +${formatGram(
+                latestBoost.amount_nano,
+                3,
+              )} GRAM`
+            : duelBoosting
+              ? 'У каждого есть минута, чтобы изменить шансы'
+              : null;
   const orbitPhase: DuelOrbitPhase =
     status === 'result'
       ? resultWon
@@ -1448,7 +1517,7 @@ export function DuelScreen({
             <PaperPlaneTilt aria-hidden="true" />
           </button>
         )}
-        {awaitingSignature && activeOffer && (
+        {awaitingSignature && activeOffer && signedOffer !== activeOffer.onchain_offer_id && (
           <button
             className="secondary-button"
             disabled={busy}

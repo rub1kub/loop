@@ -1,10 +1,10 @@
-import { NavigationArrow, User } from '@phosphor-icons/react';
+import { CaretLeft, User } from '@phosphor-icons/react';
 import { motion, useReducedMotion } from 'motion/react';
 
 export type DuelOrbitPhase = 'boosting' | 'ready' | 'waiting' | 'won' | 'lost';
 
 const URGENT_SECONDS = 10;
-const RESULT_TURNS = 4;
+const RESULT_TURNS = 3;
 const START_ANGLE = 90;
 
 function clampShare(value: number): number {
@@ -71,7 +71,6 @@ export function DuelOrbit({
   const urgent = phase === 'boosting' && seconds !== null && seconds <= URGENT_SECONDS;
   const settled = phase === 'won' || phase === 'lost';
   const revealing = settled && revealResult;
-  const spinning = phase === 'waiting';
   const mineSweep = share * 360;
   const targetAngle =
     phase === 'lost'
@@ -128,27 +127,17 @@ export function DuelOrbit({
           />
         </svg>
 
-        {(spinning || revealing) && (
+        {revealing && (
           <motion.div
-            className={`duel-orbit-needle${spinning ? ' is-waiting' : ''}`}
+            className="duel-orbit-needle"
             initial={
               reduced ? { rotate: targetAngle } : { rotate: targetAngle - RESULT_TURNS * 360 }
             }
-            animate={
-              spinning && !reduced
-                ? { rotate: [targetAngle, targetAngle + 360] }
-                : { rotate: targetAngle }
-            }
-            transition={
-              spinning && !reduced
-                ? { duration: 1.35, ease: 'linear', repeat: Infinity }
-                : reduced
-                  ? { duration: 0 }
-                  : { duration: 2.35, ease: [0.12, 0.78, 0.16, 1] }
-            }
+            animate={{ rotate: targetAngle }}
+            transition={reduced ? { duration: 0 } : { duration: 1.9, ease: [0.16, 0.82, 0.18, 1] }}
             aria-hidden="true"
           >
-            <NavigationArrow weight="regular" />
+            <CaretLeft weight="bold" />
           </motion.div>
         )}
 

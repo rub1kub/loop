@@ -185,6 +185,57 @@ async def test_afk_matchmaking_selects_only_complementary_open_offer(client, app
 
 
 @pytest.mark.asyncio
+async def test_discarding_an_unfunded_afk_quote_releases_its_opponent(client, app) -> None:
+    first_id, second_id, third_id = 700_031, 700_032, 700_033
+    await auth_headers(client, first_id)
+    second_headers = await auth_headers(client, second_id)
+    third_headers = await auth_headers(client, third_id)
+    first_wallet = await add_wallet(app, first_id, "c")
+    await add_wallet(app, second_id, "d")
+    await add_wallet(app, third_id, "e")
+    async with app.state.session_factory() as db:
+        first_user = await db.scalar(select(User).where(User.telegram_id == first_id))
+        assert first_user is not None
+        db.add(
+            offer_for(
+                first_user,
+                first_wallet,
+                3031,
+                chance_bps=5000,
+                stake_nano=500_000_000,
+                opponent_stake_nano=500_000_000,
+            )
+        )
+        await db.commit()
+
+    quote_body = {
+        "offer_id": 3032,
+        "chance_bps": 5000,
+        "stake_nano": 500_000_000,
+        "commitment_hex": "ef" * 32,
+    }
+    quote = await client.post("/api/v1/duels/offers/quote", headers=second_headers, json=quote_body)
+    assert quote.status_code == 201, quote.text
+    assert quote.json()["transaction"]["counter_offer_id"] == 3031
+
+    discarded = await client.post("/api/v1/duels/offers/3032/discard", headers=second_headers)
+    assert discarded.status_code == 204
+    async with app.state.session_factory() as db:
+        counter = await db.scalar(select(DuelOffer).where(DuelOffer.onchain_offer_id == 3031))
+        assert counter is not None
+        assert counter.state == OfferState.OPEN.value
+        assert counter.reserved_until is None
+
+    retry = await client.post(
+        "/api/v1/duels/offers/quote",
+        headers=third_headers,
+        json={**quote_body, "offer_id": 3033},
+    )
+    assert retry.status_code == 201, retry.text
+    assert retry.json()["transaction"]["counter_offer_id"] == 3031
+
+
+@pytest.mark.asyncio
 async def test_new_asymmetric_duel_offer_is_rejected(client, app) -> None:
     telegram_id = 700_011
     headers = await auth_headers(client, telegram_id)
@@ -307,20 +358,19 @@ async def test_direct_invitation_is_explicitly_accepted_and_cannot_be_stolen(cli
         valid_until=transaction["direct_valid_until"],
     )
 
+    discarded = await client.post("/api/v1/duels/offers/4002/discard", headers=receiver_headers)
+    assert discarded.status_code == 204
     async with app.state.session_factory() as db:
-        creator_offer = await db.scalar(
-            select(DuelOffer).where(DuelOffer.onchain_offer_id == 4001)
+        creator_offer = await db.scalar(select(DuelOffer).where(DuelOffer.onchain_offer_id == 4001))
+        assert creator_offer is not None
+        invitation = await db.scalar(
+            select(DuelInvitation).where(DuelInvitation.creator_offer_id == creator_offer.id)
         )
-        receiver_offer = await db.scalar(
-            select(DuelOffer).where(DuelOffer.onchain_offer_id == 4002)
-        )
-        assert creator_offer is not None and receiver_offer is not None
-        creator_offer.reserved_until = datetime.now(UTC) - timedelta(seconds=1)
-        receiver_offer.expires_at = datetime.now(UTC) - timedelta(seconds=1)
-        await db.commit()
-    assert (
-        await client.post("/api/v1/invites/direct-loop-4001/accept", headers=receiver_headers)
-    ).status_code == 200
+        assert invitation is not None
+        assert creator_offer.state == OfferState.OPEN.value
+        assert creator_offer.reserved_until is None
+        assert invitation.state == "accepted"
+
     retry = await client.post(
         "/api/v1/duels/offers/quote",
         headers=receiver_headers,

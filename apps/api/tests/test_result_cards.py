@@ -18,6 +18,7 @@ from app.result_cards import (
     create_entry_card,
     create_result_card,
     render_result_card,
+    result_caption,
 )
 
 
@@ -93,6 +94,22 @@ def test_card_renderer_is_deterministic_and_telegram_sized() -> None:
         )
 
 
+def test_duel_result_copy_uses_the_verified_payout_not_the_difference() -> None:
+    caption = result_caption(
+        SimpleNamespace(
+            mode="duel",
+            public_id="duel-payout-copy",
+            payout_nano=1_000_000_000,
+            result_nano=500_000_000,
+            contributed_nano=500_000_000,
+        )
+    )
+    assert "Выплата +1 GRAM" in caption
+    assert "+0,5 GRAM" not in caption
+    assert "Разница к входу" not in caption
+    assert "Сверх ставки" not in caption
+
+
 @pytest.mark.asyncio
 async def test_result_api_is_owner_bound_but_card_image_is_public(client, app) -> None:
     owner_headers = await authenticate(client, 830_001)
@@ -142,8 +159,8 @@ async def test_pass_the_turn_image_is_public_only_for_a_confirmed_entry(client, 
 
     listed = await client.get("/api/v1/results", headers=headers)
     assert listed.status_code == 200
-    assert listed.json()[0]["image_url"].endswith(".jpg?v=4")
-    image = await client.get(f"/api/v1/results/turn/{entry.public_id}.jpg?v=4")
+    assert listed.json()[0]["image_url"].endswith(".jpg?v=5")
+    image = await client.get(f"/api/v1/results/turn/{entry.public_id}.jpg?v=5")
     assert image.status_code == 200
     assert image.headers["content-type"] == "image/jpeg"
     assert image.content.startswith(b"\xff\xd8")
@@ -185,7 +202,10 @@ async def test_result_prepare_and_seen_use_native_telegram_share(client, app) ->
     assert bot.calls[0]["result"].photo_url.endswith(
         f"/{card.public_id}.jpg?v={card.template_version}"
     )
-    assert bot.calls[0]["result"].description == "+1 GRAM"
+    assert bot.calls[0]["result"].description == "Выплата +3 GRAM"
+    assert "Выплата +3 GRAM" in bot.calls[0]["result"].caption
+    assert "Разница к входу" not in bot.calls[0]["result"].caption
+    assert "Сверх взноса" not in bot.calls[0]["result"].caption
     async with app.state.session_factory() as db:
         referral = await db.scalar(
             select(ReferralCode).where(ReferralCode.owner_user_id == card.user_id)

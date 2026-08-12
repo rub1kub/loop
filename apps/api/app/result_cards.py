@@ -26,7 +26,7 @@ from .ton import explorer_transaction_url
 CARD_WIDTH = 1080
 CARD_HEIGHT = 1350
 CARD_JPEG_QUALITY = 92
-CARD_TEMPLATE_VERSION = 4
+CARD_TEMPLATE_VERSION = 5
 FONT_REGULAR_CANDIDATES = (
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
@@ -284,26 +284,15 @@ def result_caption(card: ResultCard, opponent_label: str | None = None) -> str:
     if card.mode == "bank_entry":
         variant = entry_variant(card.public_id)
         return variant["caption"].format(amount=f"{format_gram(card.contributed_nano)} GRAM")
-    result = format_gram(card.result_nano)
     payout = format_gram(card.payout_nano)
     if card.mode == "bank":
-        return (
-            f"Мой цикл в LOOP замкнулся.\n\n"
-            f"Выплата: +{payout} GRAM\n"
-            f"Сверх взноса: +{result} GRAM\n\n"
-            "Результат подтверждён."
-        )
+        return f"Мой цикл в LOOP замкнулся.\n\nВыплата +{payout} GRAM\n\nРезультат подтверждён."
     opening = (
         duel_taunt(card.public_id, opponent_label)["caption"]
         if opponent_label
         else "Я забрал DUEL в LOOP."
     )
-    return (
-        f"{opening}\n\n"
-        f"Выплата: {payout} GRAM\n"
-        f"Разница к входу: +{result} GRAM\n\n"
-        "Результат подтверждён."
-    )
+    return f"{opening}\n\nВыплата +{payout} GRAM\n\nРезультат подтверждён."
 
 
 def result_card_image_url(settings: Settings, card: ResultCard) -> str:
@@ -358,7 +347,7 @@ def build_result_inline(
         description=(
             f"{format_gram(card.contributed_nano)} GRAM в очереди"
             if entry
-            else f"+{format_gram(card.result_nano)} GRAM"
+            else f"Выплата +{format_gram(card.payout_nano)} GRAM"
         ),
         caption=turn_caption(card) if entry else result_caption(card, opponent_label),
         reply_markup=InlineKeyboardMarkup(
@@ -802,14 +791,14 @@ def _render_result_card(facts: CardFacts) -> bytes:
     _centered_text(
         draw,
         (CARD_WIDTH // 2, 790),
-        f"+{format_gram(facts.result_nano)} GRAM",
+        f"+{format_gram(facts.payout_nano)} GRAM",
         font=_font(82, bold=True),
         fill=(255, 255, 255),
     )
     _centered_text(
         draw,
         (CARD_WIDTH // 2, 868),
-        "СВЕРХ СТАВКИ",
+        "ВЫПЛАТА",
         font=_font(20, bold=True),
         fill=(135, 135, 135),
     )

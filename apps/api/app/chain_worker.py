@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import httpx
 import structlog
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from tonsdk.boc import Cell  # type: ignore[import-untyped]
@@ -47,6 +47,7 @@ from .modules.duel.models import (
     MatchmakingOffer,
     OfferState,
 )
+from .modules.duel.reservations import expire_unfunded_quote
 from .modules.teams.scoring import (
     reconcile_team_score_events_safely,
     record_team_score_event,
@@ -1608,14 +1609,21 @@ async def run_contract_once(
             )
         )
         await warn_unrevealed_duels(db)
-        await db.execute(
-            update(MatchmakingOffer)
-            .where(
-                MatchmakingOffer.state == OfferState.PENDING_FUNDING.value,
-                MatchmakingOffer.expires_at < datetime.now(UTC),
+        stale_quotes = (
+            await db.scalars(
+                select(MatchmakingOffer)
+                .where(
+                    MatchmakingOffer.state == OfferState.PENDING_FUNDING.value,
+                    or_(
+                        MatchmakingOffer.expires_at < datetime.now(UTC),
+                        MatchmakingOffer.created_at < datetime.now(UTC) - timedelta(minutes=6),
+                    ),
+                )
+                .with_for_update()
             )
-            .values(state=OfferState.EXPIRED.value)
-        )
+        ).all()
+        for stale in stale_quotes:
+            await expire_unfunded_quote(db, stale)
         await db.execute(
             update(MatchmakingOffer)
             .where(

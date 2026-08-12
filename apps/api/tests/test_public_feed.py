@@ -55,6 +55,22 @@ def test_public_feed_never_exposes_private_profile_name() -> None:
     assert "910002" not in caption
 
 
+def test_duel_feed_names_the_payout_once() -> None:
+    caption = public_feed_caption(
+        PublicFeedFacts(
+            event_id="duel-payout-copy",
+            event_kind="duel_payout",
+            amount_nano=1_000_000_000,
+            result_nano=500_000_000,
+            actor="@winner",
+        )
+    )
+    assert "Выплата" in caption or "выплату" in caption
+    assert "+1 GRAM" in caption
+    assert "+0,5 GRAM" not in caption
+    assert "Результат:" not in caption
+
+
 @pytest.mark.asyncio
 async def test_public_feed_is_configurable_and_deduplicated(app) -> None:
     disabled = get_settings().model_copy(update={"public_feed_chat_id": 0})
@@ -160,7 +176,8 @@ async def test_public_feed_delivery_is_rich_and_ignores_private_notification_tog
     assert call["parse_mode"] == "HTML"
     assert call["show_caption_above_media"] is True
     assert "@duelist" in call["caption"]
-    assert "+1,5 GRAM" in call["caption"]
+    assert "+2,5 GRAM" in call["caption"]
+    assert "+1,5 GRAM" not in call["caption"]
     assert call["photo"].endswith(f"/{item_id}.jpg?v=1")
     buttons = call["reply_markup"].inline_keyboard[0]
     assert buttons[0].url.startswith("https://t.me/getloopbot?startapp=ref_")

@@ -1,6 +1,6 @@
 import base64
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
@@ -1296,6 +1296,73 @@ class _Http:
 
     async def get(self, _url: str, **_kwargs: object) -> _Response:
         return _Response(self._transactions)
+
+
+@pytest.mark.asyncio
+async def test_worker_releases_counter_when_funding_quote_never_reaches_chain(app) -> None:
+    from app import chain_worker
+
+    settings = get_settings()
+    address = settings.effective_duel_contract_address
+    now = datetime.now(UTC)
+    async with app.state.session_factory() as db:
+        counter = DuelOffer(
+            onchain_offer_id=9_800,
+            query_id=9_800,
+            owner_wallet="0:" + "81" * 32,
+            network=settings.ton_network_id,
+            contract_address=address,
+            chance_bps=5000,
+            total_pool_nano=1_000_000_000,
+            stake_nano=500_000_000,
+            opponent_stake_nano=500_000_000,
+            fee_bps=250,
+            payout_nano=975_000_000,
+            commitment_hex="81" * 32,
+            state=OfferState.RESERVED.value,
+            expires_at=now + timedelta(minutes=8),
+            reserved_until=now + timedelta(minutes=2),
+        )
+        stale_quote = DuelOffer(
+            onchain_offer_id=9_801,
+            query_id=9_801,
+            owner_wallet="0:" + "82" * 32,
+            network=settings.ton_network_id,
+            contract_address=address,
+            chance_bps=5000,
+            total_pool_nano=1_000_000_000,
+            stake_nano=500_000_000,
+            opponent_stake_nano=500_000_000,
+            fee_bps=250,
+            payout_nano=975_000_000,
+            commitment_hex="82" * 32,
+            counter_offer_id=counter.onchain_offer_id,
+            state=OfferState.PENDING_FUNDING.value,
+            expires_at=now + timedelta(minutes=8),
+            created_at=now - timedelta(minutes=7),
+        )
+        db.add_all([counter, stale_quote])
+        await db.commit()
+
+    await chain_worker.run_contract_once(
+        _Http([]),
+        app.state.session_factory,
+        settings,
+        mode="duel",
+        address=address,
+    )
+
+    async with app.state.session_factory() as db:
+        stored_counter = await db.scalar(
+            select(DuelOffer).where(DuelOffer.onchain_offer_id == 9_800)
+        )
+        stored_quote = await db.scalar(
+            select(DuelOffer).where(DuelOffer.onchain_offer_id == 9_801)
+        )
+        assert stored_counter is not None and stored_quote is not None
+        assert stored_quote.state == OfferState.EXPIRED.value
+        assert stored_counter.state == OfferState.OPEN.value
+        assert stored_counter.reserved_until is None
 
 
 async def test_a_failing_transaction_keeps_the_work_already_done(app, monkeypatch) -> None:

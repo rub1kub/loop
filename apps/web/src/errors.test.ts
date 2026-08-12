@@ -32,6 +32,10 @@ describe('humanError', () => {
   });
 
   it('does not mistake a Russian refusal notice for machine noise', () => {
-    expect(humanError(new Error('Подпись отклонена в кошельке'), 'Запасной')).toBeNull();
+    expect(humanError(new Error('Кошелёк отклонил запрос пользователя'), 'Запасной')).toBeNull();
+  });
+
+  it('does not treat an ambiguous cancellation after broadcast as a refusal', () => {
+    expect(isWalletRefusal(new Error('Transaction cancelled after broadcast timeout'))).toBe(false);
   });
 });

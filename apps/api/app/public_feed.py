@@ -158,11 +158,7 @@ def public_feed_caption(facts: PublicFeedFacts) -> str:
             f"⚔️ <b>{actor} вошёл в DUEL</b>\n\n"
             f"Ставка: {amount} GRAM\nВызов уже в игре."
         )
-    result = format_gram(facts.result_nano)
-    return (
-        "⚔️ <b>DUEL завершён</b>\n\n"
-        f"{actor} получил {amount} GRAM.\nРезультат: +{result} GRAM."
-    )
+    return f"⚔️ <b>DUEL завершён</b>\n\n{actor} получил выплату +{amount} GRAM."
 
 
 def public_feed_markup(
