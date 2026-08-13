@@ -39,7 +39,7 @@ synchronized contract configuration and the audit trail are durable PostgreSQL r
 ## Request path
 
 1. Telegram sends signed `initData`; the API verifies HMAC, age and replay nonce.
-2. The user proves control of an external testnet wallet through TON proof.
+2. The user proves control of an external wallet on the configured network through TON proof.
 3. The API validates terms and returns a deterministic contract message. It does not mark funding complete.
    For direct DUEL, it signs a short-lived address-bound acceptance permit; it never signs an AFK match.
 4. TON Connect asks the external wallet to sign and broadcast.
@@ -65,7 +65,11 @@ Redis provides rate limits and short-lived distributed locks. It is never author
 - Projection exception: roll back to a savepoint and retry safely.
 - Worker restart: resume from per-contract checkpoints; duplicate events are ignored.
 - Wallet callback without a block: remain pending.
+- Explicit wallet refusal: discard only the unfunded quote and atomically release its reservation.
+- Ambiguous wallet/SDK error: keep funding pending, restore it after restart and poll the TON
+  projection; never infer rejection from transport failure.
 - Contract migration with locked funds or active DUEL projection: fail before Alembic runs.
-- Abandoned direct funding: release the expired reservation and let the same bound wallet retry.
+- Abandoned funding: one row-locked helper expires the quote, reopens the AFK counter or returns
+  the direct invitation from `funding` to `accepted`, then lets the bound wallet retry.
 - Result delivery rate limit: retry only Telegram's explicit `retry_after`.
 - Ambiguous Telegram transport failure: do not resend and risk a duplicate; keep the card in-app.

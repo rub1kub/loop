@@ -10,7 +10,9 @@
 ├── contracts/
 │   ├── bank/                BankQueue Tolk
 │   └── duel/                DuelEscrow Tolk
-├── deployments/testnet/     проверенные deployment manifests
+├── deployments/
+│   ├── mainnet/             активные manifests и release evidence
+│   └── testnet/             исторические/canary manifests
 ├── tests/                   Acton contract tests
 ├── scripts/                 deploy/smoke/canary/verification/screenshots
 ├── deploy/                  Docker, release, nginx, Apache, systemd, alerts
@@ -23,38 +25,41 @@
 └── .env.example             только имена и безопасные defaults
 ```
 
-Локальные `AGENTS.md` и `sources/` принадлежат ChatGPT project mirror и игнорируются Git.
-`sources/` всегда read-only.
+Корневой `AGENTS.md` отслеживается Git и ведёт сюда. `sources/` остаётся локальным read-only
+контекстом и игнорируется Git.
 
 ## Где менять конкретную вещь
 
-| Требование                 | Основные файлы                                                    |
-| -------------------------- | ----------------------------------------------------------------- |
-| tab/navigation             | `components/TabBar.tsx`, `App.tsx`, `styles.css`, `types.ts`      |
-| onboarding                 | `components/Onboarding.tsx`, store settings, onboarding tests     |
-| BANK UI                    | `features/bank/BankScreen.tsx`, `styles.css`, component/E2E tests |
-| DUEL UI                    | `features/duel/DuelScreen.tsx`, `ton.ts`, component/E2E tests     |
-| rating UI                  | `features/rating/RatingScreen.tsx`, `rating.py`, tests            |
-| profile/referrals          | `components/ProfileScreen.tsx`, `routes.py`, `models.py`          |
-| keyboard/safe area         | `viewport.ts`, `styles.css`, `modes.stress.spec.ts`               |
-| Telegram fullscreen/chrome | `telegram.ts`, `types.ts`, Telegram tests, `docs/telegram.md`     |
-| Telegram auth              | `security.py`, `routes.py`, `nonce_store.py`, auth/security tests |
-| bot `/start`/inline/menu   | `bot.py`, bot tests                                               |
-| TON Connect proof          | `security.py`, `ton.py`, `routes.py`, `App.tsx`, `api.ts`         |
-| BANK API/model             | `modules/bank/router.py`, `models.py`, schemas, worker            |
-| DUEL API/matchmaking       | `modules/duel/router.py`, `models.py`, `math.py`, worker          |
-| chain projection           | `chain_worker.py`, `ton.py`, worker tests                         |
-| rating formula             | `rating.py`, `schemas.py`, `RatingScreen.tsx`, docs/rating        |
-| owner control API          | `control_routes.py`, `control_state.py`, `models.py`, tests       |
-| owner control UI           | `control/ControlApp.tsx`, `control/api.ts`, `control.css`, E2E    |
-| DB schema                  | models + новая Alembic migration                                  |
-| BankQueue rule             | `contracts/bank/*.tolk`, Acton BANK tests, wrappers/manifests     |
-| DuelEscrow rule            | `contracts/duel/*.tolk`, Acton DUEL tests, wrappers/manifests     |
-| contract verification      | `scripts/verify-contracts.py`, manifests, verification fixtures   |
-| deploy/rollback            | `deploy/activate-release.sh`, backup, Compose, deployment docs    |
-| CSP/headers/proxy          | `deploy/nginx/*`, `deploy/apache/loop.conf`                       |
-| monitoring/canary          | `metrics.py`, canary runner, systemd units, alert rules           |
-| screenshots                | mock states, `capture-screenshots.mjs`, `docs/screenshots`        |
+| Требование                 | Основные файлы                                                     |
+| -------------------------- | ------------------------------------------------------------------ |
+| tab/navigation             | `components/TabBar.tsx`, `App.tsx`, `styles.css`, `types.ts`       |
+| onboarding                 | `components/Onboarding.tsx`, store settings, onboarding tests      |
+| BANK UI                    | `features/bank/BankScreen.tsx`, `styles.css`, component/E2E tests  |
+| DUEL UI/result             | `DuelScreen.tsx`, `DuelOrbit.tsx`, `errors.ts`, component/E2E      |
+| DUEL reservation/funding   | `modules/duel/router.py`, `reservations.py`, worker, API/web tests |
+| result cards/public feed   | `result_cards.py`, `public_feed.py`, `ResultSheet.tsx`, tests      |
+| teams/avatar/navigation    | `modules/teams/`, `features/teams/TeamsView.tsx`, tests            |
+| rating UI                  | `features/rating/RatingScreen.tsx`, `rating.py`, tests             |
+| profile/referrals          | `components/ProfileScreen.tsx`, `routes.py`, `models.py`           |
+| keyboard/safe area         | `viewport.ts`, `styles.css`, `modes.stress.spec.ts`                |
+| Telegram fullscreen/chrome | `telegram.ts`, `types.ts`, Telegram tests, `docs/telegram.md`      |
+| Telegram auth              | `security.py`, `routes.py`, `nonce_store.py`, auth/security tests  |
+| bot `/start`/inline/menu   | `bot.py`, bot tests                                                |
+| TON Connect proof          | `security.py`, `ton.py`, `routes.py`, `App.tsx`, `api.ts`          |
+| BANK API/model             | `modules/bank/router.py`, `models.py`, schemas, worker             |
+| DUEL API/matchmaking       | `modules/duel/router.py`, `models.py`, `math.py`, worker           |
+| chain projection           | `chain_worker.py`, `ton.py`, worker tests                          |
+| rating formula             | `rating.py`, `schemas.py`, `RatingScreen.tsx`, docs/rating         |
+| owner control API          | `control_routes.py`, `control_state.py`, `models.py`, tests        |
+| owner control UI           | `control/ControlApp.tsx`, `control/api.ts`, `control.css`, E2E     |
+| DB schema                  | models + новая Alembic migration                                   |
+| BankQueue rule             | `contracts/bank/*.tolk`, Acton BANK tests, wrappers/manifests      |
+| DuelEscrow rule            | `contracts/duel/*.tolk`, Acton DUEL tests, wrappers/manifests      |
+| contract verification      | `scripts/verify-contracts.py`, manifests, verification fixtures    |
+| deploy/rollback            | `deploy/activate-release.sh`, backup, Compose, deployment docs     |
+| CSP/headers/proxy          | `deploy/nginx/*`, `deploy/apache/loop.conf`                        |
+| monitoring/canary          | `metrics.py`, canary runner, systemd units, alert rules            |
+| screenshots                | mock states, `capture-screenshots.mjs`, `docs/screenshots`         |
 
 Перед изменением call site проверь обе стороны wire contract: Pydantic schema/API и Zod/TypeScript
 type.
@@ -114,6 +119,9 @@ type.
 - Сравни исходящие destination/value/body.
 - Сохрани отдельные BANK/DUEL события и savepoints.
 - Permissionless on-chain entity без app user должна индексироваться безопасно.
+- Для DUEL различай явный отказ кошелька и неоднозначную SDK/transport ошибку. Вторая не даёт
+  права удалить quote до reconciliation/expiry.
+- Освобождение quote, AFK-counter и direct invitation должно оставаться атомарным и replay-safe.
 
 ### Если меняется контракт
 
@@ -131,7 +139,9 @@ type.
 - UI только готовит transaction; owner wallet и contract — финальная authority.
 - Сверяй live code hash, owner, paused, locked и withdrawable перед payload.
 - Dangerous actions требуют paused и явного подтверждения.
-- Не позволяй withdrawal за границу `locked + reserve`.
+- Для DUEL не позволяй withdrawal за `locked + reserve`. Для BANK сверяй намеренную границу
+  `balance - reserve`; она допускает вывод ожидаемого открытыми позициями funding и требует
+  отдельного явного подтверждения, но не должна молча заменяться DUEL-правилом.
 
 ## Проверки по слоям
 
@@ -217,6 +227,7 @@ Wrappers обновляются штатной Acton-командой при и�
 | tests/commands               | `operations.md`, `docs/testing.md`, Makefile                |
 | release/monitoring           | `operations.md`, `docs/deployment.md`                       |
 | operational snapshot         | дата и проверка; не выдавать snapshot за invariant          |
+| agent workflow/invariant     | `AGENTS.md`, `docs/agents/README.md`, профильный playbook   |
 
 После правки проверь относительные Markdown links и `git diff --check`.
 

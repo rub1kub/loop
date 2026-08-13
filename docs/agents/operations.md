@@ -175,6 +175,9 @@ Production deploy не зависит от GitHub Actions. `scripts/deploy-vps.s
 Защитная сверка отклоняет web-only release при изменениях runtime-кода, migrations, Compose,
 contracts или deployment manifests.
 
+Если изменились только Markdown, изображения документации или agent-инструкции, runtime-деплой
+не нужен: commit/push обновляет репозиторий, но не приложение.
+
 ## Release model
 
 Каждый release — полное дерево конкретного 40-character Git SHA:
@@ -328,22 +331,24 @@ CLI diagnostics после локальной настройки:
 - Public `/live`, `/ready`, Compose health, Telegram webhook и точный frontend asset проверяются
   самим release CLI.
 - Не полагайся на сохранённый SHA или старый скриншот: перед операцией выполни
-  `npm run deploy:vps:status`, `make contracts-inspect` и `make contracts-verify`.
+  `npm run deploy:vps:status` и mainnet-проверку из `make contracts-mainnet-verify`.
 
-Изменяемые live-значения и mainnet blockers вынесены в [current-state.md](current-state.md).
+Изменяемые live-значения, ограничения и риски вынесены в [current-state.md](current-state.md).
 
 ## Инцидентные подсказки
 
-| Симптом                      | Первые проверки                                                  |
-| ---------------------------- | ---------------------------------------------------------------- |
-| «Authorization failed»       | launch URL, signed initData fallback, API origin, bot identity   |
-| Mini App не грузится         | `/live`, `/ready`, JS assets, CSP, Telegram SDK, console         |
-| mobile не fullscreen         | Telegram platform/version, BotFather Fullsize, fullscreen events |
-| desktop fullscreen           | platform classification, `exitFullscreen`, повторный `expand`    |
-| UI под Telegram chrome       | safeArea/contentSafeArea, protected 72 px fullscreen inset       |
-| sheet уехал при клавиатуре   | visual viewport, focus state, root scroll, `.keyboard-open`      |
-| tx pending >15 минут         | provider, contract account, tx success/finality, worker          |
-| worker heartbeat stale       | worker container, provider, blocked transaction, checkpoint      |
-| verifier locked mismatch     | live getter vs manifest initial value; не bytecode mismatch      |
-| direct invite не принимается | invitation state/wallet binding/permit expiry/creator offer      |
-| contract switch blocked      | old locked, active DB rows, Alembic preflight                    |
+| Симптом                         | Первые проверки                                                  |
+| ------------------------------- | ---------------------------------------------------------------- |
+| «Authorization failed»          | launch URL, signed initData fallback, API origin, bot identity   |
+| Mini App не грузится            | `/live`, `/ready`, JS assets, CSP, Telegram SDK, console         |
+| mobile не fullscreen            | Telegram platform/version, BotFather Fullsize, fullscreen events |
+| desktop fullscreen              | platform classification, `exitFullscreen`, повторный `expand`    |
+| UI под Telegram chrome          | safeArea/contentSafeArea, protected 72 px fullscreen inset       |
+| sheet уехал при клавиатуре      | visual viewport, focus state, root scroll, `.keyboard-open`      |
+| DUEL funding «проверяем»        | offer ID, local 330s reconciliation, tx finality, worker         |
+| DUEL funding >6 минут           | quote expiry, reservation release, counter/direct invitation     |
+| DUEL стрелка не останавливается | needle только на settled transition; active phase без needle     |
+| worker heartbeat stale          | worker container, provider, blocked transaction, checkpoint      |
+| verifier locked mismatch        | live getter vs manifest initial value; не bytecode mismatch      |
+| direct invite не принимается    | invitation state/wallet binding/permit expiry/creator offer      |
+| contract switch blocked         | old locked, active DB rows, Alembic preflight                    |

@@ -1,5 +1,10 @@
 Original prompt: Transform LOOP from an incorrect wallet-first implementation into a production-ready social Telegram Mini App built around BANK, DUEL, and a Telegram-native social layer. Credentials supplied separately are deliberately excluded from this file.
 
+> **Archive:** this is a chronological implementation journal. It intentionally preserves old
+> testnet plans, intermediate limits and unfinished wording. For current runtime facts use
+> [`docs/agents/current-state.md`](docs/agents/current-state.md); for agent work start at
+> [`docs/agents/README.md`](docs/agents/README.md).
+
 ## Product decisions
 
 - LOOP is not a wallet and has no internal spendable balance. TON Connect is limited to external wallet ownership proofs, transaction confirmation, payouts, and asset checks.
@@ -11,7 +16,8 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   balance, wins or losses.
 - AFK matchmaking and direct Telegram invitations are separate paths. A direct challenge binds to one funded offer and cannot enter the generic pool.
 - The contract is authoritative for escrow and outcomes. PostgreSQL stores idempotent social projections; Redis is disposable coordination state.
-- Mainnet remains disabled pending an independent audit, legal review, multisig governance, recovery rehearsal, and verified backups.
+- Mainnet was activated on 2026-08-01 through the documented self-reviewed path; no independent
+  external audit was completed.
 
 ## Completed
 
@@ -32,10 +38,11 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Published commercial open-source documentation, screenshots, design comparison evidence, contribution guidance, security policy, deployment operations, and TON audit details.
 - Published the active product line on `main` using Conventional Commits and immutable releases.
 
-## Remaining operational gates
+## Superseded operational gates
 
-- Resolve the GitHub account billing lock if hosted Actions remain unable to start.
-- Keep mainnet disabled until all documented release gates are complete.
+The former GitHub Actions billing blocker and «keep mainnet disabled» plan no longer apply.
+Production releases go directly to the VPS. Current risks and gates are maintained in the agent
+knowledge base rather than this journal.
 
 ## Latest iteration
 
@@ -46,7 +53,7 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Targeted tests cover the fourth story, all three market URLs, and Telegram-native navigation;
   the 430 × 720 visual pass fits without overlap or new console errors.
 
-## Active goal: dynamic DUEL and BANK maturity limits
+## Historical goal: dynamic DUEL and BANK maturity limits
 
 - DUEL v1.3 opens a 60-second boost window after matching. Confirmed top-ups change each
   player's chance in direct proportion to their locked stake, use a 20-second anti-sniping
@@ -199,16 +206,19 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Added a 360 × 800 Fold-cover regression with a simulated asymmetric 24px inset. Chromium and
   WebKit keep the shell, heading, vessel and state centred with no horizontal page overflow.
 
-## 2026-08-10: circular DUEL arena (in progress)
+## 2026-08-10/13: circular DUEL arena
 
 - Selected the monochrome circular probability direction for the live DUEL surface.
 - The ring reads only contract-confirmed shares; the result needle is a reveal animation and never
   calculates, changes or substitutes the settled winner.
 - Added live player identities, pool, authoritative countdown, latest confirmed boost and a clear
   solid boost action while preserving the existing transaction and reveal state machine.
-- Settled results make four restrained rotations and land inside the already-known winner sector;
-  reduced-motion mode skips the suspense safely.
-- Focused DUEL component coverage passes. Responsive browser and production verification remain.
+- Settled results make three restrained rotations in 1.9 seconds and land inside the already-known
+  winner sector; active waiting states have no needle and reduced-motion skips suspense safely.
+- Ambiguous wallet callbacks now preserve and reconcile funding instead of discarding it; stale
+  quote cleanup atomically releases AFK/direct reservations.
+- Focused DUEL component, API and responsive browser coverage passes; production runs the same
+  release captured in `docs/agents/current-state.md`.
 
 ## 2026-08-12: weekly BANK Wave
 

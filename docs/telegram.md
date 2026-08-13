@@ -50,6 +50,11 @@ A BANK or DUEL card is created only after the chain worker has matched the final
 payout to its expected recipient and amount. The JPEG is rendered by the API from immutable
 database facts; the browser never submits the displayed amount.
 
+Every settled surface uses the full verified `payout_nano` and the copy `Выплата +X GRAM`.
+The internal delta to the contribution is not presented as a payout or profit. Current immutable
+JPEG template version is `5`; already sent Telegram messages are never resent merely to refresh
+their artwork.
+
 An outbox worker sends the card to the participant once. Users can disable these messages in
 settings; enabling them calls Telegram's `requestWriteAccess`. **Share** creates a short-lived
 prepared inline message and opens Telegram's native `shareMessage` chooser. Clients without that

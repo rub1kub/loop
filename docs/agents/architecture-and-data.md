@@ -119,6 +119,8 @@ Browser и API не могут выполнить admin действие без 
 | TON message builders      | `apps/web/src/ton.ts`                           |
 | BANK                      | `apps/web/src/features/bank/BankScreen.tsx`     |
 | DUEL                      | `apps/web/src/features/duel/DuelScreen.tsx`     |
+| DUEL arena/result         | `apps/web/src/features/duel/DuelOrbit.tsx`      |
+| wallet error classes      | `apps/web/src/errors.ts`                        |
 | рейтинг                   | `apps/web/src/features/rating/RatingScreen.tsx` |
 | команды                   | `apps/web/src/features/teams/TeamsScreen.tsx`   |
 | профиль                   | `apps/web/src/components/ProfileScreen.tsx`     |
@@ -132,26 +134,28 @@ Browser и API не могут выполнить admin действие без 
 
 ### Identity и social
 
-| Method  | Path                               | Назначение                                 |
-| ------- | ---------------------------------- | ------------------------------------------ |
-| `POST`  | `/auth/telegram`                   | проверить initData и выдать bearer session |
-| `GET`   | `/me`                              | profile, wallet, mode stats, PLUSH status  |
-| `PATCH` | `/me/settings`                     | onboarding flags                           |
-| `POST`  | `/wallet/challenge`                | одноразовый TON proof payload              |
-| `POST`  | `/wallet/verify`                   | проверить и активировать внешний wallet    |
-| `GET`   | `/onchain/contracts/{mode}`        | live contract state + hash match           |
-| `GET`   | `/onchain/jettons/{jetton_master}` | доказать Jetton wallet и balance           |
-| `GET`   | `/referrals`                       | referral link, counts и reward history     |
-| `GET`   | `/rating`                          | вычисляемый season score, lists и pulse    |
-| `GET`   | `/teams/overview`                  | сезон, своя команда и общий список         |
-| `GET`   | `/teams/search`                    | поиск и постраничный список команд         |
-| `POST`  | `/teams`                           | создать команду                            |
-| `GET`   | `/teams/{slug}`                    | команда, права и заявки                    |
-| `PATCH` | `/teams/{slug}`                    | оформление и режим вступления              |
-| `POST`  | `/teams/{slug}/join`               | войти или отправить заявку                 |
-| `POST`  | `/teams/{slug}/share`              | Telegram-карточка приглашения              |
-| `GET`   | `/invites/{code}`                  | preview прямого DUEL                       |
-| `POST`  | `/invites/{code}/accept`           | привязать invite к verified user wallet    |
+| Method   | Path                               | Назначение                                 |
+| -------- | ---------------------------------- | ------------------------------------------ |
+| `POST`   | `/auth/telegram`                   | проверить initData и выдать bearer session |
+| `GET`    | `/me`                              | profile, wallet, mode stats, PLUSH status  |
+| `PATCH`  | `/me/settings`                     | onboarding flags                           |
+| `POST`   | `/wallet/challenge`                | одноразовый TON proof payload              |
+| `POST`   | `/wallet/verify`                   | проверить и активировать внешний wallet    |
+| `GET`    | `/onchain/contracts/{mode}`        | live contract state + hash match           |
+| `GET`    | `/onchain/jettons/{jetton_master}` | доказать Jetton wallet и balance           |
+| `GET`    | `/referrals`                       | referral link, counts и reward history     |
+| `GET`    | `/rating`                          | вычисляемый season score, lists и pulse    |
+| `GET`    | `/teams/overview`                  | сезон, своя команда и общий список         |
+| `GET`    | `/teams/search`                    | поиск и постраничный список команд         |
+| `POST`   | `/teams`                           | создать команду                            |
+| `GET`    | `/teams/{slug}`                    | команда, права и заявки                    |
+| `PATCH`  | `/teams/{slug}`                    | оформление и режим вступления              |
+| `PUT`    | `/teams/{slug}/avatar`             | нормализовать и сохранить аватар           |
+| `DELETE` | `/teams/{slug}/avatar`             | удалить пользовательский аватар            |
+| `POST`   | `/teams/{slug}/join`               | войти или отправить заявку                 |
+| `POST`   | `/teams/{slug}/share`              | Telegram-карточка приглашения              |
+| `GET`    | `/invites/{code}`                  | preview прямого DUEL                       |
+| `POST`   | `/invites/{code}/accept`           | привязать invite к verified user wallet    |
 
 `GET /onchain/contract` — скрытый legacy alias текущего DUEL diagnostics.
 
@@ -162,6 +166,7 @@ Browser и API не могут выполнить admin действие без 
 | `POST` | `/bank/positions/preview` | чистая математика суммы/цели/комиссии/газа |
 | `POST` | `/bank/positions/quote`   | создать pending intent и contract call     |
 | `GET`  | `/bank/limits`            | текущий лимит и следующая ступень          |
+| `GET`  | `/bank/pulse`             | очередь, ближайшие выплаты и Волна         |
 | `GET`  | `/bank/positions/current` | текущая активная position                  |
 | `GET`  | `/bank/positions`         | история пользователя                       |
 
@@ -174,9 +179,13 @@ Browser и API не могут выполнить admin действие без 
 | `GET`  | `/duels`                                 | duels пользователя                      |
 | `POST` | `/duels/{duel_id}/boost-intent`          | context для дополнительного взноса      |
 | `POST` | `/duels/{duel_id}/reveal-intent`         | BOC context для reveal                  |
+| `POST` | `/duels/offers/{offer_id}/discard`       | удалить только доказанно unfunded quote |
+| `POST` | `/duels/offers/{offer_id}/match-intent`  | подготовить найденную on-chain пару     |
 | `POST` | `/duels/offers/{offer_id}/cancel-intent` | отмена открытого offer                  |
 | `POST` | `/duels/offers/{offer_id}/expire-intent` | permissionless expiry offer             |
 | `POST` | `/duels/{duel_id}/expire-intent`         | settlement/refund после reveal deadline |
+| `GET`  | `/duels/offers/{offer_id}/preview`       | публичный preview прямого вызова        |
+| `POST` | `/duels/offers/{offer_id}/share`         | prepared Telegram invitation            |
 
 `POST /duels/quote` — скрытый legacy alias quote.
 
@@ -217,7 +226,7 @@ Browser и API не могут выполнить admin действие без 
 
 ## PostgreSQL
 
-Текущая Alembic head: `20260810_0021`.
+Текущая Alembic head: `20260812_0024`.
 
 ### Shared
 
@@ -241,7 +250,7 @@ Browser и API не могут выполнить admin действие без 
 
 | Таблица                    | Назначение                                                 |
 | -------------------------- | ---------------------------------------------------------- |
-| `teams`                    | название, описание, эмблема, владелец и режим вступления   |
+| `teams`                    | имя, описание, avatar JPEG/hash, owner и режим вступления  |
 | `team_memberships`         | временной интервал членства и роль                         |
 | `team_invites`             | хешированные короткоживущие приглашения                    |
 | `team_join_requests`       | заявки и решение администратора                            |
@@ -254,6 +263,9 @@ Browser и API не могут выполнить admin действие без 
 владельца. Основной `flow_nano` растёт только от подтверждённого principal BANK. Событие
 прикрепляется к членству, действовавшему в момент транзакции. Уникальный `source_key` защищает от
 повторного начисления; фоновая сверка восстанавливает социальную проекцию отдельно от финансовой.
+`tag` и `mark` сохранены как внутренние compatibility/fallback поля, но не предлагаются
+пользователю. Цветной JPG/PNG/WebP до 5 МБ нормализуется сервером в квадратный JPEG 512×512;
+публичный URL версионируется hash и поддерживает ETag.
 
 ### BANK bounded context
 
@@ -281,7 +293,10 @@ position_id)`, `(network, contract, query_id)` и event identity уникаль�
 | `duel_invitations`  | Telegram code, invite ID и bound accepted wallet           |
 
 Один wallet может иметь только один активный offer. Matchmaking использует row lock и
-`SKIP LOCKED`; reservation deadline повторно проверяется при funding.
+`SKIP LOCKED`; reservation deadline повторно проверяется при funding. Общий helper
+`modules/duel/reservations.py` под `FOR UPDATE` атомарно истекает unfunded quote, освобождает
+зарезервированный AFK-counter и возвращает direct invitation из `funding` в `accepted`, если
+живого quote больше нет.
 
 Миграция `20260721_0004_split_bank_duel.py` архивирует старые универсальные cycle-таблицы как
 `legacy_*`; эти строки нельзя интерпретировать как текущую финансовую историю.
@@ -304,6 +319,10 @@ position_id)`, `(network, contract, query_id)` и event identity уникаль�
 
 - Partial unique indexes заранее ограничивают активную BANK position и DUEL offer.
 - Quote path блокирует invitation/counter rows и освобождает истёкшие reservations.
+- Неоднозначный ответ TON Connect не вызывает `/discard`: клиент хранит pending funding 330
+  секунд, опрашивает проекцию каждые 2 секунды и восстанавливает проверку после перезапуска.
+- Только явный `UserRejectsError` безопасно удаляет quote сразу. Worker очищает quote после
+  `expires_at` или шестиминутного stale cutoff; подтверждённое TON-событие всё равно старше БД.
 - Chain event identity: `(network, account, lt, tx_hash, event_index)`.
 - Worker начинает с `checkpoint.last_lt - 1`, поэтому безопасно перечитывает границу.
 - Каждый event применяется под nested savepoint; исключение не продвигает checkpoint.
@@ -316,21 +335,23 @@ position_id)`, `(network, contract, query_id)` и event identity уникаль�
 
 ## Failure model
 
-| Сбой                             | Поведение                                                    |
-| -------------------------------- | ------------------------------------------------------------ |
-| Telegram SDK медленный           | bridge загружается асинхронно, есть URL fallback             |
-| Toncenter недоступен             | intent остаётся pending, worker retry с backoff              |
-| wallet callback без блока        | финансовый state не меняется                                 |
-| malformed/failed tx              | событие не применяется                                       |
-| masterchain finality отсутствует | checkpoint останавливается до повторной проверки             |
-| projection exception             | savepoint rollback, повтор безопасен                         |
-| worker restart                   | продолжение с durable checkpoint                             |
-| stale BANK intent                | через 15 минут → `failed`                                    |
-| stale DUEL funding               | после expiry → `expired`                                     |
-| stale AFK reservation            | возвращается в `open`                                        |
-| stale direct invitation          | invitation → `expired`; on-chain offer требует `ExpireOffer` |
-| Redis недоступен при rate limit  | production mutation fail-closed с `503`                      |
-| contract code hash mismatch      | API/worker production startup fail                           |
+| Сбой                              | Поведение                                                |
+| --------------------------------- | -------------------------------------------------------- |
+| Telegram SDK медленный            | bridge загружается асинхронно, есть URL fallback         |
+| Toncenter недоступен              | intent остаётся pending, worker retry с backoff          |
+| wallet callback без блока         | pending сохраняется и сверяется с проекцией              |
+| явный отказ пользователя          | quote discard + атомарное освобождение reservation       |
+| неоднозначная SDK/transport error | не discard; poll до подтверждения или безопасного expiry |
+| malformed/failed tx               | событие не применяется                                   |
+| masterchain finality отсутствует  | checkpoint останавливается до повторной проверки         |
+| projection exception              | savepoint rollback, повтор безопасен                     |
+| worker restart                    | продолжение с durable checkpoint                         |
+| stale BANK intent                 | через 15 минут → `failed`                                |
+| stale DUEL funding                | expiry/6 минут → `expired`, counter освобождается        |
+| stale AFK reservation             | возвращается в `open`                                    |
+| abandoned direct quote            | invitation `funding → accepted`, можно повторить         |
+| Redis недоступен при rate limit   | production mutation fail-closed с `503`                  |
+| contract code hash mismatch       | API/worker production startup fail                       |
 
 ## Configuration
 
@@ -350,9 +371,10 @@ position_id)`, `(network, contract, query_id)` и event identity уникаль�
 | web build      | API base, manifest URL, compile-time mock flag    |
 
 Production validator требует HTTPS, один exact CORS origin, сильные secrets, два адреса/хеша
-контрактов, owner wallet и совпадающую Ed25519 key pair. Network `-3` работает как текущий
-режим; network `-239` дополнительно требует mainnet flag, audited commit/report, canary и
-ограниченные launch caps.
+контрактов, owner wallet и совпадающую Ed25519 key pair. Testnet `-3` поддерживается для
+разработки и canary; пользовательский production работает в mainnet `-239` и дополнительно
+требует mainnet flag, совпадающее release evidence, canary и ограниченные launch caps. Текущий
+release использует опубликованный `self_reviewed` path, а не независимый внешний аудит.
 
 ## Security boundaries
 

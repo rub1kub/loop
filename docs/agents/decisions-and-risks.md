@@ -143,23 +143,15 @@ Backend-only изменение не может легитимно замени�
 
 ## Mainnet решение
 
-Текущий статус: **готово к независимому аудиту, не готово к запуску реальных средств**.
+Mainnet запущен 2026-08-01 по явно выбранному владельцем `self_reviewed` path. Независимого
+внешнего аудита нет. Release evidence связывает reviewed contract source, внутреннее
+состязательное review, раскрытие риска, bounty, source verification, BANK shadow payout и
+двухкошельковый DUEL canary. Это операционный барьер, а не замена внешнему аудиту.
 
-Решение GO возможно только при одновременном выполнении:
-
-1. независимый аудит точного clean commit завершён;
-2. report и SHA-256 находятся в Git;
-3. `release.json` совпадает с audited commit;
-4. mainnet contracts развёрнуты paused и empty;
-5. source verification опубликована;
-6. BANK shadow payout и DUEL two-wallet canary финализированы;
-7. старые обязательства drained;
-8. post-deploy verifier и runtime environment gate прошли;
-9. операционный мониторинг и recovery rehearsed;
-10. владелец отдельно принимает экономический и юридический риск.
-
-Любое изменение reviewed source, compiler, owner, treasury, signer, limits или addresses после
-аудита возвращает решение в NO-GO до повторного sign-off.
+Смена contract code/address, compiler, immutable signer, owner, treasury, экономического правила
+или withdrawal boundary требует нового gated contract release, повторных проверок и обновлённого
+manifest. Обычный app/runtime commit без изменения контрактного артефакта не выдаётся за новый
+аудит контрактов. Любая live-операция всё равно повторно сверяет состояние сети и доказательства.
 
 ## Решения 1–2 августа 2026
 

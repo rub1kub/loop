@@ -6,6 +6,14 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
+- Reconciled ambiguous DUEL wallet callbacks against the TON projection instead of discarding a
+  potentially funded quote; stale cleanup now atomically releases AFK and direct reservations.
+- Limited the DUEL result needle to one finite, settled-only reveal and removed it from all
+  waiting/revealing states and already-known cross-device results.
+- Kept invite sharing available after returning from Telegram and stopped showing the previous
+  opponent while a new search has no match.
+- Made team avatar upload versioned and retryable, restored member photos and switched nested
+  team navigation to Telegram's native BackButton.
 - Restored the `nosniff` value of the public `X-Content-Type-Options` header and pinned every
   published security-header value in an automated test.
 - Made a no-reveal `ExpireDuel` terminal in the projection so monitoring no longer reports a
@@ -14,10 +22,15 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- Result sheet, cards and public feed now show the full verified payout (`Выплата +X GRAM`), not
+  the internal delta to the entry; immutable card template version is 5.
+- Raised the default referral share to 5% while preserving configured 10% personal overrides;
+  the profile action is again the literal `Пригласить в LOOP`.
+- Team owners can upload colour avatars; hidden tag/mark fields remain compatibility-only.
 - Reported confirmed friends in the profile instead of referral reward points, which read as the
   monthly LOOP score.
 - Recorded the owner decision that PLUSH BRICK zero fee for holders is the committed mainnet
-  model, to be executed by DuelEscrow v1.4 holder permits; buyback remains a stated manual
+  model, executed by DuelEscrow v1.5 holder permits; buyback remains a stated manual
   intent.
 
 - Replaced the activity-cycle BANK with an independent FIFO position queue.
@@ -29,7 +42,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
-- DuelEscrow v1.4: PLUSH BRICK holders win the full pool with no protocol fee, proven by a
+- Weekly BANK Wave, proof-backed operator contribution workflow and rate-limited momentum
+  notifications for a near Wave, teammate entry and an imminent payout.
+- DuelEscrow v1.5: PLUSH BRICK holders win the full pool with no protocol fee, proven by a
   domain-separated Ed25519 holder permit bound to the network, contract, offer and wallet.
   Quotes verify mainnet ownership before issuing a permit, the worker re-verifies it before
   projecting an exemption, and enabling the mode requires the live contract to report holder

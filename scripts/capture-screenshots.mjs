@@ -41,6 +41,10 @@ async function capture(page, name, screen, action) {
   if (screen !== 'loader') {
     await page.waitForSelector('.screen, .onboarding, .inline-preview');
     await page.waitForTimeout(300);
+    const announcementClose = page.locator('.announcement-close');
+    if (await announcementClose.isVisible().catch(() => false)) {
+      await announcementClose.click();
+    }
   }
   if (action) await action(page);
   await page.screenshot({ path: path.join(output, `${name}.png`) });
@@ -66,7 +70,6 @@ try {
     await current.getByLabel('Сумма в GRAM').fill('2');
     await current.getByRole('button', { name: /ДАЛЬШЕ/ }).click();
     await current.getByRole('button', { name: /×1.5/ }).click();
-    await current.getByRole('button', { name: 'ПРОВЕРИТЬ' }).click();
     await current.waitForTimeout(300);
   });
   await capture(page, 'duel-create', 'duel-create');

@@ -10,7 +10,8 @@
  */
 
 /** Refusing in the wallet is a decision, not an error worth reporting back. */
-const REFUSAL = /userrejectserror|user (?:rejects?|declined)|wallet declined|отклон(?:ен|ил)[^\n]*(?:пользовател|кошелёк)|пользовател[^\n]*отмен/i;
+const REFUSAL =
+  /userrejectserror|user (?:rejects?|declined)|wallet declined|отклон(?:ен|ил)[^\n]*(?:пользовател|кошелёк)|пользовател[^\n]*отмен/i;
 
 /**
  * Our own copy is written in Russian; a library's is not. Cyrillic is therefore
@@ -27,7 +28,9 @@ function messageOf(error: unknown): string {
 
 /** True when the person declined in their wallet rather than hitting a problem. */
 export function isWalletRefusal(error: unknown): boolean {
-  return (error instanceof Error && error.name === 'UserRejectsError') || REFUSAL.test(messageOf(error));
+  return (
+    (error instanceof Error && error.name === 'UserRejectsError') || REFUSAL.test(messageOf(error))
+  );
 }
 
 /**

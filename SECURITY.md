@@ -1,6 +1,8 @@
 # Security policy
 
-LOOP is currently a testnet-only project. It has not completed an independent mainnet security audit. Do not send mainnet assets to the published contract or treat testnet balances as production funds.
+LOOP is active on TON mainnet and has not completed an independent external audit. Treat every
+transaction as involving real funds. Automated tests, source verification and canaries reduce
+known risk; they do not prove that the contracts or application are free of vulnerabilities.
 
 ## Reporting a vulnerability
 
@@ -12,6 +14,7 @@ The maintainer will acknowledge actionable reports, validate impact, prepare a f
 
 ## Supported versions
 
-Only the latest commit on `main` and the currently published testnet release receive security
-fixes. Mainnet code is not a supported deployment until every release gate in
-[docs/security.md](docs/security.md) is complete.
+Only the latest commit on `main` and the currently deployed production release receive security
+fixes. Historical testnet deployments and retired mainnet contracts are unsupported except for
+documented recovery paths. Current trust boundaries and owner powers are described in
+[docs/security.md](docs/security.md).

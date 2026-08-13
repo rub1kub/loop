@@ -27,10 +27,17 @@ make lint
 make typecheck
 ```
 
-Run live read-only testnet verification:
+Run read-only verification of the historical testnet manifests:
 
 ```bash
 make chain-smoke-test
+```
+
+For the active mainnet release, use the separate evidence gate; `contracts-inspect` itself points
+to testnet manifests and must not be quoted as production state:
+
+```bash
+make contracts-mainnet-verify
 ```
 
 The complete mainnet technical profile runs forked coverage, gas regression, separate
@@ -49,6 +56,7 @@ make contracts-mainnet-verify
 
 ## Current evidence
 
+- 231 API tests and 169 web tests in 25 files passed on 2026-08-13;
 - 22 BANK and 73 DUEL contract tests, including an adversarial suite and the allocation gas ceiling;
 - 99.67% contract line coverage and 87.45% branch coverage;
 - BANK mutation scores: 93.5% critical and 82.4% major;
@@ -56,6 +64,11 @@ make contracts-mainnet-verify
 - 64 consecutive DUEL settlements without an active-offer or locked-value leak;
 - finalized two-wallet BANK deposit → payout testnet cycle;
 - finalized two-wallet DUEL pair → boost → deadline → reveal → payout testnet cycle.
+
+Focused DUEL regressions additionally prove that an ambiguous TON Connect error does not discard
+a quote, explicit refusal does, stale cleanup releases AFK/direct reservations, and the result
+needle exists only for a finite live `settled` transition. Result-card tests require
+`Выплата +payout_nano` and reject the former delta-to-entry wording.
 
 ## E2E boundary
 

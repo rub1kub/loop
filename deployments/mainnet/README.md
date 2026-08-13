@@ -2,9 +2,12 @@
 
 This directory intentionally contains no live addresses before deployment.
 
-Copy `release.example.json` to `release.json` only after an independent audit. The audited commit,
-report file and SHA-256, mainnet owner, treasury, public invite-signing key and conservative launch
-limits are mandatory. `make contracts-mainnet-preflight` fails closed until that evidence is valid.
+Create `release.json` only through one explicit assurance path: `external_audit` with its report,
+or `self_reviewed` with the pinned disclosure, adversarial review and bounty evidence. The reviewed
+commit, SHA-256 evidence, mainnet owner, treasury, public invite-signing key and conservative
+launch limits are mandatory. `make contracts-mainnet-preflight` fails closed until that evidence
+is valid. The active release uses `self_reviewed`; it must never be described as independently
+audited.
 
 Before the production BANK deployment, deploy the audited BANK bytecode to a separate low-value
 shadow address and complete a two-wallet deposit → payout cycle there. BANK cannot complete a real

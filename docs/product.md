@@ -35,8 +35,9 @@ Membership is temporal, so changing teams cannot move an earlier transaction to 
 
 A person can belong to one active team at a time. Teams have an owner, administrators and
 members, support open/request/invite entry, and have no product-level member cap. Owners manage
-the name, description, monochrome emblem, admission policy, roles and ownership. Team scoring is
-an idempotent server projection and never changes BANK or DUEL contract state.
+the name, description, colour avatar, admission policy, roles and ownership. Uploaded JPG/PNG/WebP
+assets are normalized server-side; legacy tag/mark fields are hidden compatibility keys. Team
+scoring is an idempotent server projection and never changes BANK or DUEL contract state.
 
 ## Shared product layer
 
