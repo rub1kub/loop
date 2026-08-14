@@ -33,6 +33,8 @@ import { celebrate } from '../../celebrate';
 
 type WizardStep = 'amount' | 'multiplier' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
+const LAST_MOVE_EVENT_ID = '2026-08-16';
+const LAST_MOVE_PRIZE_NANO = 15_000_000_000;
 
 /** The fee as a percentage, so it is a rate and not just an unexplained subtraction. */
 function feePercentOf(feeNano: number, principalNano: number): string {
@@ -545,7 +547,10 @@ export function BankScreen({
               transition={{ type: 'spring', stiffness: 260, damping: 30 }}
               onClick={(event) => event.stopPropagation()}
             >
-              <SheetTitle title="Волна" onClose={() => setWaveOpen(false)} />
+              <SheetTitle
+                title={queuePulse.wave.id === LAST_MOVE_EVENT_ID ? 'Воскресный BANK' : 'Волна'}
+                onClose={() => setWaveOpen(false)}
+              />
               <BankWaveDetails
                 wave={queuePulse.wave}
                 onEnter={() => {
@@ -643,6 +648,7 @@ export function BankScreen({
 function BankWaveDetails({ wave, onEnter }: { wave: BankWave; onEnter: () => void }) {
   const active = wave.state === 'active' || wave.state === 'goal_reached';
   const completed = wave.state === 'completed';
+  const isLastMoveEvent = wave.id === LAST_MOVE_EVENT_ID;
   const closer = wave.closer_username
     ? `@${wave.closer_username}`
     : wave.closer_name || 'последний участник';
@@ -652,7 +658,9 @@ function BankWaveDetails({ wave, onEnter }: { wave: BankWave; onEnter: () => voi
 
   return (
     <div className="bank-wave-content">
-      <p className="eyebrow">ВОСКРЕСЕНЬЕ · 20:00–20:30 МСК</p>
+      <p className="eyebrow">
+        {isLastMoveEvent ? 'ВОСКРЕСЕНЬЕ · С 20:00 МСК' : 'ВОСКРЕСЕНЬЕ · 20:00–20:30 МСК'}
+      </p>
       {active ? (
         <div className="bank-wave-count">
           <strong>{Math.min(wave.participants, wave.goal)}</strong>
@@ -664,12 +672,26 @@ function BankWaveDetails({ wave, onEnter }: { wave: BankWave; onEnter: () => voi
           <span>ЗАКРЫЛ ВОЛНУ</span>
         </div>
       ) : (
-        <h3>Полчаса, чтобы войти вместе.</h3>
+        <h3>{isLastMoveEvent ? 'Последний ход.' : 'Полчаса, чтобы войти вместе.'}</h3>
       )}
-      <p className="bank-wave-rule">
-        Если войдут {wave.goal} человек, LOOP внесёт {formatGram(wave.boost_nano, 0)} GRAM в BANK.
-        Последний участник закроет Волну.
-      </p>
+      {isLastMoveEvent ? (
+        <div className="bank-event-rules">
+          <p className="bank-wave-rule">
+            <strong>{formatGram(LAST_MOVE_PRIZE_NANO, 0)} GRAM за последний ход.</strong>
+            Каждый новый взнос запускает 30 минут заново. Если его никто не перебьёт, приз получает
+            автор последнего взноса.
+          </p>
+          <p className="bank-wave-rule">
+            <strong>+{formatGram(wave.boost_nano, 0)} GRAM в очередь.</strong>
+            До 20:30 должны войти {wave.goal} разных участников.
+          </p>
+        </div>
+      ) : (
+        <p className="bank-wave-rule">
+          Если войдут {wave.goal} человек, LOOP внесёт {formatGram(wave.boost_nano, 0)} GRAM в BANK.
+          Последний участник закроет Волну.
+        </p>
+      )}
       {wave.state === 'missed' && (
         <p className="bank-wave-status">В этот раз Волна не собралась.</p>
       )}
@@ -694,7 +716,7 @@ function BankWaveDetails({ wave, onEnter }: { wave: BankWave; onEnter: () => voi
         </a>
       ) : (
         <button className="primary-button" onClick={onEnter}>
-          {active ? 'ВОЙТИ В ВОЛНУ' : 'ПОНЯТНО'}
+          {active ? (isLastMoveEvent ? 'УЧАСТВОВАТЬ' : 'ВОЙТИ В ВОЛНУ') : 'ПОНЯТНО'}
         </button>
       )}
     </div>
@@ -751,8 +773,12 @@ function BankLivePulse({ copy }: { copy: string }) {
 }
 
 function waveTeaser(wave: BankWave): string {
+  if (wave.id === LAST_MOVE_EVENT_ID && wave.state === 'upcoming') {
+    return `ИВЕНТ · ВС 20:00 · ${formatGram(LAST_MOVE_PRIZE_NANO, 0)} GRAM`;
+  }
   if (wave.state === 'active' || wave.state === 'goal_reached') {
-    return `ВОЛНА · ${Math.min(wave.participants, wave.goal)} ИЗ ${wave.goal} · ДО 20:30`;
+    const prefix = wave.id === LAST_MOVE_EVENT_ID ? 'ИВЕНТ' : 'ВОЛНА';
+    return `${prefix} · ${Math.min(wave.participants, wave.goal)} ИЗ ${wave.goal} · ДО 20:30`;
   }
   if (wave.state === 'completed') return 'ВОЛНА ЗАКРЫТА · ВЗНОС LOOP ПОДТВЕРЖДЁН';
   if (wave.state === 'awaiting_boost') return 'ВОЛНА СОБРАНА · ГОТОВИМ ВЗНОС';

@@ -169,10 +169,44 @@ describe('BankScreen', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: /ВОЛНА · 6 ИЗ 8/i })).toBeVisible();
-    expect(screen.queryByText(/Если войдут 8 человек/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /ВОЛНА · 6 ИЗ 8/i }));
-    expect(screen.getByText(/Если войдут 8 человек/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'ВОЙТИ В ВОЛНУ' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ИВЕНТ · 6 ИЗ 8/i })).toBeVisible();
+    expect(screen.queryByText(/15 GRAM за последний ход/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /ИВЕНТ · 6 ИЗ 8/i }));
+    expect(screen.getByText(/15 GRAM за последний ход/i)).toBeInTheDocument();
+    expect(screen.getByText(/Каждый новый взнос запускает 30 минут заново/i)).toBeInTheDocument();
+    expect(screen.getByText(/До 20:30 должны войти 8 разных участников/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'УЧАСТВОВАТЬ' })).toBeInTheDocument();
+  });
+
+  it('does not advertise the one-off prize in later Waves', () => {
+    render(
+      <BankScreen
+        profile={profile}
+        position={null}
+        queuePulse={{
+          ...queuePulse,
+          wave: {
+            id: '2026-08-23',
+            state: 'upcoming',
+            starts_at: '2026-08-23T17:00:00Z',
+            ends_at: '2026-08-23T17:30:00Z',
+            participants: 0,
+            goal: 8,
+            boost_nano: 5_000_000_000,
+            boost_confirmed: false,
+            proof_url: null,
+            closer_name: null,
+            closer_username: null,
+            is_closer: false,
+          },
+        }}
+        pulse={null}
+        onRefresh={vi.fn()}
+        onMockCreated={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /ВОЛНА · ВС 20:00 · \+5 GRAM/i })).toBeVisible();
+    expect(screen.queryByText(/15 GRAM/i)).not.toBeInTheDocument();
   });
 });

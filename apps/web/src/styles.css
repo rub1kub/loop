@@ -957,6 +957,22 @@ summary:focus-visible .disclosure-indicator {
   line-height: 1.5;
 }
 
+.bank-event-rules {
+  display: grid;
+  gap: 14px;
+}
+
+.bank-event-rules .bank-wave-rule {
+  display: grid;
+  gap: 4px;
+}
+
+.bank-event-rules .bank-wave-rule strong {
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.25;
+}
+
 .bank-wave-status {
   color: var(--ink);
   font-weight: 650;

@@ -65,8 +65,13 @@ users with confirmed BANK positions unlock a 5 GRAM operator position. Repeated 
 user and the configured operator wallet do not increase the counter. The result is reported as
 completed only after the operator position is independently observed in the BANK contract and its
 transaction proof is available. The last distinct entrant receives a social status and a share
-action, never a separate cash prize. Telegram announcements use the existing user notification
-preference and durable deduplication. The first campaign is hard-capped at four verified operator
+action, never a recurring cash prize. For the one-off event on 2026-08-16, a separate 15 GRAM
+promotion starts at 20:00 Moscow time: every finalized participant position resets a 30-minute
+window, and the owner of the latest position wins if no later position is finalized during that
+window. Ordering follows verified BANK contract transactions, not client callbacks. The prize is
+paid manually from the treasury and does not change FIFO allocation, contract balances or Wave
+qualification. Telegram announcements use the existing user notification preference and durable
+deduplication. The first campaign is hard-capped at four verified operator
 positions (20 GRAM principal); once that budget is exhausted, no following Wave is advertised.
 Because LOOP never stores an operator seed, reaching the goal sends the configured operator an
 actionable Telegram message. The operator signs the 5 GRAM position in the external wallet; until
