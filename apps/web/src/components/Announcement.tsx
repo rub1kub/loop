@@ -71,7 +71,7 @@ export function Announcement({ data }: { data: AnnouncementData }) {
         <div className="announcement-body">{data.text}</div>
         {data.url && (
           <button type="button" className="announcement-read" onClick={read}>
-            ЧИТАТЬ ПОЛНОСТЬЮ
+            ЧИТАТЬ ДАЛЕЕ
           </button>
         )}
       </div>

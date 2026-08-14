@@ -20,14 +20,14 @@ describe('the note from the channel', () => {
     // Handed to a browser the reader lands on the channel signed out, where
     // subscribing — the entire purpose — is not offered.
     render(<Announcement data={note} />);
-    fireEvent.click(screen.getByText('ЧИТАТЬ ПОЛНОСТЬЮ'));
+    fireEvent.click(screen.getByText('ЧИТАТЬ ДАЛЕЕ'));
 
     expect(telegram.openPlatformLink).toHaveBeenCalledWith('https://t.me/rubikub/5158', true);
   });
 
   it('never returns once it has been read', () => {
     const first = render(<Announcement data={note} />);
-    fireEvent.click(screen.getByText('ЧИТАТЬ ПОЛНОСТЬЮ'));
+    fireEvent.click(screen.getByText('ЧИТАТЬ ДАЛЕЕ'));
     first.unmount();
 
     // A new session, which is what a reopened mini app is.
@@ -51,7 +51,7 @@ describe('the note from the channel', () => {
 
   it('lets the next announcement through on its own', () => {
     const first = render(<Announcement data={note} />);
-    fireEvent.click(screen.getByText('ЧИТАТЬ ПОЛНОСТЬЮ'));
+    fireEvent.click(screen.getByText('ЧИТАТЬ ДАЛЕЕ'));
     first.unmount();
 
     render(<Announcement data={{ ...note, text: 'Потолок поднят до 10 GRAM.' }} />);
@@ -60,7 +60,7 @@ describe('the note from the channel', () => {
 
   it('offers no way onward when there is nowhere to go', () => {
     render(<Announcement data={{ text: 'Короткая заметка', url: null }} />);
-    expect(screen.queryByText('ЧИТАТЬ ПОЛНОСТЬЮ')).toBeNull();
+    expect(screen.queryByText('ЧИТАТЬ ДАЛЕЕ')).toBeNull();
     expect(telegram.openPlatformLink).not.toHaveBeenCalled();
   });
 });
