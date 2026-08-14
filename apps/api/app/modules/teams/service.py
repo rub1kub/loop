@@ -198,6 +198,7 @@ def ranked_teams_statement(season_id: str) -> Select[Any]:
         .over(
             order_by=(
                 base.c.flow_nano.desc(),
+                base.c.member_count.desc(),
                 base.c.active_members.desc(),
                 base.c.bank_payouts.desc(),
                 base.c.created_at.asc(),

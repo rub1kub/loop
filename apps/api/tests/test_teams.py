@@ -282,6 +282,41 @@ async def test_score_is_temporal_idempotent_and_bank_flow_drives_rank(client, ap
 
 
 @pytest.mark.asyncio
+async def test_equal_team_flow_is_ranked_by_current_member_count(client) -> None:
+    dev_owner = await authenticate(client, 8_310_000_001)
+    comics_owner = await authenticate(client, 8_310_000_002)
+    member_one = await authenticate(client, 8_310_000_003)
+    member_two = await authenticate(client, 8_310_000_004)
+
+    dev = await client.post(
+        "/api/v1/teams",
+        headers=dev_owner,
+        json={"name": "Dev команда", "join_policy": "open"},
+    )
+    comics = await client.post(
+        "/api/v1/teams",
+        headers=comics_owner,
+        json={"name": "Comics Crew", "join_policy": "open"},
+    )
+    assert dev.status_code == 201, dev.text
+    assert comics.status_code == 201, comics.text
+
+    comics_slug = comics.json()["slug"]
+    for headers in (member_one, member_two):
+        joined = await client.post(f"/api/v1/teams/{comics_slug}/join", headers=headers, json={})
+        assert joined.status_code == 200, joined.text
+
+    overview = await client.get("/api/v1/teams/overview", headers=dev_owner)
+    assert overview.status_code == 200, overview.text
+    leaderboard = overview.json()["leaderboard"]
+
+    assert [team["flow_nano"] for team in leaderboard[:2]] == [0, 0]
+    assert [team["name"] for team in leaderboard[:2]] == ["Comics Crew", "Dev команда"]
+    assert [team["member_count"] for team in leaderboard[:2]] == [3, 1]
+    assert [team["rank"] for team in leaderboard[:2]] == [1, 2]
+
+
+@pytest.mark.asyncio
 async def test_invite_token_is_hashed_and_public_card_is_jpeg(client, app) -> None:
     headers = await authenticate(client, 8_400_000_001)
     created = await client.post(
