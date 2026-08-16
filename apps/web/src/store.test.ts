@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   currentBankPosition: vi.fn(() => Promise.resolve(null)),
   bankPulse: vi.fn(() =>
     Promise.resolve({
+      bank_enabled: true,
       active_positions: 0,
       minimum_entry_nano: 1_000_000_000,
       minimum_entry_payouts: 0,

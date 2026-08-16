@@ -67,6 +67,28 @@ describe('API session recovery', () => {
     );
   });
 
+  it('reads the live BANK switch and keeps compatibility with an older API', async () => {
+    const basePulse = {
+      active_positions: 0,
+      minimum_entry_nano: 1_000_000_000,
+      minimum_entry_payouts: 0,
+      next_payout_gross_nano: 0,
+      updated_at: '2026-08-16T18:00:00.000Z',
+      wave: null,
+    };
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(basePulse), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...basePulse, bank_enabled: false }), { status: 200 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api');
+    await expect(api.bankPulse()).resolves.toMatchObject({ bank_enabled: true });
+    await expect(api.bankPulse()).resolves.toMatchObject({ bank_enabled: false });
+  });
+
   it('does not replay a spent wallet proof after a proof validation error', async () => {
     window.Telegram = {
       WebApp: { initData: 'signed-init-data' } as TelegramWebApp,

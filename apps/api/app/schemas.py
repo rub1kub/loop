@@ -195,6 +195,7 @@ class BankWaveView(BaseModel):
 
 
 class BankQueuePulseView(BaseModel):
+    bank_enabled: bool = True
     active_positions: int
     minimum_entry_nano: int
     minimum_entry_payouts: int

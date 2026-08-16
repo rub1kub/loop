@@ -137,6 +137,8 @@ const bankWaveSchema = z.object({
 });
 
 const bankQueuePulseSchema = z.object({
+  // Rolling compatibility: an older API did not expose the live BANK switch.
+  bank_enabled: z.boolean().default(true),
   active_positions: z.number(),
   minimum_entry_nano: z.number(),
   minimum_entry_payouts: z.number(),

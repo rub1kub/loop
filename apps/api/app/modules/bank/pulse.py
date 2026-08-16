@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import func, select
 
 from ...config import Settings
-from ...control_state import effective_contract_fee
+from ...control_state import application_control, effective_contract_fee
 from ...schemas import BankQueuePulseView
 from .models import BankPosition, BankPositionStatus
 from .wave import bank_wave_view
@@ -36,6 +36,8 @@ async def bank_queue_pulse(
     user_id: str | None = None,
 ) -> BankQueuePulseView:
     """One source of truth for the in-app and Telegram queue pulse."""
+
+    control = await application_control(db)
 
     filters = (
         BankPosition.network == settings.ton_network_id,
@@ -80,6 +82,7 @@ async def bank_queue_pulse(
 
     next_remaining = positions[0].remaining_amount_nano if positions else 0
     return BankQueuePulseView(
+        bank_enabled=control.bank_enabled,
         active_positions=active_positions,
         minimum_entry_nano=minimum_entry,
         minimum_entry_payouts=closed,

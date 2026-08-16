@@ -61,6 +61,7 @@ const position: BankPosition = {
 };
 
 const queuePulse: BankQueuePulse = {
+  bank_enabled: true,
   active_positions: 124,
   minimum_entry_nano: 1_000_000_000,
   minimum_entry_payouts: 2,
@@ -210,5 +211,65 @@ describe('BankScreen', () => {
 
     expect(screen.getByRole('button', { name: /ВОЛНА · ВС 20:00 · \+5 GRAM/i })).toBeVisible();
     expect(screen.queryByText(/30 GRAM/i)).not.toBeInTheDocument();
+  });
+
+  it('closes the season inside BANK without counters or entry controls', () => {
+    render(
+      <BankScreen
+        profile={profile}
+        position={null}
+        queuePulse={{
+          ...queuePulse,
+          bank_enabled: false,
+          wave: {
+            id: '2026-08-16',
+            state: 'active',
+            starts_at: '2026-08-16T17:00:00Z',
+            ends_at: '2026-08-16T17:30:00Z',
+            participants: 3,
+            goal: 8,
+            boost_nano: 5_000_000_000,
+            boost_confirmed: false,
+            proof_url: null,
+            closer_name: null,
+            closer_username: null,
+            is_closer: false,
+          },
+        }}
+        pulse={{ active_participants: 8, active_bank: 5, active_duels: 3, proofs_24h: 4 }}
+        onRefresh={vi.fn()}
+        onMockCreated={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('СЕЗОН ЗАВЕРШЁН')).toBeVisible();
+    expect(screen.getByText('Спасибо всем, кто был внутри')).toBeInTheDocument();
+    expect(screen.getByText('Увидимся в следующем сезоне LOOP')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /@RUBIKUB/i })).toHaveAttribute(
+      'href',
+      'https://t.me/rubikub',
+    );
+    expect(screen.queryByRole('button', { name: 'СОЗДАТЬ ПОЗИЦИЮ' })).not.toBeInTheDocument();
+    expect(screen.queryByText('В ОЧЕРЕДИ')).not.toBeInTheDocument();
+    expect(screen.queryByText('СЕЙЧАС В LOOP')).not.toBeInTheDocument();
+    expect(screen.queryByText(/ПОСЛЕДНИЙ ХОД/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps an existing position reachable after the season closes', () => {
+    render(
+      <BankScreen
+        profile={profile}
+        position={position}
+        queuePulse={{ ...queuePulse, bank_enabled: false }}
+        pulse={null}
+        onRefresh={vi.fn()}
+        onMockCreated={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('37%')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'МОЯ ПОЗИЦИЯ' }));
+    expect(screen.getByText('Позиция BANK')).toBeInTheDocument();
+    expect(screen.getByText('37%')).toBeInTheDocument();
   });
 });

@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.config import get_settings
+from app.control_state import application_control
 from app.modules.bank.models import BankPosition, BankPositionStatus
 from app.modules.bank.pulse import bank_queue_pulse, bank_queue_pulse_text, gross_needed
 from app.schemas import BankQueuePulseView
@@ -60,6 +61,19 @@ async def test_queue_pulse_counts_what_the_minimum_entry_really_closes(app) -> N
         pulse = await bank_queue_pulse(db, get_settings())
 
     assert pulse.active_positions == 3
+    assert pulse.bank_enabled is True
     assert pulse.minimum_entry_payouts == 2
     assert pulse.next_payout_gross_nano == 288_888_889
     assert "закроет 2 позиции" in bank_queue_pulse_text(pulse)
+
+
+@pytest.mark.asyncio
+async def test_queue_pulse_exposes_the_live_bank_switch(app) -> None:
+    async with app.state.session_factory() as db:
+        control = await application_control(db)
+        control.bank_enabled = False
+        await db.commit()
+
+        pulse = await bank_queue_pulse(db, get_settings())
+
+    assert pulse.bank_enabled is False

@@ -247,6 +247,7 @@ export default function App() {
   const screen = {
     bank: (
       <BankScreen
+        key={state.bankPulse?.bank_enabled === false ? 'bank-closed' : 'bank-open'}
         profile={state.profile}
         position={state.bankPosition}
         queuePulse={state.bankPulse}

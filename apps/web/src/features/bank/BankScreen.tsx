@@ -90,6 +90,7 @@ export function BankScreen({
   const locked = useRef(false);
   /** The quote holding this wallet's position slot until the wallet answers. */
   const quoted = useRef<number | null>(null);
+  const bankEnabled = queuePulse?.bank_enabled !== false;
 
   const doubleLimitNano = limit?.double_limit_nano ?? 0;
   const principalNano = useMemo(() => {
@@ -117,18 +118,18 @@ export function BankScreen({
   }, [details, waveOpen, wizard]);
 
   useEffect(() => {
-    if (isMockTelegram()) return;
+    if (!bankEnabled || isMockTelegram()) return;
     void api
       .bankLimits()
       .then(setLimit)
       .catch(() => undefined);
-  }, []);
+  }, [bankEnabled]);
 
   useEffect(() => {
-    if (queuePulse?.wave?.id !== LAST_MOVE_EVENT_ID) return;
+    if (!bankEnabled || queuePulse?.wave?.id !== LAST_MOVE_EVENT_ID) return;
     const timer = window.setInterval(() => setClock(Date.now()), 1_000);
     return () => window.clearInterval(timer);
-  }, [queuePulse?.wave?.id]);
+  }, [bankEnabled, queuePulse?.wave?.id]);
 
   function continueFromAmount() {
     if (!/^\d+([.,]\d+)?$/.test(amount.trim())) {
@@ -313,7 +314,7 @@ export function BankScreen({
   const shownPercent = useCountUp(progressPercent);
   const pulseCopy = queuePulseCopy(queuePulse);
 
-  if (wizard) {
+  if (wizard && bankEnabled) {
     return (
       <motion.section
         className={`screen bank-flow-screen bank-flow-${wizard}`}
@@ -455,47 +456,89 @@ export function BankScreen({
     );
   }
 
+  const jar = (
+    <motion.div
+      className="bank-vessel"
+      aria-hidden="true"
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 115, damping: 23 }}
+    >
+      <img className="bank-jar-shell" src="/assets/empty-jar.webp" alt="" />
+      {position && (
+        <span className="bank-sand-chamber">
+          <JarBalls fill={progressPercent} />
+        </span>
+      )}
+      {position && <img className="bank-jar-glass" src="/assets/empty-jar.webp" alt="" />}
+    </motion.div>
+  );
+
   return (
-    <section className="screen bank-screen" aria-labelledby="bank-title">
+    <section
+      className={`screen bank-screen ${bankEnabled ? '' : 'is-season-closed'}`}
+      aria-labelledby="bank-title"
+    >
       <header className="mode-header">
-        <p className="eyebrow">ФИНАНСОВАЯ ПИРАМИДА</p>
+        <p className="eyebrow">{bankEnabled ? 'ФИНАНСОВАЯ ПИРАМИДА' : 'СЕЗОН ЗАВЕРШЁН'}</p>
         <h1 id="bank-title">BANK</h1>
       </header>
 
-      <button
-        className={`bank-object ${position ? 'is-active' : 'is-empty'}`}
-        onClick={() => {
-          if (position) {
-            setDetails(true);
-          } else {
-            setMessage('');
-            setWizard('amount');
+      {bankEnabled ? (
+        <button
+          className={`bank-object ${position ? 'is-active' : 'is-empty'}`}
+          onClick={() => {
+            if (position) {
+              setDetails(true);
+            } else {
+              setMessage('');
+              setWizard('amount');
+            }
+          }}
+          aria-label={
+            position
+              ? `Открыть позицию BANK, собрано ${Math.round(progressPercent)}%`
+              : 'Создать позицию BANK'
           }
-        }}
-        aria-label={
-          position
-            ? `Открыть позицию BANK, собрано ${Math.round(progressPercent)}%`
-            : 'Создать позицию BANK'
-        }
-      >
-        <motion.div
-          className="bank-vessel"
-          aria-hidden="true"
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 115, damping: 23 }}
         >
-          <img className="bank-jar-shell" src="/assets/empty-jar.webp" alt="" />
-          {position && (
-            <span className="bank-sand-chamber">
-              <JarBalls fill={progressPercent} />
-            </span>
-          )}
-          {position && <img className="bank-jar-glass" src="/assets/empty-jar.webp" alt="" />}
-        </motion.div>
-      </button>
+          {jar}
+        </button>
+      ) : (
+        <div
+          className={`bank-object bank-closed-object ${position ? 'is-active' : 'is-empty'}`}
+          role="img"
+          aria-label="BANK. Сезон завершён"
+        >
+          {jar}
+        </div>
+      )}
 
-      {position ? (
+      {!bankEnabled ? (
+        <motion.div
+          className="bank-state bank-season-closed-copy"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.12, ease: [0.2, 0.8, 0.2, 1] }}
+        >
+          <h2>Спасибо всем, кто был внутри</h2>
+          <p>Увидимся в следующем сезоне LOOP</p>
+          {position && (
+            <button className="primary-button" onClick={() => setDetails(true)}>
+              МОЯ ПОЗИЦИЯ
+            </button>
+          )}
+          <a
+            className="bank-season-channel"
+            href="https://t.me/rubikub"
+            target="_blank"
+            rel="noreferrer"
+          >
+            АПДЕЙТЫ · @RUBIKUB
+            <ArrowSquareOut aria-hidden="true" />
+          </a>
+          <small>ВЫ ЛЕГЕНДЫ</small>
+        </motion.div>
+      ) : position ? (
         <div className="bank-state bank-active-state">
           <strong>{Math.round(shownPercent)}%</strong>
           <p className="bank-queue-note">{queueNote(ahead, aheadNano, etaSeconds, position)}</p>
@@ -530,7 +573,7 @@ export function BankScreen({
         </div>
       )}
 
-      {queuePulse?.wave && (
+      {bankEnabled && queuePulse?.wave && (
         <button className="bank-wave-teaser" onClick={() => setWaveOpen(true)}>
           <span>{waveTeaser(queuePulse.wave, clock)}</span>
           <ArrowRight aria-hidden="true" />
@@ -538,7 +581,7 @@ export function BankScreen({
       )}
 
       <AnimatePresence>
-        {waveOpen && queuePulse?.wave && (
+        {bankEnabled && waveOpen && queuePulse?.wave && (
           <motion.div
             className="sheet-backdrop"
             initial={{ opacity: 0 }}

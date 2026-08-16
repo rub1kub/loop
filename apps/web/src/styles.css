@@ -738,6 +738,36 @@ summary:focus-visible .disclosure-indicator {
   opacity: 0.72;
 }
 
+.bank-screen.is-season-closed .mode-header {
+  flex: 0 0 auto;
+}
+
+.bank-closed-object {
+  width: min(86vw, 350px);
+  height: min(40dvh, 360px);
+  min-height: 230px;
+  max-height: none;
+  flex: 0 0 auto;
+  margin-top: clamp(10px, 2dvh, 20px);
+  cursor: default;
+  pointer-events: none;
+}
+
+.bank-closed-object .bank-vessel {
+  animation: bank-season-breathe 7s var(--ease-apple) infinite;
+}
+
+@keyframes bank-season-breathe {
+  0%,
+  100% {
+    filter: brightness(0.88);
+  }
+
+  50% {
+    filter: brightness(1.04);
+  }
+}
+
 .bank-sand-chamber {
   position: absolute;
   z-index: 1;
@@ -840,6 +870,62 @@ summary:focus-visible .disclosure-indicator {
 
 .bank-state .primary-button {
   margin-top: 14px;
+}
+
+.bank-season-closed-copy {
+  width: min(100%, 340px);
+  align-content: start;
+  margin-top: clamp(6px, 1.5dvh, 16px);
+}
+
+.bank-season-closed-copy h2 {
+  max-width: 330px;
+  margin: 0;
+  font-size: clamp(24px, 7.2vw, 31px);
+  font-weight: 620;
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+}
+
+.bank-season-closed-copy > p {
+  max-width: 300px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.42;
+}
+
+.bank-season-closed-copy .primary-button {
+  margin-top: 22px;
+}
+
+.bank-season-channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 22px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.11em;
+  text-decoration: none;
+}
+
+.bank-season-channel svg {
+  width: 15px;
+  height: 15px;
+}
+
+.bank-season-channel:active {
+  opacity: 0.58;
+}
+
+.bank-season-closed-copy > small {
+  margin-top: 20px;
+  color: var(--dim);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.19em;
 }
 
 .bank-cycle-metrics {
@@ -3110,6 +3196,27 @@ details[open] > summary .disclosure-indicator svg {
     width: min(calc(100% + 34px), 430px);
     height: min(31dvh, 240px);
     margin-top: 2px;
+  }
+
+  .bank-closed-object {
+    min-height: 190px;
+  }
+
+  .bank-season-closed-copy {
+    margin-top: 4px;
+  }
+
+  .bank-season-closed-copy h2 {
+    font-size: 23px;
+  }
+
+  .bank-season-closed-copy .primary-button,
+  .bank-season-channel {
+    margin-top: 14px;
+  }
+
+  .bank-season-closed-copy > small {
+    margin-top: 14px;
   }
 
   .bank-state {

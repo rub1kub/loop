@@ -127,6 +127,7 @@ const demoBank: BankPosition = {
 };
 
 const demoBankPulse: BankQueuePulse = {
+  bank_enabled: mockScreen !== 'bank-closed',
   active_positions: 124,
   minimum_entry_nano: 1_000_000_000,
   minimum_entry_payouts: 2,
@@ -601,7 +602,9 @@ export const useLoopStore = create<LoopState>((set, get) => ({
         const empty = mockScreen === 'bank-empty';
         set({
           profile:
-            mockScreen?.startsWith('teams') || mockScreen === 'bank-wave'
+            mockScreen?.startsWith('teams') ||
+            mockScreen === 'bank-wave' ||
+            mockScreen === 'bank-closed'
               ? { ...demoProfile, announcement: null }
               : demoProfile,
           bankPosition: empty ? null : demoBank,

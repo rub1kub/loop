@@ -240,6 +240,7 @@ export interface BankLimit {
 }
 
 export interface BankQueuePulse {
+  bank_enabled: boolean;
   active_positions: number;
   minimum_entry_nano: number;
   minimum_entry_payouts: number;
