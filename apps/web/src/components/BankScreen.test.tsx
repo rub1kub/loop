@@ -172,9 +172,9 @@ describe('BankScreen', () => {
     expect(
       screen.getByRole('button', { name: /ПОСЛЕДНИЙ ХОД · ЖДЁМ ПЕРВЫЙ ВЗНОС/i }),
     ).toBeVisible();
-    expect(screen.queryByText(/15 GRAM за последний ход/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/30 GRAM за последний ход/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /ПОСЛЕДНИЙ ХОД · ЖДЁМ ПЕРВЫЙ ВЗНОС/i }));
-    expect(screen.getByText(/15 GRAM за последний ход/i)).toBeInTheDocument();
+    expect(screen.getByText(/30 GRAM за последний ход/i)).toBeInTheDocument();
     expect(screen.getByText(/Каждый новый взнос запускает 30 минут заново/i)).toBeInTheDocument();
     expect(screen.getByText(/До 20:30 должны войти 8 разных участников/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'УЧАСТВОВАТЬ' })).toBeInTheDocument();
@@ -209,6 +209,6 @@ describe('BankScreen', () => {
     );
 
     expect(screen.getByRole('button', { name: /ВОЛНА · ВС 20:00 · \+5 GRAM/i })).toBeVisible();
-    expect(screen.queryByText(/15 GRAM/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/30 GRAM/i)).not.toBeInTheDocument();
   });
 });

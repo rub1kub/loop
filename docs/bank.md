@@ -65,7 +65,7 @@ users with confirmed BANK positions unlock a 5 GRAM operator position. Repeated 
 user and the configured operator wallet do not increase the counter. The result is reported as
 completed only after the operator position is independently observed in the BANK contract and its
 transaction proof is available. The last distinct entrant receives a social status and a share
-action, never a recurring cash prize. For the one-off event on 2026-08-16, a separate 15 GRAM
+action, never a recurring cash prize. For the one-off event on 2026-08-16, a separate 30 GRAM
 promotion starts at 20:00 Moscow time: every finalized participant position resets a 30-minute
 window, and the owner of the latest position wins if no later position is finalized during that
 window. Ordering follows verified BANK contract transactions, not client callbacks. The prize is

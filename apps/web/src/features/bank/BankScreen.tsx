@@ -34,7 +34,7 @@ import { celebrate } from '../../celebrate';
 type WizardStep = 'amount' | 'multiplier' | 'waiting';
 const multipliers = [12500, 15000, 20000] as const;
 const LAST_MOVE_EVENT_ID = '2026-08-16';
-const LAST_MOVE_PRIZE_NANO = 15_000_000_000;
+const LAST_MOVE_PRIZE_NANO = 30_000_000_000;
 
 /** The fee as a percentage, so it is a rate and not just an unexplained subtraction. */
 function feePercentOf(feeNano: number, principalNano: number): string {
