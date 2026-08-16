@@ -105,6 +105,30 @@ async def test_wave_counts_distinct_people_and_never_counts_the_loop_wallet(app)
     assert wave.state == "active"
     assert wave.participants == 2
     assert not wave.is_closer
+    assert wave.last_move_deadline == WAVE_START + timedelta(minutes=33)
+
+
+@pytest.mark.asyncio
+async def test_last_move_timer_stops_at_the_first_quiet_window(app) -> None:
+    settings = wave_settings()
+    async with app.state.session_factory() as db:
+        user = User(telegram_id=800_003, first_name="Last")
+        db.add(user)
+        await db.flush()
+        for position_id, minutes in [(805, 1), (806, 20), (807, 51)]:
+            db.add(
+                entry(
+                    position_id=position_id,
+                    user_id=user.id,
+                    wallet=f"0:{position_id:064x}",
+                    confirmed_at=WAVE_START + timedelta(minutes=minutes),
+                )
+            )
+        await db.commit()
+        wave = await bank_wave_view(db, settings, now=WAVE_START + timedelta(hours=2))
+
+    assert wave is not None
+    assert wave.last_move_deadline == WAVE_START + timedelta(minutes=50)
 
 
 @pytest.mark.asyncio

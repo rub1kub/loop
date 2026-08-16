@@ -189,6 +189,9 @@ class BankWaveView(BaseModel):
     closer_name: str | None
     closer_username: str | None
     is_closer: bool
+    # One-off 2026-08-16 event: the first uninterrupted 30-minute chain
+    # window closes here. None means that nobody has made the first move yet.
+    last_move_deadline: datetime | None = None
 
 
 class BankQueuePulseView(BaseModel):

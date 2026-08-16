@@ -86,6 +86,7 @@ export function BankScreen({
       : null,
   );
   const [message, setMessage] = useState('');
+  const [clock, setClock] = useState(() => Date.now());
   const locked = useRef(false);
   /** The quote holding this wallet's position slot until the wallet answers. */
   const quoted = useRef<number | null>(null);
@@ -122,6 +123,12 @@ export function BankScreen({
       .then(setLimit)
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (queuePulse?.wave?.id !== LAST_MOVE_EVENT_ID) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [queuePulse?.wave?.id]);
 
   function continueFromAmount() {
     if (!/^\d+([.,]\d+)?$/.test(amount.trim())) {
@@ -525,7 +532,7 @@ export function BankScreen({
 
       {queuePulse?.wave && (
         <button className="bank-wave-teaser" onClick={() => setWaveOpen(true)}>
-          <span>{waveTeaser(queuePulse.wave)}</span>
+          <span>{waveTeaser(queuePulse.wave, clock)}</span>
           <ArrowRight aria-hidden="true" />
         </button>
       )}
@@ -676,6 +683,10 @@ function BankWaveDetails({ wave, onEnter }: { wave: BankWave; onEnter: () => voi
       )}
       {isLastMoveEvent ? (
         <div className="bank-event-rules">
+          <div className="bank-last-move-clock" aria-live="polite">
+            <strong>{lastMoveClock(wave, Date.now())}</strong>
+            <span>{lastMoveClockLabel(wave, Date.now())}</span>
+          </div>
           <p className="bank-wave-rule">
             <strong>{formatGram(LAST_MOVE_PRIZE_NANO, 0)} GRAM за последний ход.</strong>
             Каждый новый взнос запускает 30 минут заново. Если его никто не перебьёт, приз получает
@@ -772,9 +783,14 @@ function BankLivePulse({ copy }: { copy: string }) {
   );
 }
 
-function waveTeaser(wave: BankWave): string {
+function waveTeaser(wave: BankWave, now = Date.now()): string {
   if (wave.id === LAST_MOVE_EVENT_ID && wave.state === 'upcoming') {
-    return `ИВЕНТ · ВС 20:00 · ${formatGram(LAST_MOVE_PRIZE_NANO, 0)} GRAM`;
+    return `ДО СТАРТА · ${countdown(new Date(wave.starts_at).getTime() - now)} · ${formatGram(LAST_MOVE_PRIZE_NANO, 0)} GRAM`;
+  }
+  if (wave.id === LAST_MOVE_EVENT_ID) {
+    if (!wave.last_move_deadline) return 'ПОСЛЕДНИЙ ХОД · ЖДЁМ ПЕРВЫЙ ВЗНОС';
+    const left = new Date(wave.last_move_deadline).getTime() - now;
+    return left > 0 ? `ПОСЛЕДНИЙ ХОД · ${countdown(left)}` : 'ПОСЛЕДНИЙ ХОД · ВРЕМЯ ВЫШЛО';
   }
   if (wave.state === 'active' || wave.state === 'goal_reached') {
     const prefix = wave.id === LAST_MOVE_EVENT_ID ? 'ИВЕНТ' : 'ВОЛНА';
@@ -784,6 +800,25 @@ function waveTeaser(wave: BankWave): string {
   if (wave.state === 'awaiting_boost') return 'ВОЛНА СОБРАНА · ГОТОВИМ ВЗНОС';
   if (wave.state === 'missed') return 'ВОЛНА ЗАВЕРШЕНА · СЛЕДУЮЩАЯ В ВОСКРЕСЕНЬЕ';
   return `ВОЛНА · ВС 20:00 · +${formatGram(wave.boost_nano, 0)} GRAM В BANK`;
+}
+
+function lastMoveClock(wave: BankWave, now: number): string {
+  if (wave.state === 'upcoming') return countdown(new Date(wave.starts_at).getTime() - now);
+  if (!wave.last_move_deadline) return '30:00';
+  return countdown(new Date(wave.last_move_deadline).getTime() - now);
+}
+
+function lastMoveClockLabel(wave: BankWave, now: number): string {
+  if (wave.state === 'upcoming') return 'ДО СТАРТА';
+  if (!wave.last_move_deadline) return 'ЖДЁМ ПЕРВЫЙ ВЗНОС';
+  return new Date(wave.last_move_deadline).getTime() > now ? 'ДО ПОБЕДЫ' : 'ХОД УДЕРЖАН';
+}
+
+function countdown(milliseconds: number): string {
+  const total = Math.max(0, Math.ceil(milliseconds / 1_000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 function queuePulseCopy(pulse: BankQueuePulse | null): string | null {

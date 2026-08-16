@@ -14,6 +14,8 @@ from .models import BankPosition
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 RESULT_HOLD = timedelta(hours=24)
+LAST_MOVE_EVENT_ID = "2026-08-16"
+LAST_MOVE_SILENCE = timedelta(minutes=30)
 
 
 def wave_window(now: datetime, settings: Settings) -> tuple[datetime, datetime]:
@@ -74,6 +76,33 @@ async def bank_wave_view(
     )
     participants = int(await db.scalar(select(func.count()).select_from(entries)) or 0)
     goal_reached = participants >= settings.bank_wave_goal
+
+    last_move_deadline: datetime | None = None
+    if starts_at.astimezone(MOSCOW).date().isoformat() == LAST_MOVE_EVENT_ID:
+        confirmations = (
+            await db.scalars(
+                select(BankPosition.confirmed_at)
+                .where(
+                    BankPosition.network == settings.ton_network_id,
+                    BankPosition.contract_address == settings.bank_contract_address,
+                    BankPosition.user_id.is_not(None),
+                    BankPosition.confirmed_at.is_not(None),
+                    BankPosition.confirmed_at >= starts_at,
+                    func.lower(BankPosition.owner_wallet) != project_wallet.lower(),
+                )
+                .order_by(BankPosition.confirmed_at, BankPosition.position_id)
+            )
+        ).all()
+        # Stop at the first 30-minute quiet period. Deposits made after the
+        # event has already closed cannot silently restart it on another day.
+        for confirmed_at in confirmations:
+            if confirmed_at is None:
+                continue
+            if confirmed_at.tzinfo is None:
+                confirmed_at = confirmed_at.replace(tzinfo=UTC)
+            if last_move_deadline is not None and confirmed_at >= last_move_deadline:
+                break
+            last_move_deadline = confirmed_at + LAST_MOVE_SILENCE
 
     closer_user_id: str | None = None
     closer_name: str | None = None
@@ -151,4 +180,5 @@ async def bank_wave_view(
         closer_name=closer_name,
         closer_username=closer_username,
         is_closer=closer_user_id is not None and closer_user_id == user_id,
+        last_move_deadline=last_move_deadline,
     )

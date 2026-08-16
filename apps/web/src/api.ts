@@ -133,6 +133,7 @@ const bankWaveSchema = z.object({
   closer_name: z.string().nullable(),
   closer_username: z.string().nullable(),
   is_closer: z.boolean(),
+  last_move_deadline: z.string().nullable().default(null),
 });
 
 const bankQueuePulseSchema = z.object({

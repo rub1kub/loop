@@ -261,6 +261,7 @@ export interface BankWave {
   closer_name: string | null;
   closer_username: string | null;
   is_closer: boolean;
+  last_move_deadline?: string | null;
 }
 
 export interface Offer {
