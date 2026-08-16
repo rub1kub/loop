@@ -14,7 +14,7 @@ from app.config import get_settings
 from app.models import ReferralAttribution, ReferralCode, User, Wallet
 from app.modules.bank.models import BankPosition, BankPositionStatus
 from app.modules.duel.models import DuelInvitation, DuelOffer, OfferState
-from app.ton import verify_direct_accept_permit
+from app.ton import TonProviderError, verify_direct_accept_permit
 
 
 def signed_init_data(telegram_id: int, *, start_param: str | None = None) -> str:
@@ -585,6 +585,88 @@ async def test_a_wallet_held_by_a_live_position_says_so(app, client, monkeypatch
     assert "DUEL" not in detail  # only the side actually holding it
     # Cyrillic is what makes the interface show it instead of a fallback.
     assert any("Ѐ" <= character <= "ӿ" for character in detail)
+
+
+async def test_wallet_proof_failure_is_not_reported_as_an_expired_api_session(
+    app, client, monkeypatch
+) -> None:
+    settings = get_settings()
+    address = "0:" + "e3" * 32
+    headers = await auth_headers(client, 700_100)
+    challenge = await client.post("/api/v1/wallet/challenge", headers=headers, json={})
+    payload = challenge.json()["payload"]
+
+    async def public_key(_address: str) -> str:
+        return "d3" * 32
+
+    monkeypatch.setattr(app.state.ton_client, "get_wallet_public_key", public_key)
+    response = await client.post(
+        "/api/v1/wallet/verify",
+        headers=headers,
+        json={
+            "address": address,
+            "network": settings.ton_network_id,
+            # Deliberately differs from the authoritative on-chain key.
+            "publicKey": "d4" * 32,
+            "proof": {
+                "timestamp": int(datetime.now(UTC).timestamp()),
+                "domain": {"lengthBytes": 9, "value": "loop.test"},
+                "signature": "s" * 88,
+                "payload": payload,
+            },
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    assert "другой ключ" in response.json()["detail"]
+
+    replay = await client.post(
+        "/api/v1/wallet/verify",
+        headers=headers,
+        json={
+            "address": address,
+            "network": settings.ton_network_id,
+            "publicKey": "d4" * 32,
+            "proof": {
+                "timestamp": int(datetime.now(UTC).timestamp()),
+                "domain": {"lengthBytes": 9, "value": "loop.test"},
+                "signature": "s" * 88,
+                "payload": payload,
+            },
+        },
+    )
+    assert replay.status_code == 409, replay.text
+    assert "устарело" in replay.json()["detail"]
+
+
+async def test_wallet_public_key_provider_failure_is_actionable(app, client, monkeypatch) -> None:
+    settings = get_settings()
+    headers = await auth_headers(client, 700_101)
+    challenge = await client.post("/api/v1/wallet/challenge", headers=headers, json={})
+
+    async def unavailable(_address: str) -> str:
+        raise TonProviderError("provider details must not reach the user")
+
+    monkeypatch.setattr(app.state.ton_client, "get_wallet_public_key", unavailable)
+    response = await client.post(
+        "/api/v1/wallet/verify",
+        headers=headers,
+        json={
+            "address": "0:" + "e4" * 32,
+            "network": settings.ton_network_id,
+            "publicKey": "d5" * 32,
+            "proof": {
+                "timestamp": int(datetime.now(UTC).timestamp()),
+                "domain": {"lengthBytes": 9, "value": "loop.test"},
+                "signature": "s" * 88,
+                "payload": challenge.json()["payload"],
+            },
+        },
+    )
+
+    assert response.status_code == 503, response.text
+    assert "сначала отправь" in response.json()["detail"]
+    assert "provider details" not in response.text
 
 
 async def test_a_duel_shared_to_a_friend_finally_credits_the_player(app, client) -> None:

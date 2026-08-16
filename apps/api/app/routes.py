@@ -443,7 +443,14 @@ async def wallet_verify(
         )
     challenge = await request.app.state.challenge_store.consume(body.proof.payload)
     if not challenge or challenge.get("user_id") != user.id:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wallet challenge is invalid or used")
+        logger.info("wallet_verify_rejected", reason="challenge_invalid_or_used")
+        # This is not an expired API session. Returning 401 made the web client
+        # authenticate again and replay the same one-time proof, hiding the
+        # useful first error behind a guaranteed second failure.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Подтверждение кошелька устарело. Подключи кошелёк ещё раз.",
+        )
     try:
         onchain_key = await request.app.state.ton_client.get_wallet_public_key(body.address)
         if not secrets.compare_digest(onchain_key.lower(), body.public_key.lower()):
@@ -460,8 +467,29 @@ async def wallet_verify(
             expected_payload=body.proof.payload,
             settings=settings,
         )
-    except (AuthenticationError, TonProviderError) as exc:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
+    except TonProviderError as exc:
+        logger.warning("wallet_verify_rejected", reason="public_key_unavailable")
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Сеть не смогла прочитать ключ кошелька. Если кошелёк новый, сначала отправь "
+            "из него любую транзакцию и попробуй снова.",
+        ) from exc
+    except AuthenticationError as exc:
+        reason = str(exc)
+        logger.info(
+            "wallet_verify_rejected",
+            reason=(
+                "public_key_mismatch"
+                if reason == "wallet public key mismatch"
+                else "ton_proof_invalid"
+            ),
+        )
+        detail = (
+            "Подключённый кошелёк вернул другой ключ. Отключи его в TON Connect и подключи снова."
+            if reason == "wallet public key mismatch"
+            else "Кошелёк не подтвердил владение. Отключи его в TON Connect и подключи снова."
+        )
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail) from exc
     existing = await db.scalar(
         select(Wallet).where(Wallet.network == body.network, Wallet.address == address)
     )

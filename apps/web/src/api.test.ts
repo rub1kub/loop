@@ -67,6 +67,35 @@ describe('API session recovery', () => {
     );
   });
 
+  it('does not replay a spent wallet proof after a proof validation error', async () => {
+    window.Telegram = {
+      WebApp: { initData: 'signed-init-data' } as TelegramWebApp,
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          detail: 'Кошелёк не подтвердил владение. Отключи его в TON Connect и подключи снова.',
+        }),
+        { status: 422 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api');
+    api.setToken('session-token');
+    await expect(
+      api.verifyWallet({
+        address: `0:${'11'.repeat(32)}`,
+        network: -239,
+        publicKey: '22'.repeat(32),
+        proof: {},
+      }),
+    ).rejects.toThrow('Кошелёк не подтвердил владение');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/wallet/verify');
+  });
+
   it('retries safe reads after a transient iOS WebView network failure', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
