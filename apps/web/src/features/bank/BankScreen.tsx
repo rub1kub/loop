@@ -560,6 +560,7 @@ export function BankScreen({
               />
               <BankWaveDetails
                 wave={queuePulse.wave}
+                now={clock}
                 onEnter={() => {
                   setWaveOpen(false);
                   if (
@@ -652,7 +653,15 @@ export function BankScreen({
   );
 }
 
-function BankWaveDetails({ wave, onEnter }: { wave: BankWave; onEnter: () => void }) {
+function BankWaveDetails({
+  wave,
+  now,
+  onEnter,
+}: {
+  wave: BankWave;
+  now: number;
+  onEnter: () => void;
+}) {
   const active = wave.state === 'active' || wave.state === 'goal_reached';
   const completed = wave.state === 'completed';
   const isLastMoveEvent = wave.id === LAST_MOVE_EVENT_ID;
@@ -684,8 +693,8 @@ function BankWaveDetails({ wave, onEnter }: { wave: BankWave; onEnter: () => voi
       {isLastMoveEvent ? (
         <div className="bank-event-rules">
           <div className="bank-last-move-clock" aria-live="polite">
-            <strong>{lastMoveClock(wave, Date.now())}</strong>
-            <span>{lastMoveClockLabel(wave, Date.now())}</span>
+            <strong>{lastMoveClock(wave, now)}</strong>
+            <span>{lastMoveClockLabel(wave, now)}</span>
           </div>
           <p className="bank-wave-rule">
             <strong>{formatGram(LAST_MOVE_PRIZE_NANO, 0)} GRAM за последний ход.</strong>
