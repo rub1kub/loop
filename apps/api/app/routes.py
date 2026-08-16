@@ -454,7 +454,12 @@ async def wallet_verify(
     try:
         onchain_key = await request.app.state.ton_client.get_wallet_public_key(body.address)
         if not secrets.compare_digest(onchain_key.lower(), body.public_key.lower()):
-            raise AuthenticationError("wallet public key mismatch")
+            # `publicKey` in the TON Connect account reply is an untrusted
+            # compatibility hint. The key returned by the wallet contract is
+            # authoritative, and the proof below still has to verify against
+            # that key. Rejecting the hint before checking the signature made
+            # otherwise valid wallets impossible to relink.
+            logger.info("wallet_public_key_hint_mismatch")
         address = verify_ton_proof(
             address=body.address,
             network=body.network,
@@ -475,21 +480,11 @@ async def wallet_verify(
             "из него любую транзакцию и попробуй снова.",
         ) from exc
     except AuthenticationError as exc:
-        reason = str(exc)
-        logger.info(
-            "wallet_verify_rejected",
-            reason=(
-                "public_key_mismatch"
-                if reason == "wallet public key mismatch"
-                else "ton_proof_invalid"
-            ),
-        )
-        detail = (
-            "Подключённый кошелёк вернул другой ключ. Отключи его в TON Connect и подключи снова."
-            if reason == "wallet public key mismatch"
-            else "Кошелёк не подтвердил владение. Отключи его в TON Connect и подключи снова."
-        )
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail) from exc
+        logger.info("wallet_verify_rejected", reason="ton_proof_invalid")
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Кошелёк не подтвердил владение. Отключи его в TON Connect и подключи снова.",
+        ) from exc
     existing = await db.scalar(
         select(Wallet).where(Wallet.network == body.network, Wallet.address == address)
     )

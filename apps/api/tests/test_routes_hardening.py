@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.models import ReferralAttribution, ReferralCode, User, Wallet
 from app.modules.bank.models import BankPosition, BankPositionStatus
 from app.modules.duel.models import DuelInvitation, DuelOffer, OfferState
+from app.security import AuthenticationError
 from app.ton import TonProviderError, verify_direct_accept_permit
 
 
@@ -587,7 +588,7 @@ async def test_a_wallet_held_by_a_live_position_says_so(app, client, monkeypatch
     assert any("Ѐ" <= character <= "ӿ" for character in detail)
 
 
-async def test_wallet_proof_failure_is_not_reported_as_an_expired_api_session(
+async def test_wallet_public_key_hint_does_not_override_the_authoritative_key(
     app, client, monkeypatch
 ) -> None:
     settings = get_settings()
@@ -599,7 +600,14 @@ async def test_wallet_proof_failure_is_not_reported_as_an_expired_api_session(
     async def public_key(_address: str) -> str:
         return "d3" * 32
 
+    verified_with: list[str] = []
+
+    def verify(**kwargs) -> str:
+        verified_with.append(kwargs["public_key_hex"])
+        return address.upper()
+
     monkeypatch.setattr(app.state.ton_client, "get_wallet_public_key", public_key)
+    monkeypatch.setattr("app.routes.verify_ton_proof", verify)
     response = await client.post(
         "/api/v1/wallet/verify",
         headers=headers,
@@ -617,23 +625,47 @@ async def test_wallet_proof_failure_is_not_reported_as_an_expired_api_session(
         },
     )
 
+    assert response.status_code == 200, response.text
+    assert verified_with == ["d3" * 32]
+
+
+async def test_wallet_proof_failure_is_not_reported_as_an_expired_api_session(
+    app, client, monkeypatch
+) -> None:
+    settings = get_settings()
+    address = "0:" + "e5" * 32
+    headers = await auth_headers(client, 700_102)
+    challenge = await client.post("/api/v1/wallet/challenge", headers=headers, json={})
+    payload = challenge.json()["payload"]
+
+    async def public_key(_address: str) -> str:
+        return "d6" * 32
+
+    def invalid_proof(**_kwargs) -> str:
+        raise AuthenticationError("invalid TON proof signature")
+
+    monkeypatch.setattr(app.state.ton_client, "get_wallet_public_key", public_key)
+    monkeypatch.setattr("app.routes.verify_ton_proof", invalid_proof)
+    request = {
+        "address": address,
+        "network": settings.ton_network_id,
+        "publicKey": "d6" * 32,
+        "proof": {
+            "timestamp": int(datetime.now(UTC).timestamp()),
+            "domain": {"lengthBytes": 9, "value": "loop.test"},
+            "signature": "s" * 88,
+            "payload": payload,
+        },
+    }
+
+    response = await client.post("/api/v1/wallet/verify", headers=headers, json=request)
     assert response.status_code == 422, response.text
-    assert "другой ключ" in response.json()["detail"]
+    assert "не подтвердил владение" in response.json()["detail"]
 
     replay = await client.post(
         "/api/v1/wallet/verify",
         headers=headers,
-        json={
-            "address": address,
-            "network": settings.ton_network_id,
-            "publicKey": "d4" * 32,
-            "proof": {
-                "timestamp": int(datetime.now(UTC).timestamp()),
-                "domain": {"lengthBytes": 9, "value": "loop.test"},
-                "signature": "s" * 88,
-                "payload": payload,
-            },
-        },
+        json=request,
     )
     assert replay.status_code == 409, replay.text
     assert "устарело" in replay.json()["detail"]
