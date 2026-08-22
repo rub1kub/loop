@@ -140,6 +140,7 @@ def public_feed_facts(outbox: NotificationOutbox, user: User | None) -> PublicFe
 
 
 def public_feed_caption(facts: PublicFeedFacts) -> str:
+    """Build the single Telegram caption used for a public activity event."""
     actor = html.escape(facts.actor)
     amount = format_gram(facts.amount_nano)
     if facts.event_kind == "bank_entry":
