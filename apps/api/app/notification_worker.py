@@ -18,7 +18,6 @@ from anyio import Path
 from sqlalchemy import select, update
 
 from .bank_momentum_notifications import KIND_BANK_MOMENTUM, bank_momentum_text
-from .bank_wave_notifications import KIND_BANK_WAVE, bank_wave_text, ensure_bank_wave_notifications
 from .config import Settings, get_settings
 from .database import create_database
 from .duel_notifications import (
@@ -52,6 +51,8 @@ logger = structlog.get_logger()
 HEARTBEAT_FILE = Path("/tmp/loop-notifier-heartbeat")  # noqa: S108
 MAX_BATCH = 20
 MAX_ATTEMPTS = 8
+KIND_BANK_WAVE = "bank_wave"
+RETIRED_BANK_MOMENTUM_EVENTS = frozenset({"wave_near"})
 
 
 async def fail_stale_claims(session_factory: Any) -> None:
@@ -159,16 +160,23 @@ async def deliver_plain_alert(
     payload: dict[str, Any],
 ) -> None:
     """A confirmed friend, or the last call before a duel expires unplayed."""
+    if kind == KIND_BANK_WAVE or (
+        kind == KIND_BANK_MOMENTUM
+        and str(payload.get("event", "")) in RETIRED_BANK_MOMENTUM_EVENTS
+    ):
+        await update_delivery(
+            session_factory,
+            outbox_id,
+            state="blocked",
+            error="event_notifications_retired",
+        )
+        return
     if user is None:
         await update_delivery(session_factory, outbox_id, state="failed", error="user_missing")
         return
     now = datetime.now(UTC)
     markup = match_notification_markup(settings)
-    if kind == KIND_BANK_WAVE:
-        text = bank_wave_text(payload)
-        effect = settings.result_effect_id.strip() if payload.get("event") == "closer" else ""
-        markup = bank_pulse_markup(settings)
-    elif kind == KIND_BANK_MOMENTUM:
+    if kind == KIND_BANK_MOMENTUM:
         text = bank_momentum_text(payload)
         effect = ""
         markup = bank_pulse_markup(settings)
@@ -194,9 +202,7 @@ async def deliver_plain_alert(
             lambda value: bot.send_message(
                 chat_id=user.telegram_id,
                 text=text,
-                parse_mode=(
-                    "HTML" if kind in (KIND_BANK_WAVE, KIND_BANK_MOMENTUM) else None
-                ),
+                parse_mode=("HTML" if kind == KIND_BANK_MOMENTUM else None),
                 reply_markup=markup,
                 message_effect_id=value,
             ),
@@ -568,7 +574,6 @@ async def process_once(
     settings: Settings,
 ) -> int:
     await fail_stale_claims(session_factory)
-    await ensure_bank_wave_notifications(session_factory, settings)
     outbox_ids = await claim_due(session_factory)
     for outbox_id in outbox_ids:
         await deliver_one(bot, session_factory, settings, outbox_id)
