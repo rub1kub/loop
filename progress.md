@@ -21,6 +21,13 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Implemented fixed, viewport-wide canvas/background, floating safe-area controls and a shared cover projection for rendering, pan constraints and hit testing. No visual board frame or letterbox region remains. Sepia deletion/reversion checks kept concise actions, connection errors and rule facts; removed motivational copy rather than replacing it with new slogans.
 - Verified the updated projection with 14 focused web tests and the full pixel browser file: 11 passed, native-touch WebKit injection skipped. Coverage now asserts edge-to-edge canvas/background at 320/390/430/768/1280 px, safe areas, drawing, cooldown, panning, sharing and return navigation. Inspected Chromium/WebKit screenshots and the prescribed game-client screenshot/state; no new browser errors. ESLint, Ruff and diff checks passed.
 
+### Production release, 29 September 2026 (Moscow)
+
+- User explicitly requested production activation. Published `5cbc449` and refinement `e73dde2` to GitHub, then deployed full runtime/web `e73dde2305685e6b56162af184fb49b5efe52598` through `scripts/deploy-vps.sh deploy` with the standard gates, backup and migration.
+- Staged only `LOOP_PIXEL_BATTLE_ENABLED=true`; a comparison verified all other production settings were preserved. The staged file was consumed by the release. No contract broadcast, BANK reopening, bot broadcast or financial operation was performed.
+- At 2026-09-28 21:51 UTC all five services were healthy; public assets, `/live`, `/ready`, bot/webhook status and matching runtime/web SHAs passed. The live feature probe verified enabled state, seven tables, migration head, snapshot serialization and JPEG encoding, and rolled back its transaction. Unauthenticated canvas returned 401, missing public card 404.
+- The standard gate passed API tests (dedicated PostgreSQL/Redis tests skipped without their isolated URLs), all 189 web tests, type checks, lint, formatting, production build and migration validation. Earlier isolated PostgreSQL/Redis tests remain documented above. Production npm audit returned zero vulnerabilities; GitHub push separately reported 12 dependency alerts, not triaged in this UI release. Physical-device Telegram sharing remains a manual check.
+
 ## Product decisions
 
 - LOOP is not a wallet and has no internal spendable balance. TON Connect is limited to external wallet ownership proofs, transaction confirmation, payouts, and asset checks.
