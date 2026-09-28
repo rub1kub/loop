@@ -52,12 +52,12 @@ test('draw, cooldown, pan, share and return to the existing screen', async ({ pa
     await window.advanceTime?.(31000);
   });
   await expect.poll(async () => (await game()).ready_in_seconds).toBe(0);
-  await page.getByRole('button', { name: 'ПОЗВАТЬ РИСОВАТЬ' }).click();
+  await page.getByRole('button', { name: 'Поделиться полотном' }).click();
   await expect(page.getByText('Карточка фрагмента готова')).toBeVisible();
   await page.getByRole('button', { name: 'О полотне', exact: true }).click();
   await expect(page.getByText('COMICS CREW', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Закрыть подробности' }).click();
-  await page.getByRole('button', { name: 'Всё полотно' }).click();
+  await page.getByRole('button', { name: 'В центр полотна' }).click();
   await page.screenshot({ path: `../../output/pixels/${testInfo.project.name}-drawing.png` });
   await page.getByRole('button', { name: 'Закрыть полотно', exact: true }).click();
   const announcement = page.getByRole('dialog', { name: 'Сообщение из канала' });
@@ -110,7 +110,7 @@ test('two-finger zoom changes the canvas without painting or zooming the page', 
 test('background and drawing controls stay inside narrow and tablet viewports', async ({
   page,
 }, testInfo) => {
-  for (const width of [320, 390, 768]) {
+  for (const width of [320, 390, 430, 768, 1280]) {
     await page.setViewportSize({ width, height: width === 320 ? 640 : 844 });
     await page.goto('/?screen=bank-closed');
     await page.evaluate(() => document.documentElement.style.setProperty('--safe-top', '56px'));
@@ -123,6 +123,11 @@ test('background and drawing controls stay inside narrow and tablet viewports', 
       );
       await expect(page.locator('.screen-stage')).toHaveCSS('opacity', '1');
       await expect(page.getByTestId('pixel-background')).toBeVisible();
+      const background = (await page.getByTestId('pixel-background').boundingBox())!;
+      expect(background.x).toBe(0);
+      expect(background.y).toBe(0);
+      expect(background.width).toBe(width);
+      expect(background.height).toBe(width === 320 ? 640 : 844);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
@@ -138,6 +143,10 @@ test('background and drawing controls stay inside narrow and tablet viewports', 
         path: `../../output/pixels/${testInfo.project.name}-background.png`,
       });
     await page.getByRole('button', { name: 'ПОЛОТНО', exact: true }).click();
+    const fullCanvas = (await page.getByTestId('pixel-canvas').boundingBox())!;
+    expect(fullCanvas).toEqual({ x: 0, y: 0, width, height: width === 320 ? 640 : 844 });
+    await expect(page.locator('.pixel-viewport')).toHaveCSS('border-radius', '0px');
+    await expect(page.getByText(/Приближай|выбирай · рисуй|ОБЩИЙ ФОН LOOP/)).toHaveCount(0);
     await page.getByRole('button', { name: 'Выбрать цвет', exact: true }).click();
     const swatches = page
       .getByRole('group', { name: 'Палитра' })

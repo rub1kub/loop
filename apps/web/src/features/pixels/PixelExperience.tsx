@@ -264,7 +264,7 @@ export function PixelExperience({
         bridge.shareMessage(result.prepared_message_id, () => undefined);
       } else {
         openPlatformLink(
-          `https://t.me/share/url?url=${encodeURIComponent(result.url)}&text=${encodeURIComponent('Помоги дорисовать — бесплатно, прямо в Telegram')}`,
+          `https://t.me/share/url?url=${encodeURIComponent(result.url)}&text=${encodeURIComponent('Полотно LOOP')}`,
           true,
         );
       }
@@ -304,12 +304,27 @@ export function PixelExperience({
           tabIndex={-1}
           ref={modal}
         >
+          <PixelCanvas
+            key={state.round.id}
+            state={state}
+            selection={selection}
+            onSelect={select}
+            focus={focus}
+          />
           <header className="pixel-header">
             <div>
-              <span className="pixel-eyebrow">{ended ? 'РАУНД ЗАВЕРШЁН' : 'ОБЩИЙ ФОН LOOP'}</span>
               <h1 id="pixel-title">ПОЛОТНО</h1>
+              {ended && <span className="pixel-eyebrow">АРХИВ</span>}
             </div>
             <div className="pixel-header-actions">
+              <button
+                className="pixel-icon-button"
+                aria-label={sharing ? 'Готовим карточку' : 'Поделиться полотном'}
+                onClick={() => void share()}
+                disabled={sharing}
+              >
+                <PaperPlaneTilt size={20} />
+              </button>
               <button
                 className="pixel-icon-button"
                 aria-label="О полотне"
@@ -327,32 +342,13 @@ export function PixelExperience({
               )}
             </div>
           </header>
-          <div className="pixel-round-line">
-            <span>
-              {date(state.round.starts_at)} — {date(state.round.ends_at)}
-            </span>
-            <span>{ended ? 'АРХИВ' : '1 ПИКСЕЛЬ / 30 СЕК'}</span>
-          </div>
-          <PixelCanvas
-            key={state.round.id}
-            state={state}
-            selection={selection}
-            onSelect={select}
-            focus={focus}
-          />
-          <div className="pixel-coordinate-line">
-            <span>
-              {selection.x + 1} : {selection.y + 1}
-            </span>
-            <span role="status">
-              {!game.connected
-                ? 'Восстанавливаем связь…'
-                : ended
-                  ? 'Рисунок сохранён'
-                  : 'Приближай · выбирай · рисуй'}
-            </span>
-          </div>
           <footer className="pixel-tools">
+            <div className="pixel-coordinate-line">
+              <span>
+                {selection.x + 1} : {selection.y + 1}
+              </span>
+              {!game.connected && <span role="status">Восстанавливаем связь…</span>}
+            </div>
             {(notice || game.error) && (
               <p className="pixel-notice" role="status">
                 {notice ?? game.error}
@@ -404,15 +400,11 @@ export function PixelExperience({
                 </button>
               </div>
             )}
-            <button className="pixel-share" onClick={() => void share()} disabled={sharing}>
-              <PaperPlaneTilt size={17} />
-              {sharing ? 'ГОТОВИМ КАРТОЧКУ…' : 'ПОЗВАТЬ РИСОВАТЬ'}
-            </button>
           </footer>
           {paletteOpen && (
             <div className="pixel-palette-panel" role="group" aria-label="Палитра">
               <div className="pixel-panel-title">
-                <span>ВЫБЕРИ ЦВЕТ</span>
+                <span>ЦВЕТ</span>
                 <button
                   className="pixel-icon-button"
                   aria-label="Закрыть палитру"
@@ -447,7 +439,7 @@ export function PixelExperience({
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="pixel-panel-title">
-                  <span>НАШЕ ПОЛОТНО</span>
+                  <span>ПОЛОТНО</span>
                   <button
                     className="pixel-icon-button"
                     aria-label="Закрыть подробности"
@@ -456,9 +448,12 @@ export function PixelExperience({
                     <X size={19} />
                   </button>
                 </div>
+                <p className="pixel-round-line">
+                  {date(state.round.starts_at)} — {date(state.round.ends_at)}
+                </p>
                 <p>
-                  Один бесплатный пиксель каждые 30 секунд. Рисуй своё и перекрашивай чужое. Ходы не
-                  копятся. У всех одинаковый лимит.
+                  Один пиксель каждые 30 секунд, бесплатно. Лимит одинаковый для всех, ходы не
+                  копятся. Чужие пиксели можно перекрашивать.
                 </p>
                 <p>
                   Раунд заканчивается в понедельник в 00:00 МСК. Рисунок остаётся в архиве,
@@ -486,9 +481,7 @@ export function PixelExperience({
                     ))}
                   </div>
                 )}
-                {scores?.teams.length === 0 && (
-                  <p className="pixel-muted">Первый рисунок команды начнёт её счёт.</p>
-                )}
+                {scores?.teams.length === 0 && <p>У команд пока нет очков.</p>}
                 {rounds.length > 0 && (
                   <details>
                     <summary>Архив рисунков</summary>

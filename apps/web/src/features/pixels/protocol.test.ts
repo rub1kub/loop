@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergePixelState, pixelStateSchema, type PixelState } from './protocol';
-import { pixelAt } from './geometry';
+import { constrainPixelView, pixelAt, pixelSide } from './geometry';
 
 const snapshot = (revision = 0): PixelState => ({
   enabled: true,
@@ -84,11 +84,37 @@ describe('Canvas hit testing', () => {
       ).toEqual({ x: 64, y: 64 });
     }
   });
-  it('ignores letterbox space and accounts for pan and zoom', () => {
-    expect(pixelAt({ x: 0, y: 0 }, 390, 600, { zoom: 1, x: 0, y: 0 })).toBeNull();
+  it('makes every screen corner drawable without letterbox space', () => {
+    for (const [width, height] of [
+      [320, 640],
+      [390, 844],
+      [768, 1024],
+      [1280, 720],
+    ]) {
+      for (const zoom of [1, 4, 16]) {
+        for (const pan of [-100000, 0, 100000]) {
+          const view = constrainPixelView({ zoom, x: pan, y: pan }, width, height);
+          expect(pixelSide(width, height, zoom)).toBeGreaterThanOrEqual(Math.max(width, height));
+          for (const point of [
+            { x: 0, y: 0 },
+            { x: width - 1, y: 0 },
+            { x: 0, y: height - 1 },
+            { x: width - 1, y: height - 1 },
+          ]) {
+            const pixel = pixelAt(point, width, height, view);
+            expect(pixel).not.toBeNull();
+            expect(pixel!.x).toBeGreaterThanOrEqual(0);
+            expect(pixel!.y).toBeLessThan(128);
+          }
+        }
+      }
+    }
+  });
+  it('accounts for pan and zoom and rejects points outside the board', () => {
     expect(pixelAt({ x: 245, y: 320 }, 390, 600, { zoom: 4, x: 50, y: 20 })).toEqual({
       x: 64,
       y: 64,
     });
+    expect(pixelAt({ x: -1000, y: -1000 }, 390, 600, { zoom: 1, x: 0, y: 0 })).toBeNull();
   });
 });

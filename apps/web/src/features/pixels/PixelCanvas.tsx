@@ -1,20 +1,11 @@
-import { ArrowsOutSimple, Minus, Plus } from '@phosphor-icons/react';
+import { Crosshair, Minus, Plus } from '@phosphor-icons/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PixelPoint, PixelState } from './protocol';
-import { pixelAt } from './geometry';
+import { constrainPixelView as constrain, pixelAt, pixelSide } from './geometry';
 
 type View = { zoom: number; x: number; y: number };
 const INITIAL_VIEW: View = { zoom: 1, x: 0, y: 0 };
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
-
-function constrain(view: View, width: number, height: number): View {
-  const side = Math.min(width - 24, height - 24) * view.zoom;
-  return {
-    ...view,
-    x: clamp(view.x, -Math.max(0, (side - width) / 2 + 24), Math.max(0, (side - width) / 2 + 24)),
-    y: clamp(view.y, -Math.max(0, (side - height) / 2 + 24), Math.max(0, (side - height) / 2 + 24)),
-  };
-}
 
 export function PixelCanvas({
   state,
@@ -80,7 +71,8 @@ export function PixelCanvas({
 
   const zoomAt = useCallback(
     (zoom: number | ((previous: number) => number), point?: PixelPoint) => {
-      setView((previous) => {
+      setView((stored) => {
+        const previous = constrain(stored, dimensions.width, dimensions.height);
         const nextZoom = clamp(typeof zoom === 'function' ? zoom(previous.zoom) : zoom, 1, 16);
         const focal = point ?? { x: dimensions.width / 2, y: dimensions.height / 2 };
         const ratio = nextZoom / previous.zoom;
@@ -106,7 +98,7 @@ export function PixelCanvas({
 
   useEffect(() => {
     if (!focus || background || dimensions.width < 2) return;
-    const side = Math.min(dimensions.width - 24, dimensions.height - 24) * 4;
+    const side = pixelSide(dimensions.width, dimensions.height, 4);
     const frame = window.requestAnimationFrame(() =>
       setView(
         constrain(
@@ -136,16 +128,12 @@ export function PixelCanvas({
     context.imageSmoothingEnabled = false;
     context.fillStyle = '#080809';
     context.fillRect(0, 0, width, height);
-    const side = background
-      ? Math.max(width, height)
-      : Math.min(width - 24, height - 24) * view.zoom;
-    const left = (width - side) / 2 + (background ? 0 : view.x);
-    const top = (height - side) / 2 + (background ? 0 : view.y);
+    const visibleView = constrain(view, width, height);
+    const side = pixelSide(width, height, background ? 1 : visibleView.zoom);
+    const left = (width - side) / 2 + (background ? 0 : visibleView.x);
+    const top = (height - side) / 2 + (background ? 0 : visibleView.y);
     context.drawImage(bitmap, left, top, side, side);
     if (background) return;
-    context.strokeStyle = '#38383c';
-    context.lineWidth = 1;
-    context.strokeRect(left, top, side, side);
     const unit = side / 128;
     if (unit >= 12) {
       context.beginPath();
@@ -162,6 +150,7 @@ export function PixelCanvas({
         }
       }
       context.strokeStyle = 'rgba(255,255,255,0.12)';
+      context.lineWidth = 1;
       context.stroke();
     }
     if (selection) {
@@ -214,7 +203,9 @@ export function PixelCanvas({
         ref={canvas}
         data-testid={background ? 'pixel-background' : 'pixel-canvas'}
         data-zoom={background ? undefined : view.zoom.toFixed(3)}
-        data-pan-x={background ? undefined : view.x.toFixed(2)}
+        data-pan-x={
+          background ? undefined : constrain(view, dimensions.width, dimensions.height).x.toFixed(2)
+        }
         aria-hidden={background || undefined}
         tabIndex={background ? -1 : 0}
         aria-label={
@@ -264,8 +255,9 @@ export function PixelCanvas({
                     gesture.current.moved = true;
                   if (gesture.current.moved) {
                     const last = gesture.current.last;
-                    setView((previous) =>
-                      constrain(
+                    setView((stored) => {
+                      const previous = constrain(stored, dimensions.width, dimensions.height);
+                      return constrain(
                         {
                           ...previous,
                           x: previous.x + point.x - last.x,
@@ -273,8 +265,8 @@ export function PixelCanvas({
                         },
                         dimensions.width,
                         dimensions.height,
-                      ),
-                    );
+                      );
+                    });
                   }
                 }
                 gesture.current.last = point;
@@ -286,7 +278,12 @@ export function PixelCanvas({
             : (event) => {
                 const point = localPoint(event);
                 if (pointers.current.size === 1 && !gesture.current.moved) {
-                  const selected = pixelAt(point, dimensions.width, dimensions.height, view);
+                  const selected = pixelAt(
+                    point,
+                    dimensions.width,
+                    dimensions.height,
+                    constrain(view, dimensions.width, dimensions.height),
+                  );
                   if (selected) {
                     onSelect?.(selected);
                     if (view.zoom < 4) zoomAt(4, point);
@@ -319,7 +316,7 @@ export function PixelCanvas({
                   y: clamp(selection.y + move.y, 0, 127),
                 };
                 onSelect?.(point);
-                const side = Math.min(dimensions.width - 24, dimensions.height - 24) * view.zoom;
+                const side = pixelSide(dimensions.width, dimensions.height, view.zoom);
                 setView((previous) =>
                   constrain(
                     {
@@ -350,8 +347,8 @@ export function PixelCanvas({
           >
             <Minus size={18} />
           </button>
-          <button aria-label="Всё полотно" onClick={() => setView(INITIAL_VIEW)}>
-            <ArrowsOutSimple size={18} />
+          <button aria-label="В центр полотна" onClick={() => setView(INITIAL_VIEW)}>
+            <Crosshair size={18} />
           </button>
         </div>
       )}

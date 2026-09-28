@@ -327,7 +327,7 @@ async def prepare_share(
                         id=f"pixel-{share.id}",
                         photo_url=image_url,
                         thumbnail_url=image_url,
-                        caption="Помоги дорисовать. Один пиксель каждые 30 секунд — бесплатно.",
+                        caption="Полотно LOOP · один пиксель каждые 30 секунд, бесплатно.",
                         reply_markup=InlineKeyboardMarkup(
                             inline_keyboard=[
                                 [InlineKeyboardButton(text="Открыть полотно", url=url)]

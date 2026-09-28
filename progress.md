@@ -13,6 +13,14 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - Verified PostgreSQL concurrency and Redis wakeups/leases, the previous-to-head migration and matching ORM schema, authenticated API rules and mobile browser flows. Pixel rules and release instructions are in `docs/pixel-battle.md`.
 - Verification: 30 API/PostgreSQL/Redis tests, 43 focused web tests, browser drawing/background/CSS-failure flows in Chromium and WebKit, plus native pinch injection in Chromium. Ruff, mypy, ESLint, TypeScript, production asset verification and changed-file formatting pass. WebKit native pinch injection is skipped; no physical-device or live Telegram share test has been performed.
 
+### Full-screen refinement before the requested production release
+
+- User requested edge-to-edge canvas/background and removal of motivational interface copy, using Sepia. Scope: viewport/layout and pixel copy; the shared 128×128 coordinate space and server rules remain unchanged.
+- Sepia refactor stage 1 (UI copy): loaded canonical SKILL, professional-pass, style-pass and model-fingerprints from Nanako0129/sepia. Author: unknown, executor: GPT version unknown; prose layers: none/prior. Venue: existing concise app actions and the user's explicit preference for minimal labels.
+- Findings: check 2 density — redundant «ОБЩИЙ ФОН LOOP» above «ПОЛОТНО»; check 3 relevance and check 8 templatedness — «Приближай · выбирай · рисуй»; check 3 — invitation filler «Помоги дорисовать» and empty-ranking prompt «Первый рисунок команды начнёт её счёт». Style scan: repeated imperative template; rhythm: none (short UI labels). Passed: 1, 4, 5, 6, 7, 9, 10. Verdict: refactor these strings, preserve rule facts and actionable error messages.
+- Implemented fixed, viewport-wide canvas/background, floating safe-area controls and a shared cover projection for rendering, pan constraints and hit testing. No visual board frame or letterbox region remains. Sepia deletion/reversion checks kept concise actions, connection errors and rule facts; removed motivational copy rather than replacing it with new slogans.
+- Verified the updated projection with 14 focused web tests and the full pixel browser file: 11 passed, native-touch WebKit injection skipped. Coverage now asserts edge-to-edge canvas/background at 320/390/430/768/1280 px, safe areas, drawing, cooldown, panning, sharing and return navigation. Inspected Chromium/WebKit screenshots and the prescribed game-client screenshot/state; no new browser errors. ESLint, Ruff and diff checks passed.
+
 ## Product decisions
 
 - LOOP is not a wallet and has no internal spendable balance. TON Connect is limited to external wallet ownership proofs, transaction confirmation, payouts, and asset checks.
