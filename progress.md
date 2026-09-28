@@ -5,6 +5,14 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 > [`docs/agents/current-state.md`](docs/agents/current-state.md); for agent work start at
 > [`docs/agents/README.md`](docs/agents/README.md).
 
+## 2026-09-29: pixel battle (implementation, not released)
+
+- User approved a free off-chain collaborative canvas, visible behind each main screen, with a separate full-screen drawing mode and a commit after verification.
+- Added a separate pixel module: durable 30-second player cooldown, serialized revisions, idempotent moves, weekly archives, area-time team scoring, auditable moderation and frozen share cards. Runtime activation is explicit via `LOOP_PIXEL_BATTLE_ENABLED` after migration.
+- Added the full-screen drawing mode, a subdued shared background, pan/pinch/keyboard controls, Telegram BackButton priority, reconnect-safe synchronization and share crops. No production state or contracts have been changed.
+- Verified PostgreSQL concurrency and Redis wakeups/leases, the previous-to-head migration and matching ORM schema, authenticated API rules and mobile browser flows. Pixel rules and release instructions are in `docs/pixel-battle.md`.
+- Verification: 30 API/PostgreSQL/Redis tests, 43 focused web tests, browser drawing/background/CSS-failure flows in Chromium and WebKit, plus native pinch injection in Chromium. Ruff, mypy, ESLint, TypeScript, production asset verification and changed-file formatting pass. WebKit native pinch injection is skipped; no physical-device or live Telegram share test has been performed.
+
 ## Product decisions
 
 - LOOP is not a wallet and has no internal spendable balance. TON Connect is limited to external wallet ownership proofs, transaction confirmation, payouts, and asset checks.

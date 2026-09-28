@@ -7,6 +7,7 @@ import {
   openPlatformLink,
   requestResultNotificationAccess,
   setHapticsEnabled,
+  setBackAction,
   sharePreparedResult,
   telegramInitData,
   telegramStartParam,
@@ -14,6 +15,33 @@ import {
 import type { TelegramWebApp } from './types';
 
 describe('Telegram launch compatibility', () => {
+  it('restores the underlying BackButton after leaving a priority overlay', () => {
+    const callbacks = new Set<() => void>();
+    const button = {
+      show: vi.fn(),
+      hide: vi.fn(),
+      onClick: (callback: () => void) => callbacks.add(callback),
+      offClick: (callback: () => void) => callbacks.delete(callback),
+    };
+    window.Telegram = { WebApp: { BackButton: button } as unknown as TelegramWebApp };
+    const team = vi.fn(),
+      pixels = vi.fn(),
+      refreshed = vi.fn();
+    const releaseTeam = setBackAction(team);
+    const releasePixel = setBackAction(pixels, 100);
+    const releaseRefresh = setBackAction(refreshed);
+    callbacks.forEach((callback) => callback());
+    expect(pixels).toHaveBeenCalledOnce();
+    expect(team).not.toHaveBeenCalled();
+    expect(refreshed).not.toHaveBeenCalled();
+    releasePixel();
+    callbacks.forEach((callback) => callback());
+    expect(refreshed).toHaveBeenCalledOnce();
+    releaseRefresh();
+    releaseTeam();
+    expect(callbacks.size).toBe(0);
+    expect(button.hide).toHaveBeenCalled();
+  });
   afterEach(() => {
     window.history.replaceState(null, '', '/');
     localStorage.removeItem('loop-haptics-enabled');

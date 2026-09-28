@@ -1,6 +1,16 @@
 import { z } from 'zod';
 
 import { telegramInitData } from './telegram';
+import {
+  pixelStateSchema,
+  pixelReceiptSchema,
+  pixelRoundSchema,
+  pixelScoresSchema,
+  pixelShareSchema,
+  pixelModerationSchema,
+  type PixelPlace,
+  type PixelPoint,
+} from './features/pixels/protocol';
 import type {
   ActionIntent,
   ChallengePreview,
@@ -311,6 +321,78 @@ const teamJoinResultSchema = z.object({
 
 const IDEMPOTENT_POSTS = /^\/(results\/[^/]+\/seen|bank\/positions\/\d+\/discard)$/;
 
+async function pixelRequest(path: string, init?: RequestInit, timeout = 15000): Promise<unknown> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  init?.signal?.addEventListener('abort', abort, { once: true });
+  if (init?.signal?.aborted) abort();
+  let expired = false;
+  const timer = window.setTimeout(() => {
+    expired = true;
+    abort();
+  }, timeout);
+  try {
+    return await request<unknown>(path, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (expired) throw new Error('Полотно не отвечает. Проверь связь и повтори', { cause: error });
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+    init?.signal?.removeEventListener('abort', abort);
+  }
+}
+
+export const pixelApi = {
+  async state(roundId?: string, after?: number, signal?: AbortSignal, wait = 0) {
+    const query = new URLSearchParams();
+    if (roundId) query.set('round_id', roundId);
+    if (after !== undefined) query.set('after', String(after));
+    if (wait) query.set('wait', String(wait));
+    return pixelStateSchema.parse(await pixelRequest(`/pixels?${query}`, { signal }, 30000));
+  },
+  async place(body: PixelPlace) {
+    return pixelReceiptSchema.parse(
+      await pixelRequest('/pixels/moves', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    );
+  },
+  async archive() {
+    return z.array(pixelRoundSchema).parse(await pixelRequest('/pixels/archive'));
+  },
+  async round(id: string) {
+    return pixelStateSchema.parse(await pixelRequest(`/pixels/rounds/${encodeURIComponent(id)}`));
+  },
+  async scores(id: string) {
+    return pixelScoresSchema.parse(
+      await pixelRequest(`/pixels/rounds/${encodeURIComponent(id)}/scores`),
+    );
+  },
+  async moderation(id: string) {
+    return pixelModerationSchema.parse(
+      await pixelRequest(`/pixels/rounds/${encodeURIComponent(id)}/moderation`),
+    );
+  },
+  async share(id: string, point: PixelPoint) {
+    return pixelShareSchema.parse(
+      await pixelRequest('/pixels/share', {
+        method: 'POST',
+        body: JSON.stringify({ round_id: id, ...point }),
+      }),
+    );
+  },
+  async sharedRegion(id: string) {
+    return z
+      .object({
+        round_id: z.string(),
+        x: z.number().min(0).max(127),
+        y: z.number().min(0).max(127),
+      })
+      .parse(await pixelRequest(`/pixels/shares/${encodeURIComponent(id)}`));
+  },
+};
+
 async function restoreSession(): Promise<boolean> {
   const initData = telegramInitData();
   if (!initData) return false;
@@ -348,6 +430,7 @@ async function request<T>(path: string, init?: RequestInit, retryUnauthorized = 
       networkError = undefined;
       if (!RETRYABLE_STATUSES.has(response.status) || attempt === attempts - 1) break;
     } catch (error) {
+      if (init?.signal?.aborted) throw error;
       response = undefined;
       networkError = error;
       if (attempt === attempts - 1) break;

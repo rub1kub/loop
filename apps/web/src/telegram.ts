@@ -161,19 +161,42 @@ export function haptic(
   else feedback.notificationOccurred(type);
 }
 
-export function setBackAction(action?: () => void): () => void {
-  if (isMockTelegram()) return () => undefined;
+const backActions: { action: () => void; priority: number }[] = [];
+let activeBack: { action: () => void; button: NonNullable<TelegramWebApp['BackButton']> } | null =
+  null;
+
+function syncBackAction(): void {
   const button = telegram()?.BackButton;
-  if (!button) return () => undefined;
-  if (!action) {
+  if (activeBack) activeBack.button.offClick(activeBack.action);
+  activeBack = null;
+  if (!button) return;
+  // A fullscreen canvas temporarily owns Back even if the underlying team screen refreshes.
+  const next = backActions.reduce<(typeof backActions)[number] | undefined>(
+    (best, candidate) => (!best || candidate.priority >= best.priority ? candidate : best),
+    undefined,
+  );
+  if (!next) {
     button.hide();
-    return () => undefined;
+    return;
   }
   button.show();
-  button.onClick(action);
+  button.onClick(next.action);
+  activeBack = { action: next.action, button };
+}
+
+export function setBackAction(action?: () => void, priority = 0): () => void {
+  if (isMockTelegram()) return () => undefined;
+  if (!action) {
+    if (!backActions.length) telegram()?.BackButton?.hide();
+    return () => undefined;
+  }
+  const entry = { action, priority };
+  backActions.push(entry);
+  syncBackAction();
   return () => {
-    button.offClick(action);
-    button.hide();
+    const index = backActions.indexOf(entry);
+    if (index !== -1) backActions.splice(index, 1);
+    syncBackAction();
   };
 }
 

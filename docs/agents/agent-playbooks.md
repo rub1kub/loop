@@ -64,6 +64,10 @@
 Перед изменением call site проверь обе стороны wire contract: Pydantic schema/API и Zod/TypeScript
 type.
 
+Полотно: `modules/pixels/`, `features/pixels/`, `tests/test_pixels*.py`, `e2e/pixels.spec.ts`.
+Правила, миграция, ограничения и минимальные проверки — [pixel-battle.md](../pixel-battle.md).
+Оно не связано с финансовыми начислениями команд и не требует тестовых транзакций TON.
+
 ## Стандартный рабочий цикл
 
 1. Прочитать `docs/agents/README.md` и один профильный документ.

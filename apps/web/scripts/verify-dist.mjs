@@ -14,8 +14,9 @@ const entrySource = await readFile(new URL(`../dist/${entryMatch[1]}`, import.me
 const assetNames = await readdir(assetsRoot);
 const stylesheets = assetNames.filter((name) => name.endsWith('.css')).sort();
 
-if (stylesheets.length !== 3) {
-  throw new Error(`Expected three surface stylesheets, found ${stylesheets.length}`);
+// Landing, control, Mini App and its isolated pixel mode must all be explicitly loaded.
+if (stylesheets.length !== 4) {
+  throw new Error(`Expected four surface stylesheets, found ${stylesheets.length}`);
 }
 
 for (const stylesheet of stylesheets) {

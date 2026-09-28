@@ -3,6 +3,7 @@ import { Buffer } from 'buffer';
 import controlStylesUrl from './control/control.css?url';
 import landingStylesUrl from './landing/landing.css?url';
 import miniAppStylesUrl from './styles.css?url';
+import pixelStylesUrl from './features/pixels/pixels.css?url';
 import { resolveWebSurface } from './surface';
 
 globalThis.Buffer = Buffer;
@@ -34,7 +35,17 @@ const surface = resolveWebSurface({
 if (surface === 'control') {
   void loadStylesheet(controlStylesUrl, surface).then(() => import('./control/bootstrap'));
 } else if (surface === 'mini-app') {
-  void loadStylesheet(miniAppStylesUrl, surface).then(() => import('./bootstrap'));
+  void Promise.all([
+    loadStylesheet(miniAppStylesUrl, surface),
+    loadStylesheet(pixelStylesUrl, 'mini-app-pixels').then(
+      () => {
+        document.documentElement.dataset.loopPixelStyles = 'ready';
+      },
+      () => {
+        document.documentElement.dataset.loopPixelStyles = 'unavailable';
+      },
+    ),
+  ]).then(() => import('./bootstrap'));
 } else {
   void loadStylesheet(landingStylesUrl, surface).then(() => import('./landing/bootstrap'));
 }

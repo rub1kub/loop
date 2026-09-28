@@ -127,6 +127,7 @@ vi.mock('./features/bank/BankScreen', () => ({ BankScreen: () => <div>BANK</div>
 vi.mock('./features/duel/DuelScreen', () => ({ DuelScreen: () => null }));
 vi.mock('./features/rating/RatingScreen', () => ({ RatingScreen: () => null }));
 vi.mock('./features/results/ResultSheet', () => ({ ResultSheet: () => null }));
+vi.mock('./features/pixels/PixelExperience', () => ({ PixelExperience: () => null }));
 
 describe('App wallet restoration', () => {
   beforeEach(() => {

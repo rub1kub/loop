@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://loop:loop@localhost:5432/loop"
     redis_url: str = "redis://localhost:6379/0"
     auto_create_schema: bool = False
+    # Activate explicitly for the new season, after applying the pixel migration.
+    pixel_battle_enabled: bool = False
 
     bot_token: SecretStr = SecretStr("")
     bot_username: str = ""

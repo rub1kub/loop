@@ -17,6 +17,8 @@ import { DuelScreen } from './features/duel/DuelScreen';
 import { RatingScreen } from './features/rating/RatingScreen';
 import { TeamsScreen } from './features/teams/TeamsScreen';
 import { ResultSheet } from './features/results/ResultSheet';
+import { PixelExperience } from './features/pixels/PixelExperience';
+import { PixelBoundary } from './features/pixels/PixelBoundary';
 import { installInteractionGuards } from './interactionGuards';
 import {
   haptic,
@@ -37,6 +39,7 @@ export default function App() {
   const connectionRestored = useIsConnectionRestored();
   const [tonConnectUI] = useTonConnectUI();
   const [proofEpoch, setProofEpoch] = useState(0);
+  const [pixelOpen, setPixelOpen] = useState(false);
   const profileUserId = state.profile?.user.id ?? null;
   const verificationInFlight = useRef<string | null>(null);
   const staleSessionHandled = useRef<string | null>(null);
@@ -297,11 +300,22 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      {document.documentElement.dataset.loopPixelStyles !== 'unavailable' && (
+        <PixelBoundary onClose={() => setPixelOpen(false)}>
+          <PixelExperience
+            userId={state.profile.user.id}
+            open={pixelOpen}
+            onOpenChange={setPixelOpen}
+            blocked={state.results.some((card) => card.seen_at === null)}
+          />
+        </PixelBoundary>
+      )}
       {state.profile?.announcement && <Announcement data={state.profile.announcement} />}
       <AnimatePresence mode="wait">
         <motion.div
           key={state.activeTab}
           className="screen-stage"
+          inert={pixelOpen}
           initial={{ opacity: 0, x: 8, scale: 0.995 }}
           animate={{ opacity: 1, x: 0, scale: 1 }}
           exit={{ opacity: 0, x: -5, scale: 0.995 }}
@@ -312,13 +326,15 @@ export default function App() {
       </AnimatePresence>
 
       <Celebration />
-      <TabBar
-        active={state.activeTab}
-        onChange={(tab) => {
-          haptic('selection');
-          state.setTab(tab);
-        }}
-      />
+      {!pixelOpen && (
+        <TabBar
+          active={state.activeTab}
+          onChange={(tab) => {
+            haptic('selection');
+            state.setTab(tab);
+          }}
+        />
+      )}
 
       <AnimatePresence>
         {state.results.find((card) => card.seen_at === null) && (
