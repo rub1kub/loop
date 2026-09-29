@@ -12,28 +12,37 @@
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  /* System safe areas and Telegram controls are consecutive, not overlapping.
+     env() and tg-safe-area describe the same device inset: count that only once. */
   --safe-top: max(
-    env(safe-area-inset-top),
-    var(--tg-safe-area-inset-top, 0px),
-    var(--tg-content-safe-area-inset-top, 0px),
+    calc(
+      max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) +
+        max(
+          var(--tg-content-safe-area-inset-top, 0px),
+          var(--loop-content-safe-area-inset-top, 0px)
+        )
+    ),
     var(--loop-safe-area-inset-top, 0px)
   );
   --safe-right: max(
-    env(safe-area-inset-right),
-    var(--tg-safe-area-inset-right, 0px),
-    var(--tg-content-safe-area-inset-right, 0px),
+    calc(
+      max(env(safe-area-inset-right, 0px), var(--tg-safe-area-inset-right, 0px)) +
+        var(--tg-content-safe-area-inset-right, 0px)
+    ),
     var(--loop-safe-area-inset-right, 0px)
   );
   --safe-bottom: max(
-    env(safe-area-inset-bottom),
-    var(--tg-safe-area-inset-bottom, 0px),
-    var(--tg-content-safe-area-inset-bottom, 0px),
+    calc(
+      max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px)) +
+        var(--tg-content-safe-area-inset-bottom, 0px)
+    ),
     var(--loop-safe-area-inset-bottom, 0px)
   );
   --safe-left: max(
-    env(safe-area-inset-left),
-    var(--tg-safe-area-inset-left, 0px),
-    var(--tg-content-safe-area-inset-left, 0px),
+    calc(
+      max(env(safe-area-inset-left, 0px), var(--tg-safe-area-inset-left, 0px)) +
+        var(--tg-content-safe-area-inset-left, 0px)
+    ),
     var(--loop-safe-area-inset-left, 0px)
   );
   --motion-press: 80ms;

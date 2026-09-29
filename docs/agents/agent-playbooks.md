@@ -97,6 +97,9 @@ type.
 - Сначала воспроизведи на точном viewport/platform.
 - Не исправляй iOS keyboard глобальным scroll страницы.
 - Проверь Telegram top controls, bottom safe area, tab bar и sheet одновременно.
+- Safe area устройства и `contentSafeAreaInset` Telegram складываются: `max` между ними
+  оставит кнопки под шапкой. `env()` и `safeAreaInset` описывают один системный отступ и
+  не складываются друг с другом. Для fullscreen проверяй оверлей Telegram и поздние inset-события.
 - Протести минимум 320, 390, 430 px и desktop; WebKit обязателен.
 - Проверь reduced motion и отсутствие горизонтального overflow.
 

@@ -28,6 +28,26 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
 - At 2026-09-28 21:51 UTC all five services were healthy; public assets, `/live`, `/ready`, bot/webhook status and matching runtime/web SHAs passed. The live feature probe verified enabled state, seven tables, migration head, snapshot serialization and JPEG encoding, and rolled back its transaction. Unauthenticated canvas returned 401, missing public card 404.
 - The standard gate passed API tests (dedicated PostgreSQL/Redis tests skipped without their isolated URLs), all 189 web tests, type checks, lint, formatting, production build and migration validation. Earlier isolated PostgreSQL/Redis tests remain documented above. Production npm audit returned zero vulnerabilities; GitHub push separately reported 12 dependency alerts, not triaged in this UI release. Physical-device Telegram sharing remains a manual check.
 
+### 2026-09-29: Telegram fullscreen safe-area correction
+
+- Reproduced the pixel title/actions overlapping simulated native Telegram controls at 390×844.
+  Previous checks only set a single CSS top inset and did not model the separate status-bar and
+  Telegram-controls rows. Confirmed additive semantics against Telegram's iOS implementation.
+- Changed shared native/CSS safe-area calculation to device + content, with a 56 px controls-row
+  fallback while fullscreen events arrive. Browser `env()` and native device values remain
+  alternatives, not an extra sum. Preserved keyboard height freezing and protected top boundary.
+- Added unit regressions for all edges, delayed/zero native content insets, fullscreen transitions
+  and ordinary browsers; the three relevant assertions failed before the fix. Focused web tests:
+  48 passed. Chromium/WebKit native-chrome simulation verifies 320/390/430/768 px, launcher and
+  header hit targets, late inset events, CSS-first insets and full-viewport canvas. Inspected both
+  browser screenshots and the required game-client screenshot/state; no new console errors.
+- Existing WebKit pixel suite: 3 passed, native pinch injection skipped. The legacy
+  `modes.stress.spec.ts` cases reach tab navigation but time out on an undismissed mock announcement;
+  this unrelated fixture issue was not changed. After dismissing that announcement, separate
+  Chromium/WebKit checks cover 20 keyboard resize cycles and six tab transitions.
+- TypeScript, changed-file ESLint, Prettier and diff checks pass. Frontend-only release pending;
+  physical-device Telegram remains a manual check. Browser CLI logs/screenshots stay in `output/`.
+
 ## Product decisions
 
 - LOOP is not a wallet and has no internal spendable balance. TON Connect is limited to external wallet ownership proofs, transaction confirmation, payouts, and asset checks.

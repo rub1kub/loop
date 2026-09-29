@@ -67,14 +67,14 @@ describe('Telegram keyboard viewport behavior', () => {
     cleanup();
   });
 
-  it('uses Telegram stable height and the largest native safe-area inset', () => {
+  it('adds Telegram content insets to device insets on every edge', () => {
     const onEvent = vi.fn();
     const offEvent = vi.fn();
     window.Telegram = {
       WebApp: {
         viewportStableHeight: 720,
-        safeAreaInset: { top: 44, right: 0, bottom: 34, left: 0 },
-        contentSafeAreaInset: { top: 56, right: 8, bottom: 0, left: 8 },
+        safeAreaInset: { top: 44, right: 12, bottom: 34, left: 16 },
+        contentSafeAreaInset: { top: 56, right: 8, bottom: 10, left: 8 },
         onEvent,
         offEvent,
       } as unknown as TelegramWebApp,
@@ -83,10 +83,16 @@ describe('Telegram keyboard viewport behavior', () => {
     const cleanup = installViewportBehavior();
     expect(document.documentElement.style.getPropertyValue('--loop-stable-height')).toBe('720px');
     expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
-      '56px',
+      '100px',
     );
     expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-bottom')).toBe(
-      '34px',
+      '44px',
+    );
+    expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-right')).toBe(
+      '20px',
+    );
+    expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-left')).toBe(
+      '24px',
     );
     expect(onEvent).toHaveBeenCalledWith('contentSafeAreaChanged', expect.any(Function));
 
@@ -94,13 +100,12 @@ describe('Telegram keyboard viewport behavior', () => {
     expect(offEvent).toHaveBeenCalledWith('contentSafeAreaChanged', expect.any(Function));
   });
 
-  it('keeps fullscreen content below Telegram overlay controls', () => {
+  it('reserves a fullscreen controls row while Telegram content insets are missing', () => {
     let onFullscreenChanged: (() => void) | undefined;
     window.Telegram = {
       WebApp: {
         isFullscreen: false,
         safeAreaInset: { top: 44, right: 0, bottom: 34, left: 0 },
-        contentSafeAreaInset: { top: 56, right: 0, bottom: 0, left: 0 },
         onEvent: (event: string, callback: (payload?: { isStateStable?: boolean }) => void) => {
           if (event === 'fullscreenChanged') onFullscreenChanged = () => callback();
         },
@@ -109,19 +114,54 @@ describe('Telegram keyboard viewport behavior', () => {
 
     const cleanup = installViewportBehavior();
     expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
-      '56px',
+      '44px',
     );
     window.Telegram.WebApp.isFullscreen = true;
     onFullscreenChanged?.();
     expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
-      '72px',
+      '100px',
     );
     window.Telegram.WebApp.isFullscreen = false;
     window.Telegram.WebApp.safeAreaInset = { top: 44, right: 0, bottom: 34, left: 0 };
-    window.Telegram.WebApp.contentSafeAreaInset = { top: 56, right: 0, bottom: 0, left: 0 };
+    window.Telegram.WebApp.contentSafeAreaInset = { top: 0, right: 0, bottom: 0, left: 0 };
     onFullscreenChanged?.();
     expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
-      '72px',
+      '100px',
+    );
+    cleanup();
+  });
+
+  it('follows late native inset events without moving back under the controls', () => {
+    const handlers = new Map<string, () => void>();
+    window.Telegram = {
+      WebApp: {
+        isFullscreen: true,
+        safeAreaInset: { top: 59, right: 0, bottom: 34, left: 0 },
+        contentSafeAreaInset: { top: 0, right: 0, bottom: 0, left: 0 },
+        onEvent: (event: string, callback: () => void) => handlers.set(event, callback),
+      } as unknown as TelegramWebApp,
+    };
+    const cleanup = installViewportBehavior();
+    const top = () => document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top');
+    expect(top()).toBe('115px');
+    window.Telegram.WebApp.contentSafeAreaInset!.top = 64;
+    handlers.get('contentSafeAreaChanged')?.();
+    expect(top()).toBe('123px');
+    window.Telegram.WebApp.safeAreaInset!.top = 0;
+    window.Telegram.WebApp.contentSafeAreaInset!.top = 0;
+    handlers.get('safeAreaChanged')?.();
+    expect(top()).toBe('123px');
+    cleanup();
+    expect(top()).toBe('');
+    expect(
+      document.documentElement.style.getPropertyValue('--loop-content-safe-area-inset-top'),
+    ).toBe('');
+  });
+
+  it('does not reserve native fullscreen controls in a regular browser', () => {
+    const cleanup = installViewportBehavior();
+    expect(document.documentElement.style.getPropertyValue('--loop-safe-area-inset-top')).toBe(
+      '0px',
     );
     cleanup();
   });

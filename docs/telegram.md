@@ -16,6 +16,17 @@ The application reads Telegram's signed launch payload immediately and loads the
   background and bottom bar are restored to `#000000` after theme, activation and fullscreen
   events.
 
+The system safe area and Telegram's content safe area are **additive**: Telegram places its
+fullscreen controls below the status bar. `viewport.ts` sums the two native insets; `styles.css`
+uses `max(env(safe-area-inset-*), --tg-safe-area-inset-*)` for the device portion, then adds the
+Telegram content portion. Do not take the maximum of device and content insets, and do not
+count the same device inset twice. Until fullscreen content insets arrive, reserve a 56 px
+controls row in addition to the device inset. Keep the established top boundary during transient
+keyboard/fullscreen events. These constraints apply to interactive UI, including the pixel
+launcher and floating header; canvas/background still cover the entire viewport.
+See [Telegram's safe-area definitions](https://core.telegram.org/bots/webapps#safeareainset) and
+the [iOS fullscreen layout](https://github.com/TelegramMessenger/Telegram-iOS/blob/master/submodules/WebUI/Sources/WebAppController.swift).
+
 Only the raw signed `initData` string is sent to `/api/v1/auth/telegram`. It comes from `Telegram.WebApp.initData` when the bridge is ready, or from Telegram's original `tgWebAppData` launch parameter as a desktop fallback. The API validates the Bot API HMAC construction, duplicate keys, age, and future skew before issuing a bounded session. `initDataUnsafe` and `tgWebAppStartParam` are display hints until the server verifies the signed payload. Raw authentication data is not persisted in browser storage.
 
 ## Inline DUEL

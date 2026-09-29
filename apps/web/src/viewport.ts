@@ -2,7 +2,7 @@ import type { TelegramWebApp } from './types';
 
 const FOCUS_SETTLE_MS = 360;
 const POINTER_SETTLE_MS = 80;
-const FULLSCREEN_CONTROLS_TOP_INSET_PX = 72;
+const FULLSCREEN_CONTROLS_TOP_INSET_PX = 56;
 const COMPACT_STABLE_HEIGHT_PX = 720;
 
 function isEditable(element: Element | null): element is HTMLElement {
@@ -64,18 +64,20 @@ export function installViewportBehavior(): () => void {
     const app = window.Telegram?.WebApp;
     const device = app?.safeAreaInset;
     const content = app?.contentSafeAreaInset;
+    // Telegram's controls start below the system safe area, not at the screen
+    // origin. Reserve a controls row even while fullscreen inset events are late.
+    const controlsTop = content?.top || (app?.isFullscreen ? FULLSCREEN_CONTROLS_TOP_INSET_PX : 0);
     const inset = (side: 'top' | 'right' | 'bottom' | 'left') =>
-      Math.max(
-        device?.[side] ?? 0,
-        content?.[side] ?? 0,
-        side === 'top' && app?.isFullscreen ? FULLSCREEN_CONTROLS_TOP_INSET_PX : 0,
-      );
+      (device?.[side] ?? 0) + (side === 'top' ? controlsTop : (content?.[side] ?? 0));
 
     // Telegram can briefly report a smaller top inset while iOS opens its keyboard
     // or changes fullscreen state. A session must never move content back under the
     // native controls after a larger safe boundary has already been established.
     protectedTopInset = Math.max(protectedTopInset, inset('top'));
 
+    // CSS also adds this to env(safe-area-inset-top) when the native bridge has
+    // not reported the device inset yet. Never add the device safe area twice.
+    root.style.setProperty('--loop-content-safe-area-inset-top', `${controlsTop}px`);
     root.style.setProperty('--loop-safe-area-inset-top', `${protectedTopInset}px`);
     root.style.setProperty('--loop-safe-area-inset-right', `${inset('right')}px`);
     root.style.setProperty('--loop-safe-area-inset-bottom', `${inset('bottom')}px`);
@@ -224,6 +226,7 @@ export function installViewportBehavior(): () => void {
     root.style.removeProperty('--loop-stable-height');
     root.style.removeProperty('--loop-visual-height');
     root.style.removeProperty('--loop-visual-page-top');
+    root.style.removeProperty('--loop-content-safe-area-inset-top');
     root.style.removeProperty('--loop-safe-area-inset-top');
     root.style.removeProperty('--loop-safe-area-inset-right');
     root.style.removeProperty('--loop-safe-area-inset-bottom');
