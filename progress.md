@@ -77,6 +77,12 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   local PostgreSQL/Redis services are not running, so their unchanged lock tests were not
   repeated; previous isolated verification remains above. Physical Telegram device check remains
   manual. Production release follows the standard full-runtime gate because the API rule changed.
+- Released runtime/web `8f66e708c424573688916dc3102cf5aa12aaf609` through the standard full gate
+  (192 web tests, API tests with nine infrastructure skips, lint/types/build/migration check and
+  backup). At 2026-09-29 09:41 UTC both live SHAs, five healthy services, bot/webhook and 12 public
+  dependencies passed. Read-only live probe confirmed enabled state, a valid active-round snapshot
+  and the two-second rule; the live board had one colored cell, not the mock artwork. No staged
+  configuration, schema change, contract broadcast, financial action or announcement was applied.
 
 ## Product decisions
 
