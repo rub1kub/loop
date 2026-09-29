@@ -1,5 +1,6 @@
 import type { PixelPlace, PixelReceipt, PixelState } from './protocol';
 
+const cooldownSeconds = 2;
 const palette = [
   '#101012',
   '#ffffff',
@@ -79,7 +80,7 @@ export function demoPixelState(): PixelState {
     server_time: new Date(clock()).toISOString(),
     ready_at: readyAt ? new Date(readyAt).toISOString() : null,
     size: 128,
-    cooldown_seconds: 30,
+    cooldown_seconds: cooldownSeconds,
     palette,
     pixels: [...pixels].map((c) => c.toString(16)).join(''),
     changes: [],
@@ -94,7 +95,7 @@ export function demoPlace(body: PixelPlace): PixelReceipt {
   if (pixels[index] === body.color) throw new Error('Здесь уже этот цвет');
   pixels[index] = body.color;
   revision++;
-  readyAt = clock() + 30000;
+  readyAt = clock() + cooldownSeconds * 1000;
   const result = {
     revision,
     index,

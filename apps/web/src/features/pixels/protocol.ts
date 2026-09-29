@@ -18,7 +18,7 @@ export const pixelStateSchema = z.object({
   server_time: z.string(),
   ready_at: z.string().nullable(),
   size: z.literal(128),
-  cooldown_seconds: z.literal(30),
+  cooldown_seconds: z.number().int().positive(),
   palette: z.array(z.string().regex(/^#[0-9a-f]{6}$/i)).max(16),
   pixels: z
     .string()

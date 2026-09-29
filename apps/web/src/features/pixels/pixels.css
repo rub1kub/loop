@@ -4,7 +4,7 @@
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  opacity: 0.13;
+  opacity: 0.32;
   contain: strict;
 }
 .pixel-background::after {
@@ -25,6 +25,17 @@
 }
 .app-shell:has(.pixel-background) > .screen-stage {
   z-index: 1;
+}
+@supports (mask-mode: luminance) {
+  /* The jar artwork has an opaque black backdrop. Keep the glass, not its rectangle. */
+  .app-shell:has(.pixel-background) .bank-jar-shell,
+  .app-shell:has(.pixel-background) .bank-jar-glass {
+    mask-image: url('/assets/empty-jar.webp');
+    mask-mode: luminance;
+    mask-size: contain;
+    mask-position: center;
+    mask-repeat: no-repeat;
+  }
 }
 .app-shell:has(.pixel-background) .screen {
   padding-top: calc(var(--safe-top) + 65px);

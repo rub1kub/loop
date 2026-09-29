@@ -24,7 +24,7 @@ const board = (): PixelState => ({
   server_time: '2026-09-28T12:00:00Z',
   ready_at: null,
   size: 128,
-  cooldown_seconds: 30,
+  cooldown_seconds: 2,
   palette: Array<string>(16).fill('#000000'),
   pixels: '0'.repeat(16384),
   changes: [],
@@ -35,7 +35,7 @@ const receipt: PixelReceipt = {
   index: 1300,
   color: 4,
   server_time: '2026-09-28T12:00:01Z',
-  ready_at: '2026-09-28T12:00:31Z',
+  ready_at: '2026-09-28T12:00:03Z',
   replayed: false,
 };
 beforeEach(() => {

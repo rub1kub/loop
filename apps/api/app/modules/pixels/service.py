@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from math import ceil
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -10,6 +11,7 @@ from ...models import User
 from ..teams.models import Team, TeamMembership
 from ..teams.service import as_utc, team_week_window
 from .models import PixelCell, PixelMove, PixelPlayer, PixelRound, PixelTeamScore
+from .rules import COOLDOWN_SECONDS
 from .schemas import (
     PixelChange,
     PixelPlaceRequest,
@@ -21,7 +23,7 @@ from .schemas import (
 )
 
 SIZE = 128
-COOLDOWN = timedelta(seconds=30)
+COOLDOWN = timedelta(seconds=COOLDOWN_SECONDS)
 PALETTE = (
     "#101012",
     "#ffffff",
@@ -203,7 +205,7 @@ async def place(db: AsyncSession, user: User, body: PixelPlaceRequest) -> PixelR
         raise HTTPException(409, "Этот раунд завершён. Открой новое полотно")
     player = await db.get(PixelPlayer, user.id, populate_existing=True)
     if player and as_utc(player.ready_at) > at:
-        seconds = max(1, int((as_utc(player.ready_at) - at).total_seconds()) + 1)
+        seconds = max(1, ceil((as_utc(player.ready_at) - at).total_seconds()))
         raise HTTPException(
             429, "Следующий пиксель ещё не готов", headers={"Retry-After": str(seconds)}
         )

@@ -14,7 +14,7 @@ const snapshot = (revision = 0): PixelState => ({
   server_time: '2026-09-28T12:00:00Z',
   ready_at: null,
   size: 128,
-  cooldown_seconds: 30,
+  cooldown_seconds: 2,
   palette: Array<string>(16).fill('#000000'),
   pixels: '0'.repeat(16384),
   changes: [],
@@ -43,7 +43,7 @@ describe('Pixel synchronization', () => {
     const current = {
       ...snapshot(1),
       server_time: '2026-09-28T12:00:05Z',
-      ready_at: '2026-09-28T12:00:35Z',
+      ready_at: '2026-09-28T12:00:07Z',
     };
     expect(mergePixelState(current, snapshot()).ready_at).toBe(current.ready_at);
   });
@@ -69,6 +69,16 @@ describe('Pixel synchronization', () => {
         changes: [{ revision: 1, index: 16384, color: 1 }],
       }).success,
     ).toBe(false);
+  });
+  it('uses the server cooldown and accepts the previous interval during a rollout', () => {
+    for (const cooldown_seconds of [2, 30]) {
+      expect(pixelStateSchema.parse({ ...snapshot(), cooldown_seconds }).cooldown_seconds).toBe(
+        cooldown_seconds,
+      );
+    }
+    for (const cooldown_seconds of [0, -2, 1.5]) {
+      expect(pixelStateSchema.safeParse({ ...snapshot(), cooldown_seconds }).success).toBe(false);
+    }
   });
 });
 

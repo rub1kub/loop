@@ -45,6 +45,11 @@ const date = (value: string) =>
     month: 'short',
     timeZone: 'Europe/Moscow',
   });
+const seconds = new Intl.NumberFormat('ru-RU', {
+  style: 'unit',
+  unit: 'second',
+  unitDisplay: 'long',
+});
 
 export function PixelExperience({
   userId,
@@ -452,8 +457,8 @@ export function PixelExperience({
                   {date(state.round.starts_at)} — {date(state.round.ends_at)}
                 </p>
                 <p>
-                  Один пиксель каждые 30 секунд, бесплатно. Лимит одинаковый для всех, ходы не
-                  копятся. Чужие пиксели можно перекрашивать.
+                  Один пиксель каждые {seconds.format(state.cooldown_seconds)}, бесплатно. Лимит
+                  одинаковый для всех, ходы не копятся. Чужие пиксели можно перекрашивать.
                 </p>
                 <p>
                   Раунд заканчивается в понедельник в 00:00 МСК. Рисунок остаётся в архиве,

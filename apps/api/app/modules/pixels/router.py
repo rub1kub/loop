@@ -14,6 +14,7 @@ from ...dependencies import Config, ControlWallet, CurrentUser, Db, require_full
 from ..teams.service import as_utc
 from .card import render_card
 from .models import PixelModeration, PixelRound, PixelShare
+from .rules import COOLDOWN_SECONDS
 from .schemas import (
     PixelModerationRequest,
     PixelModerationView,
@@ -327,7 +328,9 @@ async def prepare_share(
                         id=f"pixel-{share.id}",
                         photo_url=image_url,
                         thumbnail_url=image_url,
-                        caption="Полотно LOOP · один пиксель каждые 30 секунд, бесплатно.",
+                        caption=(
+                            f"Полотно LOOP · один пиксель раз в {COOLDOWN_SECONDS} с, бесплатно."
+                        ),
                         reply_markup=InlineKeyboardMarkup(
                             inline_keyboard=[
                                 [InlineKeyboardButton(text="Открыть полотно", url=url)]

@@ -49,9 +49,14 @@ test('draw, cooldown, pan, share and return to the existing screen', async ({ pa
   expect((await game()).selected).toEqual(selected);
   expect(await canvas.getAttribute('data-pan-x')).not.toBe(panBefore);
   await page.evaluate(async () => {
-    await window.advanceTime?.(31000);
+    await window.advanceTime?.(2000);
   });
   await expect.poll(async () => (await game()).ready_in_seconds).toBe(0);
+  await page.getByRole('button', { name: 'Выбрать цвет', exact: true }).click();
+  await page.getByRole('button', { name: 'Синий', exact: true }).click();
+  await page.getByRole('button', { name: 'ПОСТАВИТЬ ПИКСЕЛЬ', exact: true }).click();
+  await expect.poll(async () => (await game()).revision).toBe(before.revision + 2);
+  expect((await game()).ready_in_seconds).toBeLessThanOrEqual(2);
   await page.getByRole('button', { name: 'Поделиться полотном' }).click();
   await expect(page.getByText('Карточка фрагмента готова')).toBeVisible();
   await page.getByRole('button', { name: 'О полотне', exact: true }).click();
@@ -110,11 +115,24 @@ test('two-finger zoom changes the canvas without painting or zooming the page', 
 test('background and drawing controls stay inside narrow and tablet viewports', async ({
   page,
 }, testInfo) => {
+  test.setTimeout(60_000); // Five viewport sizes, each with all five tab transitions.
   for (const width of [320, 390, 430, 768, 1280]) {
     await page.setViewportSize({ width, height: width === 320 ? 640 : 844 });
     await page.goto('/?screen=bank-closed');
-    await page.evaluate(() => document.documentElement.style.setProperty('--safe-top', '56px'));
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty('--safe-top', '115px');
+      document.documentElement.style.setProperty('--safe-bottom', '34px');
+    });
     await expect(page.getByRole('button', { name: 'ПОЛОТНО', exact: true })).toBeVisible();
+    await expect(page.locator('.bank-season-closed-copy')).toHaveCSS('opacity', '1');
+    const position = (await page
+      .getByRole('button', { name: 'МОЯ ПОЗИЦИЯ', exact: true })
+      .boundingBox())!;
+    const navigation = (await page.getByRole('navigation').boundingBox())!;
+    expect(position.y + position.height).toBeLessThanOrEqual(navigation.y);
+    expect(await page.locator('.bank-screen').evaluate((screen) => screen.scrollTop)).toBe(0);
+    await expect(page.locator('.pixel-background')).toHaveCSS('opacity', '0.32');
+    await expect(page.locator('.bank-jar-shell')).toHaveCSS('mask-mode', 'luminance');
     for (const tab of ['BANK', 'DUEL', 'РЕЙТИНГ', 'КОМАНДЫ', 'ПРОФИЛЬ']) {
       await page.getByRole('button', { name: tab, exact: true }).click();
       await expect(page.getByRole('button', { name: tab, exact: true })).toHaveAttribute(

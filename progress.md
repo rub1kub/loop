@@ -53,6 +53,31 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   12 public dependencies, all five service health states and bot/webhook checks passed. Runtime
   stayed on `e73dde2`; API/workers were not restarted, no DB/config/contracts/funds were changed.
 
+### 2026-09-29: two-second pixel cadence and BANK first-screen layout
+
+- User requested one free pixel every two seconds, the BANK position button visible without
+  scrolling, and a visible shared canvas behind BANK. Changed the authoritative server rule,
+  snapshot metadata, mock cadence and rules/share copy together. Share-image generation retains
+  its independent 30-second limit. No schema, auth, contract, financial rule or production
+  dependency changes.
+- Client validates a positive server-provided interval instead of hard-coding 30; it accepts
+  both previous/current releases. Added exact 1.999/2.000-second boundary and Retry-After checks,
+  retained cross-session/week cooldown and old-idempotency-receipt protection.
+- BANK's fixed-height jar and repeated bottom safe-area reservation pushed its CTA below the
+  tab bar after Telegram header protection. The jar now flexes into available space; compact
+  screens combine the two footer labels. Increased canvas background opacity from 13% to 32%
+  and masked the two opaque black jar-image backdrops, preserving the glass and ball physics.
+- Verified 22 focused API tests, 27 web unit tests, and seven pixel browser scenarios across
+  Chromium/WebKit (one WebKit native-pinch injection skipped). Expanded the existing browser
+  checks with two successive moves, realistic 115/34 px safe areas and first-screen CTA bounds.
+  The five-viewport navigation scenario needed a 60-second budget instead of 30; it passed in
+  both browsers. Final mask/background recheck passed separately in both engines.
+- Inspected native-chrome simulations at 320×568, 320×640, 390×844, 430×932, 768×1024 and
+  desktop, plus the prescribed game-client screenshot/state. No new browser errors. Dedicated
+  local PostgreSQL/Redis services are not running, so their unchanged lock tests were not
+  repeated; previous isolated verification remains above. Physical Telegram device check remains
+  manual. Production release follows the standard full-runtime gate because the API rule changed.
+
 ## Product decisions
 
 - LOOP is not a wallet and has no internal spendable balance. TON Connect is limited to external wallet ownership proofs, transaction confirmation, payouts, and asset checks.

@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .rules import COOLDOWN_SECONDS
+
 
 class PixelRoundView(BaseModel):
     id: str
@@ -24,7 +26,7 @@ class PixelState(BaseModel):
     server_time: datetime
     ready_at: datetime | None = None
     size: int = 128
-    cooldown_seconds: int = 30
+    cooldown_seconds: int = COOLDOWN_SECONDS
     palette: list[str] = Field(default_factory=list)
     # One hex digit per cell, row-major. None means apply the changes instead.
     pixels: str | None = None
