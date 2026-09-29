@@ -45,8 +45,13 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   `modes.stress.spec.ts` cases reach tab navigation but time out on an undismissed mock announcement;
   this unrelated fixture issue was not changed. After dismissing that announcement, separate
   Chromium/WebKit checks cover 20 keyboard resize cycles and six tab transitions.
-- TypeScript, changed-file ESLint, Prettier and diff checks pass. Frontend-only release pending;
-  physical-device Telegram remains a manual check. Browser CLI logs/screenshots stay in `output/`.
+- TypeScript, changed-file ESLint, Prettier and diff checks pass. Browser CLI logs/screenshots stay
+  in `output/`. Physical-device Telegram remains a manual check.
+- Released web `ea8a18d6f422e41576e290178749f0cd4349cc84` via the standard gated web-only path;
+  all 191 web tests, API tests (nine dedicated infrastructure tests skipped), production build,
+  lint/type/format and migration checks passed. At 2026-09-29 08:53 UTC the live web SHA,
+  12 public dependencies, all five service health states and bot/webhook checks passed. Runtime
+  stayed on `e73dde2`; API/workers were not restarted, no DB/config/contracts/funds were changed.
 
 ## Product decisions
 
