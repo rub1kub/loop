@@ -18,7 +18,7 @@
     "@tonconnect/ui-react": "3.0.0",
     "buffer": "6.0.3",
     "motion": "12.42.2",
-    "react": "19.2.7",
+    "react": "19.2.8",
     "react-dom": "19.2.7",
     "zod": "4.4.3",
     "zustand": "5.0.14"
