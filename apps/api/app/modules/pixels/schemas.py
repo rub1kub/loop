@@ -26,7 +26,7 @@ class PixelState(BaseModel):
     server_time: datetime
     ready_at: datetime | None = None
     size: int = 128
-    cooldown_seconds: int = COOLDOWN_SECONDS
+    cooldown_seconds: float = COOLDOWN_SECONDS
     palette: list[str] = Field(default_factory=list)
     # One hex digit per cell, row-major. None means apply the changes instead.
     pixels: str | None = None

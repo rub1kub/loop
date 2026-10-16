@@ -49,7 +49,7 @@ test('draw, cooldown, pan, share and return to the existing screen', async ({ pa
   expect((await game()).selected).toEqual(selected);
   expect(await canvas.getAttribute('data-pan-x')).not.toBe(panBefore);
   await page.evaluate(async () => {
-    await window.advanceTime?.(2000);
+    await window.advanceTime?.(500);
   });
   await expect.poll(async () => (await game()).ready_in_seconds).toBe(0);
   await page.getByRole('button', { name: 'Выбрать цвет', exact: true }).click();

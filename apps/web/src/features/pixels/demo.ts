@@ -1,6 +1,6 @@
 import type { PixelPlace, PixelReceipt, PixelState } from './protocol';
 
-const cooldownSeconds = 2;
+const cooldownSeconds = 0.5;
 const palette = [
   '#101012',
   '#ffffff',

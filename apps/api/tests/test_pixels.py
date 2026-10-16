@@ -78,33 +78,33 @@ async def test_snapshot_and_move_are_free_and_idempotent(client, app, clock):
     after = await snapshot(client, headers)
     assert after["pixels"][20 * 128 + 10] == "4"
     assert after["round"]["revision"] == 1
-    assert after["cooldown_seconds"] == 2
+    assert after["cooldown_seconds"] == 0.5
 
 
-async def test_next_pixel_is_allowed_at_exactly_two_seconds(client, app, clock):
+async def test_next_pixel_is_allowed_at_exactly_half_a_second(client, app, clock):
     _, headers = await player(app)
     board = (await snapshot(client, headers))["round"]["id"]
     started = clock[0]
     first = await client.post("/api/v1/pixels/moves", headers=headers, json=move(board))
     assert first.status_code == 200
-    assert datetime.fromisoformat(first.json()["ready_at"]) == started + timedelta(seconds=2)
+    assert datetime.fromisoformat(first.json()["ready_at"]) == started + timedelta(milliseconds=500)
 
-    for milliseconds, retry_after in [(0, "2"), (1000, "1"), (1999, "1")]:
+    for milliseconds in [0, 250, 499]:
         clock[0] = started + timedelta(milliseconds=milliseconds)
         blocked = await client.post("/api/v1/pixels/moves", headers=headers, json=move(board, x=11))
         assert blocked.status_code == 429
-        assert blocked.headers["Retry-After"] == retry_after
+        assert blocked.headers["Retry-After"] == "1"
 
-    clock[0] = started + timedelta(seconds=2)
+    clock[0] = started + timedelta(milliseconds=500)
     second = await client.post("/api/v1/pixels/moves", headers=headers, json=move(board, x=11))
     assert second.status_code == 200
     assert second.json()["revision"] == 2
-    assert datetime.fromisoformat(second.json()["ready_at"]) == started + timedelta(seconds=4)
+    assert datetime.fromisoformat(second.json()["ready_at"]) == started + timedelta(seconds=1)
 
 
 async def test_server_cooldown_survives_a_new_session_and_week(client, app, clock):
     user_id, first_headers = await player(app)
-    clock[0] = datetime(2026, 10, 4, 20, 59, 59, tzinfo=UTC)
+    clock[0] = datetime(2026, 10, 4, 20, 59, 59, 700000, tzinfo=UTC)
     board = await snapshot(client, first_headers)
     assert (
         await client.post(
@@ -113,7 +113,7 @@ async def test_server_cooldown_survives_a_new_session_and_week(client, app, cloc
     ).status_code == 200
     token, _ = issue_session(user_id, 9_700_000_001, str(uuid4()), get_settings())
     second_headers = {"Authorization": f"Bearer {token}"}
-    clock[0] += timedelta(seconds=1)
+    clock[0] += timedelta(microseconds=400_000)
     next_board = await snapshot(client, second_headers)
     assert next_board["round"]["id"] != board["round"]["id"]
     blocked = await client.post(
@@ -121,7 +121,7 @@ async def test_server_cooldown_survives_a_new_session_and_week(client, app, cloc
     )
     assert blocked.status_code == 429
     assert blocked.headers["Retry-After"] == "1"
-    clock[0] += timedelta(seconds=1)
+    clock[0] += timedelta(microseconds=100_000)
     allowed = await client.post(
         "/api/v1/pixels/moves", headers=second_headers, json=move(next_board["round"]["id"])
     )
@@ -133,7 +133,7 @@ async def test_old_retry_keeps_the_newer_cooldown(client, app, clock):
     board = (await snapshot(client, headers))["round"]["id"]
     first_body = move(board)
     await client.post("/api/v1/pixels/moves", headers=headers, json=first_body)
-    clock[0] += timedelta(seconds=2)
+    clock[0] += timedelta(milliseconds=500)
     second = await client.post("/api/v1/pixels/moves", headers=headers, json=move(board, x=11))
     retry = await client.post("/api/v1/pixels/moves", headers=headers, json=first_body)
     assert retry.json()["revision"] == 1

@@ -242,7 +242,14 @@ export function PixelExperience({
     };
   }, [open, state, selection, color, game, archived, panel, paletteOpen]);
 
-  const remaining = Math.max(0, Math.ceil((Date.parse(state?.ready_at ?? '') - now) / 1000)) || 0;
+  const remainingMilliseconds = Math.max(0, Date.parse(state?.ready_at ?? '') - now) || 0;
+  const remaining = Math.ceil(remainingMilliseconds / 1000);
+  const remainingLabel =
+    remainingMilliseconds > 0 && remainingMilliseconds < 1000
+      ? `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(
+          remainingMilliseconds / 1000,
+        )} С`
+      : `${remaining} С`;
   const ended = Boolean(
     state?.round && (state.round.archived || Date.parse(state.round.ends_at) <= now),
   );
@@ -398,7 +405,7 @@ export function PixelExperience({
                   {game.placing
                     ? 'СТАВИМ…'
                     : remaining > 0
-                      ? `СЛЕДУЮЩИЙ ЧЕРЕЗ ${remaining} С`
+                      ? `СЛЕДУЮЩИЙ ЧЕРЕЗ ${remainingLabel}`
                       : sameColor
                         ? 'ЗДЕСЬ УЖЕ ЭТОТ ЦВЕТ'
                         : 'ПОСТАВИТЬ ПИКСЕЛЬ'}
