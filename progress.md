@@ -84,6 +84,15 @@ Original prompt: Transform LOOP from an incorrect wallet-first implementation in
   and the two-second rule; the live board had one colored cell, not the mock artwork. No staged
   configuration, schema change, contract broadcast, financial action or announcement was applied.
 
+### 2026-10-16: half-second pixel cadence released
+
+- Released runtime/web `928ff63a21bec3dd697954bfc25de7686a25b4ef` through the standard full gate.
+  API tests, 192 web tests, lint, types, production build and migration checks passed; nine
+  isolated PostgreSQL/Redis tests were skipped because their dedicated local services were absent.
+- Live verification at 15:26 UTC confirmed five healthy services, bot/webhook, public health,
+  `LOOP_PIXEL_BATTLE_ENABLED=true`, `cooldown_seconds: 0.5` and a valid read-only snapshot.
+  No contract, financial data, staged configuration or announcement changed.
+
 ## Product decisions
 
 - LOOP is not a wallet and has no internal spendable balance. TON Connect is limited to external wallet ownership proofs, transaction confirmation, payouts, and asset checks.
